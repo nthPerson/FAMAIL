@@ -163,9 +163,20 @@ def _render_pca(dataset: Dict[str, np.ndarray]):
     coords = pca.fit_transform(flat)
     import pandas as pd
 
-    df = pd.DataFrame({"pc1": coords[:, 0], "pc2": coords[:, 1], "label": labels[:max_points]})
+    df = pd.DataFrame({"pc1": coords[:, 0], "pc2": coords[:, 1], "label": labels[:max_points].astype(str)})
     st.subheader("PCA Projection (sampled trajectories)")
-    st.scatter_chart(df, x="pc1", y="pc2", color="label")
+    chart = (
+        alt.Chart(df)
+        .mark_circle(size=80, opacity=0.8)
+        .encode(
+            x="pc1:Q",
+            y="pc2:Q",
+            color=alt.Color("label:N", scale=alt.Scale(domain=["0", "1"], range=["#1f77b4", "#d62728"]), legend=alt.Legend(title="label")),
+            tooltip=["label", "pc1", "pc2"],
+        )
+        .properties(height=320)
+    )
+    st.altair_chart(chart, use_container_width=True)
 
 
 def _pair_pca(x1: np.ndarray, x2: np.ndarray, mask1: np.ndarray, mask2: np.ndarray) -> pd.DataFrame:
@@ -227,7 +238,21 @@ def _render_pair_explorer(dataset: Dict[str, np.ndarray], pair_info: List[Dict[s
     pair_df = _pair_pca(x1, x2, m1, m2)
     if not pair_df.empty:
         st.markdown("**Per-pair PCA (x1 vs x2)**")
-        st.scatter_chart(pair_df, x="pc1", y="pc2", color="which")
+        # Fixed zoom per request: widen horizontal, tighten vertical
+        x_domain = [-1200.0, 1200.0]
+        y_domain = [-0.0005, 0.0005]
+        chart = (
+            alt.Chart(pair_df)
+            .mark_circle(size=160, opacity=0.85)
+            .encode(
+                x=alt.X("pc1:Q", scale=alt.Scale(domain=x_domain)),
+                y=alt.Y("pc2:Q", scale=alt.Scale(domain=y_domain)),
+                color=alt.Color("which:N", scale=alt.Scale(range=["#1f77b4", "#d62728"])),
+                tooltip=["which", "pc1", "pc2"],
+            )
+            .properties(height=260)
+        )
+        st.altair_chart(chart, use_container_width=True)
     else:
         st.info("Install scikit-learn to view per-pair PCA.")
 
