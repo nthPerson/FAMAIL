@@ -384,11 +384,14 @@ class Trainer:
             
         return checkpoint.get('epoch', 0)
     
-    def train(self, verbose: bool = True) -> TrainingHistory:
+    def train(self, verbose: bool = True, progress_callback: callable = None) -> TrainingHistory:
         """Run full training loop.
         
         Args:
             verbose: Whether to print progress
+            progress_callback: Optional callback function called after each epoch with signature:
+                callback(epoch, total_epochs, epoch_time, train_loss, val_metrics, is_best, should_stop)
+                Returns True to continue training, False to abort.
             
         Returns:
             TrainingHistory with metrics from all epochs
@@ -457,7 +460,35 @@ class Trainer:
                 if verbose:
                     print(f"\nEarly stopping at epoch {epoch}!")
                     print(f"Best epoch: {self.history.best_epoch}")
+                # Notify callback about early stopping
+                if progress_callback:
+                    progress_callback(
+                        epoch=epoch,
+                        total_epochs=self.config.epochs,
+                        epoch_time=epoch_time,
+                        train_loss=train_loss,
+                        val_metrics=val_metrics,
+                        is_best=False,
+                        should_stop=True
+                    )
                 break
+            
+            # Call progress callback if provided
+            if progress_callback:
+                continue_training = progress_callback(
+                    epoch=epoch,
+                    total_epochs=self.config.epochs,
+                    epoch_time=epoch_time,
+                    train_loss=train_loss,
+                    val_metrics=val_metrics,
+                    is_best=is_best,
+                    should_stop=False
+                )
+                # Allow callback to abort training
+                if continue_training is False:
+                    if verbose:
+                        print(f"\nTraining aborted by callback at epoch {epoch}")
+                    break
                 
         # Save final history
         history_path = self.checkpoint_dir / "history.json"

@@ -19,7 +19,7 @@ import time
 import threading
 import queue
 from dataclasses import asdict
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -235,7 +235,7 @@ def render_hyperparameters():
             early_stopping = st.number_input("Early Stopping Patience", 0, 50, 10)
             scheduler = st.selectbox("LR Scheduler", ["plateau", "cosine", "none"])
     
-    with st.expander("Other", expanded=False):
+    with st.expander("Other (hardware, workers, etc.)", expanded=False):
         col1, col2 = st.columns(2)
         with col1:
             device = st.selectbox("Device", ["auto", "cuda", "cpu"])
@@ -425,8 +425,15 @@ def render_checkpoint_explorer():
     return selected_checkpoint
 
 
-def start_training(dataset_path: Path, params: Dict, experiment_name: str) -> None:
-    """Start training in background (simplified for Streamlit)."""
+def start_training(dataset_path: Path, params: Dict, experiment_name: str, progress_container=None) -> None:
+    """Start training with optional progress tracking for Streamlit.
+    
+    Args:
+        dataset_path: Path to dataset directory
+        params: Hyperparameter dictionary
+        experiment_name: Name for this experiment
+        progress_container: Optional Streamlit container for progress updates
+    """
     # Import from local modules (when running from model/ directory)
     from model import SiameseLSTMDiscriminator
     from dataset import TrajectoryPairDataset, create_data_loaders, load_dataset_from_directory
@@ -467,10 +474,270 @@ def start_training(dataset_path: Path, params: Dict, experiment_name: str) -> No
         experiment_name=experiment_name
     )
     
-    # Train
-    trainer.train(verbose=True)
+    # Setup progress callback if container provided
+    if progress_container is not None:
+        epoch_times = []
+        start_time = time.time()
+        
+        # Create progress elements in the container
+        with progress_container:
+            progress_bar = st.progress(0, text="Initializing training...")
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                epoch_display = st.empty()
+            with col2:
+                time_elapsed_display = st.empty()
+            with col3:
+                time_remaining_display = st.empty()
+            with col4:
+                eta_display = st.empty()
+            
+            st.markdown("---")
+            
+            # Metrics row
+            metric_cols = st.columns(5)
+            with metric_cols[0]:
+                train_loss_display = st.empty()
+            with metric_cols[1]:
+                val_loss_display = st.empty()
+            with metric_cols[2]:
+                accuracy_display = st.empty()
+            with metric_cols[3]:
+                f1_display = st.empty()
+            with metric_cols[4]:
+                auc_display = st.empty()
+            
+            # Status and best epoch
+            status_display = st.empty()
+            
+            # Live chart placeholder
+            chart_placeholder = st.empty()
+        
+        def format_time(seconds: float) -> str:
+            """Format seconds into human-readable string."""
+            if seconds < 60:
+                return f"{seconds:.0f}s"
+            elif seconds < 3600:
+                mins = int(seconds // 60)
+                secs = int(seconds % 60)
+                return f"{mins}m {secs}s"
+            else:
+                hours = int(seconds // 3600)
+                mins = int((seconds % 3600) // 60)
+                return f"{hours}h {mins}m"
+        
+        def progress_callback(epoch, total_epochs, epoch_time, train_loss, val_metrics, is_best, should_stop):
+            """Callback to update Streamlit progress elements."""
+            epoch_times.append(epoch_time)
+            
+            # Calculate timing
+            elapsed = time.time() - start_time
+            avg_epoch_time = sum(epoch_times) / len(epoch_times)
+            remaining_epochs = total_epochs - epoch
+            estimated_remaining = avg_epoch_time * remaining_epochs
+            eta = datetime.now() + timedelta(seconds=estimated_remaining)
+            
+            # Update progress bar
+            progress_pct = epoch / total_epochs
+            progress_bar.progress(
+                progress_pct,
+                text=f"Epoch {epoch}/{total_epochs} ({progress_pct*100:.0f}%)"
+            )
+            
+            # Update timing displays
+            epoch_display.metric("📊 Epoch", f"{epoch} / {total_epochs}")
+            time_elapsed_display.metric("⏱️ Elapsed", format_time(elapsed))
+            time_remaining_display.metric("⏳ Remaining", format_time(estimated_remaining) if remaining_epochs > 0 else "Done!")
+            eta_display.metric("🏁 ETA", eta.strftime("%H:%M:%S") if remaining_epochs > 0 else "Complete")
+            
+            # Update metrics
+            train_loss_display.metric("Train Loss", f"{train_loss:.4f}")
+            val_loss_display.metric("Val Loss", f"{val_metrics['loss']:.4f}")
+            accuracy_display.metric("Accuracy", f"{val_metrics.get('accuracy', 0):.4f}")
+            f1_display.metric("F1 Score", f"{val_metrics.get('f1', 0):.4f}")
+            auc_display.metric("ROC AUC", f"{val_metrics.get('auc', 0):.4f}")
+            
+            # Status message
+            if should_stop:
+                status_display.warning(f"🛑 Early stopping triggered! Best epoch: {trainer.history.best_epoch}")
+            elif is_best:
+                status_display.success(f"⭐ New best model! Val Loss: {val_metrics['loss']:.4f}")
+            else:
+                patience_left = config.early_stopping_patience - trainer.early_stopping.counter
+                status_display.info(f"Training... (Early stopping patience: {patience_left} epochs remaining)")
+            
+            # Update live chart if we have enough data
+            if ALTAIR_AVAILABLE and len(epoch_times) > 1:
+                history = trainer.history
+                chart_df = pd.DataFrame({
+                    "epoch": list(range(1, len(history.train_loss) + 1)),
+                    "train_loss": history.train_loss,
+                    "val_loss": history.val_loss,
+                })
+                
+                # Melt for Altair
+                chart_df_melted = chart_df.melt(
+                    id_vars=["epoch"],
+                    value_vars=["train_loss", "val_loss"],
+                    var_name="type",
+                    value_name="loss"
+                )
+                
+                chart = alt.Chart(chart_df_melted).mark_line(point=True).encode(
+                    x=alt.X("epoch:Q", title="Epoch", scale=alt.Scale(domain=[1, total_epochs])),
+                    y=alt.Y("loss:Q", title="Loss"),
+                    color=alt.Color("type:N", scale=alt.Scale(
+                        domain=["train_loss", "val_loss"],
+                        range=["#1f77b4", "#d62728"]
+                    ), legend=alt.Legend(title="Loss Type"))
+                ).properties(height=200, title="Training Progress")
+                
+                chart_placeholder.altair_chart(chart, use_container_width=True)
+            
+            return True  # Continue training
+        
+        # Train with progress callback
+        trainer.train(verbose=True, progress_callback=progress_callback)
+        
+        # Final update
+        progress_bar.progress(1.0, text="✅ Training Complete!")
+        
+    else:
+        # Train without progress tracking
+        trainer.train(verbose=True)
     
-    return trainer.checkpoint_dir
+    # Build training summary
+    history = trainer.history
+    total_time = sum(history.epoch_times)
+    epochs_completed = len(history.train_loss)
+    
+    summary = {
+        "checkpoint_dir": str(trainer.checkpoint_dir),
+        "experiment_name": experiment_name,
+        "epochs_completed": epochs_completed,
+        "epochs_configured": params["epochs"],
+        "early_stopped": epochs_completed < params["epochs"],
+        "total_time_seconds": total_time,
+        "avg_epoch_time": total_time / epochs_completed if epochs_completed > 0 else 0,
+        "best_epoch": history.best_epoch,
+        "best_val_loss": history.best_val_loss,
+        "final_train_loss": history.train_loss[-1] if history.train_loss else None,
+        "final_val_loss": history.val_loss[-1] if history.val_loss else None,
+        "final_accuracy": history.val_accuracy[-1] if history.val_accuracy else None,
+        "final_f1": history.val_f1[-1] if history.val_f1 else None,
+        "final_auc": history.val_auc[-1] if history.val_auc else None,
+        "initial_lr": history.learning_rates[0] if history.learning_rates else None,
+        "final_lr": history.learning_rates[-1] if history.learning_rates else None,
+        "train_samples": len(train_loader.dataset),
+        "val_samples": len(val_loader.dataset),
+        "device": str(trainer.device),
+        "model_params": sum(p.numel() for p in model.parameters()),
+    }
+    
+    return trainer.checkpoint_dir, summary
+
+
+def render_training_summary(summary: Dict):
+    """Render a training summary after completion."""
+    st.subheader("📋 Training Summary")
+    
+    # Format time helper
+    def fmt_time(seconds: float) -> str:
+        if seconds < 60:
+            return f"{seconds:.1f}s"
+        elif seconds < 3600:
+            mins = int(seconds // 60)
+            secs = int(seconds % 60)
+            return f"{mins}m {secs}s"
+        else:
+            hours = int(seconds // 3600)
+            mins = int((seconds % 3600) // 60)
+            secs = int(seconds % 60)
+            return f"{hours}h {mins}m {secs}s"
+    
+    # Training completion status
+    if summary.get("early_stopped"):
+        st.info(f"🛑 Training stopped early at epoch {summary['epochs_completed']} / {summary['epochs_configured']} (early stopping triggered)")
+    else:
+        st.success(f"✅ Training completed all {summary['epochs_completed']} epochs")
+    
+    # Time metrics
+    st.markdown("#### ⏱️ Time")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Total Training Time", fmt_time(summary.get("total_time_seconds", 0)))
+    with col2:
+        st.metric("Avg Time per Epoch", fmt_time(summary.get("avg_epoch_time", 0)))
+    with col3:
+        st.metric("Device", summary.get("device", "Unknown").upper())
+    
+    # Best model info
+    st.markdown("#### 🏆 Best Model")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Best Epoch", summary.get("best_epoch", "N/A"))
+    with col2:
+        best_loss = summary.get("best_val_loss")
+        st.metric("Best Val Loss", f"{best_loss:.4f}" if best_loss else "N/A")
+    with col3:
+        params = summary.get("model_params", 0)
+        if params > 1_000_000:
+            param_str = f"{params / 1_000_000:.2f}M"
+        elif params > 1_000:
+            param_str = f"{params / 1_000:.1f}K"
+        else:
+            param_str = str(params)
+        st.metric("Model Parameters", param_str)
+    
+    # Final metrics
+    st.markdown("#### 📊 Final Metrics")
+    col1, col2, col3, col4, col5 = st.columns(5)
+    with col1:
+        final_train = summary.get("final_train_loss")
+        st.metric("Train Loss", f"{final_train:.4f}" if final_train else "N/A")
+    with col2:
+        final_val = summary.get("final_val_loss")
+        st.metric("Val Loss", f"{final_val:.4f}" if final_val else "N/A")
+    with col3:
+        final_acc = summary.get("final_accuracy")
+        st.metric("Accuracy", f"{final_acc:.4f}" if final_acc else "N/A")
+    with col4:
+        final_f1 = summary.get("final_f1")
+        st.metric("F1 Score", f"{final_f1:.4f}" if final_f1 else "N/A")
+    with col5:
+        final_auc = summary.get("final_auc")
+        st.metric("ROC AUC", f"{final_auc:.4f}" if final_auc else "N/A")
+    
+    # Dataset info
+    st.markdown("#### 📁 Dataset")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Train Samples", f"{summary.get('train_samples', 0):,}")
+    with col2:
+        st.metric("Val Samples", f"{summary.get('val_samples', 0):,}")
+    with col3:
+        total = summary.get('train_samples', 0) + summary.get('val_samples', 0)
+        st.metric("Total Samples", f"{total:,}")
+    
+    # Learning rate schedule
+    if summary.get("initial_lr") and summary.get("final_lr"):
+        st.markdown("#### 📈 Learning Rate")
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Initial LR", f"{summary['initial_lr']:.2e}")
+        with col2:
+            st.metric("Final LR", f"{summary['final_lr']:.2e}")
+        with col3:
+            reduction = summary['initial_lr'] / summary['final_lr'] if summary['final_lr'] > 0 else 1
+            st.metric("LR Reduction", f"{reduction:.1f}x" if reduction > 1 else "None")
+    
+    # Checkpoint location
+    st.markdown("#### 💾 Checkpoint")
+    st.code(summary.get("checkpoint_dir", "Unknown"), language="bash")
+    
+    # Show raw summary in expander
+    with st.expander("🔍 Raw Summary Data"):
+        st.json(summary)
 
 
 def main():
@@ -510,28 +777,63 @@ def main():
         
         st.divider()
         
-        # Experiment name
+        # Experiment name and time estimation
         st.subheader("🏷️ Experiment")
         default_name = datetime.now().strftime("%Y%m%d_%H%M%S")
         experiment_name = st.text_input("Experiment name", value=default_name)
         
+        # Training time estimation
+        if dataset_info:
+            n_train = dataset_info.get("train_samples", 0)
+            n_val = dataset_info.get("val_samples", 0)
+            batch_size = params["batch_size"]
+            epochs = params["epochs"]
+            
+            # Estimate batches per epoch
+            train_batches = (n_train + batch_size - 1) // batch_size
+            val_batches = (n_val + batch_size - 1) // batch_size
+            
+            # Rough time estimate (will be refined during training)
+            # These are rough estimates - actual time depends on hardware
+            # Assume ~0.05s per batch for LSTM on GPU, ~0.2s on CPU
+            device = params.get("device", "auto")
+            if device == "auto":
+                import torch
+                has_cuda = torch.cuda.is_available()
+            else:
+                has_cuda = device == "cuda"
+            
+            time_per_batch = 0.05 if has_cuda else 0.2
+            est_epoch_time = (train_batches + val_batches) * time_per_batch
+            est_total_time = est_epoch_time * epochs
+            
+            with st.expander("⏱️ Training Time Estimate", expanded=True):
+                col1, col2, col3, col4 = st.columns(4)
+                with col1:
+                    st.metric("Train Batches/Epoch", f"{train_batches:,}")
+                with col2:
+                    st.metric("Val Batches/Epoch", f"{val_batches:,}")
+                with col3:
+                    def _fmt_time(secs):
+                        if secs < 60:
+                            return f"{secs:.0f}s"
+                        elif secs < 3600:
+                            return f"{secs/60:.1f}m"
+                        else:
+                            return f"{secs/3600:.1f}h"
+                    st.metric("Est. per Epoch", _fmt_time(est_epoch_time))
+                with col4:
+                    st.metric("Est. Total", _fmt_time(est_total_time))
+                
+                st.caption(f"💡 Estimates assume {'GPU' if has_cuda else 'CPU'} training. Actual times may vary. "
+                          f"Early stopping (patience={params['early_stopping_patience']}) may end training sooner.")
+        
+        st.divider()
+        
         # Training buttons
         col1, col2 = st.columns(2)
         with col1:
-            if st.button("🚀 Start Training", type="primary"):
-                with st.spinner("Training in progress... Check terminal for details."):
-                    try:
-                        checkpoint_dir = start_training(
-                            dataset_path,
-                            params,
-                            experiment_name
-                        )
-                        st.success(f"✅ Training complete! Checkpoint saved to: {checkpoint_dir}")
-                        st.session_state["last_checkpoint"] = str(checkpoint_dir)
-                    except Exception as e:
-                        st.error(f"❌ Training failed: {e}")
-                        import traceback
-                        st.code(traceback.format_exc())
+            start_clicked = st.button("🚀 Start Training", type="primary")
         
         with col2:
             # Show CLI command
@@ -552,6 +854,34 @@ def main():
     --output "{DEFAULT_CHECKPOINT_DIR}"
 """
                 st.code(cmd, language="bash")
+        
+        # Progress container (placed below buttons, will be populated during training)
+        progress_container = st.container()
+        
+        # Summary container (placed after progress, will be populated after training)
+        summary_container = st.container()
+        
+        if start_clicked:
+            try:
+                checkpoint_dir, training_summary = start_training(
+                    dataset_path,
+                    params,
+                    experiment_name,
+                    progress_container=progress_container
+                )
+                st.session_state["last_checkpoint"] = str(checkpoint_dir)
+                st.session_state["last_training_summary"] = training_summary
+                st.balloons()  # Celebration animation!
+                
+                # Render training summary
+                with summary_container:
+                    st.divider()
+                    render_training_summary(training_summary)
+                    
+            except Exception as e:
+                st.error(f"❌ Training failed: {e}")
+                import traceback
+                st.code(traceback.format_exc())
     
     elif page == "📊 View Results":
         st.markdown("View training results and metrics from previous experiments.")
