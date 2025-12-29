@@ -190,7 +190,7 @@ def _render_preview(dataset: Dict[str, np.ndarray], metadata: Dict):
 |-------|-------|-------------|
 | `x1` | `{list(x1_shape)}` | First trajectory in each pair: **{n_pairs}** pairs × **{seq_len}** timesteps × **{n_features}** features |
 | `x2` | `{list(dataset['x2'].shape)}` | Second trajectory in each pair (same dimensions as x1) |
-| `label` | `{list(dataset['label'].shape)}` | Labels for each pair: **0** = same agent (positive), **1** = different agents (negative) |
+| `label` | `{list(dataset['label'].shape)}` | Labels for each pair: **1** = same agent (positive), **0** = different agents (negative) |
 | `mask1` | `{list(dataset['mask1'].shape)}` | Validity mask for x1: **1** = real data, **0** = padding |
 | `mask2` | `{list(dataset['mask2'].shape)}` | Validity mask for x2 |
 
@@ -204,9 +204,9 @@ def _render_preview(dataset: Dict[str, np.ndarray], metadata: Dict):
     labels = dataset["label"]
     col1, col2 = st.columns(2)
     with col1:
-        st.metric("Positive Pairs (label=0)", int((labels == 0).sum()))
+        st.metric("Positive Pairs (label=1)", int((labels == 1).sum()))
     with col2:
-        st.metric("Negative Pairs (label=1)", int((labels == 1).sum()))
+        st.metric("Negative Pairs (label=0)", int((labels == 0).sum()))
     lengths_table = []
     for i in range(min(8, labels.shape[0])):
         lengths_table.append(
@@ -251,7 +251,8 @@ def _render_pca(dataset: Dict[str, np.ndarray]):
         .encode(
             x="pc1:Q",
             y="pc2:Q",
-            color=alt.Color("label:N", scale=alt.Scale(domain=["0", "1"], range=["#1f77b4", "#d62728"]), legend=alt.Legend(title="label")),
+            # Label 1 = same agent (blue), Label 0 = different agents (red)
+            color=alt.Color("label:N", scale=alt.Scale(domain=["0", "1"], range=["#d62728", "#1f77b4"]), legend=alt.Legend(title="label")),
             tooltip=["label", "pc1", "pc2"],
         )
         .properties(height=320)
@@ -416,21 +417,22 @@ def _render_dataset_validation(dataset: Dict[str, np.ndarray], metadata: Dict[st
     actual_total = counts.get("total_pairs", 0)
     
     labels = dataset["label"]
-    computed_pos = int((labels == 0).sum())
-    computed_neg = int((labels == 1).sum())
+    # Labels: 1 = same agent (positive), 0 = different agents (negative)
+    computed_pos = int((labels == 1).sum())
+    computed_neg = int((labels == 0).sum())
     
     check_pos = actual_pos == computed_pos
     check_neg = actual_neg == computed_neg
     check_total = actual_total == (computed_pos + computed_neg)
     
     validation_results.append({
-        "Check": "Positive pair count",
+        "Check": "Positive pair count (label=1)",
         "Expected": actual_pos,
         "Actual": computed_pos,
         "Status": "✅ Pass" if check_pos else "❌ Fail"
     })
     validation_results.append({
-        "Check": "Negative pair count",
+        "Check": "Negative pair count (label=0)",
         "Expected": actual_neg,
         "Actual": computed_neg,
         "Status": "✅ Pass" if check_neg else "❌ Fail"
@@ -742,7 +744,8 @@ def _render_dataset_validation(dataset: Dict[str, np.ndarray], metadata: Dict[st
             .encode(
                 x=alt.X("x1_length:Q", bin=alt.Bin(maxbins=30), title="Length"),
                 y=alt.Y("count()", title="Frequency"),
-                color=alt.Color("label:N", scale=alt.Scale(domain=[0, 1], range=["#1f77b4", "#d62728"]))
+                # Label 1 = same agent (blue), Label 0 = different agents (red)
+                color=alt.Color("label:N", scale=alt.Scale(domain=[0, 1], range=["#d62728", "#1f77b4"]))
             )
             .properties(height=200)
         )
@@ -756,7 +759,8 @@ def _render_dataset_validation(dataset: Dict[str, np.ndarray], metadata: Dict[st
             .encode(
                 x=alt.X("x2_length:Q", bin=alt.Bin(maxbins=30), title="Length"),
                 y=alt.Y("count()", title="Frequency"),
-                color=alt.Color("label:N", scale=alt.Scale(domain=[0, 1], range=["#1f77b4", "#d62728"]))
+                # Label 1 = same agent (blue), Label 0 = different agents (red)
+                color=alt.Color("label:N", scale=alt.Scale(domain=[0, 1], range=["#d62728", "#1f77b4"]))
             )
             .properties(height=200)
         )

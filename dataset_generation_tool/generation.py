@@ -402,7 +402,9 @@ def assemble_dataset(
         ensure_coverage=config.ensure_agent_coverage,
         per_agent_counts=config.per_agent_counts and not preview_only,
     )
-    pairs = [(p[0], p[1], 0) for p in pos_pairs] + [(p[0], p[1], 1) for p in neg_pairs]
+    # Labels: 1 = same agent (positive), 0 = different agents (negative)
+    # This aligns with optimization objectives that maximize same-agent probability
+    pairs = [(p[0], p[1], 1) for p in pos_pairs] + [(p[0], p[1], 0) for p in neg_pairs]
     rng.shuffle(pairs)
     sequences1: List[np.ndarray] = []
     sequences2: List[np.ndarray] = []
@@ -424,10 +426,10 @@ def assemble_dataset(
         lengths_raw.append((seq1.shape[0], seq2.shape[0]))
         agent_usage.setdefault(seg_a.agent_id, {"pos": 0, "neg": 0})
         agent_usage.setdefault(seg_b.agent_id, {"pos": 0, "neg": 0})
-        if label == 0:
+        if label == 1:  # Same agent (positive)
             agent_usage[seg_a.agent_id]["pos"] += 1
             agent_usage[seg_b.agent_id]["pos"] += 1
-        else:
+        else:  # Different agents (negative)
             agent_usage[seg_a.agent_id]["neg"] += 1
             agent_usage[seg_b.agent_id]["neg"] += 1
         pair_info.append(

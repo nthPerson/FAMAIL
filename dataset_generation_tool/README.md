@@ -68,7 +68,7 @@ The generated dataset contains the following NumPy arrays:
 |-------|-------|-------------|
 | `x1` | `[N, L, F]` | First trajectory in each pair |
 | `x2` | `[N, L, F]` | Second trajectory in each pair |
-| `label` | `[N]` | Pair labels: **0** = same agent (positive), **1** = different agents (negative) |
+| `label` | `[N]` | Pair labels: **1** = same agent (positive), **0** = different agents (negative) |
 | `mask1` | `[N, L]` | Validity mask for x1: **1** = real data, **0** = padding |
 | `mask2` | `[N, L]` | Validity mask for x2 |
 
@@ -76,6 +76,10 @@ Where:
 - **N** = total number of pairs
 - **L** = sequence length (padded/truncated to uniform length)
 - **F** = number of features (minimum 4: indices 0-3)
+
+> **Label Convention**: Labels are designed for optimization objectives that **maximize** same-agent probability:
+> - **1** = same agent → reward (model should output high confidence)
+> - **0** = different agents → penalize (model should output low confidence)
 
 ### Feature Indices
 
@@ -99,8 +103,8 @@ The metadata includes:
   "config": { ... },           // Generation configuration used
   "counts": {
     "total_pairs": 22,         // Total pairs in dataset
-    "positive_pairs": 12,      // Same-agent pairs (label=0)
-    "negative_pairs": 10       // Different-agent pairs (label=1)
+    "positive_pairs": 12,      // Same-agent pairs (label=1)
+    "negative_pairs": 10       // Different-agent pairs (label=0)
   },
   "length_stats": {
     "x1": { "min": 62, "max": 760, "mean": 414.09, "p50": 466, "p90": 574.8, "p95": 593.05 },
