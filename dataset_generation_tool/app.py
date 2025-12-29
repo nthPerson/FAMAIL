@@ -239,8 +239,9 @@ def _render_pair_explorer(dataset: Dict[str, np.ndarray], pair_info: List[Dict[s
     if not pair_df.empty:
         st.markdown("**Per-pair PCA (x1 vs x2)**")
         # Fixed zoom per request: widen horizontal, tighten vertical
-        x_domain = [-1200.0, 1200.0]
-        y_domain = [-0.0005, 0.0005]
+        x_domain = [-2200.0, 2200.0]
+        # x_domain = [-1200.0, 1200.0]
+        y_domain = [-0.005, 0.005]
         chart = (
             alt.Chart(pair_df)
             .mark_circle(size=160, opacity=0.85)
