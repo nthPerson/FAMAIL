@@ -58,11 +58,81 @@ The sidebar lets you set:
 - Each trajectory is `(T, 126)`; indices 0–3 are `x_grid, y_grid, time_bucket, day_index`.
 - Trajectories per agent are assumed to be in chronological order.
 
-## Outputs
+## Output Format
 
-- Arrays `x1, x2, mask1, mask2, label` (labels: 0 = same agent, 1 = different agents).
-- Metadata JSON with config, hash, length stats, and per-agent usage counts.
-- Download buttons for `.npz`, `.pt` (if PyTorch installed), and a small JSON sample.
+### Array Outputs
+
+The generated dataset contains the following NumPy arrays:
+
+| Array | Shape | Description |
+|-------|-------|-------------|
+| `x1` | `[N, L, F]` | First trajectory in each pair |
+| `x2` | `[N, L, F]` | Second trajectory in each pair |
+| `label` | `[N]` | Pair labels: **0** = same agent (positive), **1** = different agents (negative) |
+| `mask1` | `[N, L]` | Validity mask for x1: **1** = real data, **0** = padding |
+| `mask2` | `[N, L]` | Validity mask for x2 |
+
+Where:
+- **N** = total number of pairs
+- **L** = sequence length (padded/truncated to uniform length)
+- **F** = number of features (minimum 4: indices 0-3)
+
+### Feature Indices
+
+The first 4 features (always included) are:
+
+| Index | Name | Description | Range |
+|-------|------|-------------|-------|
+| 0 | `x_grid` | Grid x-coordinate | 0-49 |
+| 1 | `y_grid` | Grid y-coordinate | 0-89 |
+| 2 | `time_bucket` | Time of day | 1-288 (5-min buckets) |
+| 3 | `day_index` | Day of week | 1-6 |
+
+Additional features (indices 4-125) can be optionally included via the feature slice settings.
+
+### Metadata JSON
+
+The metadata includes:
+
+```json
+{
+  "config": { ... },           // Generation configuration used
+  "counts": {
+    "total_pairs": 22,         // Total pairs in dataset
+    "positive_pairs": 12,      // Same-agent pairs (label=0)
+    "negative_pairs": 10       // Different-agent pairs (label=1)
+  },
+  "length_stats": {
+    "x1": { "min": 62, "max": 760, "mean": 414.09, "p50": 466, "p90": 574.8, "p95": 593.05 },
+    "x2": { "min": 3, "max": 582, ... },
+    "combined": { ... },
+    "padded_length": 541       // Final uniform sequence length
+  },
+  "agent_usage": {
+    "0": { "pos": 2, "neg": 1 },  // Agent 0 appears in 2 positive, 1 negative pairs
+    "1": { "pos": 2, "neg": 1 },
+    ...
+  },
+  "dataset_hash": "99ddd9a0..."  // Hash for dataset identification
+}
+```
+
+### Download Formats
+
+- **`.npz`** — NumPy compressed archive (always available)
+- **`.pt`** — PyTorch tensors (if PyTorch installed)
+- **`.json`** — Small sample for inspection
+
+## Preview vs Full Generation
+
+⚠️ **Important**: Preview mode uses **capped total counts** for fast iteration, even when "Per-agent counts mode" is enabled.
+
+| Mode | Positive Pairs | Negative Pairs | Per-Agent Coverage |
+|------|----------------|----------------|-------------------|
+| **Preview** | min(configured, preview_cap) | min(configured, preview_cap) | ❌ Not guaranteed |
+| **Full Dataset** | As configured (total or per-agent) | As configured (total or per-agent) | ✅ Guaranteed in per-agent mode |
+
+To verify actual coverage, click "Generate Full Dataset" and inspect the `agent_usage` in metadata.
 
 ## Example: Full Coverage Dataset
 

@@ -41,7 +41,7 @@ class GenerationConfig:
     days: int = 2
     feature_start: int = 4
     feature_end: int = 4  # default: no extra features beyond indices 0-3
-    padding: str = "truncate_to_shorter"  # pad_to_longer | truncate_to_shorter | fixed_length
+    padding: str = "pad_to_longe"  # pad_to_longer | truncate_to_shorter | fixed_length
     fixed_length: Optional[int] = None
     positive_strategy: str = "random"  # random | sequential
     negative_strategy: str = "random"  # random | round_robin

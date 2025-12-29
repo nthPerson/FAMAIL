@@ -169,17 +169,44 @@ def _generate_cached(config_dict: Dict, preview_only: bool, preview_cap: int):
 
 def _render_preview(dataset: Dict[str, np.ndarray], metadata: Dict):
     st.subheader("Preview")
-    st.write(
-        {
-            "x1": dataset["x1"].shape,
-            "x2": dataset["x2"].shape,
-            "label": dataset["label"].shape,
-            "mask1": dataset["mask1"].shape,
-        }
-    )
+    
+    # Check if per-agent mode was configured (but preview uses total counts)
+    cfg = metadata.get("config", {})
+    if cfg.get("per_agent_counts", False):
+        st.warning(
+            "⚠️ **Preview Mode Limitation**: Preview uses capped total counts for speed. "
+            "The full dataset will use per-agent counts as configured. "
+            "Click 'Generate Full Dataset' to see actual coverage."
+        )
+    
+    # Array shapes with explanation
+    x1_shape = dataset["x1"].shape
+    st.markdown("**Output Array Shapes:**")
+    
+    with st.expander("📐 Shape Explanation", expanded=True):
+        n_pairs, seq_len, n_features = x1_shape
+        st.markdown(f"""
+| Array | Shape | Description |
+|-------|-------|-------------|
+| `x1` | `{list(x1_shape)}` | First trajectory in each pair: **{n_pairs}** pairs × **{seq_len}** timesteps × **{n_features}** features |
+| `x2` | `{list(dataset['x2'].shape)}` | Second trajectory in each pair (same dimensions as x1) |
+| `label` | `{list(dataset['label'].shape)}` | Labels for each pair: **0** = same agent (positive), **1** = different agents (negative) |
+| `mask1` | `{list(dataset['mask1'].shape)}` | Validity mask for x1: **1** = real data, **0** = padding |
+| `mask2` | `{list(dataset['mask2'].shape)}` | Validity mask for x2 |
+
+**Features** (indices 0-3, always included):
+- `[0]` x_grid — grid x-coordinate
+- `[1]` y_grid — grid y-coordinate  
+- `[2]` time_bucket — time of day (1-288, each bucket = 5 minutes)
+- `[3]` day_index — day of week (1-6)
+        """)
+    
     labels = dataset["label"]
-    st.metric("Positives", int((labels == 0).sum()))
-    st.metric("Negatives", int((labels == 1).sum()))
+    col1, col2 = st.columns(2)
+    with col1:
+        st.metric("Positive Pairs (label=0)", int((labels == 0).sum()))
+    with col2:
+        st.metric("Negative Pairs (label=1)", int((labels == 1).sum()))
     lengths_table = []
     for i in range(min(8, labels.shape[0])):
         lengths_table.append(
