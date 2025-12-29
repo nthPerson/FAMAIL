@@ -32,7 +32,7 @@ from generation import (
 
 st.set_page_config(page_title="Trajectory Pair Dataset Generator", layout="wide")
 
-DEFAULT_DATA_PATH = Path("discriminator/create_traj_pair_dataset/source_data/all_trajs.pkl").resolve()
+DEFAULT_DATA_PATH = Path("/home/robert/FAMAIL/discriminator/create_traj_pair_dataset/source_data/all_trajs.pkl").resolve()
 
 
 def _build_config() -> Tuple[GenerationConfig, Dict, int]:
@@ -350,6 +350,62 @@ def _render_pair_explorer(dataset: Dict[str, np.ndarray], pair_info: List[Dict[s
 def main():
     st.title("Trajectory Pair Dataset Generator")
     cfg, cache_key, preview_cap = _build_config()
+    
+    # Dataset size summary
+    if cfg.per_agent_counts:
+        num_agents = 50  # Expected number of agents
+        pos_per_agent = cfg.positive_pairs
+        neg_per_combo = cfg.negative_pairs
+        total_pos = pos_per_agent * num_agents
+        total_neg = neg_per_combo * num_agents * (num_agents - 1)
+        total_samples = total_pos + total_neg
+        
+        st.subheader("📊 Dataset Size Summary")
+        col_pos, col_neg, col_total = st.columns(3)
+        with col_pos:
+            st.metric("Total Positive Pairs", f"{total_pos:,}")
+            st.caption(f"{pos_per_agent} per agent × {num_agents} agents")
+        with col_neg:
+            st.metric("Total Negative Pairs", f"{total_neg:,}")
+            st.caption(f"{neg_per_combo} per combo × {num_agents} × {num_agents - 1}")
+        with col_total:
+            st.metric("Total Pairs", f"{total_samples:,}")
+            pos_pct = (total_pos / total_samples * 100) if total_samples > 0 else 0
+            st.caption(f"{pos_pct:.1f}% positive / {100 - pos_pct:.1f}% negative")
+        
+        with st.expander("ℹ️ Coverage Details", expanded=False):
+            st.markdown(f"""
+**Per-Agent Counts Mode** ensures comprehensive coverage for discriminator training:
+
+| Metric | Formula | Result |
+|--------|---------|--------|
+| Positive pairs | {pos_per_agent} × {num_agents} agents | **{total_pos:,}** |
+| Negative pairs | {neg_per_combo} × {num_agents} × {num_agents - 1} combos | **{total_neg:,}** |
+| **Total** | {total_pos:,} + {total_neg:,} | **{total_samples:,}** |
+
+✅ Every agent will have **{pos_per_agent}** same-agent (matching) pairs  
+✅ Every agent pair (A→B) will have **{neg_per_combo}** different-agent (non-matching) pairs  
+✅ All **{num_agents}** agents will be fully represented in both positive and negative samples
+            """)
+        st.divider()
+    else:
+        # Standard mode - show simple totals
+        total_pos = cfg.positive_pairs
+        total_neg = cfg.negative_pairs
+        total_samples = total_pos + total_neg
+        
+        st.subheader("📊 Dataset Size Summary")
+        col_pos, col_neg, col_total = st.columns(3)
+        with col_pos:
+            st.metric("Positive Pairs", f"{total_pos:,}")
+        with col_neg:
+            st.metric("Negative Pairs", f"{total_neg:,}")
+        with col_total:
+            st.metric("Total Pairs", f"{total_samples:,}")
+            pos_pct = (total_pos / total_samples * 100) if total_samples > 0 else 0
+            st.caption(f"{pos_pct:.1f}% positive / {100 - pos_pct:.1f}% negative")
+        st.divider()
+    
     col1, col2 = st.columns(2)
     with col1:
         preview_clicked = st.button("Generate Preview", type="primary")
