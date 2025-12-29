@@ -872,7 +872,110 @@ def main():
         _render_dataset_validation(dataset, metadata)
         
         st.divider()
-        st.subheader("📥 Downloads")
+        st.subheader("📥 Downloads & Save")
+        
+        # Save to directory option
+        with st.expander("💾 Save to Directory (for training)", expanded=True):
+            st.markdown("""
+            Save the dataset to a directory for use with the training scripts.
+            This creates files compatible with the discriminator model's data loaders.
+            """)
+            
+            default_save_dir = str(Path("/home/robert/FAMAIL/discriminator/datasets").resolve())
+            save_dir = st.text_input(
+                "Save directory",
+                value=default_save_dir,
+                help="Directory where dataset files will be saved"
+            )
+            
+            col_name, col_split = st.columns(2)
+            with col_name:
+                dataset_name = st.text_input(
+                    "Dataset name",
+                    value="trajectory_pairs",
+                    help="Name for this dataset (used as subdirectory name)"
+                )
+            with col_split:
+                val_split = st.slider(
+                    "Validation split",
+                    min_value=0.0,
+                    max_value=0.5,
+                    value=0.2,
+                    step=0.05,
+                    help="Fraction of data to use for validation"
+                )
+            
+            if st.button("💾 Save Dataset", type="primary", key="save_to_dir"):
+                try:
+                    save_path = Path(save_dir) / dataset_name
+                    save_path.mkdir(parents=True, exist_ok=True)
+                    
+                    # Split dataset
+                    n_samples = len(dataset["label"])
+                    n_val = int(n_samples * val_split)
+                    n_train = n_samples - n_val
+                    
+                    # Shuffle indices
+                    rng = np.random.default_rng(metadata.get("config", {}).get("seed", 42))
+                    indices = rng.permutation(n_samples)
+                    train_idx = indices[:n_train]
+                    val_idx = indices[n_train:]
+                    
+                    # Save train split
+                    train_path = save_path / "train.npz"
+                    np.savez_compressed(
+                        train_path,
+                        x1=dataset["x1"][train_idx],
+                        x2=dataset["x2"][train_idx],
+                        label=dataset["label"][train_idx],
+                        mask1=dataset["mask1"][train_idx],
+                        mask2=dataset["mask2"][train_idx]
+                    )
+                    
+                    # Save val split
+                    val_path = save_path / "val.npz"
+                    np.savez_compressed(
+                        val_path,
+                        x1=dataset["x1"][val_idx],
+                        x2=dataset["x2"][val_idx],
+                        label=dataset["label"][val_idx],
+                        mask1=dataset["mask1"][val_idx],
+                        mask2=dataset["mask2"][val_idx]
+                    )
+                    
+                    # Save metadata
+                    save_metadata = {
+                        **metadata,
+                        "split_info": {
+                            "val_split": val_split,
+                            "n_train": n_train,
+                            "n_val": n_val,
+                            "train_file": "train.npz",
+                            "val_file": "val.npz"
+                        }
+                    }
+                    with open(save_path / "metadata.json", "w") as f:
+                        json.dump(save_metadata, f, indent=2)
+                    
+                    st.success(f"✅ Dataset saved to: `{save_path}`")
+                    st.markdown(f"""
+                    **Saved files:**
+                    - `train.npz`: {n_train:,} samples ({100 - val_split*100:.0f}%)
+                    - `val.npz`: {n_val:,} samples ({val_split*100:.0f}%)
+                    - `metadata.json`: Configuration and statistics
+                    
+                    **Use with training:**
+                    ```bash
+                    cd /home/robert/FAMAIL/discriminator/model
+                    python train.py --data-dir "{save_path}"
+                    ```
+                    """)
+                except Exception as e:
+                    st.error(f"❌ Failed to save: {e}")
+        
+        st.markdown("---")
+        st.markdown("**Or download files directly:**")
+        
         npz_bytes = dataset_to_npz_bytes(dataset)
         st.download_button(
             label="Download .npz",
