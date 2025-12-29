@@ -39,8 +39,49 @@ def _build_config() -> Tuple[GenerationConfig, Dict, int]:
     with st.sidebar:
         st.header("Configuration")
         data_path_str = st.text_input("Path to all_trajs.pkl", value=str(DEFAULT_DATA_PATH))
-        pos_pairs = st.number_input("# Positive Pairs", min_value=1, max_value=100000, value=500)
-        neg_pairs = st.number_input("# Negative Pairs", min_value=1, max_value=100000, value=500)
+        per_agent_mode = st.checkbox(
+            "Per-agent counts mode",
+            value=False,
+            help=(
+                "When checked:\n"
+                "• Positive pairs = N matching pairs **for each** of the 50 agents\n"
+                "• Negative pairs = N pairs **for each** agent-to-other-agent combination\n\n"
+                "Example with 50 agents:\n"
+                "• 100 positive → 100 × 50 = 5,000 total matching pairs\n"
+                "• 10 negative → 10 × 50 × 49 = 24,500 total non-matching pairs\n\n"
+                "This ensures comprehensive coverage for discriminator training."
+            ),
+        )
+        if per_agent_mode:
+            pos_pairs = st.number_input(
+                "# Positive Pairs per Agent",
+                min_value=1,
+                max_value=1000,
+                value=100,
+                help="Pairs per agent. Total = this × num_agents (e.g., 100 × 50 = 5,000).",
+            )
+            neg_pairs = st.number_input(
+                "# Negative Pairs per Agent Combination",
+                min_value=1,
+                max_value=100,
+                value=10,
+                help="Pairs per (agent_i, agent_j) combo. Total = this × N × (N-1) (e.g., 10 × 50 × 49 = 24,500).",
+            )
+        else:
+            pos_pairs = st.number_input(
+                "# Positive Pairs (Total)",
+                min_value=1,
+                max_value=100000,
+                value=500,
+                help="Total matching pairs across all agents.",
+            )
+            neg_pairs = st.number_input(
+                "# Negative Pairs (Total)",
+                min_value=1,
+                max_value=100000,
+                value=500,
+                help="Total non-matching pairs across all agents.",
+            )
         days = st.slider("Concatenated trajectory length (days)", min_value=1, max_value=7, value=2)
         feature_start = int(
             st.number_input(
@@ -72,8 +113,18 @@ def _build_config() -> Tuple[GenerationConfig, Dict, int]:
         neg_strategy = st.selectbox("Negative pair strategy", options=["random", "round_robin"], index=0)
         distribution = st.selectbox("Agent sampling distribution", options=["proportional", "uniform"], index=0)
         seed_text = st.text_input("Random seed (leave blank for random)", value="42")
-        ensure_coverage = st.checkbox("Ensure every agent appears", value=True)
+        ensure_coverage = st.checkbox("Ensure every agent appears", value=True, disabled=per_agent_mode)
         preview_cap = st.slider("Preview pair cap", min_value=4, max_value=40, value=12)
+        
+        # Show estimated totals when in per-agent mode
+        if per_agent_mode:
+            st.divider()
+            st.markdown("**Estimated Totals** (assuming 50 agents):")
+            est_pos = int(pos_pairs) * 50
+            est_neg = int(neg_pairs) * 50 * 49
+            st.markdown(f"- Positive pairs: {int(pos_pairs)} × 50 = **{est_pos:,}**")
+            st.markdown(f"- Negative pairs: {int(neg_pairs)} × 50 × 49 = **{est_neg:,}**")
+            st.markdown(f"- Total pairs: **{est_pos + est_neg:,}**")
     seed = int(seed_text) if seed_text.strip() else None
     cfg = GenerationConfig(
         data_path=Path(data_path_str),
@@ -88,7 +139,8 @@ def _build_config() -> Tuple[GenerationConfig, Dict, int]:
         negative_strategy=neg_strategy,
         agent_distribution=distribution,
         seed=seed,
-        ensure_agent_coverage=ensure_coverage,
+        ensure_agent_coverage=ensure_coverage if not per_agent_mode else True,  # Always ensure coverage in per-agent mode
+        per_agent_counts=per_agent_mode,
     )
     cache_key = {
         "data_path": str(cfg.data_path),
@@ -104,6 +156,7 @@ def _build_config() -> Tuple[GenerationConfig, Dict, int]:
         "agent_distribution": cfg.agent_distribution,
         "seed": cfg.seed,
         "ensure_agent_coverage": cfg.ensure_agent_coverage,
+        "per_agent_counts": cfg.per_agent_counts,
     }
     return cfg, cache_key, int(preview_cap)
 

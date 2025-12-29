@@ -48,6 +48,7 @@ class GenerationConfig:
     agent_distribution: str = "proportional"  # proportional | uniform
     seed: Optional[int] = None
     ensure_agent_coverage: bool = True
+    per_agent_counts: bool = False  # if True, positive_pairs/negative_pairs are per-agent counts
 
     def clamped_feature_bounds(self, state_dim: int) -> Tuple[int, int]:
         start = max(4, min(self.feature_start, state_dim))
@@ -195,11 +196,33 @@ def sample_positive_pairs(
     strategy: str,
     distribution: str,
     ensure_coverage: bool,
+    per_agent_counts: bool = False,
 ) -> List[Tuple[Segment, Segment]]:
+    """Sample positive (same-agent) pairs.
+    
+    If per_agent_counts=True, generates n_pairs for EACH agent (total = n_pairs * num_agents).
+    Otherwise generates n_pairs total across all agents.
+    """
     pairs: List[Tuple[Segment, Segment]] = []
     agents = [a for a, segs in segments.items() if len(segs) >= 2]
     if not agents:
         return pairs
+    
+    if per_agent_counts:
+        # Generate n_pairs for each agent
+        for agent_id in agents:
+            agent_pairs = 0
+            attempts = 0
+            max_attempts = n_pairs * 20 + 100
+            while agent_pairs < n_pairs and attempts < max_attempts:
+                pair = _pick_positive_pair(segments[agent_id], rng, strategy)
+                if pair:
+                    pairs.append(pair)
+                    agent_pairs += 1
+                attempts += 1
+        return pairs
+    
+    # Original behavior: total pairs across all agents
     weights = _agent_weights({a: segments[a] for a in agents}, distribution)
     if ensure_coverage:
         for agent_id in agents:
@@ -254,11 +277,45 @@ def sample_negative_pairs(
     strategy: str,
     distribution: str,
     ensure_coverage: bool,
+    per_agent_counts: bool = False,
 ) -> List[Tuple[Segment, Segment]]:
+    """Sample negative (different-agent) pairs.
+    
+    If per_agent_counts=True, generates n_pairs for EACH ordered agent pair (agent_i, agent_j)
+    where i != j. This ensures comprehensive cross-agent coverage for discriminator training.
+    Total pairs = n_pairs * num_agents * (num_agents - 1).
+    
+    Otherwise generates n_pairs total across all agent combinations.
+    """
     pairs: List[Tuple[Segment, Segment]] = []
     agents = list(segments.keys())
     if len(agents) < 2:
         return pairs
+    
+    if per_agent_counts:
+        # Generate n_pairs for each (anchor, other) agent combination
+        for anchor_agent in agents:
+            anchor_segs = segments.get(anchor_agent, [])
+            if not anchor_segs:
+                continue
+            for other_agent in agents:
+                if other_agent == anchor_agent:
+                    continue
+                other_segs = segments.get(other_agent, [])
+                if not other_segs:
+                    continue
+                combo_pairs = 0
+                attempts = 0
+                max_attempts = n_pairs * 20 + 100
+                while combo_pairs < n_pairs and attempts < max_attempts:
+                    seg_a = rng.choice(anchor_segs)
+                    seg_b = rng.choice(other_segs)
+                    pairs.append((seg_a, seg_b))
+                    combo_pairs += 1
+                    attempts += 1
+        return pairs
+    
+    # Original behavior: total pairs across all combinations
     if ensure_coverage:
         for agent_id in agents:
             if len(pairs) >= n_pairs:
@@ -334,6 +391,7 @@ def assemble_dataset(
         strategy=config.positive_strategy,
         distribution=config.agent_distribution,
         ensure_coverage=config.ensure_agent_coverage,
+        per_agent_counts=config.per_agent_counts and not preview_only,
     )
     neg_pairs = sample_negative_pairs(
         segments,
@@ -342,6 +400,7 @@ def assemble_dataset(
         strategy=config.negative_strategy,
         distribution=config.agent_distribution,
         ensure_coverage=config.ensure_agent_coverage,
+        per_agent_counts=config.per_agent_counts and not preview_only,
     )
     pairs = [(p[0], p[1], 0) for p in pos_pairs] + [(p[0], p[1], 1) for p in neg_pairs]
     rng.shuffle(pairs)
