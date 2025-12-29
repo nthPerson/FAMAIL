@@ -1,1 +1,0 @@
-The all_trajs.pkl file should be placed in this directory before running dataset creation tool.
