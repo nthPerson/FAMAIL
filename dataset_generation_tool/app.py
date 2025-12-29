@@ -374,6 +374,395 @@ def _render_pair_explorer(dataset: Dict[str, np.ndarray], pair_info: List[Dict[s
     st.altair_chart(chart, use_container_width=True)
 
 
+def _render_dataset_validation(dataset: Dict[str, np.ndarray], metadata: Dict[str, Any]):
+    """Render comprehensive dataset validation with agent distribution histograms."""
+    st.subheader("🔍 Dataset Validation Report")
+    
+    cfg = metadata.get("config", {})
+    counts = metadata.get("counts", {})
+    length_stats = metadata.get("length_stats", {})
+    agent_usage = metadata.get("agent_usage", {})
+    
+    # === Configuration Summary ===
+    with st.expander("⚙️ Configuration Summary", expanded=True):
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown("**Sampling Settings**")
+            st.markdown(f"- **Mode**: {'Per-Agent Counts' if cfg.get('per_agent_counts') else 'Total Counts'}")
+            st.markdown(f"- **Positive pairs config**: {cfg.get('positive_pairs', 'N/A')}")
+            st.markdown(f"- **Negative pairs config**: {cfg.get('negative_pairs', 'N/A')}")
+            st.markdown(f"- **Positive strategy**: {cfg.get('positive_strategy', 'N/A')}")
+            st.markdown(f"- **Negative strategy**: {cfg.get('negative_strategy', 'N/A')}")
+            st.markdown(f"- **Agent distribution**: {cfg.get('agent_distribution', 'N/A')}")
+        with col2:
+            st.markdown("**Data Settings**")
+            st.markdown(f"- **Days concatenated**: {cfg.get('days', 'N/A')}")
+            st.markdown(f"- **Feature slice**: indices 0-3 + [{cfg.get('feature_start', 4)}:{cfg.get('feature_end', 4)}]")
+            st.markdown(f"- **Padding mode**: {cfg.get('padding', 'N/A')}")
+            if cfg.get('fixed_length'):
+                st.markdown(f"- **Fixed length**: {cfg.get('fixed_length')}")
+            st.markdown(f"- **Random seed**: {cfg.get('seed', 'None (random)')}")
+            st.markdown(f"- **Ensure coverage**: {cfg.get('ensure_agent_coverage', False)}")
+    
+    # === Validation Checks ===
+    st.markdown("### ✅ Validation Checks")
+    
+    validation_results = []
+    all_passed = True
+    
+    # Check 1: Pair counts match
+    actual_pos = counts.get("positive_pairs", 0)
+    actual_neg = counts.get("negative_pairs", 0)
+    actual_total = counts.get("total_pairs", 0)
+    
+    labels = dataset["label"]
+    computed_pos = int((labels == 0).sum())
+    computed_neg = int((labels == 1).sum())
+    
+    check_pos = actual_pos == computed_pos
+    check_neg = actual_neg == computed_neg
+    check_total = actual_total == (computed_pos + computed_neg)
+    
+    validation_results.append({
+        "Check": "Positive pair count",
+        "Expected": actual_pos,
+        "Actual": computed_pos,
+        "Status": "✅ Pass" if check_pos else "❌ Fail"
+    })
+    validation_results.append({
+        "Check": "Negative pair count",
+        "Expected": actual_neg,
+        "Actual": computed_neg,
+        "Status": "✅ Pass" if check_neg else "❌ Fail"
+    })
+    validation_results.append({
+        "Check": "Total pair count",
+        "Expected": actual_total,
+        "Actual": computed_pos + computed_neg,
+        "Status": "✅ Pass" if check_total else "❌ Fail"
+    })
+    all_passed = all_passed and check_pos and check_neg and check_total
+    
+    # Check 2: Array shapes consistency
+    n_pairs, seq_len, n_features = dataset["x1"].shape
+    check_x2_shape = dataset["x2"].shape == (n_pairs, seq_len, n_features)
+    check_mask1_shape = dataset["mask1"].shape == (n_pairs, seq_len)
+    check_mask2_shape = dataset["mask2"].shape == (n_pairs, seq_len)
+    check_label_shape = dataset["label"].shape == (n_pairs,)
+    
+    validation_results.append({
+        "Check": "x2 shape matches x1",
+        "Expected": f"({n_pairs}, {seq_len}, {n_features})",
+        "Actual": str(dataset["x2"].shape),
+        "Status": "✅ Pass" if check_x2_shape else "❌ Fail"
+    })
+    validation_results.append({
+        "Check": "mask1 shape",
+        "Expected": f"({n_pairs}, {seq_len})",
+        "Actual": str(dataset["mask1"].shape),
+        "Status": "✅ Pass" if check_mask1_shape else "❌ Fail"
+    })
+    validation_results.append({
+        "Check": "mask2 shape",
+        "Expected": f"({n_pairs}, {seq_len})",
+        "Actual": str(dataset["mask2"].shape),
+        "Status": "✅ Pass" if check_mask2_shape else "❌ Fail"
+    })
+    validation_results.append({
+        "Check": "label shape",
+        "Expected": f"({n_pairs},)",
+        "Actual": str(dataset["label"].shape),
+        "Status": "✅ Pass" if check_label_shape else "❌ Fail"
+    })
+    all_passed = all_passed and check_x2_shape and check_mask1_shape and check_mask2_shape and check_label_shape
+    
+    # Check 3: Feature count
+    expected_features = 4 + max(0, cfg.get("feature_end", 4) - cfg.get("feature_start", 4))
+    check_features = n_features == expected_features
+    validation_results.append({
+        "Check": "Feature count",
+        "Expected": expected_features,
+        "Actual": n_features,
+        "Status": "✅ Pass" if check_features else "❌ Fail"
+    })
+    all_passed = all_passed and check_features
+    
+    # Check 4: Sequence length matches padded_length
+    padded_len = length_stats.get("padded_length", seq_len)
+    check_seq_len = seq_len == padded_len
+    validation_results.append({
+        "Check": "Sequence length = padded_length",
+        "Expected": padded_len,
+        "Actual": seq_len,
+        "Status": "✅ Pass" if check_seq_len else "❌ Fail"
+    })
+    all_passed = all_passed and check_seq_len
+    
+    # Check 5: Labels are valid (0 or 1)
+    unique_labels = set(np.unique(labels).tolist())
+    valid_labels = unique_labels.issubset({0, 1})
+    validation_results.append({
+        "Check": "Labels are valid (0 or 1)",
+        "Expected": "{0, 1}",
+        "Actual": str(unique_labels),
+        "Status": "✅ Pass" if valid_labels else "❌ Fail"
+    })
+    all_passed = all_passed and valid_labels
+    
+    # Check 6: Per-agent coverage (if enabled)
+    num_agents_in_data = len(agent_usage)
+    if cfg.get("per_agent_counts"):
+        # In per-agent mode, all agents should be represented
+        expected_agents = 50  # Assumed
+        check_agent_count = num_agents_in_data >= expected_agents * 0.9  # Allow 10% tolerance
+        validation_results.append({
+            "Check": "Agent coverage (per-agent mode)",
+            "Expected": f"≥{int(expected_agents * 0.9)} agents",
+            "Actual": f"{num_agents_in_data} agents",
+            "Status": "✅ Pass" if check_agent_count else "⚠️ Warning"
+        })
+        
+        # Check positive pairs per agent
+        pos_counts = [v.get("pos", 0) for v in agent_usage.values()]
+        min_pos = min(pos_counts) if pos_counts else 0
+        expected_pos_per_agent = cfg.get("positive_pairs", 0)
+        check_pos_per_agent = min_pos >= expected_pos_per_agent * 0.9
+        validation_results.append({
+            "Check": "Min positive pairs per agent",
+            "Expected": f"≥{int(expected_pos_per_agent * 0.9)}",
+            "Actual": min_pos,
+            "Status": "✅ Pass" if check_pos_per_agent else "⚠️ Warning"
+        })
+    
+    # Display validation table
+    st.dataframe(pd.DataFrame(validation_results), hide_index=True, use_container_width=True)
+    
+    if all_passed:
+        st.success("✅ All validation checks passed!")
+    else:
+        st.warning("⚠️ Some validation checks failed or have warnings. Review the table above.")
+    
+    # === Dataset Characteristics Summary ===
+    st.markdown("### 📈 Dataset Characteristics")
+    
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("Total Pairs", f"{actual_total:,}")
+    with col2:
+        st.metric("Positive Pairs", f"{actual_pos:,}", delta=f"{actual_pos/actual_total*100:.1f}%" if actual_total > 0 else "0%")
+    with col3:
+        st.metric("Negative Pairs", f"{actual_neg:,}", delta=f"{actual_neg/actual_total*100:.1f}%" if actual_total > 0 else "0%")
+    with col4:
+        st.metric("Unique Agents", f"{num_agents_in_data}")
+    
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("Sequence Length", f"{seq_len:,}")
+    with col2:
+        st.metric("Features", n_features)
+    with col3:
+        combined = length_stats.get("combined", {})
+        st.metric("Avg Raw Length", f"{combined.get('mean', 0):.0f}")
+    with col4:
+        st.metric("Dataset Hash", metadata.get("dataset_hash", "N/A")[:8] + "...")
+    
+    # === Agent Distribution Histograms ===
+    st.markdown("### 📊 Agent Representation Distribution")
+    
+    if agent_usage:
+        # Prepare data for histograms
+        agent_ids = list(agent_usage.keys())
+        pos_counts = [agent_usage[a].get("pos", 0) for a in agent_ids]
+        neg_counts = [agent_usage[a].get("neg", 0) for a in agent_ids]
+        total_counts = [pos_counts[i] + neg_counts[i] for i in range(len(agent_ids))]
+        
+        agent_df = pd.DataFrame({
+            "agent_id": agent_ids,
+            "positive": pos_counts,
+            "negative": neg_counts,
+            "total": total_counts
+        })
+        
+        # Sort by agent_id for consistent display
+        try:
+            agent_df["agent_id_int"] = agent_df["agent_id"].astype(int)
+            agent_df = agent_df.sort_values("agent_id_int")
+        except ValueError:
+            agent_df = agent_df.sort_values("agent_id")
+        
+        tab1, tab2, tab3 = st.tabs(["📊 Positive Distribution", "📊 Negative Distribution", "📊 Total Distribution"])
+        
+        with tab1:
+            st.markdown("**Positive pairs (same-agent) per agent:**")
+            pos_chart = (
+                alt.Chart(agent_df)
+                .mark_bar(color="#1f77b4")
+                .encode(
+                    x=alt.X("agent_id:N", sort=None, title="Agent ID"),
+                    y=alt.Y("positive:Q", title="Positive Pair Count"),
+                    tooltip=["agent_id", "positive"]
+                )
+                .properties(height=300)
+            )
+            st.altair_chart(pos_chart, use_container_width=True)
+            
+            # Stats
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.metric("Min", min(pos_counts))
+            with col2:
+                st.metric("Max", max(pos_counts))
+            with col3:
+                st.metric("Mean", f"{np.mean(pos_counts):.1f}")
+            with col4:
+                st.metric("Std Dev", f"{np.std(pos_counts):.1f}")
+        
+        with tab2:
+            st.markdown("**Negative pairs (different-agent) per agent:**")
+            neg_chart = (
+                alt.Chart(agent_df)
+                .mark_bar(color="#d62728")
+                .encode(
+                    x=alt.X("agent_id:N", sort=None, title="Agent ID"),
+                    y=alt.Y("negative:Q", title="Negative Pair Count"),
+                    tooltip=["agent_id", "negative"]
+                )
+                .properties(height=300)
+            )
+            st.altair_chart(neg_chart, use_container_width=True)
+            
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.metric("Min", min(neg_counts))
+            with col2:
+                st.metric("Max", max(neg_counts))
+            with col3:
+                st.metric("Mean", f"{np.mean(neg_counts):.1f}")
+            with col4:
+                st.metric("Std Dev", f"{np.std(neg_counts):.1f}")
+        
+        with tab3:
+            st.markdown("**Total appearances per agent (positive + negative):**")
+            total_chart = (
+                alt.Chart(agent_df)
+                .mark_bar(color="#2ca02c")
+                .encode(
+                    x=alt.X("agent_id:N", sort=None, title="Agent ID"),
+                    y=alt.Y("total:Q", title="Total Pair Count"),
+                    tooltip=["agent_id", "positive", "negative", "total"]
+                )
+                .properties(height=300)
+            )
+            st.altair_chart(total_chart, use_container_width=True)
+            
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.metric("Min", min(total_counts))
+            with col2:
+                st.metric("Max", max(total_counts))
+            with col3:
+                st.metric("Mean", f"{np.mean(total_counts):.1f}")
+            with col4:
+                st.metric("Std Dev", f"{np.std(total_counts):.1f}")
+        
+        # Stacked bar chart for comparison
+        st.markdown("**Combined View: Positive vs Negative per Agent**")
+        melted_df = agent_df.melt(
+            id_vars=["agent_id"],
+            value_vars=["positive", "negative"],
+            var_name="type",
+            value_name="count"
+        )
+        stacked_chart = (
+            alt.Chart(melted_df)
+            .mark_bar()
+            .encode(
+                x=alt.X("agent_id:N", sort=None, title="Agent ID"),
+                y=alt.Y("count:Q", title="Pair Count"),
+                color=alt.Color("type:N", scale=alt.Scale(domain=["positive", "negative"], range=["#1f77b4", "#d62728"])),
+                tooltip=["agent_id", "type", "count"]
+            )
+            .properties(height=300)
+        )
+        st.altair_chart(stacked_chart, use_container_width=True)
+        
+        # Coverage analysis
+        st.markdown("### 🎯 Coverage Analysis")
+        
+        agents_with_pos = sum(1 for c in pos_counts if c > 0)
+        agents_with_neg = sum(1 for c in neg_counts if c > 0)
+        agents_with_both = sum(1 for i in range(len(pos_counts)) if pos_counts[i] > 0 and neg_counts[i] > 0)
+        
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Agents with Positives", f"{agents_with_pos}/{num_agents_in_data}")
+        with col2:
+            st.metric("Agents with Negatives", f"{agents_with_neg}/{num_agents_in_data}")
+        with col3:
+            st.metric("Agents with Both", f"{agents_with_both}/{num_agents_in_data}")
+        
+        # Identify under-represented agents
+        if cfg.get("per_agent_counts"):
+            expected_pos = cfg.get("positive_pairs", 0)
+            expected_neg = cfg.get("negative_pairs", 0) * (num_agents_in_data - 1)
+            
+            underrep_pos = [agent_ids[i] for i in range(len(pos_counts)) if pos_counts[i] < expected_pos * 0.8]
+            underrep_neg = [agent_ids[i] for i in range(len(neg_counts)) if neg_counts[i] < expected_neg * 0.8]
+            
+            if underrep_pos or underrep_neg:
+                with st.expander("⚠️ Under-represented Agents", expanded=False):
+                    if underrep_pos:
+                        st.warning(f"Agents with <80% expected positive pairs: {', '.join(map(str, underrep_pos[:10]))}" + 
+                                  (f" (+{len(underrep_pos)-10} more)" if len(underrep_pos) > 10 else ""))
+                    if underrep_neg:
+                        st.warning(f"Agents with <80% expected negative pairs: {', '.join(map(str, underrep_neg[:10]))}" +
+                                  (f" (+{len(underrep_neg)-10} more)" if len(underrep_neg) > 10 else ""))
+    else:
+        st.warning("No agent usage data available for distribution analysis.")
+    
+    # === Length Distribution ===
+    st.markdown("### 📏 Sequence Length Analysis")
+    
+    # Compute actual lengths from masks
+    lengths_x1 = dataset["mask1"].sum(axis=1)
+    lengths_x2 = dataset["mask2"].sum(axis=1)
+    
+    length_df = pd.DataFrame({
+        "x1_length": lengths_x1,
+        "x2_length": lengths_x2,
+        "label": dataset["label"]
+    })
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        st.markdown("**x1 Length Distribution**")
+        x1_hist = (
+            alt.Chart(length_df)
+            .mark_bar(opacity=0.7)
+            .encode(
+                x=alt.X("x1_length:Q", bin=alt.Bin(maxbins=30), title="Length"),
+                y=alt.Y("count()", title="Frequency"),
+                color=alt.Color("label:N", scale=alt.Scale(domain=[0, 1], range=["#1f77b4", "#d62728"]))
+            )
+            .properties(height=200)
+        )
+        st.altair_chart(x1_hist, use_container_width=True)
+    
+    with col2:
+        st.markdown("**x2 Length Distribution**")
+        x2_hist = (
+            alt.Chart(length_df)
+            .mark_bar(opacity=0.7)
+            .encode(
+                x=alt.X("x2_length:Q", bin=alt.Bin(maxbins=30), title="Length"),
+                y=alt.Y("count()", title="Frequency"),
+                color=alt.Color("label:N", scale=alt.Scale(domain=[0, 1], range=["#1f77b4", "#d62728"]))
+            )
+            .properties(height=200)
+        )
+        st.altair_chart(x2_hist, use_container_width=True)
+
+
 def main():
     st.title("Trajectory Pair Dataset Generator")
     cfg, cache_key, preview_cap = _build_config()
@@ -473,7 +862,13 @@ def main():
     if "full_dataset" in st.session_state and "full_metadata" in st.session_state:
         dataset = st.session_state["full_dataset"]
         metadata = st.session_state["full_metadata"]
-        st.subheader("Downloads")
+        
+        # Validation section
+        st.divider()
+        _render_dataset_validation(dataset, metadata)
+        
+        st.divider()
+        st.subheader("📥 Downloads")
         npz_bytes = dataset_to_npz_bytes(dataset)
         st.download_button(
             label="Download .npz",

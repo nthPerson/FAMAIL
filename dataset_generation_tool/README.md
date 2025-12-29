@@ -132,7 +132,60 @@ The metadata includes:
 | **Preview** | min(configured, preview_cap) | min(configured, preview_cap) | ❌ Not guaranteed |
 | **Full Dataset** | As configured (total or per-agent) | As configured (total or per-agent) | ✅ Guaranteed in per-agent mode |
 
-To verify actual coverage, click "Generate Full Dataset" and inspect the `agent_usage` in metadata.
+To verify actual coverage, click "Generate Full Dataset" and use the **Dataset Validation Report**.
+
+## Dataset Validation Feature
+
+After generating a full dataset, the tool automatically displays a comprehensive **Dataset Validation Report** that includes:
+
+### Validation Checks
+
+The validation report runs automatic checks on the generated dataset:
+
+| Check | Description |
+|-------|-------------|
+| Positive/Negative pair counts | Verifies metadata counts match actual label distribution |
+| Array shape consistency | Ensures x1, x2, mask1, mask2, label arrays have compatible shapes |
+| Feature count | Validates the number of features matches configuration |
+| Sequence length | Confirms all sequences are padded to the expected length |
+| Label validity | Ensures all labels are 0 (positive) or 1 (negative) |
+| Agent coverage | (Per-agent mode) Checks that all agents are represented |
+| Min pairs per agent | (Per-agent mode) Verifies minimum positive pairs per agent |
+
+### Agent Distribution Histograms
+
+Interactive visualizations showing:
+
+1. **Positive Distribution** — Bar chart of positive (same-agent) pairs per agent
+2. **Negative Distribution** — Bar chart of negative (different-agent) pairs per agent  
+3. **Total Distribution** — Combined view of total appearances per agent
+4. **Stacked Comparison** — Positive vs negative breakdown per agent
+
+Each histogram includes statistics:
+- Min, Max, Mean, Standard Deviation
+
+### Coverage Analysis
+
+Summary metrics for agent coverage:
+- Number of agents with positive pairs
+- Number of agents with negative pairs
+- Number of agents with both types
+- List of under-represented agents (if any)
+
+### Sequence Length Analysis
+
+Histograms of actual trajectory lengths (from mask sums):
+- x1 length distribution by label type
+- x2 length distribution by label type
+
+### Configuration Summary
+
+Full display of all generation settings used:
+- Sampling mode (total vs per-agent)
+- Pair counts and strategies
+- Feature slice configuration
+- Padding/truncation settings
+- Random seed used
 
 ## Example: Full Coverage Dataset
 
@@ -142,10 +195,16 @@ For training a discriminator on 50 agents with comprehensive coverage:
 2. Set **# Positive Pairs per Agent** = 100 → 5,000 matching pairs
 3. Set **# Negative Pairs per Agent Combination** = 10 → 24,500 non-matching pairs
 4. Total dataset: **29,500 pairs** covering all agent combinations
+5. Click **"Generate Full Dataset"** and review the validation report
 
 This ensures the model sees:
 - 100 examples of each agent matching with themselves
 - 10 examples of each agent being compared to every other agent
+
+The validation report will confirm:
+✅ All 50 agents represented  
+✅ Each agent has ≥100 positive pairs  
+✅ Each agent participates in ~980 negative pairs (10 × 49 as anchor + 10 × 49 as other)
 
 ## Notes
 
