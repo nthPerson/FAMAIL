@@ -1,0 +1,11 @@
+# Pickup/Dropoff Counts Processor - Dependencies
+
+# Core data processing
+numpy>=1.21.0
+pandas>=1.3.0
+
+# Visualization & Dashboard
+streamlit>=1.20.0
+plotly>=5.0.0
+
+# Standard library pickle is used, no additional dependency needed
