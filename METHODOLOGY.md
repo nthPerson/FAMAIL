@@ -352,18 +352,12 @@ Aggregation **preserves**:
 - ✓ Manageable data size (~6.6M keys for dense dataset)
 - ✓ Balance between detail and statistical stability
 
-**Alternatives considered**:
-- 1-minute buckets (1440/day): Too sparse, many zero counts
-- 15-minute buckets (96/day): Too coarse, misses short-term variations
-- 30-minute buckets (48/day): Used in some literature, but loses peak detail
-
 ### 3.5 Sunday Exclusion Rationale
 
 Sundays are excluded by default because:
 1. **Different travel patterns**: Leisure vs. commute behavior
-2. **Lower sample size**: Fewer trips on Sundays in dataset
+2. **Lower sample size**: 0 on Sundays in dataset
 3. **Domain convention**: Many transportation studies focus on weekday behavior
-4. **Optional**: Can be re-included via configuration flag
 
 ## 4. Output Characteristics
 
