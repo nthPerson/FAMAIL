@@ -448,6 +448,24 @@ def start_training(dataset_path: Path, params: Dict, experiment_name: str, progr
         num_workers=params["num_workers"]
     )
     
+    # Load dataset metadata if available
+    dataset_info = {
+        'path': str(dataset_path),
+        'name': dataset_path.name,
+    }
+    metadata_path = dataset_path / "metadata.json"
+    if metadata_path.exists():
+        with open(metadata_path) as f:
+            metadata = json.load(f)
+            dataset_info['metadata'] = metadata
+            # Extract key counts from metadata for easy access
+            if 'counts' in metadata:
+                dataset_info['total_pairs'] = metadata['counts'].get('total_pairs')
+                dataset_info['positive_pairs'] = metadata['counts'].get('positive_pairs')
+                dataset_info['negative_pairs'] = metadata['counts'].get('negative_pairs')
+            if 'config' in metadata:
+                dataset_info['source_data_path'] = metadata['config'].get('data_path')
+    
     # Create model
     model = SiameseLSTMDiscriminator(
         hidden_dim=params["hidden_dim"],
@@ -471,7 +489,8 @@ def start_training(dataset_path: Path, params: Dict, experiment_name: str, progr
         config=config,
         train_loader=train_loader,
         val_loader=val_loader,
-        experiment_name=experiment_name
+        experiment_name=experiment_name,
+        dataset_info=dataset_info
     )
     
     # Setup progress callback if container provided

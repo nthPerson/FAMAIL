@@ -211,4 +211,4 @@ model = SiameseTransformerDiscriminator(
 
 ## License
 
-Part of the FaMAIL project.
+FaMAIL Project - San Diego State University - 2026.

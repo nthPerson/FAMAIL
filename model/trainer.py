@@ -156,7 +156,8 @@ class Trainer:
                  config: TrainingConfig,
                  train_loader: DataLoader,
                  val_loader: DataLoader,
-                 experiment_name: Optional[str] = None):
+                 experiment_name: Optional[str] = None,
+                 dataset_info: Optional[Dict[str, Any]] = None):
         """Initialize trainer.
         
         Args:
@@ -165,10 +166,12 @@ class Trainer:
             train_loader: DataLoader for training data
             val_loader: DataLoader for validation data
             experiment_name: Optional name for this experiment
+            dataset_info: Optional dict with dataset metadata (path, pos/neg counts, etc.)
         """
         self.config = config
         self.train_loader = train_loader
         self.val_loader = val_loader
+        self.dataset_info = dataset_info or {}
         
         # Set device
         if config.device == "auto":
@@ -364,6 +367,161 @@ class Trainer:
         if not self.config.save_best_only:
             epoch_path = self.checkpoint_dir / f"epoch_{epoch:04d}.pt"
             torch.save(checkpoint, epoch_path)
+    
+    def save_results_json(self, training_start_time: Optional[str] = None):
+        """Save comprehensive training results to results.json.
+        
+        This creates a single JSON file with all information needed to understand
+        the trained model: dataset info, model architecture, hyperparameters,
+        and performance metrics.
+        
+        Args:
+            training_start_time: ISO format timestamp when training started
+        """
+        # Calculate model parameters
+        total_params = sum(p.numel() for p in self.model.parameters())
+        trainable_params = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
+        
+        # Get model architecture details
+        model_config = self.model.config if hasattr(self.model, 'config') else {}
+        
+        # Calculate layer information
+        layer_info = {}
+        if hasattr(self.model, 'encoder'):
+            encoder = self.model.encoder
+            layer_info['encoder'] = {
+                'type': 'LSTM',
+                'input_dim': 6,  # After normalization
+                'hidden_dim': encoder.hidden_dim,
+                'num_layers': encoder.num_layers,
+                'bidirectional': encoder.bidirectional,
+                'output_dim': encoder.output_dim
+            }
+        if hasattr(self.model, 'classifier'):
+            classifier_layers = []
+            for name, module in self.model.classifier.named_modules():
+                if isinstance(module, nn.Linear):
+                    classifier_layers.append({
+                        'type': 'Linear',
+                        'in_features': module.in_features,
+                        'out_features': module.out_features
+                    })
+            layer_info['classifier'] = classifier_layers
+        
+        # Training statistics
+        epochs_completed = len(self.history.train_loss)
+        total_time = sum(self.history.epoch_times) if self.history.epoch_times else 0
+        
+        # Best epoch metrics (from validation during training)
+        best_epoch = self.history.best_epoch
+        best_metrics = {}
+        if best_epoch > 0 and best_epoch <= len(self.history.val_loss):
+            idx = best_epoch - 1
+            best_metrics = {
+                'epoch': best_epoch,
+                'val_loss': self.history.val_loss[idx],
+                'val_accuracy': self.history.val_accuracy[idx] if self.history.val_accuracy else None,
+                'val_f1': self.history.val_f1[idx] if self.history.val_f1 else None,
+                'val_auc': self.history.val_auc[idx] if self.history.val_auc else None,
+                'train_loss': self.history.train_loss[idx],
+            }
+        
+        # Final epoch metrics
+        final_metrics = {}
+        if epochs_completed > 0:
+            final_metrics = {
+                'epoch': epochs_completed,
+                'train_loss': self.history.train_loss[-1],
+                'val_loss': self.history.val_loss[-1] if self.history.val_loss else None,
+                'val_accuracy': self.history.val_accuracy[-1] if self.history.val_accuracy else None,
+                'val_f1': self.history.val_f1[-1] if self.history.val_f1 else None,
+                'val_auc': self.history.val_auc[-1] if self.history.val_auc else None,
+            }
+        
+        # Dataset sample counts
+        train_samples = len(self.train_loader.dataset)
+        val_samples = len(self.val_loader.dataset)
+        
+        # Try to get pos/neg counts from dataset
+        train_pos, train_neg = None, None
+        val_pos, val_neg = None, None
+        
+        if hasattr(self.train_loader.dataset, 'labels'):
+            labels = self.train_loader.dataset.labels
+            train_pos = int((labels == 1).sum())
+            train_neg = int((labels == 0).sum())
+        elif hasattr(self.train_loader.dataset, 'data') and 'label' in self.train_loader.dataset.data:
+            labels = self.train_loader.dataset.data['label']
+            train_pos = int((labels == 1).sum())
+            train_neg = int((labels == 0).sum())
+            
+        if hasattr(self.val_loader.dataset, 'labels'):
+            labels = self.val_loader.dataset.labels
+            val_pos = int((labels == 1).sum())
+            val_neg = int((labels == 0).sum())
+        elif hasattr(self.val_loader.dataset, 'data') and 'label' in self.val_loader.dataset.data:
+            labels = self.val_loader.dataset.data['label']
+            val_pos = int((labels == 1).sum())
+            val_neg = int((labels == 0).sum())
+        
+        # Build comprehensive results dictionary
+        results = {
+            'experiment': {
+                'name': self.experiment_name,
+                'checkpoint_dir': str(self.checkpoint_dir),
+                'training_started': training_start_time or datetime.now().isoformat(),
+                'training_completed': datetime.now().isoformat(),
+            },
+            'dataset': {
+                **self.dataset_info,  # Include any passed dataset metadata
+                'train_samples': train_samples,
+                'train_positive': train_pos,
+                'train_negative': train_neg,
+                'val_samples': val_samples,
+                'val_positive': val_pos,
+                'val_negative': val_neg,
+                'total_samples': train_samples + val_samples,
+            },
+            'model': {
+                'architecture': 'SiameseLSTMDiscriminator',
+                'config': model_config,
+                'total_parameters': total_params,
+                'trainable_parameters': trainable_params,
+                'layers': layer_info,
+            },
+            'hyperparameters': {
+                'batch_size': self.config.batch_size,
+                'learning_rate': self.config.learning_rate,
+                'weight_decay': self.config.weight_decay,
+                'epochs_configured': self.config.epochs,
+                'early_stopping_patience': self.config.early_stopping_patience,
+                'early_stopping_min_delta': self.config.early_stopping_min_delta,
+                'scheduler': self.config.scheduler,
+                'scheduler_patience': self.config.scheduler_patience,
+                'scheduler_factor': self.config.scheduler_factor,
+                'seed': self.config.seed,
+            },
+            'training': {
+                'device': str(self.device),
+                'epochs_completed': epochs_completed,
+                'early_stopped': epochs_completed < self.config.epochs,
+                'total_time_seconds': total_time,
+                'avg_epoch_time_seconds': total_time / epochs_completed if epochs_completed > 0 else 0,
+                'initial_learning_rate': self.history.learning_rates[0] if self.history.learning_rates else self.config.learning_rate,
+                'final_learning_rate': self.history.learning_rates[-1] if self.history.learning_rates else self.config.learning_rate,
+            },
+            'performance': {
+                'best': best_metrics,
+                'final': final_metrics,
+            }
+        }
+        
+        # Save results.json
+        results_path = self.checkpoint_dir / "results.json"
+        with open(results_path, 'w') as f:
+            json.dump(results, f, indent=2)
+            
+        return results
             
     def load_checkpoint(self, path: Union[str, Path]):
         """Load model from checkpoint.
@@ -402,6 +560,9 @@ class Trainer:
             print(f"Val samples: {len(self.val_loader.dataset)}")
             print(f"Checkpoint directory: {self.checkpoint_dir}")
             print("-" * 60)
+        
+        # Record training start time
+        training_start_time = datetime.now().isoformat()
             
         # Save config
         config_path = self.checkpoint_dir / "config.json"
@@ -494,6 +655,9 @@ class Trainer:
         history_path = self.checkpoint_dir / "history.json"
         with open(history_path, 'w') as f:
             json.dump(self.history.to_dict(), f, indent=2)
+        
+        # Save comprehensive results summary
+        self.save_results_json(training_start_time=training_start_time)
             
         if verbose:
             print("-" * 60)
