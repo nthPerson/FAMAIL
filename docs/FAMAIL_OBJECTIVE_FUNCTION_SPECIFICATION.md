@@ -62,14 +62,15 @@ Where:
 
 ### 2.2 Optimization Direction
 
-**Important**: The objective function terms are defined as **unfairness/disparity measures** where:
-- **Lower values = more fair**
-- The optimization problem is to **minimize** $\mathcal{L}$
+**Important**: Following the ST-iFGSM framework, the FAMAIL objective function is designed to be **maximized**. Each fairness term is formulated such that:
+- **Higher values = more fair/better**
+- The optimization problem is to **maximize** $\mathcal{L}$
 
-Alternatively, when maximizing fairness:
 $$
-\max_{\mathcal{T}'} \left( -\alpha_1 F_{\text{causal}} - \alpha_2 F_{\text{spatial}} + \alpha_3 F_{\text{fidelity}} + \alpha_4 F_{\text{quality}} \right)
+\max_{\mathcal{T}'} \mathcal{L} = \max_{\mathcal{T}'} \left( \alpha_1 F_{\text{causal}} + \alpha_2 F_{\text{spatial}} + \alpha_3 F_{\text{fidelity}} + \alpha_4 F_{\text{quality}} \right)
 $$
+
+All $\alpha_i$ coefficients are positive, and each $F_*$ term is defined so that higher values represent better outcomes (greater fairness, higher fidelity, better quality).
 
 ### 2.3 Subject to Constraints
 
@@ -86,9 +87,9 @@ The optimization is subject to the following constraints (detailed in Section 7)
 
 ### 3.1 Conceptual Foundation
 
-The spatial fairness term measures inequality in taxi service distribution across geographic regions. It is based on the work of Su et al. (2018) who studied spatial inequality in taxi services using service rates and Gini coefficients.
+The spatial fairness term measures equality in taxi service distribution across geographic regions. It is based on the work of Su et al. (2018) who studied spatial inequality in taxi services using service rates and Gini coefficients.
 
-**Key Insight**: Perfect spatial fairness ($F_{\text{spatial}} = 0$) means all grid cells receive taxi service proportional to their needs/demand.
+**Key Insight**: Perfect spatial fairness ($F_{\text{spatial}} = 1$) means all grid cells receive equal taxi service rates. Lower values (approaching 0) indicate greater inequality in service distribution.
 
 ### 3.2 Mathematical Formulation
 
@@ -142,24 +143,27 @@ $$
 
 Where $\mathcal{I}$ is the set of all valid grid cells.
 
-The per-period spatial fairness score (higher = more fair):
+Since the Gini coefficient measures inequality (where $G=0$ means perfect equality and $G=1$ means maximum inequality), we define the per-period spatial fairness score as the complement:
 $$
 F_{\text{spatial}}^p = 1 - \frac{1}{2}(G_a^p + G_d^p)
 $$
+
+This formulation ensures that **higher values indicate greater fairness** ($F_{\text{spatial}}^p = 1$ means perfect equality, $F_{\text{spatial}}^p = 0$ means maximum inequality).
 
 #### 3.2.4 Aggregated Spatial Fairness Term
 
 The final spatial fairness term aggregates across all time periods:
 
 $$
-F_{\text{spatial}} = \frac{1}{2|P|} \sum_{p \in P} (G_a^p + G_d^p)
+F_{\text{spatial}} = \frac{1}{|P|} \sum_{p \in P} F_{\text{spatial}}^p = 1 - \frac{1}{2|P|} \sum_{p \in P} (G_a^p + G_d^p)
 $$
 
-**Note**: This formulation yields the **unfairness measure** (higher = less fair). For the objective function where we minimize unfairness, use $F_{\text{spatial}}$ directly. If converting to a fairness score, use:
+This formulation yields a **fairness score** where:
+- $F_{\text{spatial}} = 1$ indicates perfect spatial equality across all periods
+- $F_{\text{spatial}} = 0$ indicates maximum spatial inequality
+- **Higher values = more fair**
 
-$$
-F_{st} = 1 - F_{\text{spatial}} = 1 - \frac{1}{2|P|} \sum_{p \in P}(G_a^p + G_d^p)
-$$
+The term can be maximized directly in the objective function.
 
 ### 3.3 Implementation Algorithm
 
@@ -174,7 +178,7 @@ Input:
   - num_taxis: int
 
 Output:
-  - F_spatial: float (unfairness score ∈ [0, 1])
+  - F_spatial: float (fairness score ∈ [0, 1], higher = more fair)
 
 Procedure:
   1. Initialize counts:
@@ -212,7 +216,7 @@ Procedure:
        G_a[p] = compute_gini(ASR_list)
        G_d[p] = compute_gini(DSR_list)
 
-  4. F_spatial = (1 / (2 * |P|)) * Σ_p (G_a[p] + G_d[p])
+  4. F_spatial = 1 - (1 / (2 * |P|)) * Σ_p (G_a[p] + G_d[p])
   
   5. Return F_spatial
 ```
@@ -263,7 +267,7 @@ def compute_spatial_fairness(
         num_days: Number of days in the period
     
     Returns:
-        F_spatial: Unfairness score in [0, 1]
+        F_spatial: Fairness score in [0, 1] (higher = more fair)
     """
     # Extract unique periods
     periods = set()
@@ -292,8 +296,9 @@ def compute_spatial_fairness(
         gini_arrivals.append(compute_gini_coefficient(np.array(asr_values)))
         gini_departures.append(compute_gini_coefficient(np.array(dsr_values)))
     
-    # Aggregate across periods
-    F_spatial = 0.5 * (np.mean(gini_arrivals) + np.mean(gini_departures))
+    # Aggregate across periods (complement of average Gini)
+    avg_gini = 0.5 * (np.mean(gini_arrivals) + np.mean(gini_departures))
+    F_spatial = 1.0 - avg_gini
     return F_spatial
 ```
 
@@ -318,17 +323,19 @@ def compute_spatial_fairness(
 
 ### 4.1 Conceptual Foundation
 
-The causal fairness term isolates the **unfair effect** of spatial/temporal context on taxi service outcomes. The key insight is that service differences due to **demand** are legitimate, while differences due to other factors (e.g., neighborhood characteristics, time of day) may be unfair.
+The causal fairness term quantifies how well service supply matches demand across different spatial/temporal contexts. The key insight is that in a fair system, service differences should be explainable by **demand** alone, not by other contextual factors (e.g., neighborhood characteristics, time of day).
 
 **Causal Model**:
 - Let $Y$ = service supply-demand ratio (outcome)
-- Let $D$ = demand (legitimate factor)
+- Let $D$ = demand (legitimate explanatory factor)
 - Let $C$ = spatial/temporal context (potentially unfair factor)
 
-The unfair effect is the portion of $Y$ that cannot be explained by $D$ alone:
+The causal fairness term measures the proportion of service variation explained by demand:
 $$
-Y_{i,p} = \underbrace{g(D_{i,p})}_{\text{fair (demand-based)}} + \underbrace{(Y_{i,p} - g(D_{i,p}))}_{\text{unfair residual}}
+Y_{i,p} = \underbrace{g(D_{i,p})}_{\text{demand-explained component}} + \underbrace{(Y_{i,p} - g(D_{i,p}))}_{\text{unexplained residual}}
 $$
+
+**Higher causal fairness** means that demand better explains service distribution (less contextual bias).
 
 ### 4.2 Mathematical Formulation
 
@@ -370,19 +377,20 @@ $$
 
 #### 4.2.4 Per-Period Causal Fairness
 
-For each time period $p$:
+For each time period $p$, we use a variance-based formulation (coefficient of determination or $R^2$):
 $$
-F_{\text{causal}}^p = \frac{1}{|\mathcal{I}_p|} \sum_{i \in \mathcal{I}_p} \left( R_{i,p}^{\text{(unfair)}} \right)^2
-$$
-
-Where $\mathcal{I}_p = \{i : D_{i,p} > 0\}$ is the set of cells with positive demand in period $p$.
-
-**Alternative Formulation** (variance-based):
-$$
-F_{\text{causal}}^p = \frac{\text{Var}_p(g(D_{i,p}))}{\text{Var}_p(Y_{i,p})}
+F_{\text{causal}}^p = \frac{\text{Var}_p(g(D_{i,p}))}{\text{Var}_p(Y_{i,p})} = 1 - \frac{\text{Var}_p(R_{i,p})}{\text{Var}_p(Y_{i,p})}
 $$
 
-This represents the proportion of variance in service explained by demand (coefficient of determination).
+Where:
+- $\mathcal{I}_p = \{i : D_{i,p} > 0\}$ is the set of cells with positive demand in period $p$
+- $R_{i,p} = Y_{i,p} - g(D_{i,p})$ is the residual (unexplained component)
+- $\text{Var}_p(\cdot)$ denotes variance across cells in period $p$
+
+This represents the **proportion of variance in service explained by demand alone**:
+- $F_{\text{causal}}^p = 1$: Service perfectly matches demand (perfectly fair)
+- $F_{\text{causal}}^p = 0$: Service is independent of demand (maximally unfair)
+- **Higher values = more fair** (demand better explains service distribution)
 
 #### 4.2.5 Aggregated Causal Fairness Term
 
@@ -403,7 +411,7 @@ Input:
   - estimation_method: str ∈ {"binning", "regression", "loess"}
 
 Output:
-  - F_causal: float (unfairness score)
+  - F_causal: float (fairness score ∈ [0, 1], higher = more fair)
 
 Procedure:
   1. DATA PREPARATION
@@ -434,10 +442,14 @@ Procedure:
      For each (D_ip, Y_ip, p):
        R_ip = Y_ip - g(D_ip)
 
-  4. COMPUTE PER-PERIOD CAUSAL FAIRNESS
+  4. COMPUTE PER-PERIOD CAUSAL FAIRNESS (R²)
      For each period p:
        I_p = cells with D > 0 in period p
-       F_causal_p = (1/|I_p|) * Σ_{i ∈ I_p} R_ip²
+       Compute Var_p(Y) = variance of Y_ip over cells in I_p
+       Compute Var_p(g(D)) = variance of g(D_ip) over cells in I_p
+       F_causal_p = Var_p(g(D)) / Var_p(Y)
+       
+       // Alternative: F_causal_p = 1 - (Var_p(R) / Var_p(Y))
 
   5. AGGREGATE
      F_causal = (1/|P|) * Σ_p F_causal_p
@@ -518,7 +530,7 @@ def compute_causal_fairness(
     g_estimation_method: str = "binning"
 ) -> float:
     """
-    Compute the causal fairness term.
+    Compute the causal fairness term (R² - proportion of variance explained by demand).
     
     Args:
         pickup_counts: Dict[(x, y, time, day)] → pickup count
@@ -528,7 +540,7 @@ def compute_causal_fairness(
         g_estimation_method: Method for estimating g(d)
     
     Returns:
-        F_causal: Causal unfairness score
+        F_causal: Causal fairness score ∈ [0, 1] (higher = more fair)
     """
     # Collect all (D, Y, period) observations
     observations = []
@@ -564,23 +576,27 @@ def compute_causal_fairness(
     # Estimate g(d)
     g = estimate_g_function(demands, service_ratios, method=g_estimation_method)
     
-    # Compute residuals
+    # Compute predicted values
     expected_Y = g(demands)
-    residuals = service_ratios - expected_Y
     
-    # Group by period and compute per-period fairness
+    # Group by period and compute per-period R²
     unique_periods = list(set(periods))
     F_causal_periods = []
     
     for p in unique_periods:
-        mask = [periods[i] == p for i in range(len(periods))]
-        period_residuals = residuals[mask]
+        mask = np.array([periods[i] == p for i in range(len(periods))])
+        period_Y = service_ratios[mask]
+        period_expected_Y = expected_Y[mask]
         
-        if len(period_residuals) > 0:
-            F_p = np.mean(period_residuals ** 2)
-            F_causal_periods.append(F_p)
+        if len(period_Y) > 1:
+            # Compute R² = Var(predicted) / Var(actual)
+            var_Y = np.var(period_Y)
+            if var_Y > 0:
+                var_predicted = np.var(period_expected_Y)
+                r_squared = var_predicted / var_Y
+                F_causal_periods.append(np.clip(r_squared, 0.0, 1.0))
     
-    # Aggregate
+    # Aggregate across periods
     F_causal = np.mean(F_causal_periods) if F_causal_periods else 0.0
     return F_causal
 ```
@@ -606,9 +622,10 @@ def compute_causal_fairness(
 
 To validate the causal fairness term:
 
-1. **Sanity Check 1**: If supply is allocated exactly proportional to demand, $F_{\text{causal}} \approx 0$
-2. **Sanity Check 2**: If supply is randomly distributed regardless of demand, $F_{\text{causal}}$ should be high
-3. **Sanity Check 3**: The term should decrease when trajectories are edited to better match supply to demand
+1. **Sanity Check 1**: If supply is allocated exactly proportional to demand, $F_{\text{causal}} \approx 1$ (perfect fairness)
+2. **Sanity Check 2**: If supply is randomly distributed regardless of demand, $F_{\text{causal}} \approx 0$ (no relationship)
+3. **Sanity Check 3**: The term should increase when trajectories are edited to better match supply to demand
+4. **Bounds Check**: $F_{\text{causal}} \in [0, 1]$ always (it's an $R^2$ value)
 
 ---
 
@@ -917,10 +934,12 @@ class FAMAILObjectiveFunction:
         )
         F_quality = self._quality_module.compute(edited_trajectories)
         
-        total_loss = (
+        # All terms are fairness/quality scores (higher = better)
+        # Objective is maximized
+        total_objective = (
             self.config.alpha_causal * F_causal +
-            self.config.alpha_spatial * F_spatial -
-            self.config.alpha_fidelity * F_fidelity -
+            self.config.alpha_spatial * F_spatial +
+            self.config.alpha_fidelity * F_fidelity +
             self.config.alpha_quality * F_quality
         )
         
@@ -929,7 +948,7 @@ class FAMAILObjectiveFunction:
             "F_spatial": F_spatial,
             "F_fidelity": F_fidelity,
             "F_quality": F_quality,
-            "total_loss": total_loss
+            "total_objective": total_objective
         }
     
     def check_constraints(
@@ -986,11 +1005,12 @@ def test_objective_function_smoke():
     assert "F_spatial" in result
     assert "F_fidelity" in result
     assert "F_quality" in result
-    assert "total_loss" in result
+    assert "total_objective" in result
     
-    # Verify values are reasonable
+    # Verify values are reasonable (all fairness scores in [0, 1])
     assert 0 <= result["F_spatial"] <= 1
-    assert result["F_causal"] >= 0
+    assert 0 <= result["F_causal"] <= 1
+    assert result["total_objective"] >= 0  # Sum of positive terms
 ```
 
 ### 10.3 Baseline Metrics Experiment
@@ -1061,27 +1081,34 @@ def compute_baseline_metrics():
 
 ## Appendix A: Quick Reference - Key Equations
 
-### Spatial Fairness
+### Spatial Fairness (Complement of Average Gini)
 
 $$
-F_{\text{spatial}} = \frac{1}{2|P|} \sum_{p \in P}(G_a^p + G_d^p)
+F_{\text{spatial}} = 1 - \frac{1}{2|P|} \sum_{p \in P}(G_a^p + G_d^p)
 $$
 
+**Gini Coefficient:**
 $$
 G = 1 + \frac{1}{n} - \frac{2}{n^2 \bar{x}} \sum_{i=1}^{n}(n-i+1) \cdot x_{(i)}
 $$
 
-### Causal Fairness
+**Interpretation:** $F_{\text{spatial}} = 1$ is perfect equality, $F_{\text{spatial}} = 0$ is maximum inequality.
+
+### Causal Fairness (R² - Variance Explained by Demand)
 
 $$
-F_{\text{causal}} = \frac{1}{|P|} \sum_{p \in P} \left[ \frac{1}{|\mathcal{I}_p|} \sum_{i \in \mathcal{I}_p} (Y_{i,p} - g(D_{i,p}))^2 \right]
+F_{\text{causal}} = \frac{1}{|P|} \sum_{p \in P} F_{\text{causal}}^p = \frac{1}{|P|} \sum_{p \in P} \frac{\text{Var}_p(g(D_{i,p}))}{\text{Var}_p(Y_{i,p})}
 $$
 
-### Objective Function
+**Interpretation:** $F_{\text{causal}} = 1$ means service perfectly matches demand, $F_{\text{causal}} = 0$ means no relationship.
+
+### Objective Function (Maximization)
 
 $$
-\mathcal{L} = \alpha_1 F_{\text{causal}} + \alpha_2 F_{\text{spatial}} + \alpha_3 F_{\text{fidelity}} + \alpha_4 F_{\text{quality}}
+\max_{\mathcal{T}'} \mathcal{L} = \max_{\mathcal{T}'} \left( \alpha_1 F_{\text{causal}} + \alpha_2 F_{\text{spatial}} + \alpha_3 F_{\text{fidelity}} + \alpha_4 F_{\text{quality}} \right)
 $$
+
+**All terms are fairness/quality scores where higher values are better.**
 
 ---
 
