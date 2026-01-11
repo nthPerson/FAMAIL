@@ -241,9 +241,9 @@ This averages the arrival and departure Gini coefficients to capture both aspect
 
 **Location**: `FAMAIL/source_data/all_trajs.pkl`
 
-Can be used to extract pickup/dropoff events directly from trajectories if `pickup_dropoff_counts.pkl` is unavailable or if computing on modified trajectories.
+Can be used to infer pickup events only (dataset contains only passenger-seeking trajectories). (`x_grid`, `y_grid`) of last state in trajectory can be treated as pickup event location. Can be used if computing on modified trajectories (only the `all_trajs.pkl` trajectory data will be modified).
 
-**Usage**: Extract state transitions where action implies pickup or dropoff.
+**Usage**: Extract state information where action implies pickup.
 
 ### 4.2 Data Preprocessing
 
@@ -405,7 +405,7 @@ ALGORITHM: Compute Spatial Fairness Term
 ═══════════════════════════════════════════════════════════════════════
 
 INPUT:
-  - data: pickup_dropoff_counts dictionary OR trajectory data
+  - data: pickup_dropoff_counts dictionary
   - config: SpatialFairnessConfig
     - grid_dims: (48, 90)
     - num_taxis: 50
@@ -1068,6 +1068,7 @@ sample_data = {
 | Version | Date | Changes |
 |---------|------|---------|
 | 1.0.0 | 2026-01-09 | Initial development plan |
+| 1.0.1 | 2026-01-10 | Clarify that only pickups can be inferred from `all_trajs.pkl` data |
 
 ---
 

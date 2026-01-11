@@ -725,7 +725,7 @@ All terms: Higher = Better, Range = [0, 1]
 
 | Version | Date | Author | Changes |
 |---------|------|--------|---------|
-| 1.0.0 | 2026-01-09 | FAMAIL Team | Initial specification |
+| 1.0.0 | 2026-01-09 | Robert Ashe (FAMAIL Team) | Initial specification |
 
 ---
 
