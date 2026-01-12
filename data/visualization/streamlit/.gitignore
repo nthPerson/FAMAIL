@@ -1,0 +1,9 @@
+ai_context_docs
+all_trajs.pkl
+*.pkl
+data/all_trajs.pkl
+overkill_app.py
+original_app.py
+/data/states_all.npy
+*__pycache__*
+app_data/states_all.npy
