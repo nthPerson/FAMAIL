@@ -1,0 +1,33 @@
+# Large datasets / binary artifacts
+*.pkl
+*.npz
+*.npy
+*.parquet
+*.h5
+*.hdf5
+*.pt
+*.pth
+*.ckpt
+*.onnx
+*.zip
+*.tar
+*.tar.gz
+*.7z
+
+# Notebooks outputs / caches
+**/__pycache__/
+**/.pytest_cache/
+**/.ipynb_checkpoints/
+
+# Local envs
+.venv/
+venv/
+.env
+
+# Outputs
+**/output/
+**/derived/
+
+!**/*.sample.json
+!**/*.schema.md
+!**/.gitkeep
