@@ -64,7 +64,7 @@ class ActiveTaxisConfig:
     exclude_sunday: bool = True
     
     # Index offsets (must match pickup_dropoff_counts for consistency)
-    x_grid_offset: int = 2
+    x_grid_offset: int = 1
     y_grid_offset: int = 1
     time_offset: int = 1  # 0-based to 1-based
     
