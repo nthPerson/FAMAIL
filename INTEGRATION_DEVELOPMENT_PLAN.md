@@ -5,8 +5,8 @@
 | Property | Value |
 |----------|-------|
 | **Document Title** | Integration Development Plan |
-| **Version** | 1.0.0 |
-| **Last Updated** | 2026-01-09 |
+| **Version** | 1.1.0 |
+| **Last Updated** | 2026-01-12 |
 | **Status** | Development Planning |
 | **Author** | FAMAIL Research Team |
 
@@ -55,7 +55,6 @@ Before implementing integration, the following must be complete:
 - [ ] Spatial Fairness term ([spatial_fairness/DEVELOPMENT_PLAN.md](spatial_fairness/DEVELOPMENT_PLAN.md))
 - [ ] Causal Fairness term ([causal_fairness/DEVELOPMENT_PLAN.md](causal_fairness/DEVELOPMENT_PLAN.md))
 - [ ] Fidelity term ([fidelity/DEVELOPMENT_PLAN.md](fidelity/DEVELOPMENT_PLAN.md))
-- [ ] Quality term ([quality/DEVELOPMENT_PLAN.md](quality/DEVELOPMENT_PLAN.md))
 - [ ] Common interface ([TERM_INTERFACE_SPECIFICATION.md](TERM_INTERFACE_SPECIFICATION.md))
 
 ### 1.4 Key Design Decisions
@@ -76,7 +75,7 @@ Before implementing integration, the following must be complete:
 The complete FAMAIL objective function is:
 
 $$
-\mathcal{L}(\mathcal{T}') = \alpha_1 F_{\text{causal}}(\mathcal{T}') + \alpha_2 F_{\text{spatial}}(\mathcal{T}') + \alpha_3 F_{\text{fidelity}}(\mathcal{T}') + \alpha_4 F_{\text{quality}}(\mathcal{T}')
+\mathcal{L}(\mathcal{T}') = \alpha_1 F_{\text{causal}}(\mathcal{T}') + \alpha_2 F_{\text{spatial}}(\mathcal{T}') + \alpha_3 F_{\text{fidelity}}(\mathcal{T}')
 $$
 
 Where:
@@ -102,24 +101,23 @@ $$
 | Causal Fairness | $F_{\text{causal}}$ | Service allocation driven by demand | [0, 1] |
 | Spatial Fairness | $F_{\text{spatial}}$ | Equitable geographic coverage | [0, 1] |
 | Fidelity | $F_{\text{fidelity}}$ | Trajectories appear realistic | [0, 1] |
-| Quality | $F_{\text{quality}}$ | Trajectories have good operational properties | [0, 1] |
 
 ### 2.4 Weight Constraints
 
 The weights are non-negative but do **not** need to sum to 1 (allows for scale adjustment):
 
 $$
-\alpha_i \geq 0 \quad \forall i \in \{1, 2, 3, 4\}
+\alpha_i \geq 0 \quad \forall i \in \{1, 2, 3\}
 $$
 
 **Typical configurations**:
 
-| Configuration | $\alpha_1$ | $\alpha_2$ | $\alpha_3$ | $\alpha_4$ | Purpose |
-|--------------|------------|------------|------------|------------|---------|
-| Balanced | 0.25 | 0.25 | 0.25 | 0.25 | Equal importance |
-| Fairness-focused | 0.35 | 0.35 | 0.15 | 0.15 | Prioritize fairness |
-| Realism-focused | 0.15 | 0.15 | 0.40 | 0.30 | Prioritize realism |
-| Research | 1.0 | 1.0 | 1.0 | 1.0 | Unweighted sum |
+| Configuration | $\alpha_1$ | $\alpha_2$ | $\alpha_3$ | Purpose |
+|--------------|------------|------------|------------|---------|
+| Balanced | 0.33 | 0.33 | 0.34 | Equal importance |
+| Fairness-focused | 0.40 | 0.40 | 0.20 | Prioritize fairness |
+| Realism-focused | 0.20 | 0.20 | 0.60 | Prioritize realism |
+| Research | 1.0 | 1.0 | 1.0 | Unweighted sum |
 
 ---
 
@@ -145,7 +143,6 @@ $$
          ▼                           ▼                           ▼
 ┌─────────────────┐         ┌─────────────────┐         ┌─────────────────┐
 │    Fidelity     │         │ Spatial Fairness│         │ Causal Fairness │
-│    Quality      │         │                 │         │                 │
 └────────┬────────┘         └────────┬────────┘         └────────┬────────┘
          │                           │                           │
          └───────────────────────────┼───────────────────────────┘
@@ -170,7 +167,6 @@ $$
 | Spatial Fairness | pickup_dropoff_counts.pkl | - | Trajectories |
 | Causal Fairness | pickup_dropoff_counts.pkl | latest_volume_pickups.pkl | Both |
 | Fidelity | Discriminator model | - | Trajectories |
-| Quality | - | - | Trajectories only |
 
 ### 3.3 Computation Order
 
@@ -181,14 +177,14 @@ Terms can be computed **in parallel** (no inter-term dependencies):
                     │   Input: 𝒯'       │
                     └─────────┬─────────┘
                               │
-       ┌──────────┬──────────┼──────────┬──────────┐
-       │          │          │          │          │
-       ▼          ▼          ▼          ▼          │
-   F_causal  F_spatial  F_fidelity  F_quality     │
-       │          │          │          │          │
-       └──────────┴──────────┴──────────┘          │
-                              │                    │
-                              ▼                    │
+       ┌──────────┬──────────┼──────────┐
+       │          │          │          │
+       ▼          ▼          ▼          │
+   F_causal  F_spatial  F_fidelity     │
+       │          │          │          │
+       └──────────┴──────────┘          │
+                              │         │
+                              ▼         │
                     ┌───────────────────┐          │
                     │   Weighted Sum    │◄─────────┘
                     │   𝓛 = Σ αᵢFᵢ     │    (weights)
@@ -218,14 +214,9 @@ objective_function/
 │   ├── term.py               # CausalFairnessTerm
 │   └── DEVELOPMENT_PLAN.md
 │
-├── fidelity/
-│   ├── __init__.py
-│   ├── term.py               # FidelityTerm
-│   └── DEVELOPMENT_PLAN.md
-│
-└── quality/
+└── fidelity/
     ├── __init__.py
-    ├── term.py               # QualityTerm
+    ├── term.py               # FidelityTerm
     └── DEVELOPMENT_PLAN.md
 ```
 
@@ -244,7 +235,6 @@ from objective_function.base import ObjectiveFunctionTerm
 from objective_function.spatial_fairness.term import SpatialFairnessTerm
 from objective_function.causal_fairness.term import CausalFairnessTerm
 from objective_function.fidelity.term import FidelityTerm
-from objective_function.quality.term import QualityTerm
 
 
 @dataclass
@@ -252,16 +242,14 @@ class IntegrationConfig:
     """Configuration for the complete objective function."""
     
     # Term weights
-    alpha_causal: float = 0.25
-    alpha_spatial: float = 0.25
-    alpha_fidelity: float = 0.25
-    alpha_quality: float = 0.25
+    alpha_causal: float = 0.33
+    alpha_spatial: float = 0.33
+    alpha_fidelity: float = 0.34
     
     # Term configs (optional overrides)
     spatial_config: Optional[Dict[str, Any]] = None
     causal_config: Optional[Dict[str, Any]] = None
     fidelity_config: Optional[Dict[str, Any]] = None
-    quality_config: Optional[Dict[str, Any]] = None
     
     # Data paths
     data_dir: str = "source_data"
@@ -275,7 +263,7 @@ class FAMAILObjectiveFunction:
     """
     Complete FAMAIL objective function integrating all terms.
     
-    𝓛(𝒯') = α₁F_causal + α₂F_spatial + α₃F_fidelity + α₄F_quality
+    𝓛(𝒯') = α₁F_causal + α₂F_spatial + α₃F_fidelity
     """
     
     def __init__(self, config: IntegrationConfig):
@@ -296,9 +284,6 @@ class FAMAILObjectiveFunction:
         )
         self._terms['fidelity'] = FidelityTerm(
             self.config.fidelity_config or {}
-        )
-        self._terms['quality'] = QualityTerm(
-            self.config.quality_config or {}
         )
     
     def compute(
@@ -332,16 +317,12 @@ class FAMAILObjectiveFunction:
         term_values['fidelity'] = self._terms['fidelity'].compute(
             trajectories, auxiliary_data
         )
-        term_values['quality'] = self._terms['quality'].compute(
-            trajectories, auxiliary_data
-        )
         
         # Weighted combination
         objective = (
             self.config.alpha_causal * term_values['causal'] +
             self.config.alpha_spatial * term_values['spatial'] +
-            self.config.alpha_fidelity * term_values['fidelity'] +
-            self.config.alpha_quality * term_values['quality']
+            self.config.alpha_fidelity * term_values['fidelity']
         )
         
         return objective
@@ -376,7 +357,6 @@ class FAMAILObjectiveFunction:
             'causal': self.config.alpha_causal,
             'spatial': self.config.alpha_spatial,
             'fidelity': self.config.alpha_fidelity,
-            'quality': self.config.alpha_quality,
         }
         
         objective = sum(
@@ -426,7 +406,6 @@ class FAMAILObjectiveFunction:
         alpha_causal: Optional[float] = None,
         alpha_spatial: Optional[float] = None,
         alpha_fidelity: Optional[float] = None,
-        alpha_quality: Optional[float] = None
     ) -> None:
         """Update term weights dynamically."""
         if alpha_causal is not None:
@@ -435,8 +414,6 @@ class FAMAILObjectiveFunction:
             self.config.alpha_spatial = alpha_spatial
         if alpha_fidelity is not None:
             self.config.alpha_fidelity = alpha_fidelity
-        if alpha_quality is not None:
-            self.config.alpha_quality = alpha_quality
 ```
 
 ---
@@ -453,7 +430,7 @@ class FAMAILObjectiveFunction:
 **Domain-Driven Approach**:
 - Prioritize based on research goals
 - Higher fairness weights for equity studies
-- Higher fidelity/quality for practical deployment
+- Higher fidelity for practical deployment
 
 **Empirical Approach**:
 - Grid search over weight combinations
@@ -550,11 +527,10 @@ STEPS:
    F_causal ← CausalFairnessTerm.compute(𝒯', data)
    F_spatial ← SpatialFairnessTerm.compute(𝒯', data)
    F_fidelity ← FidelityTerm.compute(𝒯', data)
-   F_quality ← QualityTerm.compute(𝒯', data)
 
 3. COMBINE WITH WEIGHTS
    ─────────────────────────────────
-   𝓛 = α₁·F_causal + α₂·F_spatial + α₃·F_fidelity + α₄·F_quality
+   𝓛 = α₁·F_causal + α₂·F_spatial + α₃·F_fidelity
 
 4. RETURN 𝓛
 ```
@@ -591,7 +567,6 @@ def compute_parallel(
         'causal': self.config.alpha_causal,
         'spatial': self.config.alpha_spatial,
         'fidelity': self.config.alpha_fidelity,
-        'quality': self.config.alpha_quality,
     }
     
     return sum(weights[k] * term_values[k] for k in term_values)
@@ -625,10 +600,9 @@ print(f"Objective value: {value:.4f}")
 ```python
 # Fairness-focused configuration
 config = IntegrationConfig(
-    alpha_causal=0.35,
-    alpha_spatial=0.35,
-    alpha_fidelity=0.15,
-    alpha_quality=0.15,
+    alpha_causal=0.40,
+    alpha_spatial=0.40,
+    alpha_fidelity=0.20,
 )
 
 objective_fn = FAMAILObjectiveFunction(config)
@@ -862,7 +836,6 @@ class TestFAMAILObjectiveFunction:
         assert 'spatial' in obj_fn._terms
         assert 'causal' in obj_fn._terms
         assert 'fidelity' in obj_fn._terms
-        assert 'quality' in obj_fn._terms
     
     def test_compute_range(self):
         """Test that objective is in expected range."""
@@ -885,14 +858,14 @@ class TestFAMAILObjectiveFunction:
         # High spatial weight
         config1 = IntegrationConfig(
             alpha_spatial=1.0, alpha_causal=0, 
-            alpha_fidelity=0, alpha_quality=0
+            alpha_fidelity=0
         )
         obj1 = FAMAILObjectiveFunction(config1)
         
         # High causal weight  
         config2 = IntegrationConfig(
             alpha_causal=1.0, alpha_spatial=0,
-            alpha_fidelity=0, alpha_quality=0
+            alpha_fidelity=0
         )
         obj2 = FAMAILObjectiveFunction(config2)
         
@@ -1018,8 +991,7 @@ class OptimizationLogger:
             f"Step {iteration}: L={step.objective_value:.4f} | "
             f"causal={step.term_values['causal']:.3f} | "
             f"spatial={step.term_values['spatial']:.3f} | "
-            f"fidelity={step.term_values['fidelity']:.3f} | "
-            f"quality={step.term_values['quality']:.3f}"
+            f"fidelity={step.term_values['fidelity']:.3f}"
         )
     
     def get_summary(self) -> Dict[str, Any]:
@@ -1066,8 +1038,8 @@ def plot_optimization_progress(logger: OptimizationLogger):
     axes[0].grid(True, alpha=0.3)
     
     # Individual terms
-    term_names = ['causal', 'spatial', 'fidelity', 'quality']
-    colors = ['red', 'green', 'blue', 'orange']
+    term_names = ['causal', 'spatial', 'fidelity']
+    colors = ['red', 'green', 'blue']
     
     for name, color in zip(term_names, colors):
         values = [s.term_values[name] for s in logger.history]
@@ -1095,8 +1067,7 @@ Complete individual term implementations:
 - [ ] **P1.1**: Implement Spatial Fairness Term
 - [ ] **P1.2**: Implement Causal Fairness Term
 - [ ] **P1.3**: Implement Fidelity Term
-- [ ] **P1.4**: Implement Quality Term
-- [ ] **P1.5**: Validate each term independently
+- [ ] **P1.4**: Validate each term independently
 
 **Duration**: 3-4 weeks  
 **Deliverables**: Working term implementations with tests
@@ -1156,26 +1127,23 @@ Complete individual term implementations:
 
 # Research baseline
 BALANCED_CONFIG = IntegrationConfig(
-    alpha_causal=0.25,
-    alpha_spatial=0.25,
-    alpha_fidelity=0.25,
-    alpha_quality=0.25,
+    alpha_causal=0.33,
+    alpha_spatial=0.33,
+    alpha_fidelity=0.34,
 )
 
 # Fairness study
 FAIRNESS_CONFIG = IntegrationConfig(
     alpha_causal=0.40,
     alpha_spatial=0.40,
-    alpha_fidelity=0.10,
-    alpha_quality=0.10,
+    alpha_fidelity=0.20,
 )
 
 # Deployment readiness
 DEPLOYMENT_CONFIG = IntegrationConfig(
-    alpha_causal=0.20,
-    alpha_spatial=0.20,
-    alpha_fidelity=0.35,
-    alpha_quality=0.25,
+    alpha_causal=0.25,
+    alpha_spatial=0.25,
+    alpha_fidelity=0.50,
 )
 
 # Ablation study (one term only)
@@ -1183,7 +1151,6 @@ SPATIAL_ONLY_CONFIG = IntegrationConfig(
     alpha_causal=0.0,
     alpha_spatial=1.0,
     alpha_fidelity=0.0,
-    alpha_quality=0.0,
 )
 ```
 
@@ -1202,6 +1169,7 @@ SPATIAL_ONLY_CONFIG = IntegrationConfig(
 | Version | Date | Changes |
 |---------|------|---------|
 | 1.0.0 | 2026-01-09 | Initial integration development plan |
+| 1.1.0 | 2026-01-12 | Removed Quality Term ($F_{\text{quality}}$) from objective function; Updated to 3-term formulation |
 
 ---
 

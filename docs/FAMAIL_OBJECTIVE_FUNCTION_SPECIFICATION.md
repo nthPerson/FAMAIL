@@ -13,7 +13,7 @@ This document provides a complete technical specification for implementing the F
 3. [Spatial Fairness Term ($F_{\text{spatial}}$)](#3-spatial-fairness-term-f_spatial)
 4. [Causal Fairness Term ($F_{\text{causal}}$)](#4-causal-fairness-term-f_causal)
 5. [Trajectory Fidelity Term ($F_{\text{fidelity}}$)](#5-trajectory-fidelity-term-f_fidelity)
-6. [Quality Term ($F_{\text{quality}}$)](#6-quality-term-f_quality)
+6. [Trajectory Modification Algorithm](#6-trajectory-modification-algorithm)
 7. [Constraints](#7-constraints)
 8. [Data Sources and Structure](#8-data-sources-and-structure)
 9. [Implementation Architecture](#9-implementation-architecture)
@@ -50,10 +50,10 @@ Taxi services in cities like Shenzhen exhibit spatial inequality—certain areas
 
 ### 2.1 Weighted Multi-Objective Formulation
 
-The FAMAIL objective function is formulated as a weighted sum of fairness and quality components:
+The FAMAIL objective function is formulated as a weighted sum of fairness and fidelity components:
 
 $$
-\mathcal{L} = \alpha_1 F_{\text{causal}} + \alpha_2 F_{\text{spatial}} + \alpha_3 F_{\text{fidelity}} + \alpha_4 F_{\text{quality}}
+\mathcal{L} = \alpha_1 F_{\text{causal}} + \alpha_2 F_{\text{spatial}} + \alpha_3 F_{\text{fidelity}}
 $$
 
 Where:
@@ -67,10 +67,10 @@ Where:
 - The optimization problem is to **maximize** $\mathcal{L}$
 
 $$
-\max_{\mathcal{T}'} \mathcal{L} = \max_{\mathcal{T}'} \left( \alpha_1 F_{\text{causal}} + \alpha_2 F_{\text{spatial}} + \alpha_3 F_{\text{fidelity}} + \alpha_4 F_{\text{quality}} \right)
+\max_{\mathcal{T}'} \mathcal{L} = \max_{\mathcal{T}'} \left( \alpha_1 F_{\text{causal}} + \alpha_2 F_{\text{spatial}} + \alpha_3 F_{\text{fidelity}} \right)
 $$
 
-All $\alpha_i$ coefficients are positive, and each $F_*$ term is defined so that higher values represent better outcomes (greater fairness, higher fidelity, better quality).
+All $\alpha_i$ coefficients are positive, and each $F_*$ term is defined so that higher values represent better outcomes (greater fairness, higher fidelity).
 
 ### 2.3 Subject to Constraints
 
@@ -695,25 +695,82 @@ def compute_fidelity_score(
 
 ---
 
-## 6. Quality Term ($F_{\text{quality}}$)
+## 6. Trajectory Modification Algorithm
 
-### 6.1 Purpose
+### 6.1 Overview
 
-The quality term ensures fairness improvements do not degrade service quality. This includes:
+The FAMAIL trajectory modification algorithm is the core procedure for improving fairness in taxi service distribution. It treats each taxi trajectory as a data sample contributing to overall fairness, identifies trajectories that cause the most unfairness, and adjusts them in a controlled manner.
 
-1. **Service Coverage**: Maintaining geographic coverage of taxi services
-2. **Response Time Proxy**: Passenger-seeking time (time between passenger drop-off and next pickup)
-3. **Efficiency**: Total distance/time traveled per trip served
+**Key Insight**: Some trajectories disproportionately contribute to unfair service distribution, analogous to how certain training examples contribute high loss in machine learning. The algorithm finds and modifies these "worst-offending" trajectories.
 
-### 6.2 Formulation
+### 6.2 Algorithm Steps
 
+```
+ALGORITHM: FAMAIL Fair Trajectory Modification
+═══════════════════════════════════════════════════════════════════════
+
+INPUT:
+  - 𝒯: Original expert trajectory set
+  - discriminator: Trained ST-SiameseNet model
+  - config:
+    - neighborhood_size: n (for n×n grid neighborhood constraint)
+    - max_iterations: int
+    - convergence_threshold: float
+
+OUTPUT:
+  - 𝒯': Modified trajectory set with improved fairness
+
+STEPS:
+
+1. RANK TRAJECTORIES BY FAIRNESS IMPACT
+   Calculate each trajectory's influence on global fairness using
+   spatial and causal fairness metrics.
+
+2. IDENTIFY WORST-OFFENDING TRAJECTORIES
+   Apply "demand hierarchy" filter: consider high-demand areas first,
+   then select lowest-fairness trajectories within those areas.
+
+3. MODIFY SELECTED TRAJECTORIES
+   For each selected trajectory:
+   - Identify well-served (fair) and underserved (unfair) regions nearby
+   - Reallocate pickups/drop-offs from well-served to underserved
+     regions within n×n neighborhood
+   - Keep overall route structure similar
+
+4. VALIDATE TRAJECTORY FIDELITY
+   Run discriminator on each edited trajectory. If score < threshold,
+   reject edit or reduce edit magnitude.
+
+5. RECOMPUTE FAIRNESS METRICS
+   Update active taxi count distribution (N^p), recompute F_spatial
+   and F_causal with the new trajectory set.
+
+6. ITERATE IF NECESSARY
+   Re-rank trajectories and make further adjustments until fairness
+   metrics reach acceptable levels or no further gains can be made.
+
+RETURN 𝒯'
+```
+
+### 6.3 Key Constraints
+
+**Local Boundedness**: All edits must stay within the original vicinity (±n grid cells):
 $$
-F_{\text{quality}} = \beta_1 \cdot \text{Coverage} + \beta_2 \cdot \text{AvgSeekingTime}^{-1} + \beta_3 \cdot \text{Efficiency}
+\forall s' \in \tau', \exists s \in \tau : \|s' - s\|_\infty \leq n
 $$
 
-### 6.3 Implementation Notes
+**Trajectory Editing vs. Generation**: The algorithm focuses on small adjustments to existing routes, not generating new trajectories. Issues beyond the edit threshold are noted for future work.
 
-This term is context-dependent and may be defined based on specific experimental requirements. The framework is designed to be extensible.
+**Efficiency Optimization**: The algorithm holds $N^p$ (active taxi counts) constant within iterations, only recalculating after modifying a batch of worst-offending trajectories.
+
+### 6.4 Causal Fairness Integration
+
+| Fairness Type | Measures | Role in Algorithm |
+|---------------|----------|-------------------|
+| **Spatial Fairness** | **What** the service distribution is | Identifies geographic inequality |
+| **Causal Fairness** | **Why** disparities exist | Guides intelligent trajectory selection |
+
+By combining demand estimates with fairness metrics, the algorithm shifts service from high-demand/well-served areas to high-demand/poorly-served areas, addressing root causes of unfairness.
 
 ---
 
@@ -852,8 +909,7 @@ objective_function/
 │   ├── __init__.py
 │   ├── spatial_fairness.py      # F_spatial implementation
 │   ├── causal_fairness.py       # F_causal implementation
-│   ├── fidelity.py              # F_fidelity implementation
-│   └── quality.py               # F_quality implementation
+│   └── fidelity.py              # F_fidelity implementation
 ├── utils/
 │   ├── __init__.py
 │   ├── data_loader.py           # Data loading utilities
@@ -881,10 +937,9 @@ import numpy as np
 @dataclass
 class ObjectiveFunctionConfig:
     """Configuration for the FAMAIL objective function."""
-    alpha_causal: float = 1.0
-    alpha_spatial: float = 1.0
-    alpha_fidelity: float = 0.5
-    alpha_quality: float = 0.5
+    alpha_causal: float = 0.33
+    alpha_spatial: float = 0.33
+    alpha_fidelity: float = 0.34
     
     # Spatial fairness parameters
     period_definition: str = "daily"
@@ -905,7 +960,7 @@ class FAMAILObjectiveFunction:
     FAMAIL Trajectory Editing Objective Function.
     
     Computes the weighted multi-objective loss for trajectory editing:
-    L = α₁·F_causal + α₂·F_spatial + α₃·F_fidelity + α₄·F_quality
+    L = α₁·F_causal + α₂·F_spatial + α₃·F_fidelity
     """
     
     def __init__(self, config: ObjectiveFunctionConfig):
@@ -913,7 +968,6 @@ class FAMAILObjectiveFunction:
         self._spatial_module = SpatialFairnessModule(config)
         self._causal_module = CausalFairnessModule(config)
         self._fidelity_module = FidelityModule(config)
-        self._quality_module = QualityModule(config)
     
     def compute(
         self,
@@ -932,22 +986,19 @@ class FAMAILObjectiveFunction:
         F_fidelity = self._fidelity_module.compute(
             original_trajectories, edited_trajectories
         )
-        F_quality = self._quality_module.compute(edited_trajectories)
         
-        # All terms are fairness/quality scores (higher = better)
+        # All terms are fairness/fidelity scores (higher = better)
         # Objective is maximized
         total_objective = (
             self.config.alpha_causal * F_causal +
             self.config.alpha_spatial * F_spatial +
-            self.config.alpha_fidelity * F_fidelity +
-            self.config.alpha_quality * F_quality
+            self.config.alpha_fidelity * F_fidelity
         )
         
         return {
             "F_causal": F_causal,
             "F_spatial": F_spatial,
             "F_fidelity": F_fidelity,
-            "F_quality": F_quality,
             "total_objective": total_objective
         }
     
@@ -1004,12 +1055,12 @@ def test_objective_function_smoke():
     assert "F_causal" in result
     assert "F_spatial" in result
     assert "F_fidelity" in result
-    assert "F_quality" in result
     assert "total_objective" in result
     
-    # Verify values are reasonable (all fairness scores in [0, 1])
+    # Verify values are reasonable (all fairness/fidelity scores in [0, 1])
     assert 0 <= result["F_spatial"] <= 1
     assert 0 <= result["F_causal"] <= 1
+    assert 0 <= result["F_fidelity"] <= 1
     assert result["total_objective"] >= 0  # Sum of positive terms
 ```
 
@@ -1105,10 +1156,10 @@ $$
 ### Objective Function (Maximization)
 
 $$
-\max_{\mathcal{T}'} \mathcal{L} = \max_{\mathcal{T}'} \left( \alpha_1 F_{\text{causal}} + \alpha_2 F_{\text{spatial}} + \alpha_3 F_{\text{fidelity}} + \alpha_4 F_{\text{quality}} \right)
+\max_{\mathcal{T}'} \mathcal{L} = \max_{\mathcal{T}'} \left( \alpha_1 F_{\text{causal}} + \alpha_2 F_{\text{spatial}} + \alpha_3 F_{\text{fidelity}} \right)
 $$
 
-**All terms are fairness/quality scores where higher values are better.**
+**All terms are fairness/fidelity scores where higher values are better.**
 
 ---
 
@@ -1117,12 +1168,11 @@ $$
 ```yaml
 # FAMAIL Objective Function Configuration
 objective_function:
-  # Term weights
+  # Term weights (must sum to 1.0)
   weights:
-    alpha_causal: 1.0
-    alpha_spatial: 1.0
-    alpha_fidelity: 0.5
-    alpha_quality: 0.5
+    alpha_causal: 0.33
+    alpha_spatial: 0.33
+    alpha_fidelity: 0.34
   
   # Spatial fairness parameters
   spatial:
@@ -1159,6 +1209,15 @@ objective_function:
 
 ---
 
-*Document Version: 1.0*  
+*Document Version: 1.1*  
 *Last Updated: January 2026*  
 *Author: FAMAIL Research Team*
+
+---
+
+## Revision History
+
+| Version | Date | Changes |
+|---------|------|----------|
+| 1.0 | 2026-01 | Initial comprehensive specification |
+| 1.1 | 2026-01-12 | Removed Quality Term (overlap with Fidelity); added Trajectory Modification Algorithm section |

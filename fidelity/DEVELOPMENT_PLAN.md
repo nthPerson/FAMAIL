@@ -6,8 +6,8 @@
 |----------|-------|
 | **Term Name** | Trajectory Fidelity |
 | **Symbol** | $F_{\text{fidelity}}$ |
-| **Version** | 1.0.0 |
-| **Last Updated** | 2026-01-09 |
+| **Version** | 1.1.0 |
+| **Last Updated** | 2026-01-12 |
 | **Status** | Development Planning |
 | **Author** | FAMAIL Research Team |
 
@@ -19,12 +19,13 @@
 2. [Mathematical Formulation](#2-mathematical-formulation)
 3. [Literature and References](#3-literature-and-references)
 4. [Data Requirements](#4-data-requirements)
-5. [Implementation Plan](#5-implementation-plan)
-6. [Configuration Parameters](#6-configuration-parameters)
-7. [Testing Strategy](#7-testing-strategy)
-8. [Expected Challenges](#8-expected-challenges)
-9. [Development Milestones](#9-development-milestones)
-10. [Appendix](#10-appendix)
+5. [Trajectory Modification Algorithm](#5-trajectory-modification-algorithm)
+6. [Implementation Plan](#6-implementation-plan)
+7. [Configuration Parameters](#7-configuration-parameters)
+8. [Testing Strategy](#8-testing-strategy)
+9. [Expected Challenges](#9-expected-challenges)
+10. [Development Milestones](#10-development-milestones)
+11. [Appendix](#11-appendix)
 
 ---
 
@@ -40,10 +41,10 @@ The **Trajectory Fidelity Term** ($F_{\text{fidelity}}$) measures how authentic 
 
 ### 1.2 Role in Objective Function
 
-The fidelity term is a quality constraint in the FAMAIL objective function:
+The fidelity term is a critical constraint in the FAMAIL objective function:
 
 $$
-\mathcal{L} = \alpha_1 F_{\text{causal}} + \alpha_2 F_{\text{spatial}} + \alpha_3 F_{\text{fidelity}} + \alpha_4 F_{\text{quality}}
+\mathcal{L} = \alpha_1 F_{\text{causal}} + \alpha_2 F_{\text{spatial}} + \alpha_3 F_{\text{fidelity}}
 $$
 
 - **Weight**: $\alpha_3$ (typically 0.2-0.4 of total weight)
@@ -57,7 +58,6 @@ $$
 | Related Term | Relationship |
 |--------------|-------------|
 | $F_{\text{spatial}}$, $F_{\text{causal}}$ | **Trade-off**: Improving fairness may require edits that reduce fidelity |
-| $F_{\text{quality}}$ | **Aligned**: Both measure trajectory characteristics; quality focuses on operational metrics |
 | Discriminator | **Implementation**: Fidelity is measured using the ST-SiameseNet discriminator |
 
 ### 1.4 Key Insights
@@ -354,9 +354,170 @@ def validate_trajectory_for_discriminator(
 
 ---
 
-## 5. Implementation Plan
+## 5. Trajectory Modification Algorithm
 
-### 5.1 Algorithm Steps
+This section describes the trajectory modification algorithm that is central to the FAMAIL framework. The fidelity term plays a critical validation role in this algorithm.
+
+### 5.1 Core Concept
+
+The FAMAIL trajectory modification approach treats each taxi trajectory as a data sample contributing to overall fairness. The core insight is that:
+
+1. **Each trajectory contributes to global fairness**: Some trajectories disproportionately contribute to unfair service distribution, analogous to how certain training examples contribute high loss in machine learning.
+2. **Trajectories are interdependent**: Changing one route affects the fairness impact of other routes because it alters the active taxi count distribution ($N^p$) and service rates.
+3. **Order matters**: The sequence in which trajectories are modified can influence outcomes (e.g., editing trajectory 1 then 2 vs. 2 then 1 may yield different results).
+
+### 5.2 Editing vs. Generation
+
+The algorithm focuses on **trajectory editing** (small adjustments to existing routes) rather than generating new trajectories from scratch:
+
+- **Edits are locally bounded**: Changes keep the route within the original vicinity (within a defined $n \times n$ grid neighborhood)
+- **Threshold-based scope**: A threshold determines how much a trajectory can be altered; issues beyond that threshold are noted as requiring new trajectory generation (future work)
+- **Examples**:
+  - ✅ **Valid edit**: Shifting a trip's start/end location to a neighboring underserved area (within ±n cells)
+  - ❌ **Out of scope**: Teleporting to a distant underserved region (requires new trajectory generation)
+
+### 5.3 Algorithm Steps
+
+```
+ALGORITHM: FAMAIL Fair Trajectory Modification
+═══════════════════════════════════════════════════════════════════════
+
+INPUT:
+  - 𝒯: Original expert trajectory set
+  - fairness_metrics: {spatial_fairness, causal_fairness}
+  - discriminator: Trained ST-SiameseNet model
+  - config:
+    - neighborhood_size: n (for n×n grid neighborhood constraint)
+    - max_iterations: int
+    - convergence_threshold: float
+
+OUTPUT:
+  - 𝒯': Modified trajectory set with improved fairness
+
+STEPS:
+
+1. RANK TRAJECTORIES BY FAIRNESS IMPACT
+   ─────────────────────────────────────────────────
+   1.1 Calculate each trajectory's influence on global fairness
+       using the spatial fairness metric (and causal fairness)
+   1.2 Identify routes that most significantly reduce fairness
+   
+2. IDENTIFY WORST-OFFENDING TRAJECTORIES
+   ─────────────────────────────────────────────────
+   2.1 Apply "demand hierarchy" filter:
+       - Consider areas with high ride demand first
+   2.2 Within high-demand areas, select lowest-fairness trajectories
+   2.3 These become initial targets for adjustment
+
+3. MODIFY SELECTED TRAJECTORIES
+   ─────────────────────────────────────────────────
+   3.1 For each selected trajectory τ:
+       3.1.1 Identify well-served (most fair) regions nearby
+       3.1.2 Identify underserved (unfair) regions nearby
+       3.1.3 Reallocate pickups/drop-offs from well-served
+             to underserved regions within n×n neighborhood
+       3.1.4 Keep overall route structure similar
+
+4. VALIDATE TRAJECTORY FIDELITY
+   ─────────────────────────────────────────────────
+   4.1 For each edited trajectory τ':
+       4.1.1 Run discriminator: score = Discriminator(τ')
+       4.1.2 If score < threshold:
+             - Reject edit OR reduce edit magnitude
+       4.1.3 Ensure trajectory cannot be easily distinguished
+             from real trajectories
+
+5. RECOMPUTE FAIRNESS METRICS
+   ─────────────────────────────────────────────────
+   5.1 Update active taxi count distribution (N^p)
+   5.2 Recompute spatial fairness: F_spatial(𝒯')
+   5.3 Recompute causal fairness: F_causal(𝒯')
+   5.4 Record improvement or regression
+
+6. ITERATE IF NECESSARY
+   ─────────────────────────────────────────────────
+   6.1 Re-rank trajectories with updated metrics
+   6.2 Make further adjustments as needed
+   6.3 Repeat until:
+       - Fairness metrics reach acceptable level, OR
+       - No further significant gains can be made, OR
+       - max_iterations reached
+
+RETURN 𝒯'
+```
+
+### 5.4 Constraints and Efficiency Considerations
+
+#### 5.4.1 Local Boundedness Constraint
+
+All trajectory edits must stay within the original vicinity:
+
+$$
+\forall s' \in \tau', \exists s \in \tau : \|s' - s\|_\infty \leq n
+$$
+
+Where $n$ is the neighborhood size in grid cells. This ensures:
+- **Physical feasibility**: Routes remain realistic
+- **Minimal disruption**: Changes are subtle
+- **Driver plausibility**: Edits represent natural route variations
+
+#### 5.4.2 Computational Efficiency
+
+To reduce computational load, the algorithm employs:
+
+1. **Hold $N^p$ constant within iterations**: Assume active taxi counts don't change immediately during individual trajectory modifications
+2. **Batch recalculation**: Only update $N^p$ after modifying a batch of worst-offending trajectories
+3. **This saves time** while still maintaining accuracy between major iterations
+
+### 5.5 Causal Fairness Integration
+
+The algorithm incorporates causal fairness alongside spatial fairness:
+
+| Fairness Type | Measures | Role in Algorithm |
+|---------------|----------|-------------------|
+| **Spatial Fairness** | **What** the service distribution is | Identifies geographic inequality |
+| **Causal Fairness** | **Why** disparities exist (demand context) | Guides intelligent trajectory selection |
+
+By combining demand estimates with fairness metrics, the algorithm can:
+- Shift service from high-demand/well-served areas to high-demand/poorly-served areas
+- Address root causes of unfairness, not just symptoms
+- Prioritize modifications that have the greatest impact on demand-supply matching
+
+### 5.6 Fidelity as Validation Gate
+
+The fidelity term serves as a **validation gate** in the modification algorithm:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    Trajectory Modification Loop                  │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  Original τ ──► Propose Edit ──► τ' (candidate)                │
+│                        │                                        │
+│                        ▼                                        │
+│              ┌─────────────────────┐                            │
+│              │  Fidelity Check     │                            │
+│              │  Discriminator(τ')  │                            │
+│              └──────────┬──────────┘                            │
+│                         │                                        │
+│           ┌─────────────┴─────────────┐                         │
+│           │                           │                         │
+│           ▼                           ▼                         │
+│     score ≥ θ                   score < θ                       │
+│     ──────────                  ───────────                      │
+│     Accept τ'                   Reject/Reduce                    │
+│     Update 𝒯'                   Try smaller edit                │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+This ensures that fairness improvements do not come at the cost of trajectory realism.
+
+---
+
+## 6. Implementation Plan
+
+### 6.1 Algorithm Steps
 
 ```
 ALGORITHM: Compute Trajectory Fidelity Term
@@ -407,7 +568,7 @@ STEPS:
 5. RETURN F_fidelity
 ```
 
-### 5.2 Pseudocode
+### 6.2 Pseudocode
 
 ```
 function compute_fidelity(edited_trajectories, discriminator, config):
@@ -438,7 +599,7 @@ function compute_fidelity(edited_trajectories, discriminator, config):
     return F_fidelity
 ```
 
-### 5.3 Python Implementation Outline
+### 6.3 Python Implementation Outline
 
 ```python
 # File: objective_function/fidelity/term.py
@@ -630,7 +791,7 @@ class FidelityTerm(ObjectiveFunctionTerm):
         return np.array(gradients)
 ```
 
-### 5.4 Computational Considerations
+### 6.4 Computational Considerations
 
 #### 5.4.1 Time Complexity
 
@@ -657,15 +818,15 @@ Where $N$ = number of trajectories, $T$ = max trajectory length, $B$ = batch siz
 
 ---
 
-## 6. Configuration Parameters
+## 7. Configuration Parameters
 
-### 6.1 Required Parameters
+### 7.1 Required Parameters
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `discriminator_checkpoint` | str | Path to trained discriminator weights |
 
-### 6.2 Optional Parameters
+### 7.2 Optional Parameters
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
@@ -676,7 +837,7 @@ Where $N$ = number of trajectories, $T$ = max trajectory length, $B$ = batch siz
 | `threshold` | float | 0.5 | Threshold for binary aggregation |
 | `weight` | float | 1.0 | Weight in objective function ($\alpha_3$) |
 
-### 6.3 Default Values and Rationale
+### 7.3 Default Values and Rationale
 
 ```python
 DEFAULT_CONFIG = FidelityConfig(
@@ -703,9 +864,9 @@ DEFAULT_CONFIG = FidelityConfig(
 
 ---
 
-## 7. Testing Strategy
+## 8. Testing Strategy
 
-### 7.1 Unit Tests
+### 8.1 Unit Tests
 
 #### 7.1.1 Discriminator Loading Tests
 
@@ -789,7 +950,7 @@ class TestFidelityComputation:
         assert result == 0.2
 ```
 
-### 7.2 Integration Tests
+### 8.2 Integration Tests
 
 ```python
 class TestFidelityIntegration:
@@ -842,7 +1003,7 @@ class TestFidelityIntegration:
         assert original_score > perturbed_score
 ```
 
-### 7.3 Validation with Real Data
+### 8.3 Validation with Real Data
 
 **Expected Behavior**:
 
@@ -852,11 +1013,11 @@ class TestFidelityIntegration:
 
 ---
 
-## 8. Expected Challenges
+## 9. Expected Challenges
 
-### 8.1 Known Difficulties
+### 9.1 Known Difficulties
 
-#### 8.1.1 Discriminator Quality
+#### 9.1.1 Discriminator Quality
 
 **Challenge**: Fidelity is only as good as the discriminator.
 
@@ -867,7 +1028,7 @@ class TestFidelityIntegration:
 - Monitor discriminator accuracy during development
 - Retrain if needed
 
-#### 8.1.2 Gradient Stability
+#### 9.1.2 Gradient Stability
 
 **Challenge**: Discriminator gradients may be unstable or vanishing.
 
@@ -878,7 +1039,7 @@ class TestFidelityIntegration:
 - Consider spectral normalization
 - Monitor gradient magnitudes
 
-#### 8.1.3 Adversarial Overfitting
+#### 9.1.3 Adversarial Overfitting
 
 **Challenge**: Optimization may find adversarial examples that fool discriminator but are unrealistic.
 
@@ -889,7 +1050,7 @@ class TestFidelityIntegration:
 - Regularization in objective
 - Periodic discriminator retraining
 
-### 8.2 Mitigation Strategies
+### 9.2 Mitigation Strategies
 
 | Challenge | Strategy | Implementation |
 |-----------|----------|----------------|
@@ -900,9 +1061,9 @@ class TestFidelityIntegration:
 
 ---
 
-## 9. Development Milestones
+## 10. Development Milestones
 
-### 9.1 Phase 1: Core Implementation (Week 1-2)
+### 10.1 Phase 1: Core Implementation (Week 1-2)
 
 - [ ] **M1.1**: Set up directory structure
 - [ ] **M1.2**: Implement `FidelityConfig` dataclass
@@ -915,7 +1076,7 @@ class TestFidelityIntegration:
 - Working `FidelityTerm` class
 - Integration with existing discriminator
 
-### 9.2 Phase 2: Testing and Validation (Week 2-3)
+### 10.2 Phase 2: Testing and Validation (Week 2-3)
 
 - [ ] **M2.1**: Unit tests for all components
 - [ ] **M2.2**: Integration tests with real data
@@ -927,7 +1088,7 @@ class TestFidelityIntegration:
 - Comprehensive test suite
 - Gradient computation validated
 
-### 9.3 Phase 3: Integration (Week 3-4)
+### 10.3 Phase 3: Integration (Week 3-4)
 
 - [ ] **M3.1**: Integrate with objective function
 - [ ] **M3.2**: Test gradient flow in optimization
@@ -940,9 +1101,9 @@ class TestFidelityIntegration:
 
 ---
 
-## 10. Appendix
+## 11. Appendix
 
-### 10.1 Code Snippets
+### 11.1 Code Snippets
 
 #### 10.1.1 Fallback Edit-Distance Fidelity
 
@@ -980,7 +1141,7 @@ def compute_edit_distance_fidelity(
     return 1.0 - edit_ratio
 ```
 
-### 10.2 Discriminator Interface
+### 11.2 Discriminator Interface
 
 ```python
 # Expected discriminator interface
@@ -1004,11 +1165,12 @@ class DiscriminatorInterface(Protocol):
         ...
 ```
 
-### 10.3 Revision History
+### 11.3 Revision History
 
 | Version | Date | Changes |
 |---------|------|---------|
 | 1.0.0 | 2026-01-09 | Initial development plan |
+| 1.1.0 | 2026-01-12 | Added Trajectory Modification Algorithm section; Removed Quality Term references |
 
 ---
 

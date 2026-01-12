@@ -46,10 +46,10 @@ The **Causal Fairness Term** ($F_{\text{causal}}$) quantifies the degree to whic
 The causal fairness term is one of two fairness components in the FAMAIL objective function:
 
 $$
-\mathcal{L} = \alpha_1 F_{\text{causal}} + \alpha_2 F_{\text{spatial}} + \alpha_3 F_{\text{fidelity}} + \alpha_4 F_{\text{quality}}
+\mathcal{L} = \alpha_1 F_{\text{causal}} + \alpha_2 F_{\text{spatial}} + \alpha_3 F_{\text{fidelity}}
 $$
 
-- **Weight**: $\alpha_1$ (typically 0.25-0.5 of total weight)
+- **Weight**: $\alpha_1$ (typically 0.33 of total weight)
 - **Optimization Direction**: **Maximize** (higher values = more causally fair)
 - **Value Range**: [0, 1]
   - $F_{\text{causal}} = 1$: Service perfectly explained by demand (no contextual bias)
@@ -61,7 +61,6 @@ $$
 |--------------|-------------|
 | $F_{\text{spatial}}$ | Complementary; spatial measures distribution equality, causal measures demand alignment |
 | $F_{\text{fidelity}}$ | May trade off; aligning supply to demand might require significant trajectory changes |
-| $F_{\text{quality}}$ | Generally aligned; better demand-supply matching often improves quality |
 
 ### 1.4 Key Insights
 

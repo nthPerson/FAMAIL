@@ -41,10 +41,10 @@ The **Spatial Fairness Term** ($F_{\text{spatial}}$) quantifies the degree of eq
 The spatial fairness term is one of two fairness components in the FAMAIL objective function:
 
 $$
-\mathcal{L} = \alpha_1 F_{\text{causal}} + \alpha_2 F_{\text{spatial}} + \alpha_3 F_{\text{fidelity}} + \alpha_4 F_{\text{quality}}
+\mathcal{L} = \alpha_1 F_{\text{causal}} + \alpha_2 F_{\text{spatial}} + \alpha_3 F_{\text{fidelity}}
 $$
 
-- **Weight**: $\alpha_2$ (typically 0.25-0.5 of total weight)
+- **Weight**: $\alpha_2$ (typically 0.33 of total weight)
 - **Optimization Direction**: **Maximize** (higher values = more spatially fair)
 - **Value Range**: [0, 1]
   - $F_{\text{spatial}} = 1$: Perfect equality (all cells have identical service rates)
@@ -56,7 +56,6 @@ $$
 |--------------|-------------|
 | $F_{\text{causal}}$ | Complementary fairness measure; spatial fairness addresses distribution, causal fairness addresses demand-service alignment |
 | $F_{\text{fidelity}}$ | May trade off; improving spatial fairness could reduce trajectory authenticity |
-| $F_{\text{quality}}$ | Generally independent; quality measures different aspects of trajectories |
 
 ### 1.4 Key Insights from Literature
 

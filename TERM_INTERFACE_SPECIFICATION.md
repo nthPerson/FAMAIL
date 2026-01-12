@@ -42,7 +42,7 @@ Each objective function term is encapsulated as an independent module that:
 | Category | Terms | Optimization Direction |
 |----------|-------|----------------------|
 | **Fairness Terms** | $F_{\text{spatial}}$, $F_{\text{causal}}$ | Maximize (higher = more fair) |
-| **Quality Terms** | $F_{\text{fidelity}}$, $F_{\text{quality}}$ | Maximize (higher = better quality) |
+| **Constraint Term** | $F_{\text{fidelity}}$ | Maximize (higher = better trajectory realism) |
 
 ### 1.3 Common Properties
 
@@ -270,7 +270,7 @@ class TermConfig:
 
 ```python
 # Must return a float in [0, 1]
-# Higher values indicate better outcomes (more fair, higher quality)
+# Higher values indicate better outcomes (more fair, higher fidelity)
 return 0.75  # Example: 75% fairness score
 ```
 
@@ -610,13 +610,6 @@ objective_function/
 │   ├── DEVELOPMENT_PLAN.md
 │   └── tests/
 │       └── ...
-├── quality/
-│   ├── __init__.py
-│   ├── term.py
-│   ├── config.py
-│   ├── DEVELOPMENT_PLAN.md
-│   └── tests/
-│       └── ...
 └── combined/
     ├── __init__.py
     ├── objective.py                     # Combined objective function
@@ -634,7 +627,6 @@ from .base import ObjectiveFunctionTerm, TermMetadata, TermConfig
 from .spatial_fairness import SpatialFairnessTerm, SpatialFairnessConfig
 from .causal_fairness import CausalFairnessTerm, CausalFairnessConfig
 from .fidelity import FidelityTerm, FidelityConfig
-from .quality import QualityTerm, QualityConfig
 from .combined import FAMAILObjectiveFunction
 
 __all__ = [
@@ -647,8 +639,6 @@ __all__ = [
     'CausalFairnessConfig',
     'FidelityTerm',
     'FidelityConfig',
-    'QualityTerm',
-    'QualityConfig',
     'FAMAILObjectiveFunction',
 ]
 ```
@@ -704,17 +694,17 @@ __all__ = [
 
 | Value | Interpretation |
 |-------|---------------|
-| 1.0 | Perfect (completely fair/high quality) |
+| 1.0 | Perfect (completely fair/high fidelity) |
 | 0.8-1.0 | Excellent |
 | 0.6-0.8 | Good |
 | 0.4-0.6 | Moderate |
 | 0.2-0.4 | Poor |
-| 0.0-0.2 | Very poor (highly unfair/low quality) |
+| 0.0-0.2 | Very poor (highly unfair/low fidelity) |
 
 ### A.2 Objective Function Summary
 
 $$
-\max_{\mathcal{T}'} \mathcal{L} = \max_{\mathcal{T}'} \left( \alpha_1 F_{\text{causal}} + \alpha_2 F_{\text{spatial}} + \alpha_3 F_{\text{fidelity}} + \alpha_4 F_{\text{quality}} \right)
+\max_{\mathcal{T}'} \mathcal{L} = \max_{\mathcal{T}'} \left( \alpha_1 F_{\text{causal}} + \alpha_2 F_{\text{spatial}} + \alpha_3 F_{\text{fidelity}} \right)
 $$
 
 All terms: Higher = Better, Range = [0, 1]
@@ -724,8 +714,9 @@ All terms: Higher = Better, Range = [0, 1]
 ## Revision History
 
 | Version | Date | Author | Changes |
-|---------|------|--------|---------|
+|---------|------|--------|----------|
 | 1.0.0 | 2026-01-09 | Robert Ashe (FAMAIL Team) | Initial specification |
+| 1.1.0 | 2026-01-12 | Robert Ashe (FAMAIL Team) | Removed Quality Term (overlap with Fidelity Term) |
 
 ---
 

@@ -1,5 +1,11 @@
 # Quality Term ($F_{\text{quality}}$) Development Plan
 
+> ⚠️ **DEPRECATED**: This term has been eliminated from the FAMAIL objective function as of January 12, 2026.
+> See [DEPRECATED.md](./DEPRECATED.md) for rationale and migration notes.
+> The Trajectory Fidelity Term ($F_{\text{fidelity}}$) now handles trajectory realism validation.
+
+---
+
 ## Document Metadata
 
 | Property | Value |
@@ -8,7 +14,7 @@
 | **Symbol** | $F_{\text{quality}}$ |
 | **Version** | 1.0.0 |
 | **Last Updated** | 2026-01-09 |
-| **Status** | Development Planning |
+| **Status** | ~~Development Planning~~ **DEPRECATED** |
 | **Author** | FAMAIL Research Team |
 
 ---
