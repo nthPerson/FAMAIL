@@ -1,0 +1,8 @@
+*__pycache__*
+
+# Source data
+*all_trajs.pkl
+
+# Generated datasets
+datasets/*
+datasets/README.md
