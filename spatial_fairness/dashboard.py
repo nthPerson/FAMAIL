@@ -186,16 +186,64 @@ def plot_gini_over_time(per_period_data: list, period_type: str) -> go.Figure:
 
 
 def plot_service_heatmap(grid_data: np.ndarray, title: str) -> go.Figure:
-    """Create a heatmap of service distribution."""
+    """Create a heatmap of service distribution.
+    
+    Grid orientation:
+    - X axis (latitude-based, 48 cells): displayed vertically, X=0 at bottom
+    - Y axis (longitude-based, 90 cells): displayed horizontally, Y=0 at left
+    """
+    # grid_data shape is (x_dim, y_dim) = (48, 90)
+    # For px.imshow: rows = vertical axis, cols = horizontal axis
+    # We want X vertical and Y horizontal, so NO transpose needed
+    # Flip vertically so X=0 is at bottom (geographic convention: latitude increases upward)
     fig = px.imshow(
-        grid_data.T,  # Transpose to show y on vertical axis
-        labels=dict(x="X Grid", y="Y Grid", color="Count"),
+        np.flipud(grid_data),  # Flip so X=0 at bottom, Y stays left-to-right
+        labels=dict(x="Y Grid (Longitude)", y="X Grid (Latitude)", color="Count"),
         title=title,
         color_continuous_scale="YlOrRd",
-        aspect="auto",
+        aspect="auto",  # Allow non-square display since 48x90 grid
     )
     
-    fig.update_layout(height=500)
+    # Update Y axis (now showing X grid) to show correct labels after flip
+    x_dim = grid_data.shape[0]
+    fig.update_yaxes(
+        tickmode='array',
+        tickvals=list(range(0, x_dim, max(1, x_dim // 8))),
+        ticktext=[str(x_dim - 1 - i) for i in range(0, x_dim, max(1, x_dim // 8))]
+    )
+    
+    fig.update_layout(height=600)
+    return fig
+
+
+def plot_gini_heatmap(grid_data: np.ndarray, title: str, color_scale: str = "RdYlGn") -> go.Figure:
+    """Create a heatmap of Gini coefficients or fairness values.
+    
+    Grid orientation:
+    - X axis (latitude-based, 48 cells): displayed vertically, X=0 at bottom
+    - Y axis (longitude-based, 90 cells): displayed horizontally, Y=0 at left
+    """
+    # grid_data shape is (x_dim, y_dim) = (48, 90)
+    # Flip vertically so X=0 is at bottom
+    fig = px.imshow(
+        np.flipud(grid_data),  # Flip so X=0 at bottom, Y stays left-to-right
+        labels=dict(x="Y Grid (Longitude)", y="X Grid (Latitude)", color="Value"),
+        title=title,
+        color_continuous_scale=color_scale,
+        aspect="auto",  # Allow non-square display since 48x90 grid
+        zmin=0,
+        zmax=1,
+    )
+    
+    # Update Y axis (now showing X grid) to show correct labels after flip
+    x_dim = grid_data.shape[0]
+    fig.update_yaxes(
+        tickmode='array',
+        tickvals=list(range(0, x_dim, max(1, x_dim // 8))),
+        ticktext=[str(x_dim - 1 - i) for i in range(0, x_dim, max(1, x_dim // 8))]
+    )
+    
+    fig.update_layout(height=600)
     return fig
 
 
@@ -342,13 +390,13 @@ def main():
     )
     
     # Taxi count configuration
-    st.sidebar.subheader("🚕 Taxi Count Configuration (N^p)")
+    st.sidebar.subheader("🚕 Taxi Count Configuration ($$N^p$$)")
     
     st.sidebar.markdown(
         """
-        The service rate formula is: DSR = pickups / (N^p × T)
+        The departure service rate formula is: $$DSR = pickups / (N^p × T)$$
         
-        N^p can be either:
+        $$N^p$$ can be either:
         - **Constant**: Same value for all cells (original approach)
         - **Active Taxis Lookup**: Dynamic per-cell values from pre-computed dataset
         """,
@@ -640,7 +688,99 @@ def main():
             st.metric("Total Cells", f"{total_cells:,}")
         with col3:
             st.metric("Activity Rate", f"{100*active_cells/total_cells:.1f}%")
-    
+        
+        # Per-cell Gini coefficients and fairness
+        st.divider()
+        st.subheader("Spatial Distribution of Fairness Metrics")
+        
+        st.markdown("""
+        These heatmaps show Gini coefficients and spatial fairness computed **per grid cell** across all time periods.
+        - **Lower Gini** (green) = more equal service distribution over time for that cell
+        - **Higher Gini** (red) = more unequal service distribution over time for that cell
+        - **Higher Fairness** (green) = better overall fairness (1 - average Gini)
+        """)
+        
+        # Compute per-cell Gini coefficients
+        per_period_data = breakdown['components']['per_period_data']
+        
+        if len(per_period_data) > 1:
+            # Initialize grids for per-cell Gini computation
+            x_dim, y_dim = config.grid_dims
+            gini_pickup_grid = np.zeros((x_dim, y_dim))
+            gini_dropoff_grid = np.zeros((x_dim, y_dim))
+            fairness_grid = np.zeros((x_dim, y_dim))
+            
+            # For each cell, compute Gini over all periods
+            pickups_agg, dropoffs_agg = aggregate_counts_by_period(
+                data,
+                period_type=period_type,
+                days_filter=config.days_filter,
+                time_filter=config.time_filter,
+            )
+            
+            x_offset = 1 if config.data_is_one_indexed else 0
+            y_offset = 1 if config.data_is_one_indexed else 0
+            
+            for x in range(x_dim):
+                for y in range(y_dim):
+                    cell = (x + x_offset, y + y_offset)
+                    
+                    # Collect values for this cell across all periods
+                    pickup_values = []
+                    dropoff_values = []
+                    
+                    for period_info in per_period_data:
+                        period = period_info['period']
+                        pickup_key = (cell, period)
+                        dropoff_key = (cell, period)
+                        
+                        pickup_values.append(pickups_agg.get(pickup_key, 0))
+                        dropoff_values.append(dropoffs_agg.get(dropoff_key, 0))
+                    
+                    # Compute Gini for this cell
+                    if len(pickup_values) > 0:
+                        gini_pickup_grid[x, y] = compute_gini(np.array(pickup_values))
+                        gini_dropoff_grid[x, y] = compute_gini(np.array(dropoff_values))
+                        fairness_grid[x, y] = 1.0 - 0.5 * (gini_pickup_grid[x, y] + gini_dropoff_grid[x, y])
+            
+            # Create visualizations
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                fig_gini_pickup = plot_gini_heatmap(
+                    gini_pickup_grid,
+                    "Per-Cell Gini Coefficient: Departures (Over Time)",
+                    color_scale="RdYlGn_r"  # Reverse so low Gini is green
+                )
+                st.plotly_chart(fig_gini_pickup, use_container_width=True)
+            
+            with col2:
+                fig_gini_dropoff = plot_gini_heatmap(
+                    gini_dropoff_grid,
+                    "Per-Cell Gini Coefficient: Arrivals (Over Time)",
+                    color_scale="RdYlGn_r"  # Reverse so low Gini is green
+                )
+                st.plotly_chart(fig_gini_dropoff, use_container_width=True)
+            
+            # Fairness heatmap
+            fig_fairness = plot_gini_heatmap(
+                fairness_grid,
+                "Per-Cell Spatial Fairness (Over Time)",
+                color_scale="RdYlGn"  # Higher fairness is green
+            )
+            st.plotly_chart(fig_fairness, use_container_width=True)
+            
+            # Statistics for per-cell metrics
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Mean Cell Gini (Pickups)", f"{np.mean(gini_pickup_grid):.4f}")
+            with col2:
+                st.metric("Mean Cell Gini (Dropoffs)", f"{np.mean(gini_dropoff_grid):.4f}")
+            with col3:
+                st.metric("Mean Cell Fairness", f"{np.mean(fairness_grid):.4f}")
+        else:
+            st.info("Per-cell Gini computation requires multiple time periods. Select finer temporal granularity.")
+          
     # Tab 3: Lorenz Curves
     with tab3:
         st.subheader("Lorenz Curves")
