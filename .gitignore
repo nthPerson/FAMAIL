@@ -4,5 +4,5 @@
 *all_trajs.pkl
 
 # Generated datasets
-discriminator/datasets/*
-!discriminator/datasets/README.md
+datasets/*
+datasets/README.md
