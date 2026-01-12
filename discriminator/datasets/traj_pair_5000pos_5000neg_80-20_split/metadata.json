@@ -1,0 +1,264 @@
+{
+  "config": {
+    "data_path": "/home/robert/FAMAIL/discriminator/dataset_generation_tool/source_data/all_trajs.pkl",
+    "positive_pairs": 5000,
+    "negative_pairs": 5000,
+    "days": 2,
+    "feature_start": 4,
+    "feature_end": 4,
+    "padding": "pad_to_longer",
+    "fixed_length": null,
+    "positive_strategy": "random",
+    "negative_strategy": "random",
+    "agent_distribution": "proportional",
+    "seed": 42,
+    "ensure_agent_coverage": true,
+    "per_agent_counts": false
+  },
+  "counts": {
+    "total_pairs": 10000,
+    "positive_pairs": 5000,
+    "negative_pairs": 5000
+  },
+  "length_stats": {
+    "x1": {
+      "min": 2.0,
+      "max": 886.0,
+      "mean": 411.745,
+      "p50": 434.0,
+      "p90": 569.0,
+      "p95": 606.0
+    },
+    "x2": {
+      "min": 2.0,
+      "max": 885.0,
+      "mean": 386.1669,
+      "p50": 414.0,
+      "p90": 560.0,
+      "p95": 600.0499999999993
+    },
+    "combined": {
+      "min": 2.0,
+      "max": 886.0,
+      "mean": 398.95595,
+      "p50": 424.0,
+      "p90": 564.0,
+      "p95": 604.0
+    },
+    "padded_length": 886
+  },
+  "agent_usage": {
+    "40": {
+      "pos": 340,
+      "neg": 294
+    },
+    "36": {
+      "pos": 316,
+      "neg": 259
+    },
+    "8": {
+      "pos": 208,
+      "neg": 184
+    },
+    "43": {
+      "pos": 282,
+      "neg": 241
+    },
+    "3": {
+      "pos": 278,
+      "neg": 250
+    },
+    "20": {
+      "pos": 268,
+      "neg": 210
+    },
+    "30": {
+      "pos": 348,
+      "neg": 224
+    },
+    "42": {
+      "pos": 144,
+      "neg": 176
+    },
+    "11": {
+      "pos": 230,
+      "neg": 217
+    },
+    "33": {
+      "pos": 286,
+      "neg": 233
+    },
+    "12": {
+      "pos": 190,
+      "neg": 201
+    },
+    "2": {
+      "pos": 216,
+      "neg": 188
+    },
+    "25": {
+      "pos": 18,
+      "neg": 124
+    },
+    "49": {
+      "pos": 276,
+      "neg": 254
+    },
+    "14": {
+      "pos": 176,
+      "neg": 207
+    },
+    "24": {
+      "pos": 166,
+      "neg": 173
+    },
+    "1": {
+      "pos": 260,
+      "neg": 210
+    },
+    "26": {
+      "pos": 324,
+      "neg": 257
+    },
+    "21": {
+      "pos": 424,
+      "neg": 275
+    },
+    "16": {
+      "pos": 204,
+      "neg": 190
+    },
+    "23": {
+      "pos": 130,
+      "neg": 183
+    },
+    "31": {
+      "pos": 224,
+      "neg": 231
+    },
+    "32": {
+      "pos": 290,
+      "neg": 245
+    },
+    "44": {
+      "pos": 158,
+      "neg": 160
+    },
+    "15": {
+      "pos": 364,
+      "neg": 255
+    },
+    "5": {
+      "pos": 8,
+      "neg": 117
+    },
+    "35": {
+      "pos": 212,
+      "neg": 207
+    },
+    "48": {
+      "pos": 2,
+      "neg": 104
+    },
+    "28": {
+      "pos": 296,
+      "neg": 243
+    },
+    "37": {
+      "pos": 276,
+      "neg": 273
+    },
+    "45": {
+      "pos": 272,
+      "neg": 251
+    },
+    "22": {
+      "pos": 292,
+      "neg": 242
+    },
+    "29": {
+      "pos": 118,
+      "neg": 152
+    },
+    "13": {
+      "pos": 260,
+      "neg": 248
+    },
+    "10": {
+      "pos": 2,
+      "neg": 105
+    },
+    "17": {
+      "pos": 8,
+      "neg": 108
+    },
+    "27": {
+      "pos": 194,
+      "neg": 193
+    },
+    "0": {
+      "pos": 204,
+      "neg": 185
+    },
+    "9": {
+      "pos": 114,
+      "neg": 158
+    },
+    "4": {
+      "pos": 206,
+      "neg": 191
+    },
+    "18": {
+      "pos": 176,
+      "neg": 208
+    },
+    "41": {
+      "pos": 20,
+      "neg": 117
+    },
+    "46": {
+      "pos": 148,
+      "neg": 195
+    },
+    "47": {
+      "pos": 222,
+      "neg": 229
+    },
+    "34": {
+      "pos": 50,
+      "neg": 139
+    },
+    "6": {
+      "pos": 334,
+      "neg": 255
+    },
+    "38": {
+      "pos": 92,
+      "neg": 155
+    },
+    "39": {
+      "pos": 142,
+      "neg": 181
+    },
+    "7": {
+      "pos": 222,
+      "neg": 201
+    },
+    "19": {
+      "pos": 10,
+      "neg": 102
+    }
+  },
+  "dataset_hash": "fec674fc55dc",
+  "split_info": {
+    "val_split": 0.2,
+    "n_train": 8000,
+    "n_val": 2000,
+    "n_train_pos": 4003,
+    "n_train_neg": 3997,
+    "n_val_pos": 997,
+    "n_val_neg": 1003,
+    "train_file": "train.npz",
+    "val_file": "val.npz"
+  }
+}

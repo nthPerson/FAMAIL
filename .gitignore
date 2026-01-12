@@ -31,3 +31,4 @@ venv/
 !**/*.sample.json
 !**/*.schema.md
 !**/.gitkeep
+data/visualization/streamlit/ai_context_docs/*

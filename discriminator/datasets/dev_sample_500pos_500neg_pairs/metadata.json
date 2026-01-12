@@ -1,0 +1,264 @@
+{
+  "config": {
+    "data_path": "/home/robert/FAMAIL/discriminator/dataset_generation_tool/source_data/all_trajs.pkl",
+    "positive_pairs": 500,
+    "negative_pairs": 500,
+    "days": 2,
+    "feature_start": 4,
+    "feature_end": 4,
+    "padding": "pad_to_longer",
+    "fixed_length": null,
+    "positive_strategy": "random",
+    "negative_strategy": "random",
+    "agent_distribution": "proportional",
+    "seed": 42,
+    "ensure_agent_coverage": true,
+    "per_agent_counts": false
+  },
+  "counts": {
+    "total_pairs": 1000,
+    "positive_pairs": 500,
+    "negative_pairs": 500
+  },
+  "length_stats": {
+    "x1": {
+      "min": 2.0,
+      "max": 730.0,
+      "mean": 412.298,
+      "p50": 432.0,
+      "p90": 570.1,
+      "p95": 604.05
+    },
+    "x2": {
+      "min": 2.0,
+      "max": 718.0,
+      "mean": 383.974,
+      "p50": 413.0,
+      "p90": 567.0,
+      "p95": 605.0
+    },
+    "combined": {
+      "min": 2.0,
+      "max": 730.0,
+      "mean": 398.136,
+      "p50": 423.0,
+      "p90": 570.0,
+      "p95": 605.0
+    },
+    "padded_length": 730
+  },
+  "agent_usage": {
+    "16": {
+      "pos": 24,
+      "neg": 21
+    },
+    "18": {
+      "pos": 16,
+      "neg": 17
+    },
+    "32": {
+      "pos": 36,
+      "neg": 23
+    },
+    "44": {
+      "pos": 12,
+      "neg": 31
+    },
+    "12": {
+      "pos": 26,
+      "neg": 20
+    },
+    "29": {
+      "pos": 22,
+      "neg": 27
+    },
+    "21": {
+      "pos": 36,
+      "neg": 29
+    },
+    "5": {
+      "pos": 2,
+      "neg": 11
+    },
+    "39": {
+      "pos": 10,
+      "neg": 24
+    },
+    "30": {
+      "pos": 44,
+      "neg": 29
+    },
+    "8": {
+      "pos": 32,
+      "neg": 23
+    },
+    "31": {
+      "pos": 18,
+      "neg": 26
+    },
+    "10": {
+      "pos": 2,
+      "neg": 13
+    },
+    "37": {
+      "pos": 18,
+      "neg": 24
+    },
+    "42": {
+      "pos": 12,
+      "neg": 19
+    },
+    "13": {
+      "pos": 28,
+      "neg": 11
+    },
+    "6": {
+      "pos": 36,
+      "neg": 26
+    },
+    "45": {
+      "pos": 16,
+      "neg": 24
+    },
+    "24": {
+      "pos": 22,
+      "neg": 21
+    },
+    "33": {
+      "pos": 28,
+      "neg": 15
+    },
+    "15": {
+      "pos": 34,
+      "neg": 24
+    },
+    "34": {
+      "pos": 6,
+      "neg": 20
+    },
+    "9": {
+      "pos": 4,
+      "neg": 14
+    },
+    "41": {
+      "pos": 2,
+      "neg": 11
+    },
+    "49": {
+      "pos": 30,
+      "neg": 23
+    },
+    "28": {
+      "pos": 36,
+      "neg": 29
+    },
+    "22": {
+      "pos": 28,
+      "neg": 20
+    },
+    "43": {
+      "pos": 22,
+      "neg": 11
+    },
+    "26": {
+      "pos": 34,
+      "neg": 32
+    },
+    "2": {
+      "pos": 20,
+      "neg": 18
+    },
+    "23": {
+      "pos": 18,
+      "neg": 10
+    },
+    "1": {
+      "pos": 22,
+      "neg": 22
+    },
+    "7": {
+      "pos": 30,
+      "neg": 27
+    },
+    "20": {
+      "pos": 24,
+      "neg": 22
+    },
+    "17": {
+      "pos": 2,
+      "neg": 10
+    },
+    "4": {
+      "pos": 18,
+      "neg": 16
+    },
+    "3": {
+      "pos": 32,
+      "neg": 21
+    },
+    "47": {
+      "pos": 22,
+      "neg": 21
+    },
+    "36": {
+      "pos": 30,
+      "neg": 26
+    },
+    "38": {
+      "pos": 6,
+      "neg": 15
+    },
+    "19": {
+      "pos": 2,
+      "neg": 16
+    },
+    "0": {
+      "pos": 18,
+      "neg": 19
+    },
+    "27": {
+      "pos": 26,
+      "neg": 23
+    },
+    "40": {
+      "pos": 26,
+      "neg": 22
+    },
+    "35": {
+      "pos": 14,
+      "neg": 18
+    },
+    "11": {
+      "pos": 20,
+      "neg": 20
+    },
+    "46": {
+      "pos": 8,
+      "neg": 17
+    },
+    "25": {
+      "pos": 2,
+      "neg": 14
+    },
+    "14": {
+      "pos": 22,
+      "neg": 12
+    },
+    "48": {
+      "pos": 2,
+      "neg": 13
+    }
+  },
+  "dataset_hash": "f45b0a8e0d10",
+  "split_info": {
+    "val_split": 0.2,
+    "n_train": 800,
+    "n_val": 200,
+    "n_train_pos": 395,
+    "n_train_neg": 405,
+    "n_val_pos": 105,
+    "n_val_neg": 95,
+    "train_file": "train.npz",
+    "val_file": "val.npz"
+  }
+}
