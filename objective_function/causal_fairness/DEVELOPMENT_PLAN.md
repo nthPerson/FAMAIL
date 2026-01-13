@@ -6,8 +6,8 @@
 |----------|-------|
 | **Term Name** | Causal Fairness |
 | **Symbol** | $F_{\text{causal}}$ |
-| **Version** | 1.0.0 |
-| **Last Updated** | 2026-01-09 |
+| **Version** | 1.1.0 |
+| **Last Updated** | 2026-01-12 |
 | **Status** | Development Planning |
 | **Author** | FAMAIL Research Team |
 
@@ -107,23 +107,32 @@ $$
 
 **Interpretation**: Demand is proxied by the number of pickup requests (passengers seeking service).
 
-**Source**: `pickup_dropoff_counts.pkl` or `latest_volume_pickups.pkl`
+**Source**: `pickup_dropoff_counts.pkl`
 
 #### 2.2.2 Supply
 
-Supply is computed using neighborhood aggregation to capture available taxi capacity:
+Supply is the count of active taxis in the neighborhood surrounding each grid cell:
 
 $$
-S_{i,p} = \sum_{j \in \mathcal{N}_k(i)} \text{traffic\_volume}_{j,p}
+S_{i,p} = N^p_i = \text{active\_taxi\_count}_{i,p}
 $$
 
 Where:
-- $\mathcal{N}_k(i)$ = $(2k+1) \times (2k+1)$ neighborhood centered on cell $i$
-- Default: $k=1$ (3×3 neighborhood)
+- $N^p_i$ = number of unique taxis that had at least one GPS reading in the $(2k+1) \times (2k+1)$ neighborhood centered on cell $i$ during period $p$
+- Default: $k=2$ (5×5 neighborhood)
 
-**Interpretation**: Supply is proxied by total taxi traffic volume in the vicinity.
+**Interpretation**: Supply represents the number of taxis available to serve the area during the time period. This is a direct measure of taxi availability, not just traffic volume.
 
-**Source**: `latest_volume_pickups.pkl` (index 1) or `latest_traffic.pkl`
+**Source**: `active_taxis/output/active_taxis_5x5_hourly.pkl` (or other active_taxis output files)
+
+**Why Active Taxis Instead of Traffic Volume?**
+
+Previously, we considered using `latest_volume_pickups.pkl` or `latest_traffic.pkl` for supply data. However, these datasets were aggregated from a larger pool of drivers (>50) than our current study set (50 drivers). Using them would create a mismatch between the supply data and our trajectory data.
+
+The `active_taxis` dataset is generated directly from the same 50-driver GPS data, ensuring consistency:
+- Same drivers as in `all_trajs.pkl`
+- Same quantization (grid cells, time buckets, days)
+- Direct count of available taxis rather than derived traffic metrics
 
 #### 2.2.3 Service Ratio
 
@@ -155,7 +164,125 @@ This can be estimated using several methods:
 | **LOESS/LOWESS** | Local polynomial smoothing | Flexible | Computationally expensive |
 | **Isotonic Regression** | Monotonic fitting | Respects monotonicity | May be step-like |
 
-**Default**: Binning with 10 quantile-based bins.
+**Default**: To be determined after data visualization (see Section 2.4).
+
+#### 2.2.4.1 Choosing the Estimation Method: Visualization-First Approach
+
+Before selecting the estimation method for $g(d)$, we will **visualize the relationship between demand ($D$) and service ratio ($Y$)** to understand the data characteristics. This visualization should be created early in development to inform our choice.
+
+**Required Visualization: Demand vs. Service Ratio Scatter Plot**
+
+Create a scatter plot with:
+- **X-axis**: Demand ($D_{i,p}$) — pickup counts
+- **Y-axis**: Service Ratio ($Y_{i,p} = S_{i,p} / D_{i,p}$)
+- **Points**: One per (cell, period) combination with positive demand
+- **Overlay**: Fitted curves for each candidate estimation method
+
+```python
+import matplotlib.pyplot as plt
+import numpy as np
+from scipy.stats import binned_statistic
+from sklearn.preprocessing import PolynomialFeatures
+from sklearn.linear_model import LinearRegression
+from sklearn.isotonic import IsotonicRegression
+from statsmodels.nonparametric.smoothers_lowess import lowess
+
+def visualize_demand_service_relationship(
+    demands: np.ndarray,
+    ratios: np.ndarray,
+    output_path: str = "g_estimation_comparison.png"
+):
+    """
+    Visualize D vs Y relationship and compare estimation methods.
+    
+    Args:
+        demands: Array of demand values (pickup counts)
+        ratios: Array of service ratios (Y = S/D)
+        output_path: Path to save the figure
+    """
+    fig, axes = plt.subplots(2, 2, figsize=(14, 12))
+    
+    # Scatter plot in all panels
+    for ax in axes.flat:
+        ax.scatter(demands, ratios, alpha=0.1, s=1, c='gray', label='Data')
+        ax.set_xlabel('Demand (Pickup Count)')
+        ax.set_ylabel('Service Ratio (Y = S/D)')
+    
+    # Sort for line plots
+    sort_idx = np.argsort(demands)
+    D_sorted = demands[sort_idx]
+    Y_sorted = ratios[sort_idx]
+    
+    # 1. Binning (top-left)
+    n_bins = 10
+    bin_means, bin_edges, _ = binned_statistic(demands, ratios, statistic='mean', bins=n_bins)
+    bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
+    axes[0, 0].plot(bin_centers, bin_means, 'ro-', linewidth=2, markersize=8, label='Binning (n=10)')
+    axes[0, 0].set_title('Binning Method')
+    axes[0, 0].legend()
+    
+    # 2. Linear Regression (top-right)
+    lr = LinearRegression()
+    lr.fit(demands.reshape(-1, 1), ratios)
+    D_pred = np.linspace(demands.min(), demands.max(), 100).reshape(-1, 1)
+    Y_pred_lr = lr.predict(D_pred)
+    axes[0, 1].plot(D_pred, Y_pred_lr, 'b-', linewidth=2, label='Linear Regression')
+    axes[0, 1].set_title(f'Linear Regression (R²={lr.score(demands.reshape(-1,1), ratios):.3f})')
+    axes[0, 1].legend()
+    
+    # 3. Polynomial (degree 2 and 3) (bottom-left)
+    for degree, color in [(2, 'green'), (3, 'purple')]:
+        poly = PolynomialFeatures(degree=degree)
+        D_poly = poly.fit_transform(demands.reshape(-1, 1))
+        lr_poly = LinearRegression()
+        lr_poly.fit(D_poly, ratios)
+        D_pred_poly = poly.transform(D_pred)
+        Y_pred_poly = lr_poly.predict(D_pred_poly)
+        axes[1, 0].plot(D_pred, Y_pred_poly, color=color, linewidth=2, label=f'Polynomial (d={degree})')
+    axes[1, 0].set_title('Polynomial Regression')
+    axes[1, 0].legend()
+    
+    # 4. LOWESS and Isotonic (bottom-right)
+    lowess_result = lowess(Y_sorted, D_sorted, frac=0.1)
+    axes[1, 1].plot(lowess_result[:, 0], lowess_result[:, 1], 'orange', linewidth=2, label='LOWESS')
+    
+    iso = IsotonicRegression(increasing=False)  # Expect decreasing Y with increasing D
+    Y_iso = iso.fit_transform(D_sorted, Y_sorted)
+    axes[1, 1].plot(D_sorted, Y_iso, 'cyan', linewidth=2, label='Isotonic')
+    axes[1, 1].set_title('Non-parametric Methods')
+    axes[1, 1].legend()
+    
+    plt.tight_layout()
+    plt.savefig(output_path, dpi=150)
+    plt.show()
+    
+    return fig
+```
+
+**Interpretation Guidelines:**
+
+| Observed Pattern | Recommended Method | Rationale |
+|------------------|-------------------|------------|
+| **Clear linear trend** | Linear Regression | Simple, interpretable, avoids overfitting |
+| **Monotonic but curved** | Isotonic Regression | Respects monotonicity without assuming functional form |
+| **Smooth nonlinear curve** | Polynomial (degree 2-3) | Captures curvature with few parameters |
+| **Highly variable, noisy** | Binning | Robust to noise, no assumptions about shape |
+| **Complex local patterns** | LOWESS | Most flexible, adapts to local structure |
+| **Uncertain / mixed signals** | Binning | Safe default, easy to interpret |
+
+**Key Questions to Answer from Visualization:**
+
+1. **Is there a clear relationship?** If the scatter shows no pattern (random cloud), causal fairness will be low regardless of method.
+
+2. **Is the relationship monotonic?** If higher demand consistently leads to lower (or higher) service ratios, consider isotonic regression.
+
+3. **Is there obvious curvature?** If the relationship curves (e.g., diminishing returns), polynomial may be appropriate.
+
+4. **How much variance is there?** High variance at each demand level suggests binning may be most robust.
+
+5. **Are there outliers?** LOWESS and binning are more robust to outliers than regression.
+
+**Action Item**: Generate this visualization before finalizing the implementation. The choice will be documented in the configuration and code comments.
 
 #### 2.2.5 Residual (Unexplained Variation)
 
@@ -284,34 +411,51 @@ Violations of this indicate unfairness.
 | `pickup_count` (index 0) | Demand proxy ($D_{i,p}$) |
 | Key components | Spatiotemporal indexing |
 
-#### 4.1.2 Supply Data: `latest_volume_pickups.pkl`
+#### 4.1.2 Supply Data: `active_taxis` Output
 
-**Location**: `FAMAIL/source_data/latest_volume_pickups.pkl`
+**Location**: `FAMAIL/active_taxis/output/active_taxis_5x5_hourly.pkl` (or similar)
+
+**Important**: The supply data must come from the `active_taxis` tool, NOT from `latest_volume_pickups.pkl` or `latest_traffic.pkl`. Those datasets were aggregated from a larger driver pool than our 50-driver study set.
 
 **Structure**:
 ```python
 {
-    (x_grid, y_grid, time_bucket, day_of_week): [pickup_count, traffic_volume],
+    (x_grid, y_grid, period_key...): active_taxi_count,
+    # For hourly:
+    (1, 1, 0, 1): 15,  # Cell (1,1), hour 0, Monday: 15 active taxis
+    # For time_bucket:
+    (1, 1, 144, 3): 12,  # Cell (1,1), bucket 144, Wednesday: 12 active taxis
 }
 ```
 
 **Fields Used**:
 | Field | Usage |
 |-------|-------|
-| `traffic_volume` (index 1) | Supply proxy ($S_{i,p}$, with neighborhood aggregation) |
+| `active_taxi_count` (value) | Supply proxy ($S_{i,p} = N^p_i$) |
+| Key components | Spatiotemporal indexing |
 
-#### 4.1.3 Alternative: `latest_traffic.pkl`
-
-**Location**: `FAMAIL/source_data/latest_traffic.pkl`
-
-Can be used if `latest_volume_pickups.pkl` is unavailable.
-
-**Structure**:
+**Generation**: Use the `active_taxis` tool with matching configuration:
 ```python
-{
-    (x_grid, y_grid, time_bucket, day_of_week): [speed, wait_time, volume],
-}
+from active_taxis import ActiveTaxisConfig, generate_active_taxi_counts
+
+config = ActiveTaxisConfig(
+    neighborhood_size=2,      # 5×5 neighborhood (must match causal fairness config)
+    period_type='hourly',     # Or 'time_bucket' for finer granularity
+    test_mode=False,
+)
+counts, stats = generate_active_taxi_counts(config)
 ```
+
+#### 4.1.3 Data Alignment Requirements
+
+| Property | Demand Data | Supply Data | Notes |
+|----------|-------------|-------------|-------|
+| Grid dimensions | 48 × 90 | 48 × 90 | Must match |
+| Coordinate indexing | 1-indexed | 1-indexed | Both use same convention |
+| Days | Monday (1) – Saturday (6) | Monday (1) – Saturday (6) | Sunday excluded |
+| Time resolution | 5-min buckets (288/day) | Configurable | May need aggregation |
+
+**Note on Temporal Alignment**: The `pickup_dropoff_counts` uses 5-minute time buckets, while `active_taxis` may be generated at hourly or daily granularity. If resolutions differ, aggregate the demand data to match the supply data resolution before computing service ratios.
 
 ### 4.2 Data Preprocessing
 
@@ -320,10 +464,14 @@ Can be used if `latest_volume_pickups.pkl` is unavailable.
 ```python
 def load_causal_fairness_data(
     pickup_counts_path: str,
-    volume_pickups_path: str
+    active_taxis_path: str
 ) -> Tuple[Dict, Dict]:
     """
     Load and align demand and supply data.
+    
+    Args:
+        pickup_counts_path: Path to pickup_dropoff_counts.pkl
+        active_taxis_path: Path to active_taxis output file
     
     Returns:
         (demand_data, supply_data) dictionaries with aligned keys
@@ -333,57 +481,47 @@ def load_causal_fairness_data(
     with open(pickup_counts_path, 'rb') as f:
         pickup_data = pickle.load(f)
     
-    with open(volume_pickups_path, 'rb') as f:
-        volume_data = pickle.load(f)
+    with open(active_taxis_path, 'rb') as f:
+        active_taxis_data = pickle.load(f)
+    
+    # Handle active_taxis output format (may contain metadata)
+    if isinstance(active_taxis_data, tuple):
+        supply = active_taxis_data[0]  # First element is the counts dict
+    else:
+        supply = active_taxis_data
     
     # Extract demand (pickup counts)
     demand = {key: val[0] for key, val in pickup_data.items()}
     
-    # Extract supply (traffic volume)
-    supply = {key: val[1] for key, val in volume_data.items()}
-    
     return demand, supply
 ```
 
-#### 4.2.2 Neighborhood Aggregation for Supply
+#### 4.2.2 Temporal Aggregation (if needed)
+
+If supply data is at a coarser resolution (e.g., hourly) than demand data (5-min buckets), aggregate demand:
 
 ```python
-def aggregate_supply_neighborhood(
-    supply: Dict[Tuple, int],
-    grid_dims: Tuple[int, int],
-    neighborhood_size: int = 1
-) -> Dict[Tuple, float]:
+def aggregate_demand_to_hourly(
+    demand: Dict[Tuple, int]
+) -> Dict[Tuple, int]:
     """
-    Aggregate supply over neighborhood for each cell.
+    Aggregate 5-minute demand data to hourly.
     
     Args:
-        supply: Raw supply data (cell → volume)
-        grid_dims: (x_max, y_max)
-        neighborhood_size: k for (2k+1)×(2k+1) window
-    
+        demand: Dict[(x, y, time_bucket, day)] -> pickup_count
+        
     Returns:
-        Aggregated supply per cell
+        Dict[(x, y, hour, day)] -> total_pickup_count
     """
-    aggregated = {}
+    from collections import defaultdict
     
-    # Get unique time-day combinations
-    time_days = set((key[2], key[3]) for key in supply.keys())
+    hourly_demand = defaultdict(int)
     
-    for t, d in time_days:
-        for x in range(grid_dims[0]):
-            for y in range(grid_dims[1]):
-                total_supply = 0
-                
-                for dx in range(-neighborhood_size, neighborhood_size + 1):
-                    for dy in range(-neighborhood_size, neighborhood_size + 1):
-                        nx, ny = x + dx, y + dy
-                        if 0 <= nx < grid_dims[0] and 0 <= ny < grid_dims[1]:
-                            key = (nx, ny, t, d)
-                            total_supply += supply.get(key, 0)
-                
-                aggregated[(x, y, t, d)] = total_supply
+    for (x, y, time_bucket, day), count in demand.items():
+        hour = (time_bucket - 1) // 12  # Convert bucket (1-288) to hour (0-23)
+        hourly_demand[(x, y, hour, day)] += count
     
-    return aggregated
+    return dict(hourly_demand)
 ```
 
 #### 4.2.3 Computing Service Ratios
@@ -391,13 +529,32 @@ def aggregate_supply_neighborhood(
 ```python
 def compute_service_ratios(
     demand: Dict[Tuple, int],
-    supply: Dict[Tuple, float],
+    supply: Dict[Tuple, int],
     min_demand: int = 1
 ) -> Dict[Tuple, float]:
     """
     Compute service ratio Y = S/D for each cell-period.
     
+    Note: Supply data from active_taxis already includes neighborhood
+    aggregation, so no additional aggregation is needed here.
+    
     Args:
+        demand: Demand (pickup counts) per cell-period
+        supply: Supply (active taxi counts) per cell-period
+        min_demand: Minimum demand threshold
+    
+    Returns:
+        Service ratios for cells with sufficient demand
+    """
+    ratios = {}
+    
+    for key, d in demand.items():
+        if d >= min_demand:
+            s = supply.get(key, 0)
+            ratios[key] = s / d
+    
+    return ratios
+```
         demand: Demand (pickup counts) per cell-period
         supply: Supply (aggregated traffic volume) per cell-period
         min_demand: Minimum demand threshold
@@ -420,10 +577,14 @@ def compute_service_ratios(
 ```python
 def validate_causal_fairness_data(
     demand: Dict[Tuple, int],
-    supply: Dict[Tuple, float]
+    supply: Dict[Tuple, int]
 ) -> List[str]:
     """
     Validate data for causal fairness computation.
+    
+    Args:
+        demand: Pickup counts from pickup_dropoff_counts.pkl
+        supply: Active taxi counts from active_taxis output
     
     Returns:
         List of validation error messages (empty if valid)
@@ -470,13 +631,13 @@ ALGORITHM: Compute Causal Fairness Term
 
 INPUT:
   - demand: Dict[(x, y, time, day)] → pickup_count
-  - supply: Dict[(x, y, time, day)] → traffic_volume
+  - supply: Dict[(x, y, time, day)] → active_taxi_count (from active_taxis tool)
   - config: CausalFairnessConfig
     - grid_dims: (48, 90)
-    - neighborhood_size: 1
-    - estimation_method: "binning"
+    - neighborhood_size: 2 (for reference; aggregation done in active_taxis)
+    - estimation_method: to be determined from visualization
     - min_demand: 1
-    - period_type: "time_bucket"
+    - period_type: "hourly"
 
 OUTPUT:
   - F_causal: float ∈ [0, 1] (higher = more fair)
@@ -520,14 +681,18 @@ STEPS:
 
 ```
 function compute_causal_fairness(demand, supply, config):
-    # Step 1: Aggregate supply
-    agg_supply = aggregate_neighborhood(supply, config.neighborhood_size)
+    # Step 1: Align temporal resolution if needed
+    if supply uses hourly and demand uses time_bucket:
+        demand = aggregate_to_hourly(demand)
+    
+    # Note: No neighborhood aggregation needed here -
+    # supply from active_taxis already includes it
     
     # Compute service ratios
     ratios = {}
     for key in demand:
         if demand[key] >= config.min_demand:
-            ratios[key] = agg_supply.get(key, 0) / demand[key]
+            ratios[key] = supply.get(key, 0) / demand[key]
     
     # Collect (D, Y, period) observations
     observations = []
@@ -585,12 +750,12 @@ from objective_function.base import ObjectiveFunctionTerm, TermMetadata, TermCon
 class CausalFairnessConfig(TermConfig):
     """Configuration for causal fairness term."""
     grid_dims: Tuple[int, int] = (48, 90)
-    neighborhood_size: int = 1  # k for (2k+1)×(2k+1) window
-    estimation_method: str = "binning"  # "binning", "regression", "polynomial"
+    neighborhood_size: int = 2  # k for (2k+1)×(2k+1) window (5×5 default)
+    estimation_method: str = "binning"  # "binning", "regression", "polynomial", "isotonic", "lowess"
     n_bins: int = 10
     poly_degree: int = 2
     min_demand: int = 1
-    period_type: str = "time_bucket"  # "time_bucket", "hourly", "daily"
+    period_type: str = "hourly"  # "time_bucket", "hourly", "daily"
 
 
 class CausalFairnessTerm(ObjectiveFunctionTerm):
@@ -599,25 +764,29 @@ class CausalFairnessTerm(ObjectiveFunctionTerm):
     
     Measures how much of the variation in service is explained by demand.
     Higher values indicate more fair (demand-based) service allocation.
+    
+    Supply data comes from the active_taxis tool, which pre-computes
+    neighborhood-aggregated taxi counts for consistency with our 50-driver dataset.
     """
     
     def _build_metadata(self) -> TermMetadata:
         return TermMetadata(
             name="causal_fairness",
             display_name="Causal Fairness",
-            version="1.0.0",
+            version="1.1.0",
             description="R²-based measure of demand-explained service variation",
             value_range=(0.0, 1.0),
             higher_is_better=True,
             is_differentiable=True,
-            required_data=["pickup_dropoff_counts", "latest_volume_pickups"],
-            optional_data=["latest_traffic"],
+            required_data=["pickup_dropoff_counts", "active_taxis"],
+            optional_data=[],
             author="FAMAIL Team",
-            last_updated="2026-01-09"
+            last_updated="2026-01-12"
         )
     
     def _validate_config(self) -> None:
-        if self.config.estimation_method not in ["binning", "regression", "polynomial"]:
+        valid_methods = ["binning", "regression", "polynomial", "isotonic", "lowess"]
+        if self.config.estimation_method not in valid_methods:
             raise ValueError(f"Invalid estimation_method: {self.config.estimation_method}")
         if self.config.neighborhood_size < 0:
             raise ValueError("neighborhood_size must be non-negative")
@@ -632,13 +801,14 @@ class CausalFairnessTerm(ObjectiveFunctionTerm):
         """Compute causal fairness value."""
         # Get demand and supply data
         demand = self._extract_demand(auxiliary_data)
-        supply = self._extract_supply(auxiliary_data)
+        supply = self._extract_supply(auxiliary_data)  # From active_taxis
         
-        # Aggregate supply over neighborhood
-        agg_supply = self._aggregate_neighborhood(supply)
+        # Align temporal resolution if needed
+        demand = self._align_temporal_resolution(demand, supply)
         
-        # Compute service ratios
-        ratios = self._compute_ratios(demand, agg_supply)
+        # Compute service ratios (no neighborhood aggregation needed -
+        # active_taxis output already includes it)
+        ratios = self._compute_ratios(demand, supply)
         
         # Compute causal fairness
         return self._compute_r_squared(demand, ratios)
@@ -778,18 +948,19 @@ def safe_r_squared(var_predicted: float, var_actual: float) -> float:
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `grid_dims` | Tuple[int, int] | Spatial grid dimensions |
+| `active_taxis_path` | str | Path to active_taxis output file |
 
 ### 6.2 Optional Parameters
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `neighborhood_size` | int | 1 | $k$ for $(2k+1) \times (2k+1)$ aggregation |
-| `estimation_method` | str | "binning" | Method for estimating g(d) |
+| `neighborhood_size` | int | 2 | $k$ for $(2k+1) \times (2k+1)$ aggregation (must match active_taxis config) |
+| `estimation_method` | str | TBD | Method for estimating g(d) — to be determined from visualization |
 | `n_bins` | int | 10 | Number of bins for binning method |
 | `poly_degree` | int | 2 | Degree for polynomial regression |
 | `min_demand` | int | 1 | Minimum demand to include cell |
-| `period_type` | str | "time_bucket" | Temporal aggregation granularity |
-| `weight` | float | 1.0 | Weight in objective function ($\alpha_1$) |
+| `period_type` | str | "hourly" | Temporal aggregation granularity |
+| `weight` | float | 0.33 | Weight in objective function ($\alpha_1$) |
 
 ### 6.3 Default Values and Rationale
 
@@ -797,10 +968,10 @@ def safe_r_squared(var_predicted: float, var_actual: float) -> float:
 DEFAULT_CONFIG = CausalFairnessConfig(
     # Spatial configuration
     grid_dims=(48, 90),       # Shenzhen grid
-    neighborhood_size=1,      # 3×3 window (balance local vs. regional)
+    neighborhood_size=2,      # 5×5 window (matches active_taxis default)
     
-    # g(d) estimation
-    estimation_method="binning",  # Simple, interpretable
+    # g(d) estimation — to be finalized after visualization
+    estimation_method="binning",  # Placeholder; will update after analyzing D vs Y plot
     n_bins=10,                    # Sufficient resolution
     poly_degree=2,                # If using polynomial
     
@@ -808,15 +979,16 @@ DEFAULT_CONFIG = CausalFairnessConfig(
     min_demand=1,             # Include all cells with any demand
     
     # Aggregation
-    period_type="time_bucket",  # Finest granularity
-    weight=1.0,
+    period_type="hourly",     # Matches typical active_taxis output
+    weight=0.33,              # Equal weight with spatial and fidelity terms
 )
 ```
 
 **Rationale**:
 
-- `neighborhood_size=1`: Captures local supply availability without excessive smoothing
-- `estimation_method="binning"`: Robust to non-linear relationships, easy to interpret
+- `neighborhood_size=2`: 5×5 window is the project standard; must match the active_taxis configuration used to generate supply data
+- `estimation_method="binning"`: Default placeholder; **the final choice will be made after visualizing the demand vs. service ratio relationship** (see Section 2.2.4.1)
+- `period_type="hourly"`: Hourly aggregation balances temporal granularity with computational efficiency and matches recommended active_taxis output
 - `n_bins=10`: Provides granularity while maintaining stable estimates per bin
 
 ---
@@ -945,16 +1117,32 @@ class TestCausalFairnessIntegration:
         """Test with actual FAMAIL datasets."""
         import pickle
         
+        # Load demand data
         with open('source_data/pickup_dropoff_counts.pkl', 'rb') as f:
             pickup_data = pickle.load(f)
         
-        with open('source_data/latest_volume_pickups.pkl', 'rb') as f:
-            volume_data = pickle.load(f)
+        # Load supply data from active_taxis (5x5 neighborhood, hourly)
+        with open('active_taxis/output/active_taxis_5x5_hourly.pkl', 'rb') as f:
+            active_taxis_data = pickle.load(f)
         
-        demand = {k: v[0] for k, v in pickup_data.items()}
-        supply = {k: v[1] for k, v in volume_data.items()}
+        # Extract counts from active_taxis output (may be tuple with metadata)
+        if isinstance(active_taxis_data, tuple):
+            supply = active_taxis_data[0]
+        else:
+            supply = active_taxis_data
         
-        config = CausalFairnessConfig()
+        # Aggregate demand to hourly to match supply resolution
+        from collections import defaultdict
+        hourly_demand = defaultdict(int)
+        for (x, y, time_bucket, day), val in pickup_data.items():
+            hour = (time_bucket - 1) // 12
+            hourly_demand[(x, y, hour, day)] += val[0]
+        demand = dict(hourly_demand)
+        
+        config = CausalFairnessConfig(
+            neighborhood_size=2,  # 5×5, matching active_taxis config
+            period_type="hourly"
+        )
         term = CausalFairnessTerm(config)
         
         result = term._compute_r_squared(demand, supply)
@@ -1163,29 +1351,29 @@ def estimate_g_function(
 ```python
 # Expected data format for causal fairness
 sample_demand = {
-    # High demand area (downtown)
-    (24, 45, 144, 1): 50,  # 50 pickup requests
-    (24, 46, 144, 1): 45,
+    # High demand area (downtown) - hourly aggregation
+    (24, 45, 12, 1): 50,  # 50 pickup requests at hour 12, Monday
+    (24, 46, 12, 1): 45,
     
     # Medium demand area
-    (10, 30, 144, 1): 15,
+    (10, 30, 12, 1): 15,
     
     # Low demand area
-    (2, 85, 144, 1): 2,
+    (2, 85, 12, 1): 2,
 }
 
 sample_supply = {
-    # Corresponding supply (traffic volume)
-    (24, 45, 144, 1): 500,  # Ratio: 10
-    (24, 46, 144, 1): 450,  # Ratio: 10
+    # Corresponding supply from active_taxis (5×5 neighborhood counts)
+    (24, 45, 12, 1): 25,  # 25 active taxis, Ratio: 0.5
+    (24, 46, 12, 1): 23,  # 23 active taxis, Ratio: ~0.5
     
-    (10, 30, 144, 1): 150,  # Ratio: 10 (fair: same ratio)
+    (10, 30, 12, 1): 8,   # 8 active taxis, Ratio: ~0.5 (fair: same ratio)
     
-    (2, 85, 144, 1): 10,    # Ratio: 5 (unfair: lower ratio)
+    (2, 85, 12, 1): 1,    # 1 active taxi, Ratio: 0.5 (fair in this example)
 }
 
 # In a fair system: all ratios should be similar given similar demand
-# The low-demand area receives less service per demand unit (unfair)
+# If the low-demand area received fewer taxis per demand unit, that would be unfair
 ```
 
 ### 10.3 Revision History
@@ -1193,6 +1381,7 @@ sample_supply = {
 | Version | Date | Changes |
 |---------|------|---------|
 | 1.0.0 | 2026-01-09 | Initial development plan |
+| 1.1.0 | 2026-01-12 | Updated supply data source from `latest_volume_pickups.pkl` to `active_taxis` output; changed default neighborhood to 5×5 (k=2); added visualization-first approach for g(d) estimation method selection |
 
 ---
 

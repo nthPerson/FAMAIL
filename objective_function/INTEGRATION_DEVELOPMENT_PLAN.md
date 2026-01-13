@@ -164,8 +164,8 @@ $$
 
 | Term | Primary Data | Secondary Data | Computed From |
 |------|--------------|----------------|---------------|
-| Spatial Fairness | pickup_dropoff_counts.pkl | - | Trajectories |
-| Causal Fairness | pickup_dropoff_counts.pkl | latest_volume_pickups.pkl | Both |
+| Spatial Fairness | pickup_dropoff_counts.pkl | active_taxis_*.pkl | Trajectories |
+| Causal Fairness | pickup_dropoff_counts.pkl | active_taxis_*.pkl | Both |
 | Fidelity | Discriminator model | - | Trajectories |
 
 ### 3.3 Computation Order
@@ -384,17 +384,24 @@ class FAMAILObjectiveFunction:
         
         auxiliary_data = {}
         
-        # Load pickup_dropoff_counts
+        # Load pickup_dropoff_counts (demand data)
         pdc_path = data_dir / "pickup_dropoff_counts.pkl"
         if pdc_path.exists():
             with open(pdc_path, 'rb') as f:
                 auxiliary_data['pickup_dropoff_counts'] = pickle.load(f)
         
-        # Load latest_volume_pickups
-        lvp_path = data_dir / "latest_volume_pickups.pkl"
-        if lvp_path.exists():
-            with open(lvp_path, 'rb') as f:
-                auxiliary_data['latest_volume_pickups'] = pickle.load(f)
+        # Load active_taxis data (supply data)
+        # Note: Using active_taxis instead of latest_volume_pickups to ensure
+        # consistency with our 50-driver study set
+        active_taxis_path = data_dir / "active_taxis_5x5_hourly.pkl"
+        if active_taxis_path.exists():
+            with open(active_taxis_path, 'rb') as f:
+                active_taxis_data = pickle.load(f)
+                # Handle tuple format (counts, stats, config) from active_taxis tool
+                if isinstance(active_taxis_data, tuple):
+                    auxiliary_data['active_taxis'] = active_taxis_data[0]
+                else:
+                    auxiliary_data['active_taxis'] = active_taxis_data
         
         if self.config.cache_data:
             self._data_cache = auxiliary_data
@@ -518,8 +525,8 @@ STEPS:
 
 1. LOAD AUXILIARY DATA
    ─────────────────────────────────
-   Load pickup_dropoff_counts.pkl
-   Load latest_volume_pickups.pkl
+   Load pickup_dropoff_counts.pkl (demand data)
+   Load active_taxis_5x5_hourly.pkl (supply data)
    (Cache if enabled)
 
 2. COMPUTE TERMS (in parallel if enabled)
@@ -1170,6 +1177,7 @@ SPATIAL_ONLY_CONFIG = IntegrationConfig(
 |---------|------|---------|
 | 1.0.0 | 2026-01-09 | Initial integration development plan |
 | 1.1.0 | 2026-01-12 | Removed Quality Term ($F_{\text{quality}}$) from objective function; Updated to 3-term formulation |
+| 1.1.1 | 2026-01-12 | Updated data source from `latest_volume_pickups.pkl` to `active_taxis` output for supply data |
 
 ---
 
