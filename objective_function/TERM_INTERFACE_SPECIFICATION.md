@@ -16,6 +16,9 @@ This document defines the **standard interface and template** that all objective
 1. [Interface Overview](#1-interface-overview)
 2. [Abstract Term Class](#2-abstract-term-class)
 3. [Required Methods](#3-required-methods)
+   - 3.1 [Method Specifications](#31-method-specifications)
+   - 3.2 [Return Value Specifications](#32-return-value-specifications)
+   - 3.3 [Differentiability Requirements (MANDATORY)](#33-differentiability-requirements-mandatory) ✨ **NEW**
 4. [Data Contracts](#4-data-contracts)
 5. [Configuration Patterns](#5-configuration-patterns)
 6. [Testing Interface](#6-testing-interface)
@@ -164,17 +167,38 @@ class ObjectiveFunctionTerm(ABC):
         """
         Compute the gradient of the term with respect to trajectory modifications.
         
-        Default implementation returns None (term is not differentiable).
-        Override this method for differentiable terms.
+        IMPORTANT (v1.1.0): All FAMAIL terms MUST be differentiable for 
+        gradient-based attribution in the Trajectory Modification Algorithm.
+        Override this method to provide analytical gradients.
         
         Args:
             trajectories: Trajectory data
             auxiliary_data: Additional datasets
         
         Returns:
-            Gradient array or None if not differentiable
+            Gradient array with shape matching trajectory coordinates
         """
-        return None
+        raise NotImplementedError(
+            f"Term {self.name} must implement compute_gradient() for "
+            "gradient-based trajectory modification."
+        )
+    
+    def get_differentiable_module(self) -> 'torch.nn.Module':
+        """
+        Return a PyTorch Module that computes this term differentiably.
+        
+        The returned module should:
+        1. Accept trajectory coordinates as a torch.Tensor with requires_grad=True
+        2. Return the term value as a scalar torch.Tensor
+        3. Support backpropagation (loss.backward())
+        
+        Returns:
+            nn.Module implementing differentiable term computation
+        """
+        raise NotImplementedError(
+            f"Term {self.name} must implement get_differentiable_module() for "
+            "end-to-end differentiable optimization."
+        )
     
     @property
     def metadata(self) -> 'TermMetadata':
@@ -297,6 +321,134 @@ return {
     }
 }
 ```
+
+### 3.3 Differentiability Requirements (MANDATORY)
+
+> **Update (v1.1.0)**: All FAMAIL objective function terms **MUST** be end-to-end differentiable to support gradient-based attribution in the Trajectory Modification Algorithm.
+
+#### 3.3.1 Why Differentiability Is Required
+
+The Trajectory Modification Algorithm uses **gradient-based attribution** (Method C from the development plan) to identify which spatial modifications will most improve fairness. This requires:
+
+1. **Analytical gradients** from the objective function back to trajectory coordinates
+2. **No discrete operations** that break the gradient chain (sorting, argmax, hard thresholds)
+3. **PyTorch-compatible implementation** using `torch.nn.Module`
+
+#### 3.3.2 Differentiable Module Interface
+
+Each term must provide a PyTorch module via `get_differentiable_module()`:
+
+```python
+import torch
+import torch.nn as nn
+from typing import Dict
+
+
+class DifferentiableTermBase(nn.Module):
+    """
+    Base class for differentiable term implementations.
+    
+    Subclass this to create PyTorch-compatible term modules.
+    """
+    
+    def __init__(self, config: 'TermConfig'):
+        super().__init__()
+        self.config = config
+    
+    def forward(
+        self,
+        trajectory_coords: torch.Tensor,
+        auxiliary_data: Dict[str, torch.Tensor]
+    ) -> torch.Tensor:
+        """
+        Compute term value differentiably.
+        
+        Args:
+            trajectory_coords: Tensor of shape (n_trajs, max_len, 2)
+                              with requires_grad=True
+            auxiliary_data: Fixed auxiliary data (no gradient)
+        
+        Returns:
+            Scalar tensor containing term value
+        """
+        raise NotImplementedError
+
+
+class ExampleDifferentiableTerm(DifferentiableTermBase):
+    """Example implementation pattern."""
+    
+    def __init__(self, config: 'TermConfig', frozen_data: torch.Tensor):
+        super().__init__(config)
+        
+        # Frozen auxiliary data - use register_buffer to prevent gradients
+        self.register_buffer('frozen_data', frozen_data)
+    
+    def forward(
+        self,
+        trajectory_coords: torch.Tensor,
+        auxiliary_data: Dict[str, torch.Tensor]
+    ) -> torch.Tensor:
+        # All operations must be differentiable PyTorch operations
+        # Use torch.* instead of np.*
+        # Use register_buffer for frozen data (no gradient)
+        # Use torch.clamp instead of np.clip
+        # Avoid sorting, argmax, hard conditionals
+        
+        result = self._differentiable_computation(trajectory_coords)
+        return result
+```
+
+#### 3.3.3 Common Differentiability Pitfalls
+
+| ❌ Non-Differentiable | ✅ Differentiable Alternative |
+|----------------------|------------------------------|
+| `np.sort()` | Pairwise differences |
+| `np.argmax()` | Softmax weighting |
+| `if x > threshold:` | `torch.sigmoid(x - threshold)` |
+| `np.clip(x, a, b)` | `torch.clamp(x, a, b)` |
+| `int(x)` / `x.long()` (after ops) | Keep as float throughout |
+| `x.detach().numpy()` (mid-computation) | Stay in PyTorch tensor land |
+
+#### 3.3.4 Gradient Verification Pattern
+
+Every differentiable term implementation must include gradient verification:
+
+```python
+def verify_gradients(self) -> bool:
+    """
+    Verify that gradients flow correctly through the term.
+    
+    Call this in unit tests to ensure differentiability.
+    """
+    import torch
+    
+    # Create test input with gradient tracking
+    coords = torch.randn(10, 50, 2, requires_grad=True)
+    
+    # Get differentiable module
+    module = self.get_differentiable_module()
+    
+    # Forward pass
+    value = module(coords, {})
+    
+    # Backward pass
+    value.backward()
+    
+    # Verify gradients exist and are valid
+    assert coords.grad is not None, "No gradient computed!"
+    assert not torch.isnan(coords.grad).any(), "NaN gradients!"
+    assert not torch.isinf(coords.grad).any(), "Inf gradients!"
+    
+    return True
+```
+
+#### 3.3.5 Term-Specific Differentiability Implementations
+
+| Term | Key Differentiability Approach | Reference |
+|------|-------------------------------|-----------|
+| **Spatial Fairness** | Pairwise Gini coefficient (no sorting) | [spatial_fairness/DEVELOPMENT_PLAN.md](spatial_fairness/DEVELOPMENT_PLAN.md#24-differentiability-requirements) |
+| **Causal Fairness** | Pre-computed frozen $g(d)$ lookup table | [causal_fairness/DEVELOPMENT_PLAN.md](causal_fairness/DEVELOPMENT_PLAN.md#24-differentiability-requirements) |
+| **Fidelity** | Native PyTorch (ST-SiameseNet uses nn.LSTM, nn.Linear, nn.Sigmoid) | Already differentiable |
 
 ---
 
@@ -664,10 +816,16 @@ __all__ = [
   - [ ] Implement `_validate_config()`
   - [ ] Implement `compute()`
   - [ ] Implement `compute_with_breakdown()`
-  - [ ] Implement `compute_gradient()` (if differentiable)
+  - [ ] Implement `compute_gradient()` (**REQUIRED** for all terms)
+  - [ ] Implement `get_differentiable_module()` (**REQUIRED** for all terms)
 - [ ] Create configuration class (`config.py`)
 - [ ] Implement helper functions (`utils.py`)
 - [ ] Write comprehensive docstrings
+- [ ] **Implement differentiable PyTorch module** (`differentiable.py`)
+  - [ ] Create `nn.Module` subclass
+  - [ ] Use only differentiable operations
+  - [ ] Register frozen data as buffers
+  - [ ] Add gradient verification test
 
 ### 9.3 Testing Checklist
 
@@ -678,6 +836,8 @@ __all__ = [
 - [ ] Test input validation
 - [ ] Test with real data samples
 - [ ] Test integration with other terms
+- [ ] **Gradient verification test** (verify_gradients())
+- [ ] **Test gradient flow end-to-end**
 
 ### 9.4 Documentation Checklist
 
@@ -717,6 +877,7 @@ All terms: Higher = Better, Range = [0, 1]
 |---------|------|--------|----------|
 | 1.0.0 | 2026-01-09 | Robert Ashe (FAMAIL Team) | Initial specification |
 | 1.1.0 | 2026-01-12 | Robert Ashe (FAMAIL Team) | Removed Quality Term (overlap with Fidelity Term) |
+| 1.2.0 | 2026-01-12 | Robert Ashe (FAMAIL Team) | **Mandatory differentiability**: Added Section 3.3, updated `compute_gradient()` and `get_differentiable_module()` as required methods, updated implementation checklist |
 
 ---
 

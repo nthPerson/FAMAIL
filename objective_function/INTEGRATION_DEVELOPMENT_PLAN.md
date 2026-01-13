@@ -5,7 +5,7 @@
 | Property | Value |
 |----------|-------|
 | **Document Title** | Integration Development Plan |
-| **Version** | 1.1.0 |
+| **Version** | 1.2.0 |
 | **Last Updated** | 2026-01-12 |
 | **Status** | Development Planning |
 | **Author** | FAMAIL Research Team |
@@ -700,80 +700,251 @@ class TrajectoryEditor:
 
 ### 7.3 Gradient Considerations
 
-**Note**: Most terms are not differentiable (discrete operations). The integration layer supports two approaches:
+> **Design Update (v1.2.0)**: All objective function terms are now fully **end-to-end differentiable** to support gradient-based attribution in the Trajectory Modification Algorithm. See individual term development plans for differentiability implementation details.
 
-#### Approach A: Numerical Gradients
+#### 7.3.1 Differentiability Architecture
 
-```python
-def estimate_gradient(
-    objective_fn: FAMAILObjectiveFunction,
-    trajectories: Dict,
-    delta: float = 1e-6
-) -> Dict:
-    """
-    Estimate gradient via finite differences.
-    
-    Expensive but works for non-differentiable objectives.
-    """
-    base_value = objective_fn.compute(trajectories)
-    gradients = {}
-    
-    for driver_id, driver_trajs in trajectories.items():
-        driver_grads = []
-        for traj_idx, traj in enumerate(driver_trajs):
-            traj_grad = []
-            for state_idx, state in enumerate(traj):
-                state_grad = []
-                for feat_idx in range(len(state)):
-                    # Perturb feature
-                    original = state[feat_idx]
-                    state[feat_idx] = original + delta
-                    
-                    new_value = objective_fn.compute(trajectories)
-                    gradient = (new_value - base_value) / delta
-                    state_grad.append(gradient)
-                    
-                    # Restore
-                    state[feat_idx] = original
-                
-                traj_grad.append(state_grad)
-            driver_grads.append(traj_grad)
-        gradients[driver_id] = driver_grads
-    
-    return gradients
-```
+All three terms support gradient computation through trajectory modifications:
 
-#### Approach B: Proxy Gradient
+| Term | Differentiability Approach | Reference |
+|------|---------------------------|-----------|
+| **Spatial Fairness** | Pairwise Gini (no sorting) | [spatial_fairness/DEVELOPMENT_PLAN.md](spatial_fairness/DEVELOPMENT_PLAN.md#24-differentiability-requirements) |
+| **Causal Fairness** | Frozen $g(d)$ lookup, differentiable $R^2$ | [causal_fairness/DEVELOPMENT_PLAN.md](causal_fairness/DEVELOPMENT_PLAN.md#24-differentiability-requirements) |
+| **Fidelity** | Native PyTorch (ST-SiameseNet) | Already differentiable |
 
-Use differentiable proxy for gradient direction, verify with actual objective:
+#### 7.3.2 Gradient-Based Objective Function
 
 ```python
-def proxy_gradient_step(
-    objective_fn: FAMAILObjectiveFunction,
-    proxy_fn: Callable,  # Differentiable approximation
-    trajectories: Dict,
-    step_size: float
-) -> Dict:
+import torch
+import torch.nn as nn
+from typing import Dict, Tuple, Optional
+
+from objective_function.spatial_fairness.differentiable import DifferentiableSpatialFairness
+from objective_function.causal_fairness.differentiable import DifferentiableCausalFairness
+from objective_function.fidelity.differentiable import DifferentiableFidelity
+
+
+class DifferentiableFAMAILObjective(nn.Module):
     """
-    Use proxy gradient but verify with actual objective.
+    Fully differentiable FAMAIL objective function.
+    
+    Supports end-to-end gradient computation for trajectory modification.
+    
+    𝓛(𝒯') = α₁F_causal + α₂F_spatial + α₃F_fidelity
     """
-    # Get gradient from proxy
-    proxy_grad = proxy_fn.gradient(trajectories)
     
-    # Line search to find good step
-    best_trajectories = trajectories
-    best_value = objective_fn.compute(trajectories)
-    
-    for scale in [0.1, 0.5, 1.0, 2.0]:
-        stepped = apply_gradient(trajectories, proxy_grad, step_size * scale)
-        value = objective_fn.compute(stepped)
+    def __init__(
+        self,
+        spatial_term: DifferentiableSpatialFairness,
+        causal_term: DifferentiableCausalFairness,
+        fidelity_term: DifferentiableFidelity,
+        alpha_causal: float = 0.33,
+        alpha_spatial: float = 0.33,
+        alpha_fidelity: float = 0.34,
+    ):
+        super().__init__()
         
-        if value > best_value:
-            best_value = value
-            best_trajectories = stepped
+        # Register terms as submodules
+        self.spatial_term = spatial_term
+        self.causal_term = causal_term
+        self.fidelity_term = fidelity_term
+        
+        # Register weights as buffers (not parameters to optimize)
+        self.register_buffer('alpha_causal', torch.tensor(alpha_causal))
+        self.register_buffer('alpha_spatial', torch.tensor(alpha_spatial))
+        self.register_buffer('alpha_fidelity', torch.tensor(alpha_fidelity))
     
-    return best_trajectories
+    def forward(
+        self,
+        trajectory_coords: torch.Tensor,
+        auxiliary_data: Dict[str, torch.Tensor]
+    ) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
+        """
+        Compute differentiable objective function.
+        
+        Args:
+            trajectory_coords: Tensor of shape (n_trajectories, max_len, 2)
+                              representing (x, y) coordinates
+            auxiliary_data: Dictionary with:
+                - 'demand': Demand tensor per cell-period
+                - 'original_trajectories': For fidelity comparison
+        
+        Returns:
+            Tuple of (objective_value, term_values_dict)
+        """
+        # Compute each term (all differentiable)
+        f_spatial = self.spatial_term(trajectory_coords, auxiliary_data)
+        f_causal = self.causal_term(trajectory_coords, auxiliary_data)
+        f_fidelity = self.fidelity_term(trajectory_coords, auxiliary_data)
+        
+        # Weighted combination
+        objective = (
+            self.alpha_causal * f_causal +
+            self.alpha_spatial * f_spatial +
+            self.alpha_fidelity * f_fidelity
+        )
+        
+        term_values = {
+            'causal': f_causal,
+            'spatial': f_spatial,
+            'fidelity': f_fidelity,
+        }
+        
+        return objective, term_values
+    
+    def compute_gradient_attribution(
+        self,
+        trajectory_coords: torch.Tensor,
+        auxiliary_data: Dict[str, torch.Tensor],
+        term: str = 'all'
+    ) -> torch.Tensor:
+        """
+        Compute gradient of objective with respect to trajectory coordinates.
+        
+        This is the core computation for gradient-based attribution
+        in the Trajectory Modification Algorithm.
+        
+        Args:
+            trajectory_coords: Coordinates requiring grad
+            auxiliary_data: Fixed auxiliary data
+            term: Which term's gradient to compute ('all', 'causal', 
+                  'spatial', 'fidelity')
+        
+        Returns:
+            Gradient tensor of same shape as trajectory_coords
+        """
+        trajectory_coords.requires_grad_(True)
+        
+        if term == 'all':
+            objective, _ = self.forward(trajectory_coords, auxiliary_data)
+        elif term == 'causal':
+            objective = self.causal_term(trajectory_coords, auxiliary_data)
+        elif term == 'spatial':
+            objective = self.spatial_term(trajectory_coords, auxiliary_data)
+        elif term == 'fidelity':
+            objective = self.fidelity_term(trajectory_coords, auxiliary_data)
+        else:
+            raise ValueError(f"Unknown term: {term}")
+        
+        # Compute gradient (maximization direction)
+        gradient = torch.autograd.grad(
+            objective,
+            trajectory_coords,
+            create_graph=False,  # Don't need higher-order gradients
+            retain_graph=False,
+        )[0]
+        
+        return gradient
 ```
+
+#### 7.3.3 Gradient Flow Diagram
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                    END-TO-END DIFFERENTIABLE OBJECTIVE                  │
+└─────────────────────────────────────────────────────────────────────────┘
+
+         Trajectory Coordinates (x, y)
+                     │
+                     │ requires_grad=True
+                     ▼
+        ┌────────────┴────────────┐
+        │     Soft Grid Binning   │  (differentiable count aggregation)
+        └────────────┬────────────┘
+                     │
+       ┌─────────────┼─────────────┐
+       │             │             │
+       ▼             ▼             ▼
+  ┌─────────┐  ┌─────────┐  ┌─────────────┐
+  │Spatial  │  │ Causal  │  │  Fidelity   │
+  │Fairness │  │Fairness │  │(ST-Siamese) │
+  │         │  │         │  │             │
+  │Pairwise │  │Frozen   │  │nn.LSTM      │
+  │  Gini   │  │g(d)+R²  │  │nn.Linear    │
+  └────┬────┘  └────┬────┘  └──────┬──────┘
+       │            │              │
+       │  α₂        │  α₁          │  α₃
+       │            │              │
+       └────────────┼──────────────┘
+                    │
+                    ▼
+           ┌───────────────┐
+           │   𝓛 = Σαᵢ·Fᵢ  │
+           └───────┬───────┘
+                   │
+                   ▼
+              loss.backward()
+                   │
+                   ▼
+           ∂𝓛/∂(x,y) → Attribution
+
+    ✓ All operations differentiable
+    ✓ Gradient flows from 𝓛 back to coordinates
+    ✓ No discrete operations break the chain
+```
+
+#### 7.3.4 Gradient Verification
+
+```python
+def verify_end_to_end_gradients():
+    """
+    Verify that gradients flow correctly through the complete objective.
+    """
+    import torch
+    
+    # Setup
+    torch.manual_seed(42)
+    
+    # Create synthetic trajectory data
+    n_trajs = 10
+    max_len = 50
+    coords = torch.randn(n_trajs, max_len, 2, requires_grad=True)
+    
+    # Initialize terms with pre-computed frozen data
+    spatial_term = DifferentiableSpatialFairness(grid_dims=(48, 90))
+    causal_term = DifferentiableCausalFairness(
+        g_lookup=torch.ones(100) * 5.0  # Frozen lookup
+    )
+    fidelity_term = DifferentiableFidelity(
+        discriminator_path='checkpoints/st_siamese.pt'
+    )
+    
+    # Create integrated objective
+    objective_fn = DifferentiableFAMAILObjective(
+        spatial_term=spatial_term,
+        causal_term=causal_term,
+        fidelity_term=fidelity_term,
+    )
+    
+    # Forward pass
+    auxiliary_data = {'demand': torch.randint(1, 20, (48, 90))}
+    objective, term_values = objective_fn(coords, auxiliary_data)
+    
+    # Backward pass
+    objective.backward()
+    
+    # Verify gradients
+    assert coords.grad is not None, "No gradient computed!"
+    assert not torch.isnan(coords.grad).any(), "NaN in gradients!"
+    assert not torch.isinf(coords.grad).any(), "Inf in gradients!"
+    
+    # Check each term contributes to gradient
+    print("✓ End-to-end gradient verification passed")
+    print(f"  Objective: {objective.item():.4f}")
+    print(f"  Gradient shape: {coords.grad.shape}")
+    print(f"  Gradient norm: {coords.grad.norm().item():.6f}")
+    
+    for name, value in term_values.items():
+        print(f"  {name}: {value.item():.4f}")
+    
+    return True
+
+
+if __name__ == "__main__":
+    verify_end_to_end_gradients()
+```
+
+> **DEPRECATED**: The previous approaches (Approach A: Numerical Gradients, Approach B: Proxy Gradient) from v1.1.0 are no longer needed now that all terms are analytically differentiable.
 
 ### 7.4 Optimization Loop
 

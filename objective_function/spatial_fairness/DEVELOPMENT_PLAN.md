@@ -6,8 +6,8 @@
 |----------|-------|
 | **Term Name** | Spatial Fairness |
 | **Symbol** | $F_{\text{spatial}}$ |
-| **Version** | 1.0.0 |
-| **Last Updated** | 2026-01-09 |
+| **Version** | 1.1.0 |
+| **Last Updated** | 2026-01-12 |
 | **Status** | Development Planning |
 | **Author** | FAMAIL Research Team |
 
@@ -120,14 +120,18 @@ $$
 
 #### 2.2.2 Gini Coefficient
 
-The Gini coefficient quantifies inequality in a distribution:
+The Gini coefficient quantifies inequality in a distribution.
+
+**Primary Formulation (Differentiable — REQUIRED)**:
 
 $$
-G = 1 + \frac{1}{n} - \frac{2}{n^2 \bar{x}} \sum_{i=1}^{n} (n - i + 1) \cdot x_{(i)}
+G = \frac{\sum_{i=1}^{n} \sum_{j=1}^{n} |x_i - x_j|}{2n^2 \bar{x}}
 $$
+
+This **pairwise absolute difference formulation** is used because it is **fully differentiable** with respect to the input values $x_i$. This is critical for gradient-based trajectory modification (see Section 2.4).
 
 Where:
-- $x_{(i)}$ = the $i$-th smallest value in the sorted distribution
+- $x_i$ = service rate for cell $i$
 - $\bar{x}$ = mean of all values
 - $n$ = number of observations (grid cells)
 
@@ -135,12 +139,15 @@ Where:
 - $G = 0$: Perfect equality
 - $G = 1$: Maximum inequality
 - Non-negative values only
+- **Differentiable**: Gradient exists almost everywhere (subgradient at $x_i = x_j$)
 
-**Alternative Formulation** (numerically equivalent):
-
-$$
-G = \frac{\sum_{i=1}^{n} \sum_{j=1}^{n} |x_i - x_j|}{2n^2 \bar{x}}
-$$
+> ⚠️ **DEPRECATED**: The sorted-index formulation below is **NOT differentiable** due to the sorting operation and should **NOT** be used in implementation:
+>
+> $$G = 1 + \frac{1}{n} - \frac{2}{n^2 \bar{x}} \sum_{i=1}^{n} (n - i + 1) \cdot x_{(i)}$$
+>
+> Where $x_{(i)}$ = the $i$-th smallest value in the sorted distribution.
+>
+> While numerically equivalent, sorting is a non-differentiable operation that breaks gradient flow.
 
 #### 2.2.3 Per-Period Spatial Fairness
 
@@ -174,6 +181,118 @@ This averages the arrival and departure Gini coefficients to capture both aspect
 - FAMAIL uses a maximization objective
 - All terms should be higher = better
 - Complement converts inequality measure to equality measure
+
+### 2.4 Differentiability Requirements
+
+> **Critical Design Requirement**: The spatial fairness term must be **end-to-end differentiable** to support gradient-based trajectory modification and attribution. This section documents the differentiability analysis and implementation requirements.
+
+#### 2.4.1 Why Differentiability?
+
+The FAMAIL trajectory modification algorithm uses **gradient-based attribution** to rank trajectories by their fairness impact:
+
+$$
+\text{Impact}_i = \left\| \nabla_{\tau_i} \mathcal{L} \right\|
+$$
+
+This requires computing gradients of all objective function terms, including $F_{\text{spatial}}$, with respect to trajectory parameters.
+
+#### 2.4.2 Differentiable Gini Implementation
+
+The pairwise absolute difference formulation is differentiable:
+
+```python
+import torch
+
+def differentiable_gini(x: torch.Tensor, eps: float = 1e-8) -> torch.Tensor:
+    """
+    Compute Gini coefficient using differentiable pairwise differences.
+    
+    This formulation supports automatic differentiation because:
+    - torch.abs() has subgradient at 0
+    - Broadcasting creates differentiable pairwise operations
+    - Mean and sum are differentiable
+    
+    Args:
+        x: Service rates tensor [num_cells]
+        eps: Small constant for numerical stability
+        
+    Returns:
+        Gini coefficient (scalar tensor, differentiable)
+    """
+    n = x.size(0)
+    x_mean = x.mean()
+    
+    # Pairwise absolute differences via broadcasting
+    # diff_matrix[i,j] = |x_i - x_j|
+    diff_matrix = torch.abs(x.unsqueeze(0) - x.unsqueeze(1))
+    
+    # Gini = sum of all pairwise differences / (2 * n^2 * mean)
+    gini = diff_matrix.sum() / (2 * n * n * x_mean + eps)
+    
+    return gini
+```
+
+#### 2.4.3 Gradient Verification
+
+```python
+def verify_spatial_fairness_gradient():
+    """
+    Verify that gradients flow through spatial fairness computation.
+    """
+    # Create service rates with gradient tracking
+    service_rates = torch.tensor([0.1, 0.2, 0.3, 0.5, 0.8], requires_grad=True)
+    
+    # Compute Gini
+    gini = differentiable_gini(service_rates)
+    
+    # Compute spatial fairness
+    F_spatial = 1.0 - gini
+    
+    # Backward pass
+    F_spatial.backward()
+    
+    # Verify gradients exist
+    assert service_rates.grad is not None, "No gradient computed"
+    assert not torch.all(service_rates.grad == 0), "Zero gradient"
+    
+    print(f"F_spatial = {F_spatial.item():.4f}")
+    print(f"Gradients: {service_rates.grad}")
+    print("✅ Spatial fairness gradient verification passed")
+```
+
+#### 2.4.4 Computational Complexity
+
+| Formulation | Time Complexity | Differentiable |
+|-------------|-----------------|----------------|
+| Sorted-index | $O(n \log n)$ | ❌ No (sorting) |
+| Pairwise differences | $O(n^2)$ | ✅ Yes |
+
+The pairwise formulation has higher complexity, but for our grid size ($n = 4320$ cells), this is acceptable:
+- Sorted: ~50,000 operations
+- Pairwise: ~18.7 million operations
+
+With GPU acceleration (vectorized matrix operations), the pairwise approach is still fast.
+
+#### 2.4.5 End-to-End Gradient Flow
+
+```
+Trajectory τ
+    │
+    ▼
+Pickup/Dropoff Events
+    │
+    ▼
+Service Rates (ASR, DSR)  ←── requires_grad=True
+    │
+    ▼
+differentiable_gini()  ←── pairwise differences
+    │
+    ▼
+F_spatial = 1 - G
+    │
+    ▼
+∇_τ F_spatial  ←── gradient flows back
+```
 
 ---
 
@@ -612,40 +731,77 @@ class SpatialFairnessTerm(ObjectiveFunctionTerm):
     
     @staticmethod
     def _compute_gini(values: np.ndarray) -> float:
-        """Compute Gini coefficient."""
+        """
+        Compute Gini coefficient using differentiable pairwise differences.
+        
+        IMPORTANT: This implementation uses the pairwise absolute difference
+        formulation, NOT the sorted-index formulation. The pairwise approach
+        is differentiable and compatible with gradient-based optimization.
+        
+        Formula: G = sum(|x_i - x_j|) / (2 * n^2 * mean(x))
+        """
         n = len(values)
-        if n == 0 or np.sum(values) == 0:
+        if n == 0:
             return 0.0
         
-        sorted_values = np.sort(values)
-        mean_value = np.mean(sorted_values)
+        mean_value = np.mean(values)
+        if mean_value == 0:
+            return 0.0
         
-        weights = np.arange(n, 0, -1)
-        weighted_sum = np.sum(weights * sorted_values)
+        # Pairwise absolute differences (differentiable formulation)
+        # Create n x n matrix of |x_i - x_j|
+        diff_matrix = np.abs(values[:, np.newaxis] - values[np.newaxis, :])
         
-        gini = 1 + (1/n) - (2 / (n**2 * mean_value)) * weighted_sum
+        # Gini = sum of all pairwise differences / (2 * n^2 * mean)
+        gini = diff_matrix.sum() / (2 * n * n * mean_value)
+        
         return max(0.0, min(1.0, gini))
+    
+    @staticmethod
+    def _compute_gini_torch(values: 'torch.Tensor', eps: float = 1e-8) -> 'torch.Tensor':
+        """
+        PyTorch implementation for gradient computation.
+        
+        Use this method when computing gradients for trajectory modification.
+        """
+        import torch
+        n = values.size(0)
+        if n == 0:
+            return torch.tensor(0.0)
+        
+        mean_value = values.mean()
+        
+        # Pairwise absolute differences
+        diff_matrix = torch.abs(values.unsqueeze(0) - values.unsqueeze(1))
+        
+        # Gini with numerical stability
+        gini = diff_matrix.sum() / (2 * n * n * mean_value + eps)
+        
+        return torch.clamp(gini, 0.0, 1.0)
 ```
 
 ### 5.4 Computational Considerations
 
 #### 5.4.1 Time Complexity
 
-| Operation | Complexity |
-|-----------|-----------|
-| Data loading | $O(K)$ where $K$ = number of keys |
-| Period aggregation | $O(K)$ |
-| Service rate computation | $O(|P| \cdot |G|)$ where $|G|$ = grid size |
-| Gini coefficient (per period) | $O(|G| \log |G|)$ (sorting) |
-| **Total** | $O(K + |P| \cdot |G| \log |G|)$ |
+| Operation | Complexity | Notes |
+|-----------|-----------|-------|
+| Data loading | $O(K)$ where $K$ = number of keys | |
+| Period aggregation | $O(K)$ | |
+| Service rate computation | $O(|P| \cdot |G|)$ where $|G|$ = grid size | |
+| Gini coefficient (per period) | $O(|G|^2)$ (pairwise differences) | Changed from $O(|G| \log |G|)$ sorting |
+| **Total** | $O(K + |P| \cdot |G|^2)$ | Higher complexity, but differentiable |
 
 For FAMAIL data: $K \approx 234,000$, $|P| \leq 1728$ (288 × 6), $|G| = 4320$ (48 × 90)
+
+> **Note on Complexity**: The pairwise formulation has $O(n^2)$ complexity instead of $O(n \log n)$ for sorting. However, this is necessary for differentiability. With GPU acceleration (vectorized matrix operations), the pairwise computation remains fast for our grid size. For $|G| = 4320$, we compute ~18.7M pairwise differences per period, which completes in milliseconds on modern hardware.
 
 #### 5.4.2 Memory Considerations
 
 - Keep only aggregated counts in memory, not raw data
 - Stream processing possible for very large datasets
 - Service rate arrays: $O(|G|)$ per period
+- Pairwise difference matrix: $O(|G|^2)$ per Gini computation (can be computed in chunks if memory-constrained)
 
 #### 5.4.3 Optimization Opportunities
 

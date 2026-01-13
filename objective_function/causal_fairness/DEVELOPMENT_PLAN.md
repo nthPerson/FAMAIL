@@ -6,7 +6,7 @@
 |----------|-------|
 | **Term Name** | Causal Fairness |
 | **Symbol** | $F_{\text{causal}}$ |
-| **Version** | 1.1.0 |
+| **Version** | 1.2.0 |
 | **Last Updated** | 2026-01-12 |
 | **Status** | Development Planning |
 | **Author** | FAMAIL Research Team |
@@ -17,6 +17,10 @@
 
 1. [Overview](#1-overview)
 2. [Mathematical Formulation](#2-mathematical-formulation)
+   - 2.1 [Core Formula](#21-core-formula)
+   - 2.2 [Component Definitions](#22-component-definitions)
+   - 2.3 [Derivation and Justification](#23-derivation-and-justification)
+   - 2.4 [Differentiability Requirements](#24-differentiability-requirements) ✨ **NEW**
 3. [Literature and References](#3-literature-and-references)
 4. [Data Requirements](#4-data-requirements)
 5. [Implementation Plan](#5-implementation-plan)
@@ -336,6 +340,318 @@ The residual $R_{i,p}$ captures variation not attributable to demand, which may 
 1. **MSE-based**: $F = -\text{MSE}(R)$ — unbounded, less interpretable
 2. **Correlation**: $F = \text{Corr}(S, D)$ — doesn't capture the ratio relationship
 3. **KL-divergence**: More complex, harder to compute gradients
+
+### 2.4 Differentiability Requirements
+
+For gradient-based trajectory modification (see [TRAJECTORY_MODIFICATION_DEVELOPMENT_PLAN.md](../docs/TRAJECTORY_MODIFICATION_DEVELOPMENT_PLAN.md)), the causal fairness term **must be end-to-end differentiable**. This section specifies the differentiability approach.
+
+#### 2.4.1 Rationale
+
+The Trajectory Modification Algorithm uses gradient-based attribution (Method C) to identify which spatial modifications will most improve fairness. This requires:
+
+1. **Complete gradient flow** from the objective function back to trajectory coordinates
+2. **Differentiable operations** in all intermediate computations
+3. **Frozen auxiliary components** that don't participate in optimization
+
+#### 2.4.2 Pre-Computed Frozen $g(d)$ Lookup Table
+
+**Critical Design Decision**: The expected service function $g(d)$ **must be pre-computed and frozen** before optimization.
+
+**Why freeze $g(d)$?**
+
+- During trajectory modification, we only want gradients with respect to the **service ratio** $Y_{i,p}$
+- The function $g(d)$ represents the *expected* service-to-demand relationship learned from the original data
+- If $g(d)$ were re-estimated during optimization, it would adapt to the modified trajectories, defeating the purpose
+- Freezing $g(d)$ ensures residuals measure deviation from the *original* expected relationship
+
+**Implementation Approach**:
+
+1. **Pre-computation Phase** (before optimization):
+   - Load original demand/supply data
+   - Fit $g(d)$ using chosen estimation method (binning, polynomial, etc.)
+   - Convert to lookup table: $g_{\text{lookup}}[d] = g(d)$ for $d \in \{0, 1, ..., d_{\max}\}$
+   - Store as a frozen `torch.Tensor` buffer
+
+2. **Optimization Phase**:
+   - Given modified trajectories → compute modified $S'_{i,p}$
+   - Look up $\hat{Y}_{i,p} = g_{\text{lookup}}[D_{i,p}]$ (frozen, no gradient)
+   - Compute $Y'_{i,p} = S'_{i,p} / D_{i,p}$ (requires gradient through $S'$)
+   - Compute residual $R'_{i,p} = Y'_{i,p} - \hat{Y}_{i,p}$ (gradient flows through $Y'$)
+
+#### 2.4.3 Differentiable R² Computation
+
+The variance-based $R^2$ formula is naturally differentiable:
+
+$$
+F_{\text{causal}}^p = 1 - \frac{\text{Var}_p(R_{i,p})}{\text{Var}_p(Y_{i,p})}
+$$
+
+Both variance computations are differentiable:
+
+$$
+\text{Var}(X) = \mathbb{E}[X^2] - \mathbb{E}[X]^2 = \frac{1}{n}\sum_i x_i^2 - \left(\frac{1}{n}\sum_i x_i\right)^2
+$$
+
+**PyTorch Implementation**:
+
+```python
+import torch
+import torch.nn as nn
+from typing import Dict, Tuple
+
+
+class DifferentiableCausalFairness(nn.Module):
+    """
+    Differentiable causal fairness term for gradient-based optimization.
+    
+    The g(d) lookup table is frozen (no gradient). Gradients flow through
+    the service ratio Y = S/D back to the supply term S.
+    """
+    
+    def __init__(
+        self,
+        g_lookup: torch.Tensor,
+        min_demand: int = 1,
+        eps: float = 1e-8
+    ):
+        """
+        Initialize with pre-computed g(d) lookup table.
+        
+        Args:
+            g_lookup: 1D tensor of shape (max_demand + 1,) where
+                      g_lookup[d] = E[Y | D = d]
+            min_demand: Minimum demand threshold
+            eps: Numerical stability constant
+        """
+        super().__init__()
+        
+        # Freeze g_lookup - no gradients flow through it
+        self.register_buffer('g_lookup', g_lookup)
+        self.min_demand = min_demand
+        self.eps = eps
+    
+    def forward(
+        self,
+        supply: torch.Tensor,
+        demand: torch.Tensor
+    ) -> torch.Tensor:
+        """
+        Compute differentiable causal fairness.
+        
+        Args:
+            supply: Tensor of supply values S_{i,p}, shape (n_cells,)
+            demand: Tensor of demand values D_{i,p}, shape (n_cells,)
+        
+        Returns:
+            Causal fairness score in [0, 1]
+        """
+        # Filter cells with sufficient demand
+        mask = demand >= self.min_demand
+        S = supply[mask]
+        D = demand[mask]
+        
+        if S.numel() == 0:
+            return torch.tensor(0.0, device=supply.device)
+        
+        # Compute service ratio Y = S/D (gradient flows through S)
+        Y = S / (D.float() + self.eps)
+        
+        # Look up expected Y from frozen g(d)
+        # Clamp indices to valid range
+        d_indices = D.long().clamp(0, self.g_lookup.size(0) - 1)
+        Y_expected = self.g_lookup[d_indices]  # No gradient here
+        
+        # Compute residual (gradient flows through Y)
+        R = Y - Y_expected
+        
+        # Compute variances
+        var_Y = self._differentiable_var(Y)
+        var_R = self._differentiable_var(R)
+        
+        # R² = 1 - Var(R) / Var(Y)
+        if var_Y < self.eps:
+            return torch.tensor(1.0, device=supply.device)
+        
+        r_squared = 1.0 - var_R / (var_Y + self.eps)
+        
+        return torch.clamp(r_squared, 0.0, 1.0)
+    
+    def _differentiable_var(self, x: torch.Tensor) -> torch.Tensor:
+        """Compute variance in a differentiable way."""
+        mean_x = x.mean()
+        return ((x - mean_x) ** 2).mean()
+    
+    @staticmethod
+    def create_g_lookup(
+        demands: torch.Tensor,
+        ratios: torch.Tensor,
+        method: str = 'binning',
+        n_bins: int = 10
+    ) -> torch.Tensor:
+        """
+        Pre-compute g(d) lookup table from original data.
+        
+        Call this BEFORE optimization to create the frozen lookup.
+        
+        Args:
+            demands: Original demand values
+            ratios: Original service ratios Y = S/D
+            method: Estimation method ('binning', 'polynomial')
+            n_bins: Number of bins for binning method
+        
+        Returns:
+            Lookup tensor g_lookup where g_lookup[d] = E[Y | D = d]
+        """
+        max_demand = int(demands.max().item()) + 1
+        g_lookup = torch.zeros(max_demand)
+        
+        if method == 'binning':
+            # Quantile-based bins
+            bin_edges = torch.quantile(
+                demands.float(),
+                torch.linspace(0, 1, n_bins + 1)
+            )
+            bin_edges = torch.unique(bin_edges)
+            
+            for d in range(max_demand):
+                # Find which bin d falls into
+                bin_idx = torch.searchsorted(bin_edges, float(d))
+                bin_idx = torch.clamp(bin_idx, 0, len(bin_edges) - 1)
+                
+                # Mean ratio for this bin
+                in_bin = (demands >= bin_edges[bin_idx - 1]) & \
+                         (demands < bin_edges[bin_idx])
+                if in_bin.any():
+                    g_lookup[d] = ratios[in_bin].mean()
+        
+        elif method == 'polynomial':
+            # Fit polynomial regression
+            import numpy as np
+            from sklearn.preprocessing import PolynomialFeatures
+            from sklearn.linear_model import LinearRegression
+            
+            D_np = demands.numpy().reshape(-1, 1)
+            Y_np = ratios.numpy()
+            
+            poly = PolynomialFeatures(degree=2)
+            D_poly = poly.fit_transform(D_np)
+            
+            model = LinearRegression().fit(D_poly, Y_np)
+            
+            # Fill lookup table
+            for d in range(max_demand):
+                d_poly = poly.transform([[d]])
+                g_lookup[d] = torch.tensor(model.predict(d_poly)[0])
+        
+        return g_lookup
+```
+
+#### 2.4.4 Gradient Flow Diagram
+
+```
+                     ┌─────────────────────────────────────────────────┐
+                     │         CAUSAL FAIRNESS GRADIENT FLOW           │
+                     └─────────────────────────────────────────────────┘
+
+    Trajectory Coordinates (x, y)
+              │
+              │ ∂L/∂coord (backprop)
+              ▼
+    ┌─────────────────┐
+    │ Grid Cell Count │ (how many trajectories pass through each cell)
+    │   (Soft Binning)│
+    └────────┬────────┘
+              │
+              │ ∂supply/∂coord
+              ▼
+    ┌─────────────────┐
+    │    Supply S     │ = count of active taxis
+    └────────┬────────┘
+              │
+              │ ∂Y/∂S = 1/D
+              ▼
+    ┌─────────────────┐     ┌─────────────────────┐
+    │   Ratio Y=S/D   │ ◄───│ Demand D (fixed)    │ No gradient
+    └────────┬────────┘     └─────────────────────┘
+              │
+              │ ∂R/∂Y = 1
+              ▼
+    ┌─────────────────┐     ┌─────────────────────┐
+    │ Residual R=Y-ĝ  │ ◄───│ ĝ = g_lookup[D]    │ FROZEN (no grad)
+    └────────┬────────┘     │ (pre-computed)      │
+              │              └─────────────────────┘
+              │
+              │ ∂Var(R)/∂R, ∂Var(Y)/∂Y
+              ▼
+    ┌─────────────────┐
+    │  R² = 1 - Var(R)│ / Var(Y)
+    └────────┬────────┘
+              │
+              │ ∂F_causal/∂R²
+              ▼
+    ┌─────────────────┐
+    │  F_causal       │ = mean(R² per period)
+    └─────────────────┘
+
+    Key:
+    ───── Gradient flows through
+    ◄──── Dependency (no gradient for frozen components)
+```
+
+#### 2.4.5 Implementation Checklist
+
+- [ ] Pre-compute $g(d)$ lookup table before optimization starts
+- [ ] Register lookup as buffer (`register_buffer`) to prevent gradient computation
+- [ ] Use `torch.clamp` instead of `np.clip` for differentiability
+- [ ] Ensure demand values are detached (no gradient)
+- [ ] Add numerical stability epsilon to divisions
+- [ ] Verify gradient flow with `torch.autograd.grad()`
+
+#### 2.4.6 Gradient Verification
+
+```python
+def verify_causal_fairness_gradients():
+    """
+    Test that gradients flow correctly through causal fairness.
+    """
+    import torch
+    
+    # Create synthetic data
+    torch.manual_seed(42)
+    n_cells = 100
+    
+    # Supply (what we're optimizing)
+    supply = torch.randn(n_cells, requires_grad=True) * 10 + 50
+    supply = torch.abs(supply)  # Ensure positive
+    
+    # Demand (fixed)
+    demand = torch.randint(1, 20, (n_cells,))
+    
+    # Create frozen g(d) lookup
+    g_lookup = torch.ones(50) * 5.0  # Simple constant g(d) = 5
+    
+    # Compute causal fairness
+    model = DifferentiableCausalFairness(g_lookup, min_demand=1)
+    f_causal = model(supply, demand)
+    
+    # Check gradient exists
+    f_causal.backward()
+    
+    assert supply.grad is not None, "No gradient for supply!"
+    assert not torch.isnan(supply.grad).any(), "NaN gradients!"
+    assert not torch.isinf(supply.grad).any(), "Inf gradients!"
+    
+    print(f"✓ Causal fairness: {f_causal.item():.4f}")
+    print(f"✓ Gradient shape: {supply.grad.shape}")
+    print(f"✓ Gradient mean: {supply.grad.mean().item():.6f}")
+    print(f"✓ Gradient std: {supply.grad.std().item():.6f}")
+    
+    return True
+
+
+if __name__ == "__main__":
+    verify_causal_fairness_gradients()
+```
 
 ---
 
