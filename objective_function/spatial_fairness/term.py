@@ -37,6 +37,8 @@ from base import ObjectiveFunctionTerm, TermMetadata, TrajectoryData, AuxiliaryD
 from spatial_fairness.config import SpatialFairnessConfig
 from spatial_fairness.utils import (
     compute_gini,
+    compute_gini_pairwise,
+    compute_gini_torch,
     compute_lorenz_curve,
     aggregate_counts_by_period,
     get_unique_periods,
@@ -47,6 +49,8 @@ from spatial_fairness.utils import (
     load_active_taxis_data,
     get_active_taxis_statistics,
     validate_active_taxis_period_alignment,
+    verify_gini_gradient,
+    DifferentiableSpatialFairness,
 )
 
 
@@ -85,19 +89,20 @@ class SpatialFairnessTerm(ObjectiveFunctionTerm):
         return TermMetadata(
             name="spatial_fairness",
             display_name="Spatial Fairness",
-            version="1.0.0",
+            version="1.1.0",
             description=(
                 "Gini-based measure of taxi service distribution equality. "
                 "Computes complement of average Gini coefficient across arrival "
-                "and departure service rates for all time periods."
+                "and departure service rates for all time periods. "
+                "Uses differentiable pairwise Gini formulation for gradient-based optimization."
             ),
             value_range=(0.0, 1.0),
             higher_is_better=True,
-            is_differentiable=False,  # Gini involves sorting
+            is_differentiable=True,  # Now uses pairwise Gini (no sorting)
             required_data=["pickup_dropoff_counts"],
-            optional_data=["all_trajs"],
+            optional_data=["all_trajs", "active_taxis"],
             author="FAMAIL Team",
-            last_updated="2026-01-10"
+            last_updated="2026-01-12"
         )
     
     def _validate_config(self) -> None:
@@ -442,3 +447,118 @@ class SpatialFairnessTerm(ObjectiveFunctionTerm):
             'dropoffs': dropoff_grid,
             'total': pickup_grid + dropoff_grid,
         }
+    
+    def get_differentiable_module(self) -> DifferentiableSpatialFairness:
+        """
+        Return a differentiable module for gradient-based optimization.
+        
+        This module computes spatial fairness using the pairwise Gini
+        formulation, which is fully differentiable.
+        
+        Returns:
+            DifferentiableSpatialFairness instance
+            
+        Example:
+            >>> term = SpatialFairnessTerm(config)
+            >>> diff_module = term.get_differentiable_module()
+            >>> dsr = torch.randn(4320, requires_grad=True).abs()
+            >>> asr = torch.randn(4320, requires_grad=True).abs()
+            >>> f_spatial = diff_module.compute(dsr, asr)
+            >>> f_spatial.backward()
+        """
+        return DifferentiableSpatialFairness(
+            grid_dims=self.config.grid_dims,
+        )
+    
+    def compute_gradient(
+        self,
+        trajectories: TrajectoryData,
+        auxiliary_data: AuxiliaryData,
+    ) -> np.ndarray:
+        """
+        Compute gradient of spatial fairness with respect to service rates.
+        
+        This method demonstrates gradient computation for a single forward
+        pass. For actual optimization, use get_differentiable_module() and
+        integrate with the trajectory modification algorithm.
+        
+        Args:
+            trajectories: Dictionary of trajectories (can be empty)
+            auxiliary_data: Must contain 'pickup_dropoff_counts'
+            
+        Returns:
+            Gradient array (concatenated DSR and ASR gradients)
+        """
+        import torch
+        
+        if 'pickup_dropoff_counts' not in auxiliary_data:
+            raise ValueError("auxiliary_data must contain 'pickup_dropoff_counts'")
+        
+        data = auxiliary_data['pickup_dropoff_counts']
+        
+        # Aggregate all data
+        pickups, dropoffs = aggregate_counts_by_period(
+            data, period_type="all",
+            days_filter=self.config.days_filter,
+            time_filter=self.config.time_filter,
+        )
+        
+        periods = get_unique_periods(pickups, dropoffs)
+        if not periods:
+            return np.array([])
+        
+        period = periods[0]
+        period_duration = compute_period_duration_days(
+            period, "all", self.config.num_days
+        )
+        
+        # Compute service rates
+        dsr_values, asr_values = compute_service_rates_for_period(
+            pickups, dropoffs, period,
+            self.config.grid_dims, self.config.num_taxis,
+            period_duration, self.config.include_zero_cells,
+            self.config.data_is_one_indexed, self.config.min_activity_threshold,
+        )
+        
+        # Convert to PyTorch tensors
+        dsr_torch = torch.tensor(dsr_values, dtype=torch.float32, requires_grad=True)
+        asr_torch = torch.tensor(asr_values, dtype=torch.float32, requires_grad=True)
+        
+        # Compute spatial fairness
+        diff_module = self.get_differentiable_module()
+        f_spatial = diff_module.compute(dsr_torch, asr_torch)
+        
+        # Backward pass
+        f_spatial.backward()
+        
+        # Return concatenated gradients
+        dsr_grad = dsr_torch.grad.numpy() if dsr_torch.grad is not None else np.zeros_like(dsr_values)
+        asr_grad = asr_torch.grad.numpy() if asr_torch.grad is not None else np.zeros_like(asr_values)
+        
+        return np.concatenate([dsr_grad, asr_grad])
+    
+    def verify_differentiability(self, n_cells: int = 100) -> Dict[str, Any]:
+        """
+        Verify that the spatial fairness term is differentiable.
+        
+        This method runs verification tests on the Gini coefficient
+        and spatial fairness computation to ensure gradients flow correctly.
+        
+        Args:
+            n_cells: Number of cells to test with
+            
+        Returns:
+            Dictionary with verification results
+        """
+        results = {
+            'gini_verification': verify_gini_gradient(n_cells),
+            'spatial_fairness_verification': DifferentiableSpatialFairness.verify_gradients(n_cells),
+        }
+        
+        results['all_passed'] = (
+            results['gini_verification']['passed'] and
+            results['spatial_fairness_verification']['passed']
+        )
+        
+        return results
+

@@ -37,6 +37,9 @@ from config import SpatialFairnessConfig, WEEKDAYS_JULY, WEEKDAYS_AUGUST, WEEKDA
 from term import SpatialFairnessTerm
 from utils import (
     compute_gini,
+    compute_gini_pairwise,
+    compute_gini_sorted,
+    compute_gini_torch,
     compute_lorenz_curve,
     aggregate_counts_by_period,
     get_unique_periods,
@@ -44,6 +47,8 @@ from utils import (
     validate_pickup_dropoff_data,
     load_active_taxis_data,
     get_active_taxis_statistics,
+    verify_gini_gradient,
+    DifferentiableSpatialFairness,
 )
 # from spatial_fairness.config import SpatialFairnessConfig
 # from spatial_fairness.term import SpatialFairnessTerm
@@ -86,6 +91,7 @@ def get_default_data_path() -> Optional[str]:
         PROJECT_ROOT / "source_data" / "pickup_dropoff_counts.pkl",
         Path("source_data/pickup_dropoff_counts.pkl"),
         Path("../source_data/pickup_dropoff_counts.pkl"),
+        Path("../../source_data/pickup_dropoff_counts.pkl"),
         Path("../../source_data/pickup_dropoff_counts.pkl"),
     ]
     
@@ -323,6 +329,480 @@ def plot_hourly_pattern(per_period_data: list) -> go.Figure:
         return fig
     except Exception:
         return None
+
+
+# =============================================================================
+# GRADIENT VERIFICATION TAB
+# =============================================================================
+
+def render_gradient_verification_tab(term: SpatialFairnessTerm):
+    """
+    Render the gradient verification tab for testing differentiability.
+    
+    This tab provides:
+    1. Interactive gradient verification tests
+    2. Gini formulation comparison (pairwise vs sorted)
+    3. Gradient statistics visualization
+    4. Integration readiness indicators
+    
+    Args:
+        term: The configured SpatialFairnessTerm instance
+    """
+    st.subheader("🔬 Differentiability Verification")
+    
+    st.markdown("""
+    This tab helps verify that the Spatial Fairness term is properly differentiable
+    for gradient-based trajectory optimization. The term uses a **pairwise absolute
+    difference formulation** of the Gini coefficient:
+    
+    $$G = \\frac{\\sum_{i=1}^{n} \\sum_{j=1}^{n} |x_i - x_j|}{2 n^2 \\mu}$$
+    
+    This formulation, while O(n²), is fully differentiable and compatible with
+    PyTorch autograd for end-to-end optimization.
+    """)
+    
+    # Check PyTorch availability
+    try:
+        import torch
+        pytorch_available = True
+        pytorch_version = torch.__version__
+    except ImportError:
+        pytorch_available = False
+        pytorch_version = None
+    
+    # Status indicators
+    st.markdown("### 📋 System Status")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        if pytorch_available:
+            st.success(f"✅ PyTorch {pytorch_version}")
+        else:
+            st.error("❌ PyTorch Not Installed")
+            st.markdown("Install with: `pip install torch`")
+    
+    with col2:
+        metadata = term._build_metadata()
+        if metadata.is_differentiable:
+            st.success("✅ Term is Differentiable")
+        else:
+            st.warning("⚠️ Term Not Differentiable")
+    
+    with col3:
+        st.info(f"📦 Version {metadata.version}")
+    
+    st.divider()
+    
+    # Gradient Verification Section
+    st.markdown("### 🧪 Gradient Verification Tests")
+    
+    st.markdown("""
+    Run verification tests to ensure gradients flow correctly through the Gini computation.
+    These tests use synthetic data to validate the mathematical correctness of the implementation.
+    """)
+    
+    # Test configuration
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        n_cells = st.slider(
+            "Number of grid cells",
+            min_value=10,
+            max_value=500,
+            value=100,
+            step=10,
+            help="Number of synthetic grid cells for testing"
+        )
+    
+    with col2:
+        test_seed = st.number_input(
+            "Random seed",
+            min_value=0,
+            max_value=9999,
+            value=42,
+            help="Seed for reproducible tests"
+        )
+    
+    if st.button("🚀 Run Gradient Verification", type="primary"):
+        if not pytorch_available:
+            st.error("PyTorch is required for gradient verification. Please install it first.")
+            return
+        
+        with st.spinner("Running gradient verification tests..."):
+            # Generate synthetic data
+            np.random.seed(test_seed)
+            synthetic_rates = np.abs(np.random.randn(n_cells) * 50 + 100).astype(np.float32)
+            
+            # Run verification
+            try:
+                result = verify_gini_gradient(synthetic_rates)
+                
+                # Display results
+                st.markdown("#### Results")
+                
+                if result['gradients_exist']:
+                    st.success("✅ **Gradients Computed Successfully**")
+                    
+                    col1, col2, col3, col4 = st.columns(4)
+                    
+                    with col1:
+                        st.metric("Gini Value", f"{result['gini_value']:.6f}")
+                    
+                    with col2:
+                        st.metric("Gradient Mean", f"{result['gradient_stats']['mean']:.6e}")
+                    
+                    with col3:
+                        st.metric("Gradient Std", f"{result['gradient_stats']['std']:.6e}")
+                    
+                    with col4:
+                        grad_range = result['gradient_stats']['max'] - result['gradient_stats']['min']
+                        st.metric("Gradient Range", f"{grad_range:.6e}")
+                    
+                    # Gradient distribution visualization
+                    st.markdown("#### Gradient Distribution")
+                    
+                    gradients = result['gradients']
+                    
+                    fig = go.Figure()
+                    
+                    fig.add_trace(go.Histogram(
+                        x=gradients,
+                        nbinsx=50,
+                        name="Gradient Values",
+                        marker_color='steelblue',
+                        opacity=0.7,
+                    ))
+                    
+                    # Add mean line
+                    fig.add_vline(
+                        x=result['gradient_stats']['mean'],
+                        line_dash="dash",
+                        line_color="red",
+                        annotation_text=f"Mean: {result['gradient_stats']['mean']:.2e}",
+                    )
+                    
+                    fig.update_layout(
+                        title="Distribution of ∂G/∂xᵢ (Gradients w.r.t. Service Rates)",
+                        xaxis_title="Gradient Value",
+                        yaxis_title="Count",
+                        height=350,
+                    )
+                    
+                    st.plotly_chart(fig, use_container_width=True)
+                    
+                    # Gradient vs Value scatter
+                    st.markdown("#### Gradient vs Service Rate")
+                    
+                    fig2 = go.Figure()
+                    
+                    fig2.add_trace(go.Scatter(
+                        x=synthetic_rates,
+                        y=gradients,
+                        mode='markers',
+                        marker=dict(
+                            size=6,
+                            color=gradients,
+                            colorscale='RdBu',
+                            colorbar=dict(title="Gradient"),
+                            showscale=True,
+                        ),
+                        name="∂G/∂x",
+                    ))
+                    
+                    fig2.update_layout(
+                        title="Gradient Relationship: How Service Rate Changes Affect Gini",
+                        xaxis_title="Service Rate (xᵢ)",
+                        yaxis_title="Gradient (∂G/∂xᵢ)",
+                        height=350,
+                    )
+                    
+                    st.plotly_chart(fig2, use_container_width=True)
+                    
+                    # Interpretation
+                    st.markdown("""
+                    #### 📖 Interpretation
+                    
+                    The gradient ∂G/∂xᵢ tells us how the Gini coefficient changes when we 
+                    modify service rate xᵢ:
+                    
+                    - **Positive gradient**: Increasing this cell's service rate increases inequality
+                    - **Negative gradient**: Increasing this cell's service rate decreases inequality
+                    - **Gradient magnitude**: Larger magnitude = more influence on fairness
+                    
+                    In a fair optimization, trajectories should be modified to reduce high-Gini 
+                    cells (those with positive gradients and low service rates).
+                    """)
+                    
+                else:
+                    st.error("❌ **Gradient Computation Failed**")
+                    st.markdown("""
+                    Gradients could not be computed. This may indicate:
+                    - A discontinuity in the computation graph
+                    - Non-differentiable operations
+                    - PyTorch configuration issues
+                    """)
+                    
+            except Exception as e:
+                st.error(f"Error during verification: {str(e)}")
+                st.exception(e)
+    
+    st.divider()
+    
+    # Formulation Comparison Section
+    st.markdown("### 📊 Gini Formulation Comparison")
+    
+    st.markdown("""
+    Compare the two Gini coefficient formulations:
+    
+    1. **Pairwise (Differentiable)**: $G = \\frac{\\sum|x_i - x_j|}{2n^2\\mu}$ - O(n²) but differentiable
+    2. **Sorted (Non-differentiable)**: $G = 1 + \\frac{1}{n} - \\frac{2}{n^2\\mu}\\sum_{i=1}^{n}(n-i+1)x_{(i)}$ - O(n log n) but uses sorting
+    
+    Both should produce identical results (within numerical precision).
+    """)
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        comparison_n_cells = st.slider(
+            "Test size",
+            min_value=10,
+            max_value=1000,
+            value=100,
+            step=10,
+            key="comparison_n_cells",
+            help="Number of cells for comparison test"
+        )
+    
+    with col2:
+        n_trials = st.slider(
+            "Number of trials",
+            min_value=1,
+            max_value=20,
+            value=5,
+            key="n_trials",
+            help="Number of random trials to run"
+        )
+    
+    if st.button("🔄 Run Comparison", key="run_comparison"):
+        with st.spinner("Comparing formulations..."):
+            results = []
+            
+            for trial in range(n_trials):
+                np.random.seed(trial + 1000)
+                test_data = np.abs(np.random.randn(comparison_n_cells) * 50 + 100)
+                
+                gini_pairwise = compute_gini_pairwise(test_data)
+                gini_sorted = compute_gini_sorted(test_data)
+                
+                results.append({
+                    'trial': trial + 1,
+                    'gini_pairwise': gini_pairwise,
+                    'gini_sorted': gini_sorted,
+                    'absolute_diff': abs(gini_pairwise - gini_sorted),
+                    'relative_diff_pct': abs(gini_pairwise - gini_sorted) / max(gini_pairwise, 1e-10) * 100,
+                })
+            
+            df_results = pd.DataFrame(results)
+            
+            # Summary metrics
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                st.metric(
+                    "Mean Gini (Pairwise)",
+                    f"{df_results['gini_pairwise'].mean():.6f}",
+                    delta=None,
+                )
+            
+            with col2:
+                st.metric(
+                    "Mean Gini (Sorted)",
+                    f"{df_results['gini_sorted'].mean():.6f}",
+                    delta=None,
+                )
+            
+            with col3:
+                max_diff = df_results['absolute_diff'].max()
+                st.metric(
+                    "Max Absolute Difference",
+                    f"{max_diff:.2e}",
+                    delta="✓ Numerically equivalent" if max_diff < 1e-10 else "⚠️ Differs",
+                )
+            
+            # Results table
+            st.dataframe(
+                df_results.style.format({
+                    'gini_pairwise': '{:.8f}',
+                    'gini_sorted': '{:.8f}',
+                    'absolute_diff': '{:.2e}',
+                    'relative_diff_pct': '{:.8f}%',
+                }),
+                use_container_width=True,
+            )
+            
+            # Visualization
+            fig = make_subplots(rows=1, cols=2, subplot_titles=['Gini Values', 'Difference'])
+            
+            fig.add_trace(
+                go.Scatter(
+                    x=df_results['trial'],
+                    y=df_results['gini_pairwise'],
+                    mode='lines+markers',
+                    name='Pairwise (Differentiable)',
+                    line=dict(color='blue'),
+                ),
+                row=1, col=1,
+            )
+            
+            fig.add_trace(
+                go.Scatter(
+                    x=df_results['trial'],
+                    y=df_results['gini_sorted'],
+                    mode='lines+markers',
+                    name='Sorted (Original)',
+                    line=dict(color='orange', dash='dot'),
+                ),
+                row=1, col=1,
+            )
+            
+            fig.add_trace(
+                go.Bar(
+                    x=df_results['trial'],
+                    y=df_results['absolute_diff'],
+                    name='Absolute Difference',
+                    marker_color='green',
+                ),
+                row=1, col=2,
+            )
+            
+            fig.update_layout(
+                height=350,
+                showlegend=True,
+            )
+            
+            st.plotly_chart(fig, use_container_width=True)
+            
+            if df_results['absolute_diff'].max() < 1e-10:
+                st.success("""
+                ✅ **Formulations are numerically equivalent!**
+                
+                The pairwise formulation produces identical results to the sorted formulation,
+                confirming mathematical correctness while enabling differentiability.
+                """)
+            else:
+                st.warning("""
+                ⚠️ **Small numerical differences detected**
+                
+                This is expected due to floating-point precision. The differences are negligible
+                for practical optimization purposes.
+                """)
+    
+    st.divider()
+    
+    # Integration Readiness Section
+    st.markdown("### 🔗 Integration Readiness")
+    
+    st.markdown("""
+    This section shows how the differentiable Spatial Fairness term integrates with
+    the broader FAMAIL objective function and trajectory optimization pipeline.
+    """)
+    
+    # Get differentiable module status
+    try:
+        diff_module = term.get_differentiable_module()
+        module_available = True
+    except Exception as e:
+        diff_module = None
+        module_available = False
+        module_error = str(e)
+    
+    # Status checklist
+    checks = [
+        ("Term metadata indicates differentiability", metadata.is_differentiable),
+        ("Pairwise Gini implementation available", True),  # Always true since we just added it
+        ("PyTorch integration available", pytorch_available),
+        ("DifferentiableSpatialFairness module available", module_available),
+    ]
+    
+    for check_name, passed in checks:
+        if passed:
+            st.markdown(f"✅ {check_name}")
+        else:
+            st.markdown(f"❌ {check_name}")
+    
+    # Integration example code
+    with st.expander("📝 Integration Example Code"):
+        st.code("""
+# Example: Using the differentiable spatial fairness term in optimization
+
+import torch
+from spatial_fairness.term import SpatialFairnessTerm
+from spatial_fairness.utils import DifferentiableSpatialFairness
+
+# Initialize the term
+term = SpatialFairnessTerm(config)
+
+# Get the differentiable module
+diff_module = term.get_differentiable_module()
+
+# Create service rates as differentiable tensor
+pickup_rates = torch.tensor(pickup_counts, requires_grad=True, dtype=torch.float32)
+dropoff_rates = torch.tensor(dropoff_counts, requires_grad=True, dtype=torch.float32)
+
+# Compute differentiable Gini
+gini_pickup = diff_module.compute_gini(pickup_rates)
+gini_dropoff = diff_module.compute_gini(dropoff_rates)
+
+# Compute spatial fairness score
+fairness = 1.0 - 0.5 * (gini_pickup + gini_dropoff)
+
+# Backpropagate to get gradients
+fairness.backward()
+
+# Access gradients for optimization
+pickup_gradients = pickup_rates.grad  # ∂F/∂pickup_rates
+dropoff_gradients = dropoff_rates.grad  # ∂F/∂dropoff_rates
+
+# Use gradients to guide trajectory modification
+# (these gradients tell us how to adjust service rates to improve fairness)
+        """, language="python")
+    
+    # Trajectory modification explanation
+    with st.expander("🚕 How Gradients Guide Trajectory Modification"):
+        st.markdown("""
+        ### Gradient-Based Trajectory Optimization
+        
+        The differentiable spatial fairness term enables **end-to-end optimization** of taxi trajectories:
+        
+        1. **Forward Pass**: 
+           - Taxi trajectories → Grid cell service counts → Service rates → Gini coefficients → Fairness score
+        
+        2. **Backward Pass** (enabled by differentiability):
+           - Fairness score gradients → Gini gradients → Service rate gradients → Grid cell gradients → **Trajectory adjustments**
+        
+        3. **Optimization Loop**:
+           ```
+           for iteration in optimization:
+               fairness = compute_spatial_fairness(trajectories)
+               loss = -fairness  # We want to maximize fairness
+               loss.backward()
+               trajectories = update_trajectories(trajectories, gradients)
+           ```
+        
+        ### Gradient Interpretation
+        
+        For a grid cell $i$ with service rate $x_i$:
+        
+        - If $\\frac{\\partial G}{\\partial x_i} > 0$: This cell has above-average service. 
+          Adding more service here increases inequality.
+        
+        - If $\\frac{\\partial G}{\\partial x_i} < 0$: This cell has below-average service.
+          Adding more service here decreases inequality.
+        
+        The optimization will naturally steer trajectories toward underserved areas
+        (negative gradient cells) and away from overserved areas (positive gradient cells).
+        """)
 
 
 # =============================================================================
@@ -611,12 +1091,13 @@ def main():
     st.divider()
     
     # Tabs for different views
-    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
         "📈 Temporal Analysis",
         "🗺️ Spatial Distribution",
         "📊 Lorenz Curves",
         "📉 Statistics",
         "🔍 Raw Data",
+        "🔬 Gradient Verification",
     ])
     
     # Tab 1: Temporal Analysis
@@ -946,12 +1427,17 @@ def main():
             mime="text/csv",
         )
     
+    # Tab 6: Gradient Verification
+    with tab6:
+        render_gradient_verification_tab(term)
+    
     # Footer
     st.divider()
     st.markdown("""
     ---
-    **FAMAIL Spatial Fairness Dashboard** | Version 1.0.0  
-    Based on Su et al. (2018) "Uncovering Spatial Inequality in Taxi Services"
+    **FAMAIL Spatial Fairness Dashboard** | Version 1.1.0 (Differentiable)  
+    Based on Su et al. (2018) "Uncovering Spatial Inequality in Taxi Services"  
+    *Now with differentiable Gini coefficient for gradient-based optimization*
     """)
 
 

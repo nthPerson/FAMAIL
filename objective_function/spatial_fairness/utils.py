@@ -19,13 +19,72 @@ from collections import defaultdict
 # GINI COEFFICIENT COMPUTATION
 # =============================================================================
 
-def compute_gini(values: np.ndarray) -> float:
+def compute_gini(values: np.ndarray, use_pairwise: bool = True) -> float:
     """
     Compute the Gini coefficient for a distribution of values.
     
     The Gini coefficient measures inequality in a distribution:
     - G = 0: Perfect equality (all values identical)
     - G = 1: Maximum inequality (one entity has everything)
+    
+    Args:
+        values: Array of non-negative values
+        use_pairwise: If True, use differentiable pairwise formulation (default).
+                     If False, use sorted formulation (faster but non-differentiable).
+        
+    Returns:
+        Gini coefficient in [0, 1]
+    """
+    if use_pairwise:
+        return compute_gini_pairwise(values)
+    else:
+        return compute_gini_sorted(values)
+
+
+def compute_gini_pairwise(values: np.ndarray, eps: float = 1e-10) -> float:
+    """
+    Compute Gini coefficient using differentiable pairwise differences.
+    
+    This formulation is DIFFERENTIABLE and should be used for gradient-based
+    optimization in the trajectory modification algorithm.
+    
+    Formula:
+        G = Σ|xi - xj| / (2 * n² * μ)
+    
+    Args:
+        values: Array of non-negative values
+        eps: Small constant for numerical stability
+        
+    Returns:
+        Gini coefficient in [0, 1]
+    """
+    values = np.asarray(values, dtype=np.float64)
+    n = len(values)
+    
+    # Handle edge cases
+    if n == 0 or n == 1:
+        return 0.0
+    
+    mean_value = np.mean(values)
+    if mean_value < eps:
+        return 0.0  # No inequality among zeros/near-zeros
+    
+    # Pairwise absolute differences via broadcasting
+    # diff_matrix[i,j] = |x_i - x_j|
+    diff_matrix = np.abs(values[:, np.newaxis] - values[np.newaxis, :])
+    
+    # Gini = sum of all pairwise differences / (2 * n^2 * mean)
+    gini = diff_matrix.sum() / (2.0 * n * n * mean_value + eps)
+    
+    return float(np.clip(gini, 0.0, 1.0))
+
+
+def compute_gini_sorted(values: np.ndarray) -> float:
+    """
+    Compute Gini coefficient using sorted index formulation.
+    
+    WARNING: This formulation is NOT DIFFERENTIABLE due to the sorting
+    operation. Use compute_gini_pairwise() for gradient-based optimization.
     
     Formula:
         G = 1 + (1/n) - (2 / (n² * μ)) * Σ(n-i+1) * x_(i)
@@ -73,10 +132,13 @@ def compute_gini_alternative(values: np.ndarray) -> float:
     """
     Alternative Gini computation using mean absolute difference.
     
+    DEPRECATED: Use compute_gini_pairwise() instead. This function
+    is kept for backward compatibility.
+    
     Formula:
         G = Σ|xi - xj| / (2 * n² * μ)
     
-    This is mathematically equivalent but useful for verification.
+    This is mathematically equivalent to the sorted formulation.
     
     Args:
         values: Array of non-negative values
@@ -84,32 +146,145 @@ def compute_gini_alternative(values: np.ndarray) -> float:
     Returns:
         Gini coefficient in [0, 1]
     """
-    values = np.asarray(values, dtype=np.float64)
-    n = len(values)
+    return compute_gini_pairwise(values)
+
+
+# =============================================================================
+# PYTORCH DIFFERENTIABLE GINI (FOR GRADIENT-BASED OPTIMIZATION)
+# =============================================================================
+
+def compute_gini_torch(values: 'torch.Tensor', eps: float = 1e-8) -> 'torch.Tensor':
+    """
+    Compute Gini coefficient using PyTorch for automatic differentiation.
     
-    if n == 0 or n == 1:
-        return 0.0
+    This is the PRIMARY implementation for gradient-based trajectory
+    modification. Supports backpropagation through the computation.
     
-    total = np.sum(values)
-    if total == 0:
-        return 0.0
+    Formula:
+        G = Σ|xi - xj| / (2 * n² * μ)
     
-    mean_value = total / n
+    Args:
+        values: 1D Tensor of service rates (must have requires_grad=True for gradients)
+        eps: Small constant for numerical stability
+        
+    Returns:
+        Scalar Tensor containing Gini coefficient (differentiable)
     
-    # Compute mean absolute difference directly
-    # Using pairwise differences
-    sorted_values = np.sort(values)
+    Example:
+        >>> import torch
+        >>> x = torch.tensor([0.1, 0.2, 0.5, 0.8], requires_grad=True)
+        >>> gini = compute_gini_torch(x)
+        >>> gini.backward()
+        >>> print(x.grad)  # Gradients wrt each input
+    """
+    import torch
     
-    # For sorted values, sum of |xi - xj| can be computed efficiently
-    # |xi - xj| for sorted = xj - xi for j > i
-    # Sum = 2 * sum_i (2*i - n - 1) * x_i for i from 0 to n-1
-    indices = np.arange(n)
-    weights = 2 * indices - n + 1
-    mad = np.sum(weights * sorted_values)
+    n = values.size(0)
     
-    gini = mad / (n * n * mean_value)
+    if n <= 1:
+        return torch.tensor(0.0, device=values.device, dtype=values.dtype)
     
-    return float(np.clip(gini, 0.0, 1.0))
+    mean_value = values.mean()
+    
+    # Pairwise absolute differences via broadcasting
+    # diff_matrix[i,j] = |x_i - x_j|
+    diff_matrix = torch.abs(values.unsqueeze(0) - values.unsqueeze(1))
+    
+    # Gini with numerical stability
+    gini = diff_matrix.sum() / (2.0 * n * n * mean_value + eps)
+    
+    return torch.clamp(gini, 0.0, 1.0)
+
+
+def verify_gini_gradient(
+    values: Optional[np.ndarray] = None,
+    n_samples: int = 100,
+    seed: int = 42
+) -> Dict[str, Any]:
+    """
+    Verify that gradients flow correctly through Gini computation.
+    
+    This function tests the differentiability of the pairwise Gini
+    formulation and compares PyTorch vs NumPy implementations.
+    
+    Args:
+        values: Optional array of values to test with. If None, random values are generated.
+        n_samples: Number of samples to generate if values is None
+        seed: Random seed for reproducibility
+        
+    Returns:
+        Dictionary with verification results including:
+        - gini_value: The computed Gini coefficient
+        - gradients_exist: Whether gradients were computed
+        - gradients: The gradient values (if computed)
+        - gradient_stats: Statistics about the gradients
+    """
+    import torch
+    
+    # Create test data
+    if values is None:
+        np.random.seed(seed)
+        test_values = np.random.exponential(scale=1.0, size=n_samples).astype(np.float32)
+    else:
+        test_values = np.asarray(values, dtype=np.float32)
+        n_samples = len(test_values)
+    
+    # NumPy computation
+    gini_numpy_pairwise = compute_gini_pairwise(test_values)
+    gini_numpy_sorted = compute_gini_sorted(test_values)
+    
+    # PyTorch computation with gradients
+    values_torch = torch.tensor(test_values, dtype=torch.float32, requires_grad=True)
+    gini_torch = compute_gini_torch(values_torch)
+    
+    # Backward pass
+    gini_torch.backward()
+    
+    # Collect gradient information
+    gradients = None
+    gradient_stats = None
+    if values_torch.grad is not None:
+        gradients = values_torch.grad.numpy()
+        gradient_stats = {
+            'mean': float(gradients.mean()),
+            'std': float(gradients.std()),
+            'min': float(gradients.min()),
+            'max': float(gradients.max()),
+        }
+    
+    # Collect results
+    results = {
+        'n_samples': n_samples,
+        'gini_value': gini_torch.item(),
+        'gini_numpy_pairwise': gini_numpy_pairwise,
+        'gini_numpy_sorted': gini_numpy_sorted,
+        'gini_torch': gini_torch.item(),
+        'formulations_match': abs(gini_numpy_pairwise - gini_numpy_sorted) < 1e-6,
+        'numpy_torch_match': abs(gini_numpy_pairwise - gini_torch.item()) < 1e-5,
+        'gradients_exist': values_torch.grad is not None,
+        'gradient_has_nan': values_torch.grad is not None and torch.isnan(values_torch.grad).any().item(),
+        'gradient_has_inf': values_torch.grad is not None and torch.isinf(values_torch.grad).any().item(),
+        'gradients': gradients,
+        'gradient_stats': gradient_stats,
+    }
+    
+    # Backward compatibility
+    results['gradient_exists'] = results['gradients_exist']
+    results['gradient_mean'] = gradient_stats['mean'] if gradient_stats else None
+    results['gradient_std'] = gradient_stats['std'] if gradient_stats else None
+    results['gradient_min'] = gradient_stats['min'] if gradient_stats else None
+    results['gradient_max'] = gradient_stats['max'] if gradient_stats else None
+    
+    # Overall pass/fail
+    results['passed'] = (
+        results['formulations_match'] and
+        results['numpy_torch_match'] and
+        results['gradients_exist'] and
+        not results['gradient_has_nan'] and
+        not results['gradient_has_inf']
+    )
+    
+    return results
 
 
 def compute_lorenz_curve(values: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
@@ -738,3 +913,173 @@ def validate_active_taxis_period_alignment(
         )
     
     return True, "Period types are aligned"
+
+
+# =============================================================================
+# DIFFERENTIABLE PYTORCH MODULE
+# =============================================================================
+
+class DifferentiableSpatialFairness:
+    """
+    Differentiable spatial fairness computation using PyTorch.
+    
+    This class provides end-to-end differentiable computation of the
+    spatial fairness term, enabling gradient-based trajectory modification.
+    
+    The spatial fairness is computed as:
+        F_spatial = 1 - 0.5 * (G_arrivals + G_departures)
+    
+    where G is the Gini coefficient computed using pairwise differences:
+        G = Σ|xi - xj| / (2 * n² * μ)
+    
+    Example:
+        >>> module = DifferentiableSpatialFairness(grid_dims=(48, 90))
+        >>> service_rates = torch.randn(4320, requires_grad=True).abs()
+        >>> f_spatial = module.compute(service_rates, service_rates)
+        >>> f_spatial.backward()
+        >>> print(service_rates.grad is not None)  # True
+    """
+    
+    def __init__(
+        self,
+        grid_dims: Tuple[int, int] = (48, 90),
+        eps: float = 1e-8,
+    ):
+        """
+        Initialize the differentiable spatial fairness module.
+        
+        Args:
+            grid_dims: Spatial grid dimensions (x_cells, y_cells)
+            eps: Small constant for numerical stability
+        """
+        self.grid_dims = grid_dims
+        self.eps = eps
+        self.n_cells = grid_dims[0] * grid_dims[1]
+    
+    def compute_gini(self, values: 'torch.Tensor') -> 'torch.Tensor':
+        """
+        Compute differentiable Gini coefficient.
+        
+        Args:
+            values: 1D tensor of service rates
+            
+        Returns:
+            Scalar tensor containing Gini coefficient
+        """
+        return compute_gini_torch(values, self.eps)
+    
+    def compute(
+        self,
+        dsr_values: 'torch.Tensor',
+        asr_values: 'torch.Tensor',
+    ) -> 'torch.Tensor':
+        """
+        Compute spatial fairness from service rate tensors.
+        
+        Args:
+            dsr_values: Departure service rates (pickups)
+            asr_values: Arrival service rates (dropoffs)
+            
+        Returns:
+            Scalar tensor containing spatial fairness value [0, 1]
+        """
+        import torch
+        
+        g_departure = self.compute_gini(dsr_values)
+        g_arrival = self.compute_gini(asr_values)
+        
+        f_spatial = 1.0 - 0.5 * (g_arrival + g_departure)
+        
+        return torch.clamp(f_spatial, 0.0, 1.0)
+    
+    def compute_from_counts(
+        self,
+        pickup_counts: 'torch.Tensor',
+        dropoff_counts: 'torch.Tensor',
+        active_taxis: 'torch.Tensor',
+        period_duration: float,
+    ) -> 'torch.Tensor':
+        """
+        Compute spatial fairness from raw count tensors.
+        
+        This method computes service rates from counts and then
+        computes spatial fairness. Gradients flow back to the counts.
+        
+        Args:
+            pickup_counts: Tensor of pickup counts per cell
+            dropoff_counts: Tensor of dropoff counts per cell  
+            active_taxis: Tensor of active taxi counts per cell
+            period_duration: Duration of period in days
+            
+        Returns:
+            Scalar tensor containing spatial fairness value
+        """
+        import torch
+        
+        # Compute service rates (DSR = pickups / (N * T))
+        normalization = active_taxis * period_duration + self.eps
+        dsr = pickup_counts / normalization
+        asr = dropoff_counts / normalization
+        
+        return self.compute(dsr, asr)
+    
+    @staticmethod
+    def verify_gradients(n_cells: int = 100, seed: int = 42) -> Dict[str, Any]:
+        """
+        Verify that gradients flow correctly through spatial fairness.
+        
+        Args:
+            n_cells: Number of cells to test with
+            seed: Random seed for reproducibility
+            
+        Returns:
+            Dictionary with verification results
+        """
+        import torch
+        
+        torch.manual_seed(seed)
+        np.random.seed(seed)
+        
+        # Create test service rates with gradient tracking
+        dsr = torch.rand(n_cells, requires_grad=True)
+        asr = torch.rand(n_cells, requires_grad=True)
+        
+        # Compute spatial fairness
+        module = DifferentiableSpatialFairness(grid_dims=(10, 10))
+        f_spatial = module.compute(dsr, asr)
+        
+        # Backward pass
+        f_spatial.backward()
+        
+        # Collect results
+        results = {
+            'n_cells': n_cells,
+            'f_spatial': f_spatial.item(),
+            'dsr_gradient_exists': dsr.grad is not None,
+            'asr_gradient_exists': asr.grad is not None,
+            'dsr_gradient_has_nan': dsr.grad is not None and torch.isnan(dsr.grad).any().item(),
+            'asr_gradient_has_nan': asr.grad is not None and torch.isnan(asr.grad).any().item(),
+            'dsr_gradient_stats': {
+                'mean': dsr.grad.mean().item() if dsr.grad is not None else None,
+                'std': dsr.grad.std().item() if dsr.grad is not None else None,
+                'min': dsr.grad.min().item() if dsr.grad is not None else None,
+                'max': dsr.grad.max().item() if dsr.grad is not None else None,
+            },
+            'asr_gradient_stats': {
+                'mean': asr.grad.mean().item() if asr.grad is not None else None,
+                'std': asr.grad.std().item() if asr.grad is not None else None,
+                'min': asr.grad.min().item() if asr.grad is not None else None,
+                'max': asr.grad.max().item() if asr.grad is not None else None,
+            },
+        }
+        
+        # Overall pass/fail
+        results['passed'] = (
+            results['dsr_gradient_exists'] and
+            results['asr_gradient_exists'] and
+            not results['dsr_gradient_has_nan'] and
+            not results['asr_gradient_has_nan']
+        )
+        
+        return results
+
