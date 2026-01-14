@@ -28,7 +28,7 @@ import sys
 import os
 
 # Add paths for imports
-SCRIPT_DIR = Path(__file__).parent
+SCRIPT_DIR = Path(__file__).resolve().parent
 OBJECTIVE_FUNCTION_DIR = SCRIPT_DIR.parent
 PROJECT_ROOT = OBJECTIVE_FUNCTION_DIR.parent
 DISCRIMINATOR_DIR = PROJECT_ROOT / "discriminator" / "model"

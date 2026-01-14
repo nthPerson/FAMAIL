@@ -28,7 +28,7 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
 # Add parent directories to path
-SCRIPT_DIR = Path(__file__).parent
+SCRIPT_DIR = Path(__file__).resolve().parent
 OBJECTIVE_FUNCTION_DIR = SCRIPT_DIR.parent
 PROJECT_ROOT = OBJECTIVE_FUNCTION_DIR.parent
 sys.path.insert(0, str(OBJECTIVE_FUNCTION_DIR))
