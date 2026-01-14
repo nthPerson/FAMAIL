@@ -53,12 +53,12 @@ st.markdown("""
 
 def get_default_paths():
     """Get default file paths based on project structure."""
-    base_dir = Path(__file__).parent.parent
+    base_dir = Path(__file__).resolve().parent.parent
     return {
-        'raw_data_dir': base_dir / "../" / "raw_data",
+        'raw_data_dir': base_dir / "raw_data",
         'output_dir': Path(__file__).parent / "output",
-        'existing_volume_pickups': base_dir / "../" / "source_data" / "latest_volume_pickups.pkl",
-        'sample_volume_pickups': base_dir / "../" / "data" / "dataset_samples" / "latest_volume_pickups.sample.json",
+        'existing_volume_pickups': base_dir / "source_data" / "latest_volume_pickups.pkl",
+        'sample_volume_pickups': base_dir /  "data" / "dataset_samples" / "latest_volume_pickups.sample.json",
     }
 
 

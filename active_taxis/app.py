@@ -65,7 +65,7 @@ st.markdown("""
 
 def get_default_paths() -> Dict[str, Path]:
     """Get default file paths based on project structure."""
-    base_dir = Path(__file__).parent
+    base_dir = Path(__file__).resolve().parent
     return {
         'raw_data_dir': base_dir.parent / "raw_data",
         'output_dir': base_dir / "output",
