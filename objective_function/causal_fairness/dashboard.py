@@ -684,7 +684,7 @@ def main():
     dataset_period = st.sidebar.selectbox(
         "Dataset Time Period",
         options=["July (21 days)", "August (23 days)", "September (22 days)", "All (66 days)"],
-        index=0,
+        index=3,
     )
     
     num_days_map = {
