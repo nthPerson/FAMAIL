@@ -109,28 +109,33 @@ def load_discriminator(
     # Extract model config from checkpoint or config file
     model_config = checkpoint.get('config', {})
     if not model_config and config:
-        # Use training config to extract model parameters
         model_config = {
-            'hidden_dim': config.get('hidden_dim', 128),
-            'num_layers': config.get('num_layers', 2),
+            'lstm_hidden_dims': tuple(config.get('lstm_hidden_dims', [200, 100])),
             'dropout': config.get('dropout', 0.2),
             'bidirectional': config.get('bidirectional', True),
-            'classifier_hidden_dims': tuple(config.get('classifier_hidden_dims', [128, 64])),
+            'classifier_hidden_dims': tuple(config.get('classifier_hidden_dims', [64, 32, 8])),
         }
+    
+    # Verify checkpoint is from new architecture (stacked LSTM layers)
+    state_dict = checkpoint.get('model_state_dict', checkpoint)
+    if 'encoder.lstm.weight_ih_l0' in state_dict:
+        raise ValueError(
+            "This checkpoint was trained with the old discriminator architecture "
+            "(single nn.LSTM). Please train a new model with the current architecture "
+            "(stacked LSTM layers with variable hidden dimensions)."
+        )
     
     # Import and create model
     from model import SiameseLSTMDiscriminator
     
     model = SiameseLSTMDiscriminator(
-        hidden_dim=model_config.get('hidden_dim', 128),
-        num_layers=model_config.get('num_layers', 2),
+        lstm_hidden_dims=tuple(model_config.get('lstm_hidden_dims', [200, 100])),
         dropout=model_config.get('dropout', 0.2),
         bidirectional=model_config.get('bidirectional', True),
-        classifier_hidden_dims=tuple(model_config.get('classifier_hidden_dims', [128, 64])),
+        classifier_hidden_dims=tuple(model_config.get('classifier_hidden_dims', [64, 32, 8])),
     )
     
     # Load weights
-    state_dict = checkpoint.get('model_state_dict', checkpoint)
     model.load_state_dict(state_dict)
     
     # Move to device and set to eval mode
