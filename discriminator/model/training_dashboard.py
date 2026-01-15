@@ -552,7 +552,7 @@ def start_training(dataset_path: Path, params: Dict, experiment_name: str, progr
                 mins = int((seconds % 3600) // 60)
                 return f"{hours}h {mins}m"
         
-        def progress_callback(epoch, total_epochs, epoch_time, train_loss, val_metrics, is_best, should_stop):
+        def progress_callback(epoch, total_epochs, epoch_time, train_loss, val_metrics, identical_metrics, is_best, should_stop):
             """Callback to update Streamlit progress elements."""
             epoch_times.append(epoch_time)
             
@@ -866,8 +866,7 @@ def main():
             with st.expander("🖥️ CLI Command"):
                 cmd = f"""python train.py \\
     --data-dir "{dataset_path}" \\
-    --hidden-dim {params['hidden_dim']} \\
-    --num-layers {params['num_layers']} \\
+    --lstm_hidden_dims {params['lstm_hidden_dims']} \\
     --dropout {params['dropout']} \\
     {"--no-bidirectional" if not params['bidirectional'] else ""} \\
     --classifier-dims "{','.join(map(str, params['classifier_hidden_dims']))}" \\
