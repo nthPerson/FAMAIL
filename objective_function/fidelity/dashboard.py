@@ -8,6 +8,16 @@ This dashboard provides an interactive interface for:
 - Analyzing per-driver and per-trajectory statistics
 - Comparing original vs edited trajectories
 - Verifying differentiability for gradient-based optimization
+- **Testing discriminator behavior** with diagnostic modes
+
+ST-iFGSM Paper Reference:
+    The ST-SiameseNet discriminator should output:
+    - > 0.5 for trajectories from the SAME agent (positive pairs)
+    - < 0.5 for trajectories from DIFFERENT agents (negative pairs)
+    
+    In the trajectory editing context:
+    - HIGH scores (> 0.5): Edited trajectory maintains driver identity
+    - LOW scores (< 0.5): Edited trajectory has lost driver identity
 
 Usage:
     streamlit run dashboard.py
@@ -24,6 +34,7 @@ from typing import Dict, Any, Optional, Tuple, List
 import numpy as np
 import pandas as pd
 import json
+import random
 
 import streamlit as st
 import plotly.express as px
@@ -71,6 +82,52 @@ except ImportError:
 
 
 # =============================================================================
+# CONSTANTS
+# =============================================================================
+
+# Test mode definitions
+TEST_MODES = {
+    "identical_trajectories": {
+        "name": "🔬 Identical Trajectories",
+        "description": "Compare each trajectory with ITSELF. Expected: scores ≈ 1.0 (identical inputs)",
+        "expected_behavior": "Should return ~1.0 for all pairs since inputs are identical",
+        "failure_indicates": "Model architecture issue or feature preprocessing problem"
+    },
+    "same_driver_same_day": {
+        "name": "👤 Same Driver, Same Day", 
+        "description": "Compare different trajectories from same driver on same day. Expected: scores > 0.5",
+        "expected_behavior": "Should return > 0.5 (same agent identity)",
+        "failure_indicates": "Model may not be learning driver identity correctly"
+    },
+    "same_driver_different_days": {
+        "name": "📅 Same Driver, Different Days",
+        "description": "Compare trajectories from same driver on different days. Expected: scores > 0.5",
+        "expected_behavior": "Should return > 0.5 (same agent identity persists across days)",
+        "failure_indicates": "Model may be overfitting to temporal patterns"
+    },
+    "different_drivers": {
+        "name": "🚗 Different Drivers",
+        "description": "Compare trajectories from DIFFERENT drivers. Expected: scores < 0.5",
+        "expected_behavior": "Should return < 0.5 (different agent identities)",
+        "failure_indicates": "Model not distinguishing between drivers"
+    },
+    "edited_vs_original": {
+        "name": "✏️ Edited vs Original",
+        "description": "Standard fidelity mode: compare edited trajectories with their originals",
+        "expected_behavior": "Should return > 0.5 if edits preserve identity, < 0.5 if identity lost",
+        "failure_indicates": "N/A - this is the actual use case"
+    }
+}
+
+AGGREGATION_METHODS = {
+    "mean": "Average of all scores. Best for overall assessment.",
+    "min": "Minimum score (worst-case). Use when any failure is unacceptable.",
+    "threshold": "Fraction of pairs above threshold. Good for pass/fail analysis.",
+    "weighted": "Length-weighted average. Accounts for trajectory importance."
+}
+
+
+# =============================================================================
 # PAGE CONFIG
 # =============================================================================
 
@@ -102,6 +159,241 @@ def load_model_cached(checkpoint_path: str, use_gpu: bool = True):
 
 
 # =============================================================================
+# TEST MODE HELPER FUNCTIONS
+# =============================================================================
+
+def create_identical_pairs(
+    trajectories: Dict[Any, List[List[List[float]]]],
+    max_pairs: int = 100,
+    feature_range: Tuple[int, int] = (0, 4),
+    min_length: int = 2
+) -> Tuple[List[np.ndarray], List[np.ndarray], List[dict]]:
+    """Create pairs where both trajectories are identical (traj compared with itself)."""
+    traj1_list = []
+    traj2_list = []
+    metadata = []
+    
+    count = 0
+    for driver_id, trajs in trajectories.items():
+        for idx, traj in enumerate(trajs):
+            if len(traj) < min_length:
+                continue
+            
+            features = extract_trajectory_features(traj, feature_range)
+            traj1_list.append(features)
+            traj2_list.append(features.copy())  # Exact copy
+            metadata.append({
+                'driver_id': driver_id,
+                'trajectory_idx': idx,
+                'length': len(traj),
+                'pair_type': 'identical'
+            })
+            
+            count += 1
+            if count >= max_pairs:
+                return traj1_list, traj2_list, metadata
+    
+    return traj1_list, traj2_list, metadata
+
+
+def create_same_driver_pairs(
+    trajectories: Dict[Any, List[List[List[float]]]],
+    max_pairs: int = 100,
+    feature_range: Tuple[int, int] = (0, 4),
+    min_length: int = 2,
+    same_day: bool = True
+) -> Tuple[List[np.ndarray], List[np.ndarray], List[dict]]:
+    """Create pairs from same driver (different trajectories)."""
+    traj1_list = []
+    traj2_list = []
+    metadata = []
+    
+    rng = random.Random(42)
+    count = 0
+    
+    for driver_id, trajs in trajectories.items():
+        valid_trajs = [(i, t) for i, t in enumerate(trajs) if len(t) >= min_length]
+        
+        if len(valid_trajs) < 2:
+            continue
+        
+        # Get day indices for trajectories (assumes day_index is at position 3)
+        traj_by_day = {}
+        for idx, traj in valid_trajs:
+            # Use first state's day_index as trajectory day
+            day = int(traj[0][3]) if len(traj[0]) > 3 else 0
+            if day not in traj_by_day:
+                traj_by_day[day] = []
+            traj_by_day[day].append((idx, traj))
+        
+        if same_day:
+            # Pair trajectories from same day
+            for day, day_trajs in traj_by_day.items():
+                if len(day_trajs) < 2:
+                    continue
+                for i in range(len(day_trajs) - 1):
+                    idx1, traj1 = day_trajs[i]
+                    idx2, traj2 = day_trajs[i + 1]
+                    
+                    traj1_list.append(extract_trajectory_features(traj1, feature_range))
+                    traj2_list.append(extract_trajectory_features(traj2, feature_range))
+                    metadata.append({
+                        'driver_id': driver_id,
+                        'traj1_idx': idx1,
+                        'traj2_idx': idx2,
+                        'day': day,
+                        'pair_type': 'same_driver_same_day'
+                    })
+                    
+                    count += 1
+                    if count >= max_pairs:
+                        return traj1_list, traj2_list, metadata
+        else:
+            # Pair trajectories from different days
+            days = list(traj_by_day.keys())
+            if len(days) < 2:
+                continue
+            
+            for i, day1 in enumerate(days):
+                for day2 in days[i+1:]:
+                    trajs1 = traj_by_day[day1]
+                    trajs2 = traj_by_day[day2]
+                    
+                    # Sample one pair from each day combination
+                    idx1, traj1 = rng.choice(trajs1)
+                    idx2, traj2 = rng.choice(trajs2)
+                    
+                    traj1_list.append(extract_trajectory_features(traj1, feature_range))
+                    traj2_list.append(extract_trajectory_features(traj2, feature_range))
+                    metadata.append({
+                        'driver_id': driver_id,
+                        'traj1_idx': idx1,
+                        'traj2_idx': idx2,
+                        'day1': day1,
+                        'day2': day2,
+                        'pair_type': 'same_driver_different_days'
+                    })
+                    
+                    count += 1
+                    if count >= max_pairs:
+                        return traj1_list, traj2_list, metadata
+    
+    return traj1_list, traj2_list, metadata
+
+
+def create_different_driver_pairs(
+    trajectories: Dict[Any, List[List[List[float]]]],
+    max_pairs: int = 100,
+    feature_range: Tuple[int, int] = (0, 4),
+    min_length: int = 2
+) -> Tuple[List[np.ndarray], List[np.ndarray], List[dict]]:
+    """Create pairs from different drivers (negative pairs)."""
+    traj1_list = []
+    traj2_list = []
+    metadata = []
+    
+    rng = random.Random(42)
+    driver_ids = list(trajectories.keys())
+    
+    if len(driver_ids) < 2:
+        return traj1_list, traj2_list, metadata
+    
+    count = 0
+    for i, driver1 in enumerate(driver_ids):
+        for driver2 in driver_ids[i+1:]:
+            trajs1 = [t for t in trajectories[driver1] if len(t) >= min_length]
+            trajs2 = [t for t in trajectories[driver2] if len(t) >= min_length]
+            
+            if not trajs1 or not trajs2:
+                continue
+            
+            traj1 = rng.choice(trajs1)
+            traj2 = rng.choice(trajs2)
+            
+            traj1_list.append(extract_trajectory_features(traj1, feature_range))
+            traj2_list.append(extract_trajectory_features(traj2, feature_range))
+            metadata.append({
+                'driver1_id': driver1,
+                'driver2_id': driver2,
+                'pair_type': 'different_drivers'
+            })
+            
+            count += 1
+            if count >= max_pairs:
+                return traj1_list, traj2_list, metadata
+    
+    return traj1_list, traj2_list, metadata
+
+
+def run_discriminator_test(
+    model: Any,
+    traj1_list: List[np.ndarray],
+    traj2_list: List[np.ndarray],
+    batch_size: int = 32,
+    device: str = "cpu"
+) -> np.ndarray:
+    """Run discriminator on trajectory pairs and return scores."""
+    if not TORCH_AVAILABLE or len(traj1_list) == 0:
+        return np.array([])
+    
+    return compute_fidelity_scores(
+        model, traj1_list, traj2_list,
+        batch_size=batch_size, device=device
+    )
+
+
+def analyze_test_results(
+    scores: np.ndarray,
+    test_mode: str,
+    threshold: float = 0.5
+) -> dict:
+    """Analyze test results and determine if behavior is correct."""
+    if len(scores) == 0:
+        return {'error': 'No scores computed'}
+    
+    mean_score = float(np.mean(scores))
+    std_score = float(np.std(scores))
+    min_score = float(np.min(scores))
+    max_score = float(np.max(scores))
+    above_threshold = float(np.mean(scores > threshold))
+    below_threshold = float(np.mean(scores < threshold))
+    
+    # Determine expected behavior based on test mode
+    if test_mode == "identical_trajectories":
+        expected_range = (0.95, 1.0)  # Should be very close to 1.0
+        passed = mean_score >= 0.9
+        diagnosis = "PASS: Identical inputs produce high scores" if passed else \
+                   "FAIL: Model not recognizing identical inputs - check architecture"
+    elif test_mode in ["same_driver_same_day", "same_driver_different_days"]:
+        expected_range = (0.5, 1.0)  # Should be above 0.5
+        passed = mean_score > 0.5
+        diagnosis = "PASS: Same-driver pairs recognized" if passed else \
+                   "FAIL: Model not learning driver identity"
+    elif test_mode == "different_drivers":
+        expected_range = (0.0, 0.5)  # Should be below 0.5
+        passed = mean_score < 0.5
+        diagnosis = "PASS: Different drivers distinguished" if passed else \
+                   "FAIL: Model not distinguishing between drivers"
+    else:
+        expected_range = (0.0, 1.0)
+        passed = True
+        diagnosis = "Standard fidelity computation"
+    
+    return {
+        'mean': mean_score,
+        'std': std_score,
+        'min': min_score,
+        'max': max_score,
+        'above_threshold': above_threshold,
+        'below_threshold': below_threshold,
+        'expected_range': expected_range,
+        'passed': passed,
+        'diagnosis': diagnosis,
+        'n_pairs': len(scores)
+    }
+
+
+# =============================================================================
 # MAIN DASHBOARD
 # =============================================================================
 
@@ -112,6 +404,12 @@ def main():
     
     The fidelity term measures how authentic edited trajectories appear compared to original expert trajectories
     using a pre-trained ST-SiameseNet discriminator.
+    
+    ---
+    
+    **ST-iFGSM Reference**: The discriminator outputs probability that two trajectories belong to the **same agent**:
+    - **Score > 0.5**: Trajectories likely from same agent (maintains identity)
+    - **Score < 0.5**: Trajectories likely from different agents (identity lost)
     """)
     
     # ==========================================================================
@@ -121,30 +419,18 @@ def main():
     st.sidebar.header("⚙️ Configuration")
     
     # Data paths
-    st.sidebar.subheader("📂 Data Sources")
+    st.sidebar.subheader("📂 Data Source")
     
     default_traj_path = str(PROJECT_ROOT / "source_data" / "all_trajs.pkl")
     trajectory_path = st.sidebar.text_input(
         "Trajectory Data Path",
         value=default_traj_path,
-        help="Path to all_trajs.pkl or similar trajectory file"
+        help="""Path to the trajectory data file (all_trajs.pkl format).
+        
+This file contains expert trajectories organized by driver ID.
+Each trajectory is a list of states with features:
+[x_grid, y_grid, time_bucket, day_index, ...]"""
     )
-    
-    # For demo purposes, we'll use the same file for both edited and original
-    use_same_for_both = st.sidebar.checkbox(
-        "Use same trajectories as edited & original (demo mode)",
-        value=True,
-        help="In demo mode, compares trajectories with themselves (should give high fidelity)"
-    )
-    
-    if not use_same_for_both:
-        edited_path = st.sidebar.text_input(
-            "Edited Trajectories Path",
-            value=trajectory_path,
-            help="Path to edited trajectory file"
-        )
-    else:
-        edited_path = trajectory_path
     
     # Model configuration
     st.sidebar.subheader("🤖 Discriminator Model")
@@ -164,96 +450,94 @@ def main():
             "Checkpoint",
             options=available_checkpoints,
             index=len(available_checkpoints) - 1,  # Select latest
-            format_func=lambda x: Path(x).parent.name
+            format_func=lambda x: Path(x).parent.name,
+            help="""Select a trained discriminator model checkpoint.
+
+The ST-SiameseNet discriminator learns to identify whether two 
+trajectories belong to the same driver. Training on balanced 
+positive/negative pairs is recommended (e.g., 5000 pos + 5000 neg)."""
         )
     else:
         checkpoint_path = st.sidebar.text_input(
             "Checkpoint Path",
             value=str(DEFAULT_CONFIG.checkpoint_path),
+            help="Full path to the model checkpoint (.pt file)"
         )
     
     use_gpu = st.sidebar.checkbox(
         "Use GPU",
         value=True,
-        disabled=not TORCH_AVAILABLE or not torch.cuda.is_available()
+        disabled=not TORCH_AVAILABLE or not torch.cuda.is_available(),
+        help="Use GPU acceleration for faster inference. Recommended for large datasets."
     )
     
-    # Computation settings
-    st.sidebar.subheader("🔧 Computation Settings")
+    # Simplified computation settings
+    st.sidebar.subheader("🔧 Settings")
     
-    mode = st.sidebar.selectbox(
-        "Pairing Mode",
-        options=["same_agent", "paired", "batch"],
-        index=0,
-        help="""
-        - same_agent: Compare each edited trajectory with original from same driver
-        - paired: Compare by trajectory index
-        - batch: Compare against random sample of originals
-        """
-    )
+    with st.sidebar.expander("Advanced Options", expanded=False):
+        aggregation = st.selectbox(
+            "Score Aggregation",
+            options=list(AGGREGATION_METHODS.keys()),
+            index=0,
+            format_func=lambda x: f"{x.capitalize()}",
+            help="\n".join([f"• **{k}**: {v}" for k, v in AGGREGATION_METHODS.items()])
+        )
+        
+        threshold = st.slider(
+            "Threshold",
+            min_value=0.0,
+            max_value=1.0,
+            value=0.5,
+            step=0.05,
+            help="""Classification threshold from ST-iFGSM paper.
+
+• **> 0.5**: Same agent (positive)
+• **< 0.5**: Different agent (negative)
+
+Default 0.5 aligns with the paper's methodology."""
+        )
+        
+        batch_size = st.number_input(
+            "Batch Size",
+            min_value=1,
+            max_value=256,
+            value=32,
+            help="Number of trajectory pairs processed per batch. Higher = faster but more memory."
+        )
+        
+        max_trajectory_length = st.number_input(
+            "Max Length",
+            min_value=100,
+            max_value=2000,
+            value=1000,
+            help="Maximum trajectory length (states). Longer trajectories are truncated."
+        )
     
-    aggregation = st.sidebar.selectbox(
-        "Aggregation Method",
-        options=["mean", "min", "threshold", "weighted"],
-        index=0,
-        help="""
-        - mean: Average of all scores
-        - min: Minimum score (worst-case)
-        - threshold: Fraction above threshold
-        - weighted: Length-weighted average
-        """
-    )
+    # Simplified filtering  
+    st.sidebar.subheader("🔍 Data Filtering")
     
-    threshold = st.sidebar.slider(
-        "Classification Threshold",
-        min_value=0.0,
-        max_value=1.0,
-        value=0.5,
-        step=0.05,
-        help="Threshold for classifying as authentic"
-    )
-    
-    batch_size = st.sidebar.number_input(
-        "Batch Size",
-        min_value=1,
-        max_value=256,
-        value=32,
-        help="Number of pairs per batch"
-    )
-    
-    max_trajectory_length = st.sidebar.number_input(
-        "Max Trajectory Length",
-        min_value=100,
-        max_value=2000,
-        value=1000,
-        help="Maximum states per trajectory"
-    )
-    
-    # Driver/trajectory filtering
-    st.sidebar.subheader("🔍 Filtering")
-    
-    max_drivers = st.sidebar.number_input(
-        "Max Drivers to Process",
+    max_drivers = st.sidebar.slider(
+        "Drivers",
         min_value=1,
         max_value=50,
-        value=50,
-        help="Limit number of drivers (for faster testing)"
+        value=10,
+        help="Number of drivers to include in analysis. Start small for quick tests."
     )
     
-    max_trajectories_per_driver = st.sidebar.number_input(
-        "Max Trajectories per Driver",
+    max_trajectories_per_driver = st.sidebar.slider(
+        "Trajectories/Driver",
         min_value=1,
-        max_value=500,
-        value=100,
-        help="Limit trajectories per driver"
+        max_value=100,
+        value=20,
+        help="Maximum trajectories per driver. Reduces computation for testing."
     )
     
     min_trajectory_length = st.sidebar.number_input(
-        "Min Trajectory Length",
+        "Min Length",
         min_value=2,
         max_value=50,
         value=2,
-        help="Minimum states for valid trajectory"
+        help="Minimum trajectory length required. Short trajectories may be unreliable."
     )
     
     # ==========================================================================
@@ -277,11 +561,11 @@ def main():
     # Load trajectory data
     try:
         with st.spinner("Loading trajectories..."):
-            original_trajectories = load_trajectories(trajectory_path)
+            trajectories = load_trajectories(trajectory_path)
             
             # Apply filtering
-            filtered_original = {}
-            for i, (driver_id, trajs) in enumerate(original_trajectories.items()):
+            filtered_trajectories = {}
+            for i, (driver_id, trajs) in enumerate(trajectories.items()):
                 if i >= max_drivers:
                     break
                 filtered_trajs = [
@@ -289,28 +573,14 @@ def main():
                     if len(t) >= min_trajectory_length
                 ]
                 if filtered_trajs:
-                    filtered_original[driver_id] = filtered_trajs
+                    filtered_trajectories[driver_id] = filtered_trajs
             
-            original_trajectories = filtered_original
+            trajectories = filtered_trajectories
             
-            if use_same_for_both:
-                edited_trajectories = original_trajectories
-            else:
-                edited_trajectories = load_trajectories(edited_path)
-                # Apply same filtering
-                filtered_edited = {}
-                for i, (driver_id, trajs) in enumerate(edited_trajectories.items()):
-                    if i >= max_drivers:
-                        break
-                    filtered_trajs = [
-                        t for t in trajs[:max_trajectories_per_driver]
-                        if len(t) >= min_trajectory_length
-                    ]
-                    if filtered_trajs:
-                        filtered_edited[driver_id] = filtered_trajs
-                edited_trajectories = filtered_edited
+            # Count trajectories
+            n_trajectories = sum(len(trajs) for trajs in trajectories.values())
         
-        st.sidebar.success(f"✅ Loaded {len(original_trajectories)} drivers")
+        st.sidebar.success(f"✅ {len(trajectories)} drivers, {n_trajectories} trajectories")
     except Exception as e:
         st.error(f"Failed to load trajectories: {e}")
         st.stop()
@@ -334,25 +604,267 @@ def main():
     # ==========================================================================
     
     tabs = st.tabs([
-        "📊 Overview",
+        "🔬 Discriminator Tests",
+        "📊 Fidelity Analysis",
         "📈 Score Distribution",
         "👤 Per-Driver Analysis",
         "🔬 Trajectory Comparison",
-        "📉 Length Analysis",
         "🧪 Gradient Verification",
         "ℹ️ Model Info",
     ])
     
     # --------------------------------------------------------------------------
-    # TAB 1: Overview
+    # TAB 1: DISCRIMINATOR TESTS (NEW)
     # --------------------------------------------------------------------------
     with tabs[0]:
-        st.header("📊 Fidelity Overview")
+        st.header("🔬 Discriminator Model Tests")
+        
+        st.markdown("""
+        **Validate that the discriminator model is working correctly** before using it for fidelity computation.
+        
+        These tests verify the model's behavior matches the ST-iFGSM paper specification:
+        - **Identical trajectories** → Score ≈ 1.0 (same input = same output)
+        - **Same driver pairs** → Score > 0.5 (recognizes driver identity)
+        - **Different driver pairs** → Score < 0.5 (distinguishes drivers)
+        
+        ---
+        """)
+        
+        # Test mode selection
+        test_mode = st.selectbox(
+            "Select Test Mode",
+            options=list(TEST_MODES.keys()),
+            format_func=lambda x: TEST_MODES[x]["name"],
+            help="Choose a test to validate discriminator behavior"
+        )
+        
+        # Display test info
+        test_info = TEST_MODES[test_mode]
+        st.info(f"""
+        **{test_info['name']}**
+        
+        {test_info['description']}
+        
+        • **Expected Behavior**: {test_info['expected_behavior']}
+        • **Failure Indicates**: {test_info['failure_indicates']}
+        """)
+        
+        # Test configuration
+        col1, col2 = st.columns(2)
+        with col1:
+            max_test_pairs = st.number_input(
+                "Max Test Pairs",
+                min_value=10,
+                max_value=500,
+                value=100,
+                help="Number of trajectory pairs to test"
+            )
+        with col2:
+            test_batch_size = st.number_input(
+                "Test Batch Size", 
+                min_value=1,
+                max_value=128,
+                value=32,
+                help="Batch size for test inference"
+            )
+        
+        # Run test button
+        run_test = st.button("🚀 Run Test", type="primary", key="run_discriminator_test")
+        
+        if run_test:
+            with st.spinner(f"Running {test_info['name']}..."):
+                # Create appropriate pairs based on test mode
+                if test_mode == "identical_trajectories":
+                    traj1_list, traj2_list, metadata = create_identical_pairs(
+                        trajectories, max_pairs=max_test_pairs,
+                        min_length=min_trajectory_length
+                    )
+                elif test_mode == "same_driver_same_day":
+                    traj1_list, traj2_list, metadata = create_same_driver_pairs(
+                        trajectories, max_pairs=max_test_pairs,
+                        min_length=min_trajectory_length, same_day=True
+                    )
+                elif test_mode == "same_driver_different_days":
+                    traj1_list, traj2_list, metadata = create_same_driver_pairs(
+                        trajectories, max_pairs=max_test_pairs,
+                        min_length=min_trajectory_length, same_day=False
+                    )
+                elif test_mode == "different_drivers":
+                    traj1_list, traj2_list, metadata = create_different_driver_pairs(
+                        trajectories, max_pairs=max_test_pairs,
+                        min_length=min_trajectory_length
+                    )
+                else:  # edited_vs_original - use same trajectory as both
+                    traj1_list, traj2_list, metadata = create_identical_pairs(
+                        trajectories, max_pairs=max_test_pairs,
+                        min_length=min_trajectory_length
+                    )
+                
+                if len(traj1_list) == 0:
+                    st.error("❌ No valid trajectory pairs found for this test mode.")
+                else:
+                    # Run discriminator
+                    scores = run_discriminator_test(
+                        model, traj1_list, traj2_list,
+                        batch_size=test_batch_size, device=device
+                    )
+                    
+                    # Analyze results
+                    results = analyze_test_results(scores, test_mode, threshold)
+                    
+                    # Store in session state
+                    st.session_state['test_results'] = {
+                        'mode': test_mode,
+                        'scores': scores,
+                        'metadata': metadata,
+                        'analysis': results
+                    }
+        
+        # Display results
+        if 'test_results' in st.session_state:
+            results = st.session_state['test_results']
+            analysis = results['analysis']
+            scores = results['scores']
+            
+            st.subheader("Test Results")
+            
+            # Pass/Fail indicator
+            if analysis['passed']:
+                st.success(f"✅ **{analysis['diagnosis']}**")
+            else:
+                st.error(f"❌ **{analysis['diagnosis']}**")
+            
+            # Key metrics
+            col1, col2, col3, col4 = st.columns(4)
+            
+            with col1:
+                st.metric(
+                    "Mean Score",
+                    f"{analysis['mean']:.4f}",
+                    help="Average discriminator output across all test pairs"
+                )
+            
+            with col2:
+                expected = analysis['expected_range']
+                st.metric(
+                    "Expected Range",
+                    f"{expected[0]:.1f} - {expected[1]:.1f}",
+                    help="Score range expected for this test mode"
+                )
+            
+            with col3:
+                st.metric(
+                    "Std Dev",
+                    f"{analysis['std']:.4f}",
+                    help="Score variability"
+                )
+            
+            with col4:
+                st.metric(
+                    "Test Pairs",
+                    f"{analysis['n_pairs']:,}",
+                    help="Number of trajectory pairs tested"
+                )
+            
+            # Score range
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Min", f"{analysis['min']:.4f}")
+            with col2:
+                st.metric("Median", f"{float(np.median(scores)):.4f}")
+            with col3:
+                st.metric("Max", f"{analysis['max']:.4f}")
+            
+            # Histogram
+            st.subheader("Score Distribution")
+            
+            fig = go.Figure()
+            fig.add_trace(go.Histogram(
+                x=scores,
+                nbinsx=30,
+                marker_color='steelblue',
+                opacity=0.7
+            ))
+            
+            # Add expected range shading
+            expected = analysis['expected_range']
+            fig.add_vrect(
+                x0=expected[0], x1=expected[1],
+                fillcolor="green", opacity=0.1,
+                annotation_text="Expected", annotation_position="top"
+            )
+            
+            # Add threshold line
+            fig.add_vline(
+                x=0.5,
+                line_dash="dash",
+                line_color="red",
+                annotation_text="Threshold (0.5)"
+            )
+            
+            # Add mean line
+            fig.add_vline(
+                x=analysis['mean'],
+                line_dash="dot",
+                line_color="blue",
+                annotation_text=f"Mean ({analysis['mean']:.3f})"
+            )
+            
+            fig.update_layout(
+                title=f"Score Distribution - {TEST_MODES[results['mode']]['name']}",
+                xaxis_title="Discriminator Score",
+                yaxis_title="Count",
+                xaxis=dict(range=[0, 1]),
+                height=400,
+            )
+            
+            st.plotly_chart(fig, use_container_width=True)
+            
+            # Detailed breakdown
+            with st.expander("📊 Detailed Statistics"):
+                st.markdown(f"""
+                | Statistic | Value |
+                |-----------|-------|
+                | Mean | {analysis['mean']:.6f} |
+                | Std Dev | {analysis['std']:.6f} |
+                | Min | {analysis['min']:.6f} |
+                | Max | {analysis['max']:.6f} |
+                | > 0.5 | {analysis['above_threshold']:.1%} |
+                | < 0.5 | {analysis['below_threshold']:.1%} |
+                | Pairs Tested | {analysis['n_pairs']} |
+                """)
+    
+    # --------------------------------------------------------------------------
+    # TAB 2: Fidelity Analysis (was Overview)
+    # --------------------------------------------------------------------------
+    with tabs[1]:
+        st.header("📊 Fidelity Analysis")
+        
+        st.markdown("""
+        Compute fidelity scores comparing **edited trajectories** with their **originals**.
+        
+        For testing purposes, you can use the same trajectories as both edited and original
+        (should give high scores ~1.0 if the model is working correctly).
+        """)
+        
+        # Pairing mode selection for this tab
+        fidelity_mode = st.selectbox(
+            "Comparison Mode",
+            options=["identical", "same_agent"],
+            format_func=lambda x: {
+                "identical": "🔬 Identical (test mode - each trajectory vs itself)",
+                "same_agent": "👤 Same Agent (different trajectories from same driver)"
+            }[x],
+            help="""Select how to pair trajectories for comparison:
+            
+• **Identical**: Compare each trajectory with itself (test mode, should give ~1.0)
+• **Same Agent**: Compare different trajectories from the same driver (realistic scenario)"""
+        )
         
         # Build config
         config = FidelityConfig(
             checkpoint_path=checkpoint_path,
-            mode=mode,
+            mode="same_agent",  # Always use same_agent for underlying logic
             aggregation=aggregation,
             threshold=threshold,
             batch_size=batch_size,
@@ -362,16 +874,58 @@ def main():
         )
         
         # Compute fidelity
-        compute_btn = st.button("🚀 Compute Fidelity", type="primary")
+        compute_btn = st.button("🚀 Compute Fidelity", type="primary", key="compute_fidelity")
         
         if compute_btn or 'fidelity_result' in st.session_state:
             if compute_btn:
                 with st.spinner("Computing fidelity scores..."):
-                    term = FidelityTerm(config)
-                    result = term.compute_with_breakdown(
-                        edited_trajectories,
-                        {'original_trajectories': original_trajectories}
+                    # Create pairs based on selected mode
+                    if fidelity_mode == "identical":
+                        traj1_list, traj2_list, metadata = create_identical_pairs(
+                            trajectories, max_pairs=1000,
+                            min_length=min_trajectory_length
+                        )
+                    else:
+                        traj1_list, traj2_list, metadata = create_same_driver_pairs(
+                            trajectories, max_pairs=1000,
+                            min_length=min_trajectory_length, same_day=True
+                        )
+                    
+                    if len(traj1_list) == 0:
+                        st.error("No valid trajectory pairs found.")
+                        st.stop()
+                    
+                    # Compute scores
+                    scores = compute_fidelity_scores(
+                        model, traj1_list, traj2_list,
+                        batch_size=batch_size, device=device
                     )
+                    
+                    # Aggregate
+                    fidelity_value = aggregate_fidelity_scores(scores, aggregation, threshold)
+                    
+                    # Build result structure
+                    result = {
+                        'value': fidelity_value,
+                        'components': {
+                            'n_pairs': len(scores),
+                            'scores': scores.tolist(),
+                            'metadata': metadata,
+                        },
+                        'statistics': {
+                            'score_mean': float(np.mean(scores)),
+                            'score_std': float(np.std(scores)),
+                            'score_min': float(np.min(scores)),
+                            'score_max': float(np.max(scores)),
+                            'score_median': float(np.median(scores)),
+                            'above_threshold': float(np.mean(scores >= threshold)),
+                            'above_0.7': float(np.mean(scores >= 0.7)),
+                            'above_0.9': float(np.mean(scores >= 0.9)),
+                        },
+                        'diagnostics': {
+                            'computation_time_seconds': 0,
+                        }
+                    }
                     st.session_state['fidelity_result'] = result
                     st.session_state['config'] = config
             
@@ -384,7 +938,7 @@ def main():
                 st.metric(
                     "Fidelity Score",
                     f"{result['value']:.4f}",
-                    help="Higher = more authentic"
+                    help="Higher = more authentic (should be > 0.5 for same-agent pairs)"
                 )
             
             with col2:
@@ -438,11 +992,17 @@ def main():
                 st.warning("⚠️ **Moderate Fidelity**: Some trajectories show signs of editing.")
             else:
                 st.error("❌ **Low Fidelity**: Edited trajectories are significantly different from originals.")
+                st.markdown("""
+                **Troubleshooting Low Scores:**
+                1. First run the **Discriminator Tests** tab to verify model behavior
+                2. If "Identical Trajectories" test fails, the model may have issues
+                3. Check model training results in the **Model Info** tab
+                """)
     
     # --------------------------------------------------------------------------
-    # TAB 2: Score Distribution
+    # TAB 3: Score Distribution
     # --------------------------------------------------------------------------
-    with tabs[1]:
+    with tabs[2]:
         st.header("📈 Score Distribution")
         
         if 'fidelity_result' not in st.session_state:
@@ -549,9 +1109,9 @@ def main():
                 st.plotly_chart(fig_box, use_container_width=True)
     
     # --------------------------------------------------------------------------
-    # TAB 3: Per-Driver Analysis
+    # TAB 4: Per-Driver Analysis
     # --------------------------------------------------------------------------
-    with tabs[2]:
+    with tabs[3]:
         st.header("👤 Per-Driver Analysis")
         
         if 'fidelity_result' not in st.session_state:
@@ -629,9 +1189,9 @@ def main():
                     )
     
     # --------------------------------------------------------------------------
-    # TAB 4: Trajectory Comparison
+    # TAB 5: Trajectory Comparison
     # --------------------------------------------------------------------------
-    with tabs[3]:
+    with tabs[4]:
         st.header("🔬 Trajectory Comparison")
         
         st.markdown("""
@@ -639,7 +1199,7 @@ def main():
         """)
         
         if 'fidelity_result' not in st.session_state:
-            st.info("Click 'Compute Fidelity' in the Overview tab first.")
+            st.info("Click 'Compute Fidelity' in the Fidelity Analysis tab first.")
         else:
             result = st.session_state['fidelity_result']
             scores = result['components'].get('scores', [])
@@ -666,51 +1226,33 @@ def main():
                 driver_id = meta.get('driver_id')
                 traj_idx = meta.get('trajectory_idx', 0)
                 
-                if driver_id in edited_trajectories and traj_idx < len(edited_trajectories[driver_id]):
-                    edited_traj = edited_trajectories[driver_id][traj_idx]
-                    
-                    if driver_id in original_trajectories and traj_idx < len(original_trajectories[driver_id]):
-                        original_traj = original_trajectories[driver_id][traj_idx]
-                    else:
-                        original_traj = edited_traj
+                if driver_id in trajectories and traj_idx < len(trajectories[driver_id]):
+                    traj = trajectories[driver_id][traj_idx]
                     
                     # Display score
-                    col1, col2, col3 = st.columns(3)
+                    col1, col2 = st.columns(2)
                     with col1:
                         st.metric("Fidelity Score", f"{scores[selected_pair]:.4f}")
                     with col2:
-                        st.metric("Edited Length", len(edited_traj))
-                    with col3:
-                        st.metric("Original Length", len(original_traj))
+                        st.metric("Trajectory Length", len(traj))
                     
                     # Extract features for visualization
-                    edited_features = np.array([[s[0], s[1]] for s in edited_traj])
-                    original_features = np.array([[s[0], s[1]] for s in original_traj])
+                    features = np.array([[s[0], s[1]] for s in traj])
                     
-                    # Plot trajectories
+                    # Plot trajectory
                     fig = go.Figure()
                     
                     fig.add_trace(go.Scatter(
-                        x=edited_features[:, 0],
-                        y=edited_features[:, 1],
+                        x=features[:, 0],
+                        y=features[:, 1],
                         mode='lines+markers',
-                        name='Edited',
-                        line=dict(color='red', width=2),
+                        name='Trajectory',
+                        line=dict(color='steelblue', width=2),
                         marker=dict(size=4),
-                    ))
-                    
-                    fig.add_trace(go.Scatter(
-                        x=original_features[:, 0],
-                        y=original_features[:, 1],
-                        mode='lines+markers',
-                        name='Original',
-                        line=dict(color='blue', width=2),
-                        marker=dict(size=4),
-                        opacity=0.7,
                     ))
                     
                     fig.update_layout(
-                        title=f"Trajectory Comparison (Score: {scores[selected_pair]:.4f})",
+                        title=f"Trajectory Visualization (Driver {driver_id}, Score: {scores[selected_pair]:.4f})",
                         xaxis_title="X Grid",
                         yaxis_title="Y Grid",
                         height=600,
@@ -720,99 +1262,23 @@ def main():
                     st.plotly_chart(fig, use_container_width=True)
                     
                     # Feature comparison
-                    st.subheader("Feature Comparison (First 10 States)")
+                    st.subheader("Trajectory Features (First 10 States)")
                     
-                    n_show = min(10, len(edited_traj), len(original_traj))
+                    n_show = min(10, len(traj))
                     
-                    comparison_data = []
+                    feature_data = []
                     for i in range(n_show):
-                        comparison_data.append({
+                        feature_data.append({
                             'State': i,
-                            'Edit X': edited_traj[i][0],
-                            'Orig X': original_traj[i][0],
-                            'Edit Y': edited_traj[i][1],
-                            'Orig Y': original_traj[i][1],
-                            'Edit Time': edited_traj[i][2],
-                            'Orig Time': original_traj[i][2],
+                            'X Grid': traj[i][0],
+                            'Y Grid': traj[i][1],
+                            'Time Bucket': traj[i][2] if len(traj[i]) > 2 else 'N/A',
+                            'Day Index': traj[i][3] if len(traj[i]) > 3 else 'N/A',
                         })
                     
-                    st.dataframe(pd.DataFrame(comparison_data), hide_index=True)
+                    st.dataframe(pd.DataFrame(feature_data), hide_index=True)
                 else:
                     st.warning("Could not find trajectory pair.")
-    
-    # --------------------------------------------------------------------------
-    # TAB 5: Length Analysis
-    # --------------------------------------------------------------------------
-    with tabs[4]:
-        st.header("📉 Trajectory Length Analysis")
-        
-        if 'fidelity_result' not in st.session_state:
-            st.info("Click 'Compute Fidelity' in the Overview tab first.")
-        else:
-            result = st.session_state['fidelity_result']
-            length_corr = result['statistics'].get('length_correlation', {})
-            metadata = result['components'].get('metadata', [])
-            scores = np.array(result['components'].get('scores', []))
-            
-            # Extract lengths
-            edited_lengths = []
-            original_lengths = []
-            
-            for meta in metadata:
-                if 'edited_length' in meta:
-                    edited_lengths.append(meta['edited_length'])
-                if 'original_length' in meta:
-                    original_lengths.append(meta['original_length'])
-            
-            if len(edited_lengths) > 0:
-                # Correlation
-                correlation = length_corr.get('correlation')
-                if correlation is not None:
-                    st.metric(
-                        "Length-Fidelity Correlation",
-                        f"{correlation:.4f}",
-                        help="Correlation between trajectory length and fidelity score"
-                    )
-                
-                # Scatter plot
-                if len(edited_lengths) == len(scores):
-                    fig = px.scatter(
-                        x=edited_lengths,
-                        y=scores,
-                        title="Fidelity vs Trajectory Length",
-                        labels={'x': 'Trajectory Length', 'y': 'Fidelity Score'},
-                        trendline='ols',
-                    )
-                    fig.update_layout(height=500)
-                    st.plotly_chart(fig, use_container_width=True)
-                
-                # Length histogram
-                st.subheader("Trajectory Length Distribution")
-                
-                fig = go.Figure()
-                fig.add_trace(go.Histogram(
-                    x=edited_lengths,
-                    name='Edited',
-                    opacity=0.7,
-                ))
-                if original_lengths:
-                    fig.add_trace(go.Histogram(
-                        x=original_lengths,
-                        name='Original',
-                        opacity=0.7,
-                    ))
-                
-                fig.update_layout(
-                    title="Trajectory Length Distribution",
-                    xaxis_title="Length (states)",
-                    yaxis_title="Count",
-                    barmode='overlay',
-                    height=400,
-                )
-                
-                st.plotly_chart(fig, use_container_width=True)
-            else:
-                st.warning("No length information available.")
     
     # --------------------------------------------------------------------------
     # TAB 6: Gradient Verification
@@ -828,7 +1294,7 @@ def main():
         if not TORCH_AVAILABLE:
             st.error("PyTorch is required for gradient verification.")
         else:
-            verify_btn = st.button("🔬 Verify Gradients", type="primary")
+            verify_btn = st.button("🔬 Verify Gradients", type="primary", key="verify_gradients")
             
             if verify_btn:
                 with st.spinner("Verifying gradients..."):
@@ -839,10 +1305,10 @@ def main():
                     term = FidelityTerm(config)
                     
                     # Use real data if available
-                    if edited_trajectories:
+                    if trajectories:
                         verification = term.verify_differentiability(
-                            edited_trajectories,
-                            {'original_trajectories': original_trajectories}
+                            trajectories,
+                            {'original_trajectories': trajectories}
                         )
                     else:
                         verification = term.verify_differentiability()
@@ -911,6 +1377,11 @@ def main():
     # --------------------------------------------------------------------------
     with tabs[6]:
         st.header("ℹ️ Model Information")
+        
+        st.markdown("""
+        Information about the trained discriminator model, including architecture,
+        training history, and performance metrics.
+        """)
         
         # Model config
         st.subheader("Model Configuration")
