@@ -858,7 +858,7 @@ $$
 | Spatial X | `x_grid` | [0, 47] | Longitude grid index |
 | Spatial Y | `y_grid` | [0, 89] | Latitude grid index |
 | Temporal | `time_bucket` | [0, 287] | 5-minute interval |
-| Day | `day_of_week` | [0, 6] or [1, 6] | Day of week |
+| Day | `day_of_week` | [1, 5] | Day of week (Mon-Fri only) |
 
 ### 8.3 Data Loading Patterns
 

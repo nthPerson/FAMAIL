@@ -465,7 +465,7 @@ class FidelityTerm(ObjectiveFunctionTerm):
             edited_features[..., 0] *= 49  # x_grid
             edited_features[..., 1] *= 89  # y_grid
             edited_features[..., 2] *= 287  # time_bucket
-            edited_features[..., 3] = (edited_features[..., 3] * 7).astype(int)  # day_index
+            edited_features[..., 3] = (edited_features[..., 3] * 4 + 1).astype(int)  # day_index (1-5, Mon-Fri)
             
             original_features = edited_features + np.random.randn(1, n_steps, 4).astype(np.float32) * 0.1
             original_features = np.clip(original_features, 0, None)

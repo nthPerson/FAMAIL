@@ -20,15 +20,18 @@ Raw input features (4):
 - `x_grid`: Grid x-coordinate (0-49)
 - `y_grid`: Grid y-coordinate (0-89)
 - `time_bucket`: Time of day (0-287, 5-minute intervals)
-- `day_index`: Day of week (0-6)
+- `day_index`: Day of week (1-5, Monday to Friday only)
 
 Normalized features (6):
 - `x_norm = x_grid / 49` (min-max to [0, 1])
 - `y_norm = y_grid / 89` (min-max to [0, 1])
 - `sin_time = sin(2π × time_bucket / 288)` (cyclic encoding)
 - `cos_time = cos(2π × time_bucket / 288)`
-- `sin_day = sin(2π × day_index / 7)` (cyclic encoding)
-- `cos_day = cos(2π × day_index / 7)`
+- `sin_day = sin(2π × (day_index - 1) / 5)` (cyclic encoding, 5-day week)
+- `cos_day = cos(2π × (day_index - 1) / 5)`
+
+**Note**: Our dataset only contains weekday data (Monday-Friday), so we use
+5-day cyclic encoding instead of 7-day.
 
 ### LSTM Encoder
 

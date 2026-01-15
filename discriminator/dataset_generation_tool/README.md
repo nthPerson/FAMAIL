@@ -48,7 +48,8 @@ The sidebar lets you set:
 - **Agent sampling distribution** (proportional or uniform) — only applies in total mode
 - **Positive strategy** (random vs sequential non-overlapping segments)
 - **Negative strategy** (random vs round-robin agents) — only applies in total mode
-- **Concatenated trajectory span** (1–7 days)
+- **Concatenated trajectory span** (1–5 days, Mon-Fri only)
+- **Identical pair ratio** (fraction of positive pairs that are same trajectory vs itself)
 - **Optional extra feature slice** beyond indices 0–3 (defaults to none)
 - **Padding/truncation mode** (defaults to truncate to shorter; pad or fixed length also available)
 
@@ -90,7 +91,9 @@ The first 4 features (always included) are:
 | 0 | `x_grid` | Grid x-coordinate | 0-49 |
 | 1 | `y_grid` | Grid y-coordinate | 0-89 |
 | 2 | `time_bucket` | Time of day | 1-288 (5-min buckets) |
-| 3 | `day_index` | Day of week | 1-6 |
+| 3 | `day_index` | Day of week (Mon-Fri) | 1-5 |
+
+**Note**: Our dataset only contains weekday data (Monday=1 to Friday=5).
 
 Additional features (indices 4-125) can be optionally included via the feature slice settings.
 
@@ -103,8 +106,9 @@ The metadata includes:
   "config": { ... },           // Generation configuration used
   "counts": {
     "total_pairs": 22,         // Total pairs in dataset
-    "positive_pairs": 12,      // Same-agent pairs (label=1)
-    "negative_pairs": 10       // Different-agent pairs (label=0)
+    "positive_pairs": 10,      // Same-agent, different trajectory pairs (label=1)
+    "negative_pairs": 10,      // Different-agent pairs (label=0)
+    "identical_pairs": 2       // Same trajectory vs itself pairs (label=1)
   },
   "length_stats": {
     "x1": { "min": 62, "max": 760, "mean": 414.09, "p50": 466, "p90": 574.8, "p95": 593.05 },

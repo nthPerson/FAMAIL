@@ -202,7 +202,7 @@ Where:
 | `x_grid` | [0, 47] |
 | `y_grid` | [0, 89] |
 | `time_bucket` | [0, 287] |
-| `day_index` | [0, 6] |
+| `day_index` | [1, 5] (Mon-Fri) |
 | Normalized features | [-5, 5] (typical, based on normalization) |
 
 ### 2.3 Aggregated Quality Formula

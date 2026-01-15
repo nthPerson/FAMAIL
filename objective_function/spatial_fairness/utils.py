@@ -354,7 +354,7 @@ def aggregate_counts_by_period(
     Args:
         data: Raw pickup_dropoff_counts data
         period_type: One of "time_bucket", "hourly", "daily", "all"
-        days_filter: Optional list of days to include (1-6)
+        days_filter: Optional list of days to include (1-5, Mon-Fri)
         time_filter: Optional tuple of (start_bucket, end_bucket) to include
         
     Returns:

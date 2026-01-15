@@ -132,7 +132,7 @@ Where:
 - `x`: Grid x-coordinate [1, 48]
 - `y`: Grid y-coordinate [1, 90]
 - `time_bucket`: 5-minute interval index [1, 288]
-- `day`: Day of week [1, 6] (Mon-Sat)
+- `day`: Day of week [1, 5] (Mon-Fri only)
 
 ## Running Tests
 

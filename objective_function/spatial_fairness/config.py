@@ -50,7 +50,7 @@ class SpatialFairnessConfig(TermConfig):
         period_type: Temporal aggregation level
             - "time_bucket": Each 5-min bucket (finest, 288 periods/day)
             - "hourly": Each hour (24 periods/day)  
-            - "daily": Each day (6 periods total)
+            - "daily": Each day (5 periods total, Mon-Fri)
             - "all": Aggregate all data into single period
         grid_dims: Spatial grid dimensions (x, y)
         

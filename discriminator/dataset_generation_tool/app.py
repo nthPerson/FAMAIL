@@ -75,7 +75,8 @@ def _build_config() -> Tuple[GenerationConfig, Dict, int]:
                 value=500,
                 help="Total non-matching pairs across all agents.",
             )
-        days = st.slider("Concatenated trajectory length (days)", min_value=1, max_value=7, value=2)
+        days = st.slider("Concatenated trajectory length (days)", min_value=1, max_value=5, value=2,
+                         help="Dataset contains Monday-Friday data only (5 days max)")
         feature_start = int(
             st.number_input(
                 "Feature start index (inclusive, >=4)",
@@ -215,7 +216,7 @@ def _render_preview(dataset: Dict[str, np.ndarray], metadata: Dict):
 - `[0]` x_grid — grid x-coordinate
 - `[1]` y_grid — grid y-coordinate  
 - `[2]` time_bucket — time of day (1-288, each bucket = 5 minutes)
-- `[3]` day_index — day of week (1-6)
+- `[3]` day_index — day of week (1-5, Mon-Fri only)
         """)
     
     labels = dataset["label"]
@@ -409,6 +410,9 @@ def _render_dataset_validation(dataset: Dict[str, np.ndarray], metadata: Dict[st
             st.markdown(f"- **Mode**: {'Per-Agent Counts' if cfg.get('per_agent_counts') else 'Total Counts'}")
             st.markdown(f"- **Positive pairs config**: {cfg.get('positive_pairs', 'N/A')}")
             st.markdown(f"- **Negative pairs config**: {cfg.get('negative_pairs', 'N/A')}")
+            identical_ratio = cfg.get('identical_pair_ratio', 0)
+            if identical_ratio > 0:
+                st.markdown(f"- **Identical pair ratio**: {identical_ratio:.0%}")
             st.markdown(f"- **Positive strategy**: {cfg.get('positive_strategy', 'N/A')}")
             st.markdown(f"- **Negative strategy**: {cfg.get('negative_strategy', 'N/A')}")
             st.markdown(f"- **Agent distribution**: {cfg.get('agent_distribution', 'N/A')}")
@@ -431,23 +435,34 @@ def _render_dataset_validation(dataset: Dict[str, np.ndarray], metadata: Dict[st
     # Check 1: Pair counts match
     actual_pos = counts.get("positive_pairs", 0)
     actual_neg = counts.get("negative_pairs", 0)
+    actual_identical = counts.get("identical_pairs", 0)
     actual_total = counts.get("total_pairs", 0)
     
     labels = dataset["label"]
-    # Labels: 1 = same agent (positive), 0 = different agents (negative)
+    # Labels: 1 = same agent (positive + identical), 0 = different agents (negative)
     computed_pos = int((labels == 1).sum())
     computed_neg = int((labels == 0).sum())
     
-    check_pos = actual_pos == computed_pos
+    # Expected label=1 count includes both positive pairs AND identical pairs
+    expected_label_1 = actual_pos + actual_identical
+    
+    check_pos = expected_label_1 == computed_pos
     check_neg = actual_neg == computed_neg
     check_total = actual_total == (computed_pos + computed_neg)
     
     validation_results.append({
-        "Check": "Positive pair count (label=1)",
-        "Expected": actual_pos,
+        "Check": "Same-agent pairs (label=1: positive + identical)",
+        "Expected": expected_label_1,
         "Actual": computed_pos,
         "Status": "✅ Pass" if check_pos else "❌ Fail"
     })
+    if actual_identical > 0:
+        validation_results.append({
+            "Check": "  └─ Including identical pairs",
+            "Expected": actual_identical,
+            "Actual": actual_identical,
+            "Status": "ℹ️ Info"
+        })
     validation_results.append({
         "Check": "Negative pair count (label=0)",
         "Expected": actual_neg,

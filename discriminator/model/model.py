@@ -39,22 +39,25 @@ class FeatureNormalizer(nn.Module):
         
     Temporal cyclic encoding:
         - time_bucket ∈ [0, 287] → angle = 2π * time_bucket / 288
-        - day_index ∈ [0, 6] → angle = 2π * day_index / 7
+        - day_index ∈ [1, 5] → angle = 2π * (day_index - 1) / 5 (Monday=1 to Friday=5)
         - Output: (sin(angle), cos(angle)) for each
+    
+    Note: Our dataset only contains weekday data (Monday-Friday), so we use
+    5-day cyclic encoding instead of 7-day.
     """
     
     def __init__(self, 
                  x_max: float = 49.0,
                  y_max: float = 89.0,
                  time_buckets: int = 288,
-                 days_in_week: int = 7):
+                 days_in_week: int = 5):
         """Initialize the normalizer.
         
         Args:
             x_max: Maximum x_grid value (default 49 for 50-wide grid)
             y_max: Maximum y_grid value (default 89 for 90-tall grid)
             time_buckets: Number of time buckets per day (default 288 = 5-min intervals)
-            days_in_week: Number of days in cycle (default 7)
+            days_in_week: Number of days in cycle (default 5 for Mon-Fri data)
         """
         super().__init__()
         self.x_max = x_max
@@ -90,7 +93,8 @@ class FeatureNormalizer(nn.Module):
         
         # Temporal cyclic encoding
         time_angle = 2 * math.pi * time_bucket / self.time_buckets
-        day_angle = 2 * math.pi * day_index / self.days_in_week
+        # day_index is 1-indexed (1=Mon, 5=Fri), convert to 0-indexed for cyclic encoding
+        day_angle = 2 * math.pi * (day_index - 1) / self.days_in_week
         
         sin_time = torch.sin(time_angle)
         cos_time = torch.cos(time_angle)
@@ -217,7 +221,7 @@ class SiameseLSTMDiscriminator(nn.Module):
                  num_layers: int = 2,
                  dropout: float = 0.2,
                  bidirectional: bool = True,
-                 classifier_hidden_dims: Tuple[int, ...] = (128, 64)):
+                 classifier_hidden_dims: Tuple[int, ...] = (64, 32, 8)):
         """Initialize the discriminator.
         
         Args:

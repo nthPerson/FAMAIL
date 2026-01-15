@@ -360,7 +360,7 @@ F_spatial = 1 - G
 | `x_grid` | [0, 47] | Grid x-coordinate (48 cells) |
 | `y_grid` | [0, 89] | Grid y-coordinate (90 cells) |
 | `time_bucket` | [1, 288] | 5-minute time bucket (1-indexed) |
-| `day_of_week` | [1, 6] | Monday=1 through Saturday=6 |
+| `day_of_week` | [1, 5] | Monday=1 through Friday=5 |
 | `pickup_count` | ≥0 | Number of pickups at this key |
 | `dropoff_count` | ≥0 | Number of dropoffs at this key |
 
@@ -913,7 +913,7 @@ result_b = term_b.compute({}, auxiliary_data)
 | `include_zero_cells` | bool | True | Include cells with zero activity |
 | `data_is_one_indexed` | bool | True | Whether data uses 1-based indexing |
 | `min_activity_threshold` | int | 0 | Minimum events to include cell |
-| `days_filter` | List[int] | None | Filter to specific days (1-6) |
+| `days_filter` | List[int] | None | Filter to specific days (1-5, Mon-Fri) |
 | `time_filter` | Tuple[int,int] | None | Filter to time bucket range |
 | `verbose` | bool | False | Print debug information |
 
