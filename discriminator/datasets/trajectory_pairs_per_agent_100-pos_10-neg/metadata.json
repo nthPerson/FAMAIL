@@ -1,0 +1,316 @@
+{
+  "config": {
+    "data_path": "/home/robert/FAMAIL/discriminator/dataset_generation_tool/source_data/all_trajs.pkl",
+    "positive_pairs": 100,
+    "negative_pairs": 10,
+    "days": 2,
+    "feature_start": 4,
+    "feature_end": 4,
+    "padding": "pad_to_longer",
+    "fixed_length": null,
+    "positive_strategy": "random",
+    "negative_strategy": "random",
+    "agent_distribution": "proportional",
+    "seed": 42,
+    "ensure_agent_coverage": true,
+    "per_agent_counts": true,
+    "identical_pair_ratio": 0.1
+  },
+  "counts": {
+    "total_pairs": 29010,
+    "positive_pairs": 4500,
+    "negative_pairs": 24500,
+    "identical_pairs": 10
+  },
+  "length_stats": {
+    "x1": {
+      "min": 2.0,
+      "max": 885.0,
+      "mean": 366.56387452602553,
+      "p50": 395.0,
+      "p90": 558.0,
+      "p95": 599.0
+    },
+    "x2": {
+      "min": 2.0,
+      "max": 885.0,
+      "mean": 366.18614270941055,
+      "p50": 395.0,
+      "p90": 556.0,
+      "p95": 596.0
+    },
+    "combined": {
+      "min": 2.0,
+      "max": 885.0,
+      "mean": 366.37500861771804,
+      "p50": 395.0,
+      "p90": 556.0,
+      "p95": 598.0
+    },
+    "padded_length": 885
+  },
+  "agent_usage": {
+    "23": {
+      "pos": 180,
+      "neg": 980,
+      "identical": 0
+    },
+    "40": {
+      "pos": 180,
+      "neg": 980,
+      "identical": 0
+    },
+    "39": {
+      "pos": 180,
+      "neg": 980,
+      "identical": 0
+    },
+    "28": {
+      "pos": 180,
+      "neg": 980,
+      "identical": 0
+    },
+    "3": {
+      "pos": 180,
+      "neg": 980,
+      "identical": 1
+    },
+    "33": {
+      "pos": 180,
+      "neg": 980,
+      "identical": 0
+    },
+    "22": {
+      "pos": 180,
+      "neg": 980,
+      "identical": 0
+    },
+    "26": {
+      "pos": 180,
+      "neg": 980,
+      "identical": 0
+    },
+    "19": {
+      "pos": 180,
+      "neg": 980,
+      "identical": 0
+    },
+    "12": {
+      "pos": 180,
+      "neg": 980,
+      "identical": 0
+    },
+    "21": {
+      "pos": 180,
+      "neg": 980,
+      "identical": 0
+    },
+    "41": {
+      "pos": 180,
+      "neg": 980,
+      "identical": 0
+    },
+    "8": {
+      "pos": 180,
+      "neg": 980,
+      "identical": 1
+    },
+    "13": {
+      "pos": 180,
+      "neg": 980,
+      "identical": 0
+    },
+    "48": {
+      "pos": 180,
+      "neg": 980,
+      "identical": 0
+    },
+    "37": {
+      "pos": 180,
+      "neg": 980,
+      "identical": 0
+    },
+    "6": {
+      "pos": 180,
+      "neg": 980,
+      "identical": 1
+    },
+    "46": {
+      "pos": 180,
+      "neg": 980,
+      "identical": 0
+    },
+    "7": {
+      "pos": 180,
+      "neg": 980,
+      "identical": 1
+    },
+    "42": {
+      "pos": 180,
+      "neg": 980,
+      "identical": 0
+    },
+    "14": {
+      "pos": 180,
+      "neg": 980,
+      "identical": 0
+    },
+    "34": {
+      "pos": 180,
+      "neg": 980,
+      "identical": 0
+    },
+    "24": {
+      "pos": 180,
+      "neg": 980,
+      "identical": 0
+    },
+    "43": {
+      "pos": 180,
+      "neg": 980,
+      "identical": 0
+    },
+    "25": {
+      "pos": 180,
+      "neg": 980,
+      "identical": 0
+    },
+    "5": {
+      "pos": 180,
+      "neg": 980,
+      "identical": 1
+    },
+    "0": {
+      "pos": 180,
+      "neg": 980,
+      "identical": 1
+    },
+    "4": {
+      "pos": 180,
+      "neg": 980,
+      "identical": 1
+    },
+    "18": {
+      "pos": 180,
+      "neg": 980,
+      "identical": 0
+    },
+    "27": {
+      "pos": 180,
+      "neg": 980,
+      "identical": 0
+    },
+    "30": {
+      "pos": 180,
+      "neg": 980,
+      "identical": 0
+    },
+    "35": {
+      "pos": 180,
+      "neg": 980,
+      "identical": 0
+    },
+    "16": {
+      "pos": 180,
+      "neg": 980,
+      "identical": 0
+    },
+    "9": {
+      "pos": 180,
+      "neg": 980,
+      "identical": 1
+    },
+    "15": {
+      "pos": 180,
+      "neg": 980,
+      "identical": 0
+    },
+    "32": {
+      "pos": 180,
+      "neg": 980,
+      "identical": 0
+    },
+    "11": {
+      "pos": 180,
+      "neg": 980,
+      "identical": 0
+    },
+    "31": {
+      "pos": 180,
+      "neg": 980,
+      "identical": 0
+    },
+    "29": {
+      "pos": 180,
+      "neg": 980,
+      "identical": 0
+    },
+    "20": {
+      "pos": 180,
+      "neg": 980,
+      "identical": 0
+    },
+    "45": {
+      "pos": 180,
+      "neg": 980,
+      "identical": 0
+    },
+    "47": {
+      "pos": 180,
+      "neg": 980,
+      "identical": 0
+    },
+    "49": {
+      "pos": 180,
+      "neg": 980,
+      "identical": 0
+    },
+    "17": {
+      "pos": 180,
+      "neg": 980,
+      "identical": 0
+    },
+    "1": {
+      "pos": 180,
+      "neg": 980,
+      "identical": 1
+    },
+    "36": {
+      "pos": 180,
+      "neg": 980,
+      "identical": 0
+    },
+    "10": {
+      "pos": 180,
+      "neg": 980,
+      "identical": 0
+    },
+    "38": {
+      "pos": 180,
+      "neg": 980,
+      "identical": 0
+    },
+    "2": {
+      "pos": 180,
+      "neg": 980,
+      "identical": 1
+    },
+    "44": {
+      "pos": 180,
+      "neg": 980,
+      "identical": 0
+    }
+  },
+  "dataset_hash": "fb39e1ac3e2d",
+  "split_info": {
+    "val_split": 0.2,
+    "n_train": 23208,
+    "n_val": 5802,
+    "n_train_pos": 3623,
+    "n_train_neg": 19585,
+    "n_val_pos": 887,
+    "n_val_neg": 4915,
+    "train_file": "train.npz",
+    "val_file": "val.npz"
+  }
+}
