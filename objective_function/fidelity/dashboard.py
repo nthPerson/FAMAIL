@@ -630,6 +630,534 @@ Default 0.5 aligns with the paper's methodology."""
         ---
         """)
         
+        # ============== RUN ALL TESTS SECTION ==============
+        st.subheader("🏃 Comprehensive Model Assessment")
+        
+        with st.expander("ℹ️ How This Relates to Trajectory Modification", expanded=False):
+            st.markdown("""
+            ### Discriminator's Role in ST-iFGSM-Based Trajectory Modification
+            
+            The FAMAIL project uses a **modified ST-iFGSM algorithm** to edit trajectories for fairness improvement.
+            The discriminator serves as a **fidelity constraint** in this process:
+            
+            **During Trajectory Editing:**
+            1. **Gradient Computation**: Compute gradient of fairness objective w.r.t. trajectory
+            2. **Perturbation**: Apply small changes to pickup/dropoff locations
+            3. **Fidelity Check**: Use discriminator to verify modified trajectory is still realistic
+            4. **Accept/Reject**: Only accept modifications where `score(τ_original, τ_modified) ≥ threshold`
+            
+            **Why These Tests Matter:**
+            
+            | Test Scenario | Relevance to Trajectory Modification |
+            |---------------|--------------------------------------|
+            | **Identical** | Baseline sanity check - should give ~1.0 |
+            | **Same Driver, Same Day** | Most similar to fidelity validation during editing |
+            | **Same Driver, Different Days** | Tests generalization across temporal patterns |
+            | **Different Drivers** | Model must reject trajectories that become too different |
+            
+            **Key Insight**: If the model fails to distinguish different drivers (high scores on negative pairs),
+            it will be **too lenient** during trajectory editing - allowing modifications that fundamentally
+            change the trajectory's character. This defeats the purpose of the fidelity constraint.
+            """)
+        
+        col1, col2 = st.columns([2, 1])
+        with col1:
+            max_test_pairs_all = st.slider("Test Pairs per Category", 25, 200, 100, 25,
+                                           help="Number of pairs to test in each category")
+        with col2:
+            run_all_tests = st.button("⚡ Run All Tests", type="primary", key="run_all_tests")
+        
+        if run_all_tests or 'all_test_results' in st.session_state:
+            if run_all_tests:
+                all_results = {}
+                all_metadata = {}
+                progress_bar = st.progress(0, text="Running all tests...")
+                
+                test_configs = [
+                    ('identical_trajectories', create_identical_pairs),
+                    ('same_driver_same_day', lambda t, **kw: create_same_driver_pairs(t, same_day=True, **kw)),
+                    ('same_driver_different_days', lambda t, **kw: create_same_driver_pairs(t, same_day=False, **kw)),
+                    ('different_drivers', create_different_driver_pairs),
+                ]
+                
+                for i, (mode, pair_func) in enumerate(test_configs):
+                    progress_bar.progress((i + 1) / len(test_configs), text=f"Testing: {TEST_MODES[mode]['name']}...")
+                    
+                    try:
+                        traj1_list, traj2_list, metadata = pair_func(
+                            trajectories, max_pairs=max_test_pairs_all, min_length=min_trajectory_length
+                        )
+                        
+                        if len(traj1_list) > 0:
+                            scores = run_discriminator_test(
+                                model, traj1_list, traj2_list,
+                                batch_size=32, device=device
+                            )
+                            
+                            analysis = analyze_test_results(scores, mode, threshold)
+                            all_results[mode] = {
+                                'scores': scores,
+                                'analysis': analysis,
+                                'n_pairs': len(scores),
+                                'metadata': metadata
+                            }
+                        else:
+                            all_results[mode] = None
+                    except Exception as e:
+                        all_results[mode] = {'error': str(e)}
+                
+                progress_bar.empty()
+                st.session_state['all_test_results'] = all_results
+            
+            all_results = st.session_state.get('all_test_results', {})
+            
+            # ==================== COMPREHENSIVE RESULTS ====================
+            
+            # Section 1: Overall Model Performance
+            st.markdown("---")
+            st.markdown("### 📊 Overall Model Performance")
+            
+            # Compute comprehensive metrics
+            total_pairs = sum(r.get('n_pairs', 0) for r in all_results.values() if r and 'n_pairs' in r)
+            
+            # Calculate key metrics for trajectory modification context
+            identical_mean = all_results.get('identical_trajectories', {}).get('analysis', {}).get('mean', 0)
+            same_day_acc = all_results.get('same_driver_same_day', {}).get('analysis', {}).get('above_threshold', 0)
+            diff_day_acc = all_results.get('same_driver_different_days', {}).get('analysis', {}).get('above_threshold', 0)
+            diff_driver_acc = all_results.get('different_drivers', {}).get('analysis', {}).get('below_threshold', 0)
+            
+            # Top-level metrics
+            col1, col2, col3, col4 = st.columns(4)
+            
+            with col1:
+                st.metric(
+                    "🎯 Identical Score",
+                    f"{identical_mean:.3f}",
+                    delta=f"{identical_mean - 1.0:.3f}" if identical_mean > 0 else None,
+                    delta_color="inverse" if identical_mean < 0.95 else "normal",
+                    help="Mean score for identical trajectories (expected: ~1.0)"
+                )
+            
+            with col2:
+                st.metric(
+                    "✅ Same-Driver Recognition",
+                    f"{same_day_acc:.1%}",
+                    help="% of same-driver pairs correctly recognized (score > 0.5)"
+                )
+            
+            with col3:
+                st.metric(
+                    "🔄 Cross-Day Generalization",
+                    f"{diff_day_acc:.1%}",
+                    help="% of same-driver pairs recognized across different days"
+                )
+            
+            with col4:
+                st.metric(
+                    "🚫 Different-Driver Rejection",
+                    f"{diff_driver_acc:.1%}",
+                    delta="Critical!" if diff_driver_acc < 0.3 else None,
+                    delta_color="inverse",
+                    help="% of different-driver pairs correctly rejected (score < 0.5)"
+                )
+            
+            # Section 2: Trajectory Modification Readiness Assessment
+            st.markdown("---")
+            st.markdown("### 🔧 Trajectory Modification Readiness")
+            
+            # Compute readiness score
+            readiness_checks = []
+            
+            # Check 1: Identical trajectory handling
+            if identical_mean >= 0.95:
+                readiness_checks.append(("✅", "Identical Handling", "PASS", "Model correctly identifies identical trajectories"))
+            elif identical_mean >= 0.8:
+                readiness_checks.append(("⚠️", "Identical Handling", "MARGINAL", f"Score {identical_mean:.2f} is below ideal (0.95+)"))
+            else:
+                readiness_checks.append(("❌", "Identical Handling", "FAIL", f"Score {identical_mean:.2f} is too low - model may have issues"))
+            
+            # Check 2: Fidelity validation capability (same driver recognition)
+            if same_day_acc >= 0.85:
+                readiness_checks.append(("✅", "Fidelity Validation", "PASS", "Model can validate same-driver trajectory pairs"))
+            elif same_day_acc >= 0.7:
+                readiness_checks.append(("⚠️", "Fidelity Validation", "MARGINAL", f"Recognition rate {same_day_acc:.0%} may cause some valid edits to be rejected"))
+            else:
+                readiness_checks.append(("❌", "Fidelity Validation", "FAIL", f"Recognition rate {same_day_acc:.0%} is too low for reliable fidelity checking"))
+            
+            # Check 3: Discrimination capability (critical for constraint enforcement)
+            if diff_driver_acc >= 0.7:
+                readiness_checks.append(("✅", "Discrimination Capability", "PASS", "Model can distinguish different drivers"))
+            elif diff_driver_acc >= 0.4:
+                readiness_checks.append(("⚠️", "Discrimination Capability", "WEAK", f"Only {diff_driver_acc:.0%} rejection rate - edits may drift too far"))
+            else:
+                readiness_checks.append(("❌", "Discrimination Capability", "FAIL", f"Only {diff_driver_acc:.0%} rejection - fidelity constraint is ineffective"))
+            
+            # Check 4: Temporal generalization
+            if diff_day_acc >= 0.7:
+                readiness_checks.append(("✅", "Temporal Generalization", "PASS", "Model generalizes across days"))
+            elif diff_day_acc >= 0.5:
+                readiness_checks.append(("⚠️", "Temporal Generalization", "MARGINAL", "Some temporal overfitting detected"))
+            else:
+                readiness_checks.append(("❌", "Temporal Generalization", "FAIL", "Model may be overfitting to time-of-day patterns"))
+            
+            # Display readiness checks
+            for icon, check_name, status, description in readiness_checks:
+                if status == "PASS":
+                    st.success(f"{icon} **{check_name}**: {description}")
+                elif status == "MARGINAL" or status == "WEAK":
+                    st.warning(f"{icon} **{check_name}**: {description}")
+                else:
+                    st.error(f"{icon} **{check_name}**: {description}")
+            
+            # Overall readiness verdict
+            n_pass = sum(1 for r in readiness_checks if r[2] == "PASS")
+            n_total = len(readiness_checks)
+            
+            if n_pass == n_total:
+                st.success(f"""
+                🎉 **Model is READY for trajectory modification** ({n_pass}/{n_total} checks passed)
+                
+                The discriminator can reliably serve as a fidelity constraint in the ST-iFGSM-based
+                trajectory modification algorithm.
+                """)
+            elif n_pass >= n_total - 1:
+                st.warning(f"""
+                ⚠️ **Model is PARTIALLY READY** ({n_pass}/{n_total} checks passed)
+                
+                Consider addressing the marginal checks before production use. The model may allow
+                some trajectory edits that drift too far from the original driver's patterns.
+                """)
+            else:
+                st.error(f"""
+                ❌ **Model is NOT READY** ({n_pass}/{n_total} checks passed)
+                
+                The discriminator cannot reliably serve as a fidelity constraint. Consider:
+                - Retraining with more diverse negative pairs
+                - Using hard negative mining
+                - Adjusting the model architecture
+                """)
+            
+            # Section 3: Detailed Performance Breakdown
+            st.markdown("---")
+            st.markdown("### 📈 Detailed Performance Breakdown")
+            
+            # Comprehensive results table
+            detailed_data = []
+            for mode, result in all_results.items():
+                if result and 'analysis' in result:
+                    analysis = result['analysis']
+                    scores = result['scores']
+                    
+                    # Compute percentiles
+                    p25, p50, p75 = np.percentile(scores, [25, 50, 75])
+                    
+                    # Expected behavior check
+                    if mode == 'different_drivers':
+                        correct_pct = analysis['below_threshold']
+                        expected_range = "0.0 - 0.5"
+                    else:
+                        correct_pct = analysis['above_threshold']
+                        expected_range = "0.5 - 1.0"
+                    
+                    detailed_data.append({
+                        'Test Scenario': TEST_MODES[mode]['name'].replace(' Test', ''),
+                        'N Pairs': result['n_pairs'],
+                        'Mean': f"{analysis['mean']:.4f}",
+                        'Std': f"{analysis['std']:.4f}",
+                        'P25': f"{p25:.4f}",
+                        'Median': f"{p50:.4f}",
+                        'P75': f"{p75:.4f}",
+                        'Min': f"{analysis['min']:.4f}",
+                        'Max': f"{analysis['max']:.4f}",
+                        'Expected': expected_range,
+                        'Correct %': f"{correct_pct:.1%}",
+                        'Status': '✅' if analysis['passed'] else '❌'
+                    })
+            
+            detailed_df = pd.DataFrame(detailed_data)
+            st.dataframe(detailed_df, hide_index=True, use_container_width=True)
+            
+            # Section 4: Visual Comparison
+            st.markdown("#### 📊 Score Distribution Comparison")
+            
+            fig_comparison = go.Figure()
+            
+            colors = {
+                'identical_trajectories': '#2E86AB',
+                'same_driver_same_day': '#28A745', 
+                'same_driver_different_days': '#FFC107',
+                'different_drivers': '#DC3545'
+            }
+            
+            for mode, result in all_results.items():
+                if result and 'scores' in result:
+                    fig_comparison.add_trace(go.Violin(
+                        y=result['scores'],
+                        name=TEST_MODES[mode]['name'].replace(' Test', ''),
+                        box_visible=True,
+                        meanline_visible=True,
+                        fillcolor=colors.get(mode, 'gray'),
+                        opacity=0.7,
+                        line_color='black'
+                    ))
+            
+            fig_comparison.add_hline(y=0.5, line_dash="dash", line_color="black",
+                                     annotation_text="Decision Threshold (0.5)")
+            
+            # Add expected regions
+            fig_comparison.add_hrect(y0=0.5, y1=1.0, fillcolor="green", opacity=0.05,
+                                     annotation_text="Same Driver Region", annotation_position="top right")
+            fig_comparison.add_hrect(y0=0.0, y1=0.5, fillcolor="red", opacity=0.05,
+                                     annotation_text="Different Driver Region", annotation_position="bottom right")
+            
+            fig_comparison.update_layout(
+                title="Score Distribution by Test Scenario (Violin + Box Plot)",
+                yaxis_title="Discriminator Score",
+                yaxis=dict(range=[0, 1]),
+                height=500,
+                showlegend=False
+            )
+            
+            st.plotly_chart(fig_comparison, use_container_width=True)
+            
+            # Section 5: Confusion Analysis
+            st.markdown("---")
+            st.markdown("### 🔍 Error Analysis")
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.markdown("#### False Negatives (Same Driver → Low Score)")
+                st.caption("Same-driver pairs incorrectly classified as different")
+                
+                false_neg_data = []
+                for mode in ['same_driver_same_day', 'same_driver_different_days']:
+                    if mode in all_results and all_results[mode] and 'scores' in all_results[mode]:
+                        scores = all_results[mode]['scores']
+                        false_neg_count = np.sum(scores < 0.5)
+                        total = len(scores)
+                        false_neg_rate = false_neg_count / total if total > 0 else 0
+                        false_neg_data.append({
+                            'Scenario': TEST_MODES[mode]['name'].replace(' Test', ''),
+                            'False Negatives': false_neg_count,
+                            'Total Pairs': total,
+                            'FN Rate': f"{false_neg_rate:.1%}"
+                        })
+                
+                if false_neg_data:
+                    st.dataframe(pd.DataFrame(false_neg_data), hide_index=True, use_container_width=True)
+                    
+                    # Impact explanation
+                    st.info("""
+                    **Impact on Trajectory Modification**: False negatives mean the model may 
+                    **reject valid edits** that preserve the driver's behavioral signature.
+                    A high false negative rate leads to slower convergence.
+                    """)
+            
+            with col2:
+                st.markdown("#### False Positives (Different Driver → High Score)")
+                st.caption("Different-driver pairs incorrectly classified as same")
+                
+                if 'different_drivers' in all_results and all_results['different_drivers'] and 'scores' in all_results['different_drivers']:
+                    scores = all_results['different_drivers']['scores']
+                    false_pos_count = np.sum(scores >= 0.5)
+                    total = len(scores)
+                    false_pos_rate = false_pos_count / total if total > 0 else 0
+                    
+                    st.dataframe(pd.DataFrame([{
+                        'Scenario': 'Different Drivers',
+                        'False Positives': false_pos_count,
+                        'Total Pairs': total,
+                        'FP Rate': f"{false_pos_rate:.1%}"
+                    }]), hide_index=True, use_container_width=True)
+                    
+                    # Impact explanation
+                    if false_pos_rate > 0.3:
+                        st.error(f"""
+                        **⚠️ CRITICAL**: {false_pos_rate:.0%} false positive rate means the fidelity 
+                        constraint is **too lenient**. Edited trajectories may drift significantly 
+                        from the original driver's patterns while still passing the fidelity check.
+                        
+                        **Recommendations**:
+                        - Increase the fidelity threshold (currently {threshold})
+                        - Retrain with more/harder negative examples
+                        - Use triplet loss with margin
+                        """)
+                    else:
+                        st.success("""
+                        **Impact on Trajectory Modification**: Low false positive rate means the 
+                        fidelity constraint is effective - edits that change driver identity will be rejected.
+                        """)
+            
+            # Section 6: Fidelity Threshold Analysis
+            st.markdown("---")
+            st.markdown("### 🎚️ Fidelity Threshold Analysis")
+            
+            st.markdown("""
+            During trajectory modification, the fidelity threshold determines when an edited trajectory
+            is **accepted** or **rejected**. A higher threshold is stricter (fewer edits accepted),
+            while a lower threshold is more lenient (more edits accepted).
+            
+            The table below shows expected acceptance rates at different thresholds based on test results.
+            """)
+            
+            # Compute acceptance rates at different thresholds
+            thresholds_to_test = [0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
+            threshold_analysis = []
+            
+            # Get scores from each category
+            same_day_scores = all_results.get('same_driver_same_day', {}).get('scores', [])
+            diff_day_scores = all_results.get('same_driver_different_days', {}).get('scores', [])
+            diff_driver_scores = all_results.get('different_drivers', {}).get('scores', [])
+            
+            # Combine same-driver scores (this represents "valid edits")
+            valid_edit_scores = np.concatenate([same_day_scores, diff_day_scores]) if len(same_day_scores) > 0 or len(diff_day_scores) > 0 else np.array([])
+            
+            for thresh in thresholds_to_test:
+                row = {'Threshold': f"{thresh:.1f}"}
+                
+                # Valid edit acceptance rate (same-driver pairs above threshold)
+                if len(valid_edit_scores) > 0:
+                    valid_accept_rate = np.mean(valid_edit_scores >= thresh)
+                    row['Valid Edit Accept Rate'] = f"{valid_accept_rate:.1%}"
+                else:
+                    row['Valid Edit Accept Rate'] = "N/A"
+                
+                # Invalid edit rejection rate (different-driver pairs below threshold)
+                if len(diff_driver_scores) > 0:
+                    invalid_reject_rate = np.mean(diff_driver_scores < thresh)
+                    row['Invalid Edit Reject Rate'] = f"{invalid_reject_rate:.1%}"
+                else:
+                    row['Invalid Edit Reject Rate'] = "N/A"
+                
+                # Recommendation
+                if len(valid_edit_scores) > 0 and len(diff_driver_scores) > 0:
+                    valid_accept = np.mean(valid_edit_scores >= thresh)
+                    invalid_reject = np.mean(diff_driver_scores < thresh)
+                    
+                    if valid_accept >= 0.8 and invalid_reject >= 0.7:
+                        row['Recommendation'] = "✅ Excellent"
+                    elif valid_accept >= 0.6 and invalid_reject >= 0.5:
+                        row['Recommendation'] = "⚠️ Acceptable"
+                    elif valid_accept >= 0.8 and invalid_reject < 0.5:
+                        row['Recommendation'] = "⚡ Too Lenient"
+                    elif valid_accept < 0.5 and invalid_reject >= 0.8:
+                        row['Recommendation'] = "🐢 Too Strict"
+                    else:
+                        row['Recommendation'] = "❌ Poor"
+                else:
+                    row['Recommendation'] = "N/A"
+                
+                threshold_analysis.append(row)
+            
+            st.dataframe(pd.DataFrame(threshold_analysis), hide_index=True, use_container_width=True)
+            
+            st.caption("""
+            **Interpretation Guide:**
+            - **Valid Edit Accept Rate**: How often would true driver-preserving edits be accepted?
+            - **Invalid Edit Reject Rate**: How often would identity-changing edits be rejected?
+            - **Excellent**: Both rates are high - good discrimination
+            - **Too Lenient**: Accepts too many invalid edits (threshold too low)
+            - **Too Strict**: Rejects too many valid edits (threshold too high)
+            """)
+            
+            # Best threshold recommendation
+            if len(valid_edit_scores) > 0 and len(diff_driver_scores) > 0:
+                best_threshold = None
+                best_f1 = 0
+                
+                for thresh in np.linspace(0.3, 0.9, 61):
+                    valid_accept = np.mean(valid_edit_scores >= thresh)
+                    invalid_reject = np.mean(diff_driver_scores < thresh)
+                    
+                    # F1-like score balancing both
+                    if valid_accept + invalid_reject > 0:
+                        f1 = 2 * valid_accept * invalid_reject / (valid_accept + invalid_reject)
+                        if f1 > best_f1:
+                            best_f1 = f1
+                            best_threshold = thresh
+                
+                if best_threshold is not None:
+                    valid_at_best = np.mean(valid_edit_scores >= best_threshold)
+                    invalid_at_best = np.mean(diff_driver_scores < best_threshold)
+                    
+                    st.info(f"""
+                    **📍 Recommended Fidelity Threshold: {best_threshold:.2f}**
+                    
+                    At this threshold:
+                    - {valid_at_best:.1%} of valid edits would be accepted
+                    - {invalid_at_best:.1%} of invalid edits would be rejected
+                    - F1-like score: {best_f1:.3f}
+                    
+                    This balances accepting legitimate trajectory modifications while rejecting edits
+                    that would fundamentally change the driver's behavioral signature.
+                    """)
+            
+            # Section 7: Operational Guidelines
+            st.markdown("---")
+            st.markdown("### 📋 Operational Guidelines for Trajectory Modification")
+            
+            # Compute overall stats
+            if len(valid_edit_scores) > 0 and len(diff_driver_scores) > 0:
+                mean_valid = np.mean(valid_edit_scores)
+                mean_invalid = np.mean(diff_driver_scores)
+                separation = mean_valid - mean_invalid
+                
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    st.markdown("#### Expected Behavior During Editing")
+                    st.markdown(f"""
+                    Based on test results, during the ST-iFGSM trajectory modification loop:
+                    
+                    1. **Small perturbations** (moving pickup 1-2 cells) should produce scores
+                       close to the original (~{mean_valid:.2f} expected)
+                    
+                    2. **Moderate perturbations** (moving pickup 3-5 cells) may lower the score
+                       but should remain above threshold if edits are reasonable
+                    
+                    3. **Large perturbations** that change the trajectory character should
+                       be rejected (score dropping below threshold)
+                    
+                    **Score Separation**: {separation:.3f}
+                    {'✅ Good separation between same/different driver scores' if separation > 0.2 else '⚠️ Poor separation - fidelity constraint may be unreliable'}
+                    """)
+                
+                with col2:
+                    st.markdown("#### Recommended Settings")
+                    
+                    # Determine recommendations based on results
+                    if separation > 0.3 and diff_driver_acc >= 0.6:
+                        rec_threshold = max(0.5, np.percentile(diff_driver_scores, 80))
+                        rec_status = "✅"
+                        rec_note = "Model performs well - use standard settings"
+                    elif separation > 0.1:
+                        rec_threshold = max(0.6, np.percentile(diff_driver_scores, 90))
+                        rec_status = "⚠️"
+                        rec_note = "Marginal separation - use conservative threshold"
+                    else:
+                        rec_threshold = 0.7
+                        rec_status = "❌"
+                        rec_note = "Poor separation - consider retraining model"
+                    
+                    st.markdown(f"""
+                    {rec_status} {rec_note}
+                    
+                    | Parameter | Recommended Value |
+                    |-----------|-------------------|
+                    | Fidelity Threshold (θ) | {rec_threshold:.2f} |
+                    | Max Perturbation (ε) | Start with 1 cell |
+                    | Max Modified Points (η) | 20% of trajectory |
+                    | Alpha for Fidelity (α₃) | 0.3 |
+                    
+                    **Note**: These are starting values. Tune based on:
+                    - Convergence speed (lower threshold if too slow)
+                    - Edit quality (raise threshold if edits look unrealistic)
+                    """)
+        
+        st.markdown("---")
+        st.subheader("🔬 Individual Test Analysis")
+        
         # Test mode selection
         test_mode = st.selectbox(
             "Select Test Mode",
@@ -833,7 +1361,314 @@ Default 0.5 aligns with the paper's methodology."""
                 | < 0.5 | {analysis['below_threshold']:.1%} |
                 | Pairs Tested | {analysis['n_pairs']} |
                 """)
-    
+            
+            # ==================== DIAGNOSTIC ANALYSIS ====================
+            st.markdown("---")
+            st.subheader("🔍 Diagnostic Analysis")
+            
+            metadata = results.get('metadata', [])
+            mode = results.get('mode', '')
+            
+            # Per-Driver/Pair Analysis based on test mode
+            if mode == 'different_drivers' and metadata:
+                st.markdown("""
+                **Analysis of Different-Driver Classification Performance**
+                
+                This analysis helps identify which driver pairs the model struggles to distinguish.
+                Scores should be **< 0.5** for different drivers, but high scores indicate confusion.
+                """)
+                
+                # Build per-driver-pair analysis
+                pair_data = []
+                for score, meta in zip(scores, metadata):
+                    driver1 = meta.get('driver1_id', 'unknown')
+                    driver2 = meta.get('driver2_id', 'unknown')
+                    pair_data.append({
+                        'Driver 1': str(driver1),
+                        'Driver 2': str(driver2),
+                        'Score': float(score),
+                        'Correct': score < 0.5,  # Should be < 0.5 for different drivers
+                        'Pair': f"{driver1} vs {driver2}"
+                    })
+                
+                pair_df = pd.DataFrame(pair_data)
+                
+                # Summary metrics
+                col1, col2, col3, col4 = st.columns(4)
+                with col1:
+                    correct_pct = pair_df['Correct'].mean() * 100
+                    st.metric("Accuracy", f"{correct_pct:.1f}%", 
+                              delta=f"{correct_pct - 50:.1f}% vs random",
+                              help="% of pairs correctly classified as different drivers (score < 0.5)")
+                with col2:
+                    confused_pairs = pair_df[~pair_df['Correct']]
+                    st.metric("Confused Pairs", f"{len(confused_pairs)}/{len(pair_df)}",
+                              help="Number of pairs incorrectly classified as same driver")
+                with col3:
+                    if len(confused_pairs) > 0:
+                        avg_confused_score = confused_pairs['Score'].mean()
+                        st.metric("Avg Confused Score", f"{avg_confused_score:.3f}",
+                                  help="Average score for misclassified pairs (should be < 0.5)")
+                with col4:
+                    false_positive_rate = (pair_df['Score'] >= 0.5).mean()
+                    st.metric("False Positive Rate", f"{false_positive_rate:.1%}",
+                              help="Rate at which different drivers are confused as same")
+                
+                # Most confused pairs table
+                st.markdown("#### 🚨 Most Confused Driver Pairs")
+                st.caption("Pairs with highest scores (most confused as same driver)")
+                
+                worst_pairs = pair_df.nlargest(min(15, len(pair_df)), 'Score')
+                
+                # Color code the table
+                def highlight_confusion(val):
+                    if isinstance(val, float):
+                        if val >= 0.8:
+                            return 'background-color: #ff6b6b; color: white'
+                        elif val >= 0.5:
+                            return 'background-color: #ffd93d'
+                        else:
+                            return 'background-color: #6bcb77'
+                    return ''
+                
+                st.dataframe(
+                    worst_pairs[['Pair', 'Score', 'Correct']].style
+                        .applymap(highlight_confusion, subset=['Score'])
+                        .format({'Score': '{:.4f}'}),
+                    hide_index=True,
+                    use_container_width=True
+                )
+                
+                # Driver confusion matrix heatmap
+                st.markdown("#### 🗺️ Driver Confusion Matrix")
+                st.caption("Darker red = higher confusion (scores closer to 1.0)")
+                
+                # Build confusion matrix
+                all_drivers = sorted(set(pair_df['Driver 1'].tolist() + pair_df['Driver 2'].tolist()))
+                
+                if len(all_drivers) > 1:
+                    confusion_matrix = pd.DataFrame(
+                        index=all_drivers, 
+                        columns=all_drivers,
+                        data=np.nan
+                    )
+                    
+                    for _, row in pair_df.iterrows():
+                        d1, d2, score = row['Driver 1'], row['Driver 2'], row['Score']
+                        confusion_matrix.loc[d1, d2] = score
+                        confusion_matrix.loc[d2, d1] = score
+                    
+                    # Fill diagonal with 1.0 (same driver = perfect match)
+                    for d in all_drivers:
+                        confusion_matrix.loc[d, d] = 1.0
+                    
+                    fig_heatmap = go.Figure(data=go.Heatmap(
+                        z=confusion_matrix.values.astype(float),
+                        x=confusion_matrix.columns.tolist(),
+                        y=confusion_matrix.index.tolist(),
+                        colorscale='RdYlGn_r',  # Red = high (bad for different drivers)
+                        zmin=0, zmax=1,
+                        text=confusion_matrix.values.astype(float),
+                        texttemplate='%{text:.2f}',
+                        textfont={"size": 10},
+                        hoverongaps=False,
+                        colorbar=dict(title="Score")
+                    ))
+                    
+                    fig_heatmap.update_layout(
+                        title="Inter-Driver Similarity Scores (Red = Confused, Green = Distinguished)",
+                        xaxis_title="Driver ID",
+                        yaxis_title="Driver ID",
+                        height=max(400, len(all_drivers) * 40),
+                    )
+                    
+                    st.plotly_chart(fig_heatmap, use_container_width=True)
+                
+                # Per-driver breakdown
+                st.markdown("#### 👤 Per-Driver Classification Performance")
+                st.caption("How well is each driver distinguished from others?")
+                
+                driver_stats = []
+                for driver in all_drivers:
+                    driver_pairs = pair_df[(pair_df['Driver 1'] == driver) | (pair_df['Driver 2'] == driver)]
+                    if len(driver_pairs) > 0:
+                        driver_stats.append({
+                            'Driver ID': driver,
+                            'N Pairs': len(driver_pairs),
+                            'Mean Score': driver_pairs['Score'].mean(),
+                            'Accuracy': driver_pairs['Correct'].mean(),
+                            'Max Confusion': driver_pairs['Score'].max(),
+                            'Status': '✅' if driver_pairs['Correct'].mean() > 0.5 else '❌'
+                        })
+                
+                driver_stats_df = pd.DataFrame(driver_stats)
+                driver_stats_df = driver_stats_df.sort_values('Accuracy', ascending=True)
+                
+                st.dataframe(
+                    driver_stats_df.style
+                        .format({
+                            'Mean Score': '{:.4f}',
+                            'Accuracy': '{:.1%}',
+                            'Max Confusion': '{:.4f}'
+                        })
+                        .background_gradient(subset=['Accuracy'], cmap='RdYlGn'),
+                    hide_index=True,
+                    use_container_width=True
+                )
+                
+                # Driver accuracy bar chart
+                fig_driver = px.bar(
+                    driver_stats_df,
+                    x='Driver ID',
+                    y='Accuracy',
+                    color='Accuracy',
+                    color_continuous_scale='RdYlGn',
+                    title="Per-Driver Distinction Accuracy (% correctly classified as different)"
+                )
+                fig_driver.add_hline(y=0.5, line_dash="dash", line_color="red",
+                                     annotation_text="Random (50%)")
+                fig_driver.update_layout(height=400)
+                st.plotly_chart(fig_driver, use_container_width=True)
+                
+            elif mode in ['same_driver_same_day', 'same_driver_different_days'] and metadata:
+                st.markdown("""
+                **Analysis of Same-Driver Classification Performance**
+                
+                This analysis shows which drivers the model recognizes well.
+                Scores should be **> 0.5** for same-driver pairs.
+                """)
+                
+                # Build per-driver analysis
+                driver_scores_dict = {}
+                for score, meta in zip(scores, metadata):
+                    driver_id = meta.get('driver_id', 'unknown')
+                    if driver_id not in driver_scores_dict:
+                        driver_scores_dict[driver_id] = []
+                    driver_scores_dict[driver_id].append(float(score))
+                
+                driver_data = []
+                for driver_id, drv_scores in driver_scores_dict.items():
+                    drv_scores = np.array(drv_scores)
+                    driver_data.append({
+                        'Driver ID': str(driver_id),
+                        'N Pairs': len(drv_scores),
+                        'Mean Score': float(np.mean(drv_scores)),
+                        'Std': float(np.std(drv_scores)),
+                        'Min': float(np.min(drv_scores)),
+                        'Accuracy': float(np.mean(drv_scores >= 0.5)),
+                        'Status': '✅' if np.mean(drv_scores >= 0.5) > 0.5 else '❌'
+                    })
+                
+                driver_df = pd.DataFrame(driver_data)
+                driver_df = driver_df.sort_values('Accuracy', ascending=False)
+                
+                # Summary
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    overall_acc = np.mean(scores >= 0.5)
+                    st.metric("Overall Accuracy", f"{overall_acc:.1%}")
+                with col2:
+                    n_good_drivers = (driver_df['Accuracy'] >= 0.5).sum()
+                    st.metric("Well-Recognized Drivers", f"{n_good_drivers}/{len(driver_df)}")
+                with col3:
+                    worst_driver = driver_df.iloc[-1]['Driver ID'] if len(driver_df) > 0 else "N/A"
+                    st.metric("Worst Recognized", worst_driver)
+                
+                # Table
+                st.dataframe(
+                    driver_df.style
+                        .format({
+                            'Mean Score': '{:.4f}',
+                            'Std': '{:.4f}',
+                            'Min': '{:.4f}',
+                            'Accuracy': '{:.1%}'
+                        })
+                        .background_gradient(subset=['Accuracy'], cmap='RdYlGn'),
+                    hide_index=True,
+                    use_container_width=True
+                )
+                
+                # Bar chart
+                fig_driver = px.bar(
+                    driver_df,
+                    x='Driver ID',
+                    y='Mean Score',
+                    error_y='Std',
+                    color='Accuracy',
+                    color_continuous_scale='RdYlGn',
+                    title="Per-Driver Recognition Score"
+                )
+                fig_driver.add_hline(y=0.5, line_dash="dash", line_color="red")
+                fig_driver.update_layout(height=400)
+                st.plotly_chart(fig_driver, use_container_width=True)
+            
+            # General Model Assessment
+            st.markdown("---")
+            st.subheader("📋 Model Performance Assessment")
+            
+            # Compute overall assessment
+            assessment_items = []
+            
+            if mode == 'identical':
+                if analysis['mean'] > 0.95:
+                    assessment_items.append(("✅", "Identical trajectory handling", "Excellent - model correctly identifies identical inputs"))
+                elif analysis['mean'] > 0.8:
+                    assessment_items.append(("⚠️", "Identical trajectory handling", "Good but not perfect - some variation in identical pair scores"))
+                else:
+                    assessment_items.append(("❌", "Identical trajectory handling", "Poor - model should give ~1.0 for identical trajectories"))
+            
+            elif mode == 'same_driver_same_day':
+                if analysis['above_threshold'] > 0.8:
+                    assessment_items.append(("✅", "Same-day recognition", "Good - model recognizes same-driver patterns within a day"))
+                else:
+                    assessment_items.append(("⚠️", "Same-day recognition", f"Only {analysis['above_threshold']:.0%} pairs recognized"))
+            
+            elif mode == 'same_driver_different_days':
+                if analysis['above_threshold'] > 0.7:
+                    assessment_items.append(("✅", "Cross-day recognition", "Good - model generalizes across days"))
+                else:
+                    assessment_items.append(("⚠️", "Cross-day recognition", "Model may be overfitting to time-of-day patterns"))
+            
+            elif mode == 'different_drivers':
+                if analysis['below_threshold'] > 0.7:
+                    assessment_items.append(("✅", "Driver distinction", "Good - model distinguishes different drivers"))
+                else:
+                    assessment_items.append(("❌", "Driver distinction", f"Poor - only {analysis['below_threshold']:.0%} correctly classified"))
+                    assessment_items.append(("💡", "Recommendation", "Consider: more negative samples, hard negative mining, or longer training"))
+            
+            # Display assessment
+            for icon, title, description in assessment_items:
+                st.markdown(f"**{icon} {title}**: {description}")
+            
+            # Recommendations for improvement
+            if mode == 'different_drivers' and analysis['below_threshold'] < 0.5:
+                st.markdown("---")
+                st.subheader("💡 Recommendations for Improvement")
+                
+                st.markdown("""
+                The model is failing to distinguish between different drivers. This is a common issue with Siamese networks. Here are potential solutions:
+                
+                **1. Training Data Issues:**
+                - **Increase negative pair ratio**: Ensure training data has sufficient different-driver pairs
+                - **Hard negative mining**: Focus on drivers whose trajectories look similar
+                - **Balance the dataset**: Equal positive and negative pairs
+                
+                **2. Architecture Considerations:**
+                - **Longer sequences**: Use more timesteps to capture behavioral patterns
+                - **Feature engineering**: Add velocity, acceleration, or turn angle features
+                - **Attention mechanisms**: Help model focus on discriminative parts of trajectories
+                
+                **3. Training Strategies:**
+                - **Triplet loss**: Use (anchor, positive, negative) instead of pairs
+                - **Contrastive loss with margin**: Add margin to push negatives further apart
+                - **Curriculum learning**: Start with easy pairs, gradually add harder ones
+                
+                **4. Data Quality:**
+                - **Remove short trajectories**: May not have enough signal
+                - **Normalize by trajectory length**: Longer trajectories shouldn't dominate
+                - **Time alignment**: Ensure fair comparison across different times
+                """)
+
     # --------------------------------------------------------------------------
     # TAB 2: Fidelity Analysis (was Overview)
     # --------------------------------------------------------------------------
