@@ -207,13 +207,22 @@ def render_hyperparameters():
     with st.expander("Model Architecture", expanded=True):
         col1, col2 = st.columns(2)
         with col1:
-            hidden_dim = st.selectbox("LSTM Hidden Dim", [64, 128, 256, 512], index=1)
-            num_layers = st.selectbox("LSTM Layers", [1, 2, 3, 4], index=1)
-            bidirectional = st.checkbox("Bidirectional", value=True)
+            # LSTM hidden dims - text input for advanced users, default follows ST-SiameseNet
+            lstm_dims_str = st.text_input(
+                "LSTM Hidden Dims", 
+                "200, 100",
+                help="Hidden dimensions per LSTM layer (comma-separated). Default: 200, 100 follows ST-SiameseNet."
+            )
+            lstm_hidden_dims = tuple(int(x.strip()) for x in lstm_dims_str.split(",") if x.strip())
+            classifier_dims_str = st.text_input(
+                "Classifier Hidden Dims", 
+                "64, 32, 8",
+                help="Hidden dimensions for classifier MLP (comma-separated). Default: 64, 32, 8 follows ST-SiameseNet."
+            )
+            classifier_dims = tuple(int(x.strip()) for x in classifier_dims_str.split(",") if x.strip())
         with col2:
             dropout = st.slider("Dropout", 0.0, 0.5, 0.2, 0.05)
-            classifier_dims_str = st.text_input("Classifier Hidden Dims", "128,64")
-            classifier_dims = tuple(int(x.strip()) for x in classifier_dims_str.split(",") if x.strip())
+            bidirectional = st.checkbox("Bidirectional", value=False)
     
     with st.expander("Training", expanded=True):
         col1, col2, col3 = st.columns(3)
@@ -245,8 +254,7 @@ def render_hyperparameters():
             save_best_only = st.checkbox("Save Best Only", value=True)
     
     return {
-        "hidden_dim": hidden_dim,
-        "num_layers": num_layers,
+        "lstm_hidden_dims": lstm_hidden_dims,
         "dropout": dropout,
         "bidirectional": bidirectional,
         "classifier_hidden_dims": classifier_dims,
@@ -468,8 +476,7 @@ def start_training(dataset_path: Path, params: Dict, experiment_name: str, progr
     
     # Create model
     model = SiameseLSTMDiscriminator(
-        hidden_dim=params["hidden_dim"],
-        num_layers=params["num_layers"],
+        lstm_hidden_dims=params["lstm_hidden_dims"],
         dropout=params["dropout"],
         bidirectional=params["bidirectional"],
         classifier_hidden_dims=params["classifier_hidden_dims"]

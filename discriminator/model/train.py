@@ -76,16 +76,14 @@ def parse_args():
     
     # Model architecture
     model_group = parser.add_argument_group("Model Architecture")
-    model_group.add_argument("--hidden-dim", type=int, default=128,
-                            help="LSTM hidden dimension (default: 128)")
-    model_group.add_argument("--num-layers", type=int, default=2,
-                            help="Number of LSTM layers (default: 2)")
+    model_group.add_argument("--lstm-hidden-dims", type=str, default="200,100",
+                            help="LSTM hidden dims per layer (comma-separated, default: 200,100)")
     model_group.add_argument("--dropout", type=float, default=0.2,
                             help="Dropout probability (default: 0.2)")
     model_group.add_argument("--no-bidirectional", action="store_true",
                             help="Use unidirectional LSTM")
-    model_group.add_argument("--classifier-dims", type=str, default="128,64",
-                            help="Classifier hidden dims (comma-separated, default: 128,64)")
+    model_group.add_argument("--classifier-dims", type=str, default="64,32,8",
+                            help="Classifier hidden dims (comma-separated, default: 64,32,8)")
     model_group.add_argument("--model-version", type=str, default="v1",
                             choices=["v1", "v2"],
                             help="Model version: v1=concatenation, v2=distance-based (default: v1)")
@@ -182,14 +180,16 @@ def main():
         num_workers=args.num_workers
     )
     
+    # Parse LSTM hidden dims
+    lstm_hidden_dims = tuple(int(x) for x in args.lstm_hidden_dims.split(","))
+    
     # Parse classifier dims
     classifier_dims = tuple(int(x) for x in args.classifier_dims.split(","))
     
     # Create model based on version
     if args.model_version == "v2":
         model = SiameseLSTMDiscriminatorV2(
-            hidden_dim=args.hidden_dim,
-            num_layers=args.num_layers,
+            lstm_hidden_dims=lstm_hidden_dims,
             dropout=args.dropout,
             bidirectional=not args.no_bidirectional,
             classifier_hidden_dims=classifier_dims,
@@ -197,8 +197,7 @@ def main():
         )
     else:
         model = SiameseLSTMDiscriminator(
-            hidden_dim=args.hidden_dim,
-            num_layers=args.num_layers,
+            lstm_hidden_dims=lstm_hidden_dims,
             dropout=args.dropout,
             bidirectional=not args.no_bidirectional,
             classifier_hidden_dims=classifier_dims
@@ -207,8 +206,7 @@ def main():
     if not args.quiet:
         print(f"\nModel architecture:")
         print(f"  Model version: {args.model_version}")
-        print(f"  Hidden dim: {args.hidden_dim}")
-        print(f"  Num layers: {args.num_layers}")
+        print(f"  LSTM hidden dims: {lstm_hidden_dims}")
         print(f"  Bidirectional: {not args.no_bidirectional}")
         print(f"  Classifier: {classifier_dims}")
         if args.model_version == "v2":

@@ -118,40 +118,59 @@ class SiameseLSTMEncoder(nn.Module):
     
     Processes a sequence of trajectory features and produces a fixed-size embedding.
     Supports masking for variable-length sequences.
+    
+    Architecture follows ST-SiameseNet from ST-iFGSM paper, supporting variable
+    hidden dimensions per layer (e.g., [200, 100] for a 2-layer LSTM where the
+    first layer has 200 hidden units and the second has 100).
     """
     
     def __init__(self,
                  input_dim: int = 6,
-                 hidden_dim: int = 128,
-                 num_layers: int = 2,
+                 lstm_hidden_dims: Tuple[int, ...] = (200, 100),
                  dropout: float = 0.2,
                  bidirectional: bool = True):
         """Initialize the LSTM encoder.
         
         Args:
             input_dim: Number of input features (6 after normalization)
-            hidden_dim: LSTM hidden state dimension
-            num_layers: Number of LSTM layers
+            lstm_hidden_dims: Tuple of hidden dimensions for each LSTM layer.
+                              Default (200, 100) follows ST-SiameseNet architecture.
+                              Length determines the number of layers.
             dropout: Dropout probability between layers
             bidirectional: Whether to use bidirectional LSTM
         """
         super().__init__()
-        self.hidden_dim = hidden_dim
-        self.num_layers = num_layers
+        self.lstm_hidden_dims = lstm_hidden_dims
+        self.num_layers = len(lstm_hidden_dims)
         self.bidirectional = bidirectional
         self.num_directions = 2 if bidirectional else 1
+        self.dropout = dropout
         
-        self.lstm = nn.LSTM(
-            input_size=input_dim,
-            hidden_size=hidden_dim,
-            num_layers=num_layers,
-            batch_first=True,
-            dropout=dropout if num_layers > 1 else 0,
-            bidirectional=bidirectional
-        )
+        # Build stacked LSTM layers with variable hidden dimensions
+        # Each layer is a separate nn.LSTM to allow different hidden sizes
+        self.lstm_layers = nn.ModuleList()
+        self.dropout_layers = nn.ModuleList()
         
-        # Output dimension after bidirectional concatenation
-        self.output_dim = hidden_dim * self.num_directions
+        current_input_dim = input_dim
+        for i, hidden_dim in enumerate(lstm_hidden_dims):
+            lstm = nn.LSTM(
+                input_size=current_input_dim,
+                hidden_size=hidden_dim,
+                num_layers=1,  # Single layer each
+                batch_first=True,
+                bidirectional=bidirectional
+            )
+            self.lstm_layers.append(lstm)
+            
+            # Add dropout between layers (not after the last layer)
+            if i < len(lstm_hidden_dims) - 1 and dropout > 0:
+                self.dropout_layers.append(nn.Dropout(dropout))
+            
+            # Next layer's input is current layer's output
+            current_input_dim = hidden_dim * self.num_directions
+        
+        # Output dimension is the final layer's hidden dim * directions
+        self.output_dim = lstm_hidden_dims[-1] * self.num_directions
         
     def forward(self, 
                 x: torch.Tensor, 
@@ -166,36 +185,47 @@ class SiameseLSTMEncoder(nn.Module):
             Embedding [batch, output_dim]
         """
         batch_size = x.size(0)
-        seq_len = x.size(1)
         
+        # Calculate actual sequence lengths from mask (if provided)
         if mask is not None:
-            # Calculate actual sequence lengths from mask
             lengths = mask.sum(dim=1).cpu()
-            
-            # Clamp to at least 1 to avoid errors with empty sequences
             lengths = lengths.clamp(min=1)
-            
-            # Pack padded sequence for efficient LSTM processing
-            packed = nn.utils.rnn.pack_padded_sequence(
-                x, lengths, batch_first=True, enforce_sorted=False
-            )
-            
-            # Process through LSTM
-            _, (h_n, _) = self.lstm(packed)
         else:
-            # No masking - process full sequences
-            _, (h_n, _) = self.lstm(x)
+            lengths = None
         
-        # h_n shape: [num_layers * num_directions, batch, hidden_dim]
+        # Process through each LSTM layer
+        current_output = x
+        final_h_n = None
+        
+        for i, lstm in enumerate(self.lstm_layers):
+            if lengths is not None:
+                # Pack padded sequence for efficient LSTM processing
+                packed = nn.utils.rnn.pack_padded_sequence(
+                    current_output, lengths, batch_first=True, enforce_sorted=False
+                )
+                packed_output, (h_n, _) = lstm(packed)
+                # Unpack for next layer
+                current_output, _ = nn.utils.rnn.pad_packed_sequence(
+                    packed_output, batch_first=True
+                )
+            else:
+                current_output, (h_n, _) = lstm(current_output)
+            
+            final_h_n = h_n
+            
+            # Apply dropout between layers
+            if i < len(self.dropout_layers):
+                current_output = self.dropout_layers[i](current_output)
+        
+        # h_n shape: [num_directions, batch, hidden_dim] (since each lstm has 1 layer)
         # We want the final layer's hidden state
         if self.bidirectional:
             # Concatenate forward and backward final hidden states
-            # Last layer forward: h_n[-2]
-            # Last layer backward: h_n[-1]
-            embedding = torch.cat([h_n[-2], h_n[-1]], dim=-1)
+            # Forward: final_h_n[0], Backward: final_h_n[1]
+            embedding = torch.cat([final_h_n[0], final_h_n[1]], dim=-1)
         else:
-            # Just use the last layer's hidden state
-            embedding = h_n[-1]
+            # Just use the hidden state
+            embedding = final_h_n[0]
             
         return embedding  # [batch, output_dim]
 
@@ -205,11 +235,16 @@ class SiameseLSTMDiscriminator(nn.Module):
     
     Determines whether two trajectories belong to the same agent.
     
-    Architecture:
+    Architecture follows ST-SiameseNet from ST-iFGSM paper:
         1. Feature normalization (4 → 6 features)
-        2. Shared LSTM encoder for both trajectories
+        2. Shared LSTM encoder with variable hidden dims per layer
         3. Concatenate embeddings
         4. FC classifier with sigmoid output
+        
+    Default architecture:
+        - LSTM: [200, 100] (200 hidden units in layer 1, 100 in layer 2)
+        - Classifier: [64, 32, 8] (three hidden layers with these sizes)
+        - Output: 1 (binary classification)
         
     Output:
         - 1 = same agent (positive pair)
@@ -217,19 +252,19 @@ class SiameseLSTMDiscriminator(nn.Module):
     """
     
     def __init__(self,
-                 hidden_dim: int = 128,
-                 num_layers: int = 2,
+                 lstm_hidden_dims: Tuple[int, ...] = (200, 100),
                  dropout: float = 0.2,
                  bidirectional: bool = True,
                  classifier_hidden_dims: Tuple[int, ...] = (64, 32, 8)):
         """Initialize the discriminator.
         
         Args:
-            hidden_dim: LSTM hidden state dimension
-            num_layers: Number of LSTM layers
+            lstm_hidden_dims: Hidden dimensions for each LSTM layer.
+                              Default (200, 100) follows ST-SiameseNet.
             dropout: Dropout probability
             bidirectional: Whether to use bidirectional LSTM
-            classifier_hidden_dims: Hidden layer sizes for the classifier MLP
+            classifier_hidden_dims: Hidden layer sizes for the classifier MLP.
+                                    Default (64, 32, 8) follows ST-SiameseNet.
         """
         super().__init__()
         
@@ -239,8 +274,7 @@ class SiameseLSTMDiscriminator(nn.Module):
         # Shared LSTM encoder
         self.encoder = SiameseLSTMEncoder(
             input_dim=6,  # After normalization
-            hidden_dim=hidden_dim,
-            num_layers=num_layers,
+            lstm_hidden_dims=lstm_hidden_dims,
             dropout=dropout,
             bidirectional=bidirectional
         )
@@ -267,8 +301,7 @@ class SiameseLSTMDiscriminator(nn.Module):
         
         # Store config for checkpointing
         self.config = {
-            "hidden_dim": hidden_dim,
-            "num_layers": num_layers,
+            "lstm_hidden_dims": lstm_hidden_dims,
             "dropout": dropout,
             "bidirectional": bidirectional,
             "classifier_hidden_dims": classifier_hidden_dims
@@ -537,11 +570,16 @@ class SiameseLSTMDiscriminatorV2(nn.Module):
        - Cosine similarity: emb1 · emb2 / (||emb1|| * ||emb2||)
        - Element-wise difference: |emb1 - emb2|
     
-    Architecture:
+    Architecture follows ST-SiameseNet from ST-iFGSM paper:
         1. Feature normalization (4 → 6 features)
-        2. Shared LSTM encoder for both trajectories
+        2. Shared LSTM encoder with variable hidden dims per layer
         3. Similarity-based combination (not concatenation)
         4. FC classifier with sigmoid output
+        
+    Default architecture:
+        - LSTM: [200, 100] (200 hidden units in layer 1, 100 in layer 2)
+        - Classifier: [64, 32, 8] (three hidden layers with these sizes)
+        - Output: 1 (binary classification)
         
     Output:
         - 1 = same agent (positive pair)
@@ -549,20 +587,20 @@ class SiameseLSTMDiscriminatorV2(nn.Module):
     """
     
     def __init__(self,
-                 hidden_dim: int = 128,
-                 num_layers: int = 2,
+                 lstm_hidden_dims: Tuple[int, ...] = (200, 100),
                  dropout: float = 0.2,
                  bidirectional: bool = True,
-                 classifier_hidden_dims: Tuple[int, ...] = (128, 64),
+                 classifier_hidden_dims: Tuple[int, ...] = (64, 32, 8),
                  combination_mode: str = "difference"):
         """Initialize the improved discriminator.
         
         Args:
-            hidden_dim: LSTM hidden state dimension
-            num_layers: Number of LSTM layers
+            lstm_hidden_dims: Hidden dimensions for each LSTM layer.
+                              Default (200, 100) follows ST-SiameseNet.
             dropout: Dropout probability
             bidirectional: Whether to use bidirectional LSTM
-            classifier_hidden_dims: Hidden layer sizes for the classifier MLP
+            classifier_hidden_dims: Hidden layer sizes for the classifier MLP.
+                                    Default (64, 32, 8) follows ST-SiameseNet.
             combination_mode: How to combine embeddings
                 - "difference": |emb1 - emb2| (absolute element-wise difference)
                 - "distance": Additional distance features (cosine, euclidean)
@@ -578,8 +616,7 @@ class SiameseLSTMDiscriminatorV2(nn.Module):
         # Shared LSTM encoder
         self.encoder = SiameseLSTMEncoder(
             input_dim=6,  # After normalization
-            hidden_dim=hidden_dim,
-            num_layers=num_layers,
+            lstm_hidden_dims=lstm_hidden_dims,
             dropout=dropout,
             bidirectional=bidirectional
         )
@@ -617,8 +654,7 @@ class SiameseLSTMDiscriminatorV2(nn.Module):
         
         # Store config for checkpointing
         self.config = {
-            "hidden_dim": hidden_dim,
-            "num_layers": num_layers,
+            "lstm_hidden_dims": lstm_hidden_dims,
             "dropout": dropout,
             "bidirectional": bidirectional,
             "classifier_hidden_dims": classifier_hidden_dims,

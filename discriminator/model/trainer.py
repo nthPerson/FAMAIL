@@ -39,11 +39,10 @@ except ImportError:
 class TrainingConfig:
     """Configuration for training."""
     # Model architecture
-    hidden_dim: int = 128
-    num_layers: int = 2
+    lstm_hidden_dims: Tuple[int, ...] = (200, 100)
     dropout: float = 0.2
     bidirectional: bool = True
-    classifier_hidden_dims: Tuple[int, ...] = (128, 64)
+    classifier_hidden_dims: Tuple[int, ...] = (64, 32, 8)
     
     # Training
     batch_size: int = 32
@@ -77,6 +76,8 @@ class TrainingConfig:
         # Handle tuple conversion
         if "classifier_hidden_dims" in d and isinstance(d["classifier_hidden_dims"], list):
             d["classifier_hidden_dims"] = tuple(d["classifier_hidden_dims"])
+        if "lstm_hidden_dims" in d and isinstance(d["lstm_hidden_dims"], list):
+            d["lstm_hidden_dims"] = tuple(d["lstm_hidden_dims"])
         return cls(**{k: v for k, v in d.items() if k in cls.__dataclass_fields__})
 
 
@@ -443,7 +444,7 @@ class Trainer:
             layer_info['encoder'] = {
                 'type': 'LSTM',
                 'input_dim': 6,  # After normalization
-                'hidden_dim': encoder.hidden_dim,
+                'lstm_hidden_dims': encoder.lstm_hidden_dims,
                 'num_layers': encoder.num_layers,
                 'bidirectional': encoder.bidirectional,
                 'output_dim': encoder.output_dim
