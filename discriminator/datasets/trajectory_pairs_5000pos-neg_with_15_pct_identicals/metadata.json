@@ -1,0 +1,316 @@
+{
+  "config": {
+    "data_path": "/home/robert/FAMAIL/discriminator/dataset_generation_tool/source_data/all_trajs.pkl",
+    "positive_pairs": 5000,
+    "negative_pairs": 5000,
+    "days": 2,
+    "feature_start": 4,
+    "feature_end": 4,
+    "padding": "pad_to_longer",
+    "fixed_length": null,
+    "positive_strategy": "random",
+    "negative_strategy": "random",
+    "agent_distribution": "proportional",
+    "seed": 42,
+    "ensure_agent_coverage": true,
+    "per_agent_counts": false,
+    "identical_pair_ratio": 0.15
+  },
+  "counts": {
+    "total_pairs": 10000,
+    "positive_pairs": 4250,
+    "negative_pairs": 5000,
+    "identical_pairs": 750
+  },
+  "length_stats": {
+    "x1": {
+      "min": 2.0,
+      "max": 886.0,
+      "mean": 412.119,
+      "p50": 433.0,
+      "p90": 570.0,
+      "p95": 607.0
+    },
+    "x2": {
+      "min": 2.0,
+      "max": 886.0,
+      "mean": 387.6476,
+      "p50": 415.0,
+      "p90": 560.0,
+      "p95": 600.0
+    },
+    "combined": {
+      "min": 2.0,
+      "max": 886.0,
+      "mean": 399.8833,
+      "p50": 424.0,
+      "p90": 565.0,
+      "p95": 604.0
+    },
+    "padded_length": 886
+  },
+  "agent_usage": {
+    "37": {
+      "pos": 252,
+      "neg": 270,
+      "identical": 22
+    },
+    "3": {
+      "pos": 226,
+      "neg": 236,
+      "identical": 14
+    },
+    "15": {
+      "pos": 316,
+      "neg": 252,
+      "identical": 22
+    },
+    "14": {
+      "pos": 140,
+      "neg": 189,
+      "identical": 17
+    },
+    "35": {
+      "pos": 174,
+      "neg": 200,
+      "identical": 13
+    },
+    "32": {
+      "pos": 242,
+      "neg": 247,
+      "identical": 24
+    },
+    "19": {
+      "pos": 10,
+      "neg": 116,
+      "identical": 1
+    },
+    "43": {
+      "pos": 234,
+      "neg": 245,
+      "identical": 26
+    },
+    "25": {
+      "pos": 18,
+      "neg": 118,
+      "identical": 3
+    },
+    "34": {
+      "pos": 40,
+      "neg": 147,
+      "identical": 5
+    },
+    "44": {
+      "pos": 138,
+      "neg": 164,
+      "identical": 15
+    },
+    "6": {
+      "pos": 280,
+      "neg": 262,
+      "identical": 24
+    },
+    "36": {
+      "pos": 266,
+      "neg": 246,
+      "identical": 21
+    },
+    "21": {
+      "pos": 362,
+      "neg": 271,
+      "identical": 26
+    },
+    "40": {
+      "pos": 284,
+      "neg": 281,
+      "identical": 21
+    },
+    "31": {
+      "pos": 184,
+      "neg": 240,
+      "identical": 20
+    },
+    "26": {
+      "pos": 266,
+      "neg": 276,
+      "identical": 24
+    },
+    "33": {
+      "pos": 234,
+      "neg": 237,
+      "identical": 21
+    },
+    "11": {
+      "pos": 202,
+      "neg": 235,
+      "identical": 17
+    },
+    "42": {
+      "pos": 120,
+      "neg": 196,
+      "identical": 11
+    },
+    "13": {
+      "pos": 228,
+      "neg": 243,
+      "identical": 30
+    },
+    "29": {
+      "pos": 98,
+      "neg": 138,
+      "identical": 9
+    },
+    "0": {
+      "pos": 184,
+      "neg": 185,
+      "identical": 10
+    },
+    "24": {
+      "pos": 150,
+      "neg": 175,
+      "identical": 14
+    },
+    "22": {
+      "pos": 252,
+      "neg": 238,
+      "identical": 23
+    },
+    "4": {
+      "pos": 182,
+      "neg": 209,
+      "identical": 15
+    },
+    "49": {
+      "pos": 230,
+      "neg": 265,
+      "identical": 25
+    },
+    "41": {
+      "pos": 20,
+      "neg": 106,
+      "identical": 1
+    },
+    "20": {
+      "pos": 236,
+      "neg": 196,
+      "identical": 18
+    },
+    "2": {
+      "pos": 192,
+      "neg": 204,
+      "identical": 13
+    },
+    "45": {
+      "pos": 238,
+      "neg": 248,
+      "identical": 18
+    },
+    "16": {
+      "pos": 164,
+      "neg": 217,
+      "identical": 10
+    },
+    "48": {
+      "pos": 2,
+      "neg": 96,
+      "identical": 1
+    },
+    "1": {
+      "pos": 212,
+      "neg": 213,
+      "identical": 15
+    },
+    "7": {
+      "pos": 186,
+      "neg": 198,
+      "identical": 13
+    },
+    "27": {
+      "pos": 156,
+      "neg": 206,
+      "identical": 16
+    },
+    "30": {
+      "pos": 298,
+      "neg": 238,
+      "identical": 28
+    },
+    "46": {
+      "pos": 140,
+      "neg": 183,
+      "identical": 15
+    },
+    "39": {
+      "pos": 122,
+      "neg": 180,
+      "identical": 13
+    },
+    "18": {
+      "pos": 142,
+      "neg": 198,
+      "identical": 8
+    },
+    "28": {
+      "pos": 258,
+      "neg": 231,
+      "identical": 22
+    },
+    "47": {
+      "pos": 186,
+      "neg": 239,
+      "identical": 16
+    },
+    "23": {
+      "pos": 108,
+      "neg": 183,
+      "identical": 18
+    },
+    "17": {
+      "pos": 6,
+      "neg": 111,
+      "identical": 2
+    },
+    "12": {
+      "pos": 154,
+      "neg": 193,
+      "identical": 21
+    },
+    "38": {
+      "pos": 84,
+      "neg": 139,
+      "identical": 6
+    },
+    "9": {
+      "pos": 94,
+      "neg": 137,
+      "identical": 4
+    },
+    "8": {
+      "pos": 182,
+      "neg": 178,
+      "identical": 14
+    },
+    "5": {
+      "pos": 8,
+      "neg": 118,
+      "identical": 4
+    },
+    "10": {
+      "pos": 0,
+      "neg": 107,
+      "identical": 1
+    }
+  },
+  "dataset_hash": "eaeed1116419",
+  "split_info": {
+    "val_split": 0.2,
+    "n_train": 8000,
+    "n_val": 2000,
+    "n_train_pos": 3988,
+    "n_train_neg": 4012,
+    "n_val_pos": 1012,
+    "n_val_neg": 988,
+    "train_file": "train.npz",
+    "val_file": "val.npz"
+  }
+}
