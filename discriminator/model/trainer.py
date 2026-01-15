@@ -86,6 +86,7 @@ class TrainingHistory:
     train_loss: List[float] = field(default_factory=list)
     val_loss: List[float] = field(default_factory=list)
     val_accuracy: List[float] = field(default_factory=list)
+    val_identical_score: List[float] = field(default_factory=list)  # Mean score for identical trajectories
     val_f1: List[float] = field(default_factory=list)
     val_auc: List[float] = field(default_factory=list)
     learning_rates: List[float] = field(default_factory=list)
@@ -335,6 +336,56 @@ class Trainer:
             
         return metrics
     
+    @torch.no_grad()
+    def _validate_identical_trajectories(self, n_samples: int = 100) -> Dict[str, float]:
+        """Test model behavior on identical trajectory pairs.
+        
+        This is a crucial sanity check: the model should output high similarity
+        (close to 1.0) when comparing a trajectory to itself.
+        
+        Args:
+            n_samples: Number of trajectories to test
+            
+        Returns:
+            Dict with identical trajectory metrics
+        """
+        self.model.eval()
+        all_scores = []
+        
+        samples_tested = 0
+        for batch in self.val_loader:
+            x1 = batch['x1'].to(self.device)
+            mask1 = batch['mask1'].to(self.device)
+            
+            # Test each trajectory against itself
+            for i in range(min(len(x1), n_samples - samples_tested)):
+                traj = x1[i:i+1]  # [1, seq_len, 4]
+                mask = mask1[i:i+1]  # [1, seq_len]
+                
+                # Compare trajectory to itself
+                output = self.model(traj, traj, mask, mask).squeeze().item()
+                all_scores.append(output)
+                samples_tested += 1
+                
+                if samples_tested >= n_samples:
+                    break
+                    
+            if samples_tested >= n_samples:
+                break
+        
+        if not all_scores:
+            return {'identical_mean': 0.0, 'identical_std': 0.0, 'identical_min': 0.0}
+            
+        scores_arr = np.array(all_scores)
+        return {
+            'identical_mean': float(scores_arr.mean()),
+            'identical_std': float(scores_arr.std()),
+            'identical_min': float(scores_arr.min()),
+            'identical_max': float(scores_arr.max()),
+            'identical_above_0.9': float((scores_arr >= 0.9).mean()),
+            'identical_above_0.5': float((scores_arr >= 0.5).mean()),
+        }
+    
     def save_checkpoint(self, epoch: int, is_best: bool = False):
         """Save model checkpoint.
         
@@ -578,6 +629,9 @@ class Trainer:
             # Validate
             val_metrics = self._validate()
             
+            # Validate identical trajectory behavior (crucial sanity check)
+            identical_metrics = self._validate_identical_trajectories(n_samples=100)
+            
             epoch_time = time.time() - epoch_start
             
             # Update history
@@ -586,6 +640,7 @@ class Trainer:
             self.history.val_accuracy.append(val_metrics.get('accuracy', 0))
             self.history.val_f1.append(val_metrics.get('f1', 0))
             self.history.val_auc.append(val_metrics.get('auc', 0))
+            self.history.val_identical_score.append(identical_metrics.get('identical_mean', 0))
             self.history.learning_rates.append(self.optimizer.param_groups[0]['lr'])
             self.history.epoch_times.append(epoch_time)
             
@@ -608,12 +663,14 @@ class Trainer:
             # Print progress
             if verbose:
                 best_marker = " *" if is_best else ""
+                identical_score = identical_metrics.get('identical_mean', 0)
+                identical_warn = " ⚠️ LOW" if identical_score < 0.5 else ""
                 print(f"Epoch {epoch:3d}/{self.config.epochs} | "
                       f"Train Loss: {train_loss:.4f} | "
                       f"Val Loss: {val_metrics['loss']:.4f} | "
                       f"Acc: {val_metrics.get('accuracy', 0):.4f} | "
-                      f"F1: {val_metrics.get('f1', 0):.4f} | "
                       f"AUC: {val_metrics.get('auc', 0):.4f} | "
+                      f"Identical: {identical_score:.3f}{identical_warn} | "
                       f"Time: {epoch_time:.1f}s{best_marker}")
                 
             # Early stopping
@@ -629,6 +686,7 @@ class Trainer:
                         epoch_time=epoch_time,
                         train_loss=train_loss,
                         val_metrics=val_metrics,
+                        identical_metrics=identical_metrics,
                         is_best=False,
                         should_stop=True
                     )
@@ -642,6 +700,7 @@ class Trainer:
                     epoch_time=epoch_time,
                     train_loss=train_loss,
                     val_metrics=val_metrics,
+                    identical_metrics=identical_metrics,
                     is_best=is_best,
                     should_stop=False
                 )

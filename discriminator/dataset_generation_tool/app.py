@@ -105,6 +105,28 @@ def _build_config() -> Tuple[GenerationConfig, Dict, int]:
         pos_strategy = st.selectbox("Positive pair strategy", options=["random", "sequential"], index=0)
         neg_strategy = st.selectbox("Negative pair strategy", options=["random", "round_robin"], index=0)
         distribution = st.selectbox("Agent sampling distribution", options=["proportional", "uniform"], index=0)
+        
+        st.divider()
+        st.markdown("**Identical Pair Settings** (recommended for better model generalization)")
+        identical_ratio = st.slider(
+            "Identical pair ratio",
+            min_value=0.0,
+            max_value=0.5,
+            value=0.15,
+            step=0.05,
+            help=(
+                "Fraction of positive pairs that should be identical (same trajectory vs itself).\n\n"
+                "**Why this matters:** The discriminator should output ~1.0 when comparing a trajectory "
+                "to itself. Without identical pairs in training, the model learns only to distinguish "
+                "different trajectories, not to recognize identical ones.\n\n"
+                "Recommended: 0.10-0.20 (10-20% identical pairs)"
+            ),
+        )
+        if identical_ratio > 0:
+            estimated_identical = int(pos_pairs * identical_ratio)
+            st.info(f"~{estimated_identical} identical pairs will be included in training")
+        
+        st.divider()
         seed_text = st.text_input("Random seed (leave blank for random)", value="42")
         ensure_coverage = st.checkbox("Ensure every agent appears", value=True, disabled=per_agent_mode)
         preview_cap = st.slider("Preview pair cap", min_value=4, max_value=40, value=12)
@@ -134,6 +156,7 @@ def _build_config() -> Tuple[GenerationConfig, Dict, int]:
         seed=seed,
         ensure_agent_coverage=ensure_coverage if not per_agent_mode else True,  # Always ensure coverage in per-agent mode
         per_agent_counts=per_agent_mode,
+        identical_pair_ratio=identical_ratio,
     )
     cache_key = {
         "data_path": str(cfg.data_path),
@@ -150,6 +173,7 @@ def _build_config() -> Tuple[GenerationConfig, Dict, int]:
         "seed": cfg.seed,
         "ensure_agent_coverage": cfg.ensure_agent_coverage,
         "per_agent_counts": cfg.per_agent_counts,
+        "identical_pair_ratio": cfg.identical_pair_ratio,
     }
     return cfg, cache_key, int(preview_cap)
 

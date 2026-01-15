@@ -49,6 +49,7 @@ class GenerationConfig:
     seed: Optional[int] = None
     ensure_agent_coverage: bool = True
     per_agent_counts: bool = False  # if True, positive_pairs/negative_pairs are per-agent counts
+    identical_pair_ratio: float = 0.0  # ratio of positive pairs that should be identical (0.0-1.0)
 
     def clamped_feature_bounds(self, state_dim: int) -> Tuple[int, int]:
         start = max(4, min(self.feature_start, state_dim))
@@ -242,6 +243,56 @@ def sample_positive_pairs(
     return pairs[:n_pairs]
 
 
+def sample_identical_pairs(
+    segments: Dict[str, List[Segment]],
+    n_pairs: int,
+    rng: random.Random,
+    distribution: str,
+) -> List[Tuple[Segment, Segment]]:
+    """Sample identical (same segment vs itself) pairs.
+    
+    These pairs are crucial for training the discriminator to correctly
+    output high similarity scores when comparing a trajectory to itself.
+    
+    Args:
+        segments: Dictionary mapping agent_id to list of Segment objects
+        n_pairs: Number of identical pairs to generate
+        rng: Random number generator
+        distribution: "proportional" or "uniform" agent selection
+    
+    Returns:
+        List of (segment, segment) tuples where both elements are the same segment
+    """
+    pairs: List[Tuple[Segment, Segment]] = []
+    agents = list(segments.keys())
+    if not agents:
+        return pairs
+    
+    weights = _agent_weights(segments, distribution)
+    
+    # Ensure at least one identical pair per agent for coverage
+    for agent_id in agents:
+        if len(pairs) >= n_pairs:
+            break
+        agent_segs = segments.get(agent_id, [])
+        if agent_segs:
+            seg = rng.choice(agent_segs)
+            pairs.append((seg, seg))  # Same segment twice = identical pair
+    
+    # Fill remaining pairs
+    attempts = 0
+    max_attempts = n_pairs * 10 + 200
+    while len(pairs) < n_pairs and attempts < max_attempts:
+        agent_id = rng.choices(agents, weights=weights, k=1)[0]
+        agent_segs = segments.get(agent_id, [])
+        if agent_segs:
+            seg = rng.choice(agent_segs)
+            pairs.append((seg, seg))
+        attempts += 1
+    
+    return pairs[:n_pairs]
+
+
 def _pick_negative_pair(
     segments: Dict[str, List[Segment]],
     rng: random.Random,
@@ -384,9 +435,26 @@ def assemble_dataset(
     state_dim = next(iter(expert_trajs.values()))[0].shape[1]
     feat_start, feat_end = config.clamped_feature_bounds(state_dim)
     segments = build_segments(expert_trajs, config.days)
+    
+    # Calculate how many identical pairs to include based on ratio
+    total_positive = config.positive_pairs if not preview_only else min(config.positive_pairs, preview_cap)
+    n_identical = int(total_positive * config.identical_pair_ratio)
+    n_regular_positive = total_positive - n_identical
+    
+    # Sample identical pairs (same trajectory vs itself)
+    identical_pairs: List[Tuple[Segment, Segment]] = []
+    if n_identical > 0:
+        identical_pairs = sample_identical_pairs(
+            segments,
+            n_pairs=n_identical,
+            rng=rng,
+            distribution=config.agent_distribution,
+        )
+    
+    # Sample regular positive pairs (same agent, different trajectories)
     pos_pairs = sample_positive_pairs(
         segments,
-        n_pairs=config.positive_pairs if not preview_only else min(config.positive_pairs, preview_cap),
+        n_pairs=n_regular_positive,
         rng=rng,
         strategy=config.positive_strategy,
         distribution=config.agent_distribution,
@@ -404,7 +472,12 @@ def assemble_dataset(
     )
     # Labels: 1 = same agent (positive), 0 = different agents (negative)
     # This aligns with optimization objectives that maximize same-agent probability
-    pairs = [(p[0], p[1], 1) for p in pos_pairs] + [(p[0], p[1], 0) for p in neg_pairs]
+    # Identical pairs get label 1 (same agent) with special flag for tracking
+    pairs = (
+        [(p[0], p[1], 1, "identical") for p in identical_pairs] +
+        [(p[0], p[1], 1, "same_agent") for p in pos_pairs] + 
+        [(p[0], p[1], 0, "different_agent") for p in neg_pairs]
+    )
     rng.shuffle(pairs)
     sequences1: List[np.ndarray] = []
     sequences2: List[np.ndarray] = []
@@ -414,7 +487,8 @@ def assemble_dataset(
     lengths_raw: List[Tuple[int, int]] = []
     agent_usage: Dict[str, Dict[str, int]] = {}
     pair_info: List[Dict[str, Any]] = []
-    for seg_a, seg_b, label in pairs:
+    identical_count = 0
+    for seg_a, seg_b, label, pair_type in pairs:
         seq1 = _slice_features(seg_a.data, feat_start, feat_end).astype(np.float32)
         seq2 = _slice_features(seg_b.data, feat_start, feat_end).astype(np.float32)
         aligned1, aligned2, mask1, mask2, target_len = align_pair(seq1, seq2, config.padding, config.fixed_length)
@@ -424,9 +498,12 @@ def assemble_dataset(
         masks2.append(mask2)
         labels.append(label)
         lengths_raw.append((seq1.shape[0], seq2.shape[0]))
-        agent_usage.setdefault(seg_a.agent_id, {"pos": 0, "neg": 0})
-        agent_usage.setdefault(seg_b.agent_id, {"pos": 0, "neg": 0})
-        if label == 1:  # Same agent (positive)
+        agent_usage.setdefault(seg_a.agent_id, {"pos": 0, "neg": 0, "identical": 0})
+        agent_usage.setdefault(seg_b.agent_id, {"pos": 0, "neg": 0, "identical": 0})
+        if pair_type == "identical":
+            agent_usage[seg_a.agent_id]["identical"] += 1
+            identical_count += 1
+        elif label == 1:  # Same agent (positive)
             agent_usage[seg_a.agent_id]["pos"] += 1
             agent_usage[seg_b.agent_id]["pos"] += 1
         else:  # Different agents (negative)
@@ -437,6 +514,7 @@ def assemble_dataset(
                 "agent_a": seg_a.agent_id,
                 "agent_b": seg_b.agent_id,
                 "label": int(label),
+                "pair_type": pair_type,  # "identical", "same_agent", or "different_agent"
                 "len_raw_a": int(seq1.shape[0]),
                 "len_raw_b": int(seq2.shape[0]),
                 "align_len": int(target_len),
@@ -497,6 +575,7 @@ def assemble_dataset(
         total_pairs=len(pairs),
         pos_pairs=len(pos_pairs),
         neg_pairs=len(neg_pairs),
+        identical_pairs=len(identical_pairs),
     )
     return dataset, metadata, pair_info
 
@@ -523,6 +602,7 @@ def _build_metadata(
     total_pairs: int,
     pos_pairs: int,
     neg_pairs: int,
+    identical_pairs: int = 0,
 ) -> Dict[str, Any]:
     lens1 = [a for a, _ in lengths_raw]
     lens2 = [b for _, b in lengths_raw]
@@ -539,6 +619,7 @@ def _build_metadata(
             "total_pairs": total_pairs,
             "positive_pairs": pos_pairs,
             "negative_pairs": neg_pairs,
+            "identical_pairs": identical_pairs,
         },
         "length_stats": {
             "x1": _length_stats(lens1),

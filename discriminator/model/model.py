@@ -515,3 +515,225 @@ class SiameseTransformerDiscriminator(nn.Module):
         combined = torch.cat([emb1, emb2], dim=-1)
         logits = self.classifier(combined)
         return torch.sigmoid(logits)
+
+
+class SiameseLSTMDiscriminatorV2(nn.Module):
+    """Improved Siamese LSTM Discriminator with distance-based similarity.
+    
+    This version addresses the issue where the original model fails on identical
+    trajectories because it was trained only on different trajectories.
+    
+    Key improvements:
+    1. Distance-based combination: Uses |emb1 - emb2| instead of concatenation
+       - Identical trajectories → zero difference → high similarity
+       - Different trajectories → non-zero difference → classified separately
+    
+    2. Optional similarity metrics: Can combine multiple similarity measures
+       - Euclidean distance: ||emb1 - emb2||
+       - Cosine similarity: emb1 · emb2 / (||emb1|| * ||emb2||)
+       - Element-wise difference: |emb1 - emb2|
+    
+    Architecture:
+        1. Feature normalization (4 → 6 features)
+        2. Shared LSTM encoder for both trajectories
+        3. Similarity-based combination (not concatenation)
+        4. FC classifier with sigmoid output
+        
+    Output:
+        - 1 = same agent (positive pair)
+        - 0 = different agent (negative pair)
+    """
+    
+    def __init__(self,
+                 hidden_dim: int = 128,
+                 num_layers: int = 2,
+                 dropout: float = 0.2,
+                 bidirectional: bool = True,
+                 classifier_hidden_dims: Tuple[int, ...] = (128, 64),
+                 combination_mode: str = "difference"):
+        """Initialize the improved discriminator.
+        
+        Args:
+            hidden_dim: LSTM hidden state dimension
+            num_layers: Number of LSTM layers
+            dropout: Dropout probability
+            bidirectional: Whether to use bidirectional LSTM
+            classifier_hidden_dims: Hidden layer sizes for the classifier MLP
+            combination_mode: How to combine embeddings
+                - "difference": |emb1 - emb2| (absolute element-wise difference)
+                - "distance": Additional distance features (cosine, euclidean)
+                - "hybrid": Both difference and concatenation
+        """
+        super().__init__()
+        
+        self.combination_mode = combination_mode
+        
+        # Feature normalizer (4 raw features → 6 normalized features)
+        self.normalizer = FeatureNormalizer()
+        
+        # Shared LSTM encoder
+        self.encoder = SiameseLSTMEncoder(
+            input_dim=6,  # After normalization
+            hidden_dim=hidden_dim,
+            num_layers=num_layers,
+            dropout=dropout,
+            bidirectional=bidirectional
+        )
+        
+        # Calculate classifier input dimension based on combination mode
+        encoder_output_dim = self.encoder.output_dim
+        
+        if combination_mode == "difference":
+            # Just the element-wise difference
+            classifier_input_dim = encoder_output_dim
+        elif combination_mode == "distance":
+            # Difference + cosine similarity + euclidean distance
+            classifier_input_dim = encoder_output_dim + 2
+        elif combination_mode == "hybrid":
+            # Concatenation + difference + distance metrics
+            classifier_input_dim = encoder_output_dim * 3 + 2
+        else:
+            raise ValueError(f"Unknown combination_mode: {combination_mode}")
+        
+        # Classifier MLP
+        layers = []
+        prev_dim = classifier_input_dim
+        for hdim in classifier_hidden_dims:
+            layers.extend([
+                nn.Linear(prev_dim, hdim),
+                nn.ReLU(),
+                nn.Dropout(dropout)
+            ])
+            prev_dim = hdim
+            
+        # Final output layer
+        layers.append(nn.Linear(prev_dim, 1))
+        
+        self.classifier = nn.Sequential(*layers)
+        
+        # Store config for checkpointing
+        self.config = {
+            "hidden_dim": hidden_dim,
+            "num_layers": num_layers,
+            "dropout": dropout,
+            "bidirectional": bidirectional,
+            "classifier_hidden_dims": classifier_hidden_dims,
+            "combination_mode": combination_mode,
+            "model_version": "v2"
+        }
+        
+    def encode(self, 
+               x: torch.Tensor, 
+               mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+        """Encode a single trajectory.
+        
+        Args:
+            x: Raw features [batch, seq_len, 4]
+            mask: Boolean mask [batch, seq_len]
+            
+        Returns:
+            Embedding [batch, encoder_output_dim]
+        """
+        x_norm = self.normalizer(x)
+        return self.encoder(x_norm, mask)
+    
+    def _combine_embeddings(self, 
+                            emb1: torch.Tensor, 
+                            emb2: torch.Tensor) -> torch.Tensor:
+        """Combine embeddings based on combination mode.
+        
+        Args:
+            emb1: First embedding [batch, emb_dim]
+            emb2: Second embedding [batch, emb_dim]
+            
+        Returns:
+            Combined features [batch, combined_dim]
+        """
+        # Element-wise absolute difference
+        diff = torch.abs(emb1 - emb2)  # [batch, emb_dim]
+        
+        if self.combination_mode == "difference":
+            return diff
+        
+        # Additional distance metrics
+        # Cosine similarity: normalized dot product
+        emb1_norm = emb1 / (emb1.norm(dim=-1, keepdim=True) + 1e-8)
+        emb2_norm = emb2 / (emb2.norm(dim=-1, keepdim=True) + 1e-8)
+        cosine_sim = (emb1_norm * emb2_norm).sum(dim=-1, keepdim=True)  # [batch, 1]
+        
+        # Euclidean distance (normalized by embedding dimension)
+        euclidean_dist = diff.norm(dim=-1, keepdim=True) / math.sqrt(emb1.size(-1))  # [batch, 1]
+        
+        if self.combination_mode == "distance":
+            return torch.cat([diff, cosine_sim, euclidean_dist], dim=-1)
+        
+        if self.combination_mode == "hybrid":
+            # Also include original concatenation for backward compatibility
+            concat = torch.cat([emb1, emb2], dim=-1)
+            return torch.cat([concat, diff, cosine_sim, euclidean_dist], dim=-1)
+        
+        raise ValueError(f"Unknown combination_mode: {self.combination_mode}")
+    
+    def forward(self,
+                x1: torch.Tensor,
+                x2: torch.Tensor,
+                mask1: Optional[torch.Tensor] = None,
+                mask2: Optional[torch.Tensor] = None) -> torch.Tensor:
+        """Compute same-agent probability for trajectory pairs.
+        
+        Args:
+            x1: First trajectory raw features [batch, seq_len, 4]
+            x2: Second trajectory raw features [batch, seq_len, 4]
+            mask1: Boolean mask for x1 [batch, seq_len]
+            mask2: Boolean mask for x2 [batch, seq_len]
+            
+        Returns:
+            Same-agent probability [batch, 1] in range [0, 1]
+        """
+        # Encode both trajectories with shared encoder
+        emb1 = self.encode(x1, mask1)  # [batch, emb_dim]
+        emb2 = self.encode(x2, mask2)  # [batch, emb_dim]
+        
+        # Combine using similarity-based method
+        combined = self._combine_embeddings(emb1, emb2)
+        
+        # Classify
+        logits = self.classifier(combined)  # [batch, 1]
+        probs = torch.sigmoid(logits)
+        
+        return probs
+    
+    def predict(self,
+                x1: torch.Tensor,
+                x2: torch.Tensor,
+                mask1: Optional[torch.Tensor] = None,
+                mask2: Optional[torch.Tensor] = None,
+                threshold: float = 0.5) -> torch.Tensor:
+        """Predict binary labels for trajectory pairs.
+        
+        Args:
+            x1, x2, mask1, mask2: Same as forward()
+            threshold: Classification threshold (default 0.5)
+            
+        Returns:
+            Binary predictions [batch] where 1 = same agent
+        """
+        probs = self.forward(x1, x2, mask1, mask2)
+        return (probs.squeeze(-1) >= threshold).long()
+    
+    def get_embeddings(self,
+                       x1: torch.Tensor,
+                       x2: torch.Tensor,
+                       mask1: Optional[torch.Tensor] = None,
+                       mask2: Optional[torch.Tensor] = None) -> Tuple[torch.Tensor, torch.Tensor]:
+        """Get trajectory embeddings (useful for visualization).
+        
+        Args:
+            x1, x2, mask1, mask2: Same as forward()
+            
+        Returns:
+            Tuple of (emb1, emb2) each [batch, emb_dim]
+        """
+        emb1 = self.encode(x1, mask1)
+        emb2 = self.encode(x2, mask2)
+        return emb1, emb2

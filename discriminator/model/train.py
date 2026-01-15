@@ -35,6 +35,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 try:
     from model import (
         SiameseLSTMDiscriminator,
+        SiameseLSTMDiscriminatorV2,
         TrajectoryPairDataset,
         load_dataset_from_directory,
         Trainer,
@@ -43,7 +44,7 @@ try:
     from model.dataset import create_train_val_split, create_data_loaders
 except ImportError:
     # Running from within model/ directory
-    from model import SiameseLSTMDiscriminator
+    from model import SiameseLSTMDiscriminator, SiameseLSTMDiscriminatorV2
     from dataset import (
         TrajectoryPairDataset,
         load_dataset_from_directory,
@@ -85,6 +86,12 @@ def parse_args():
                             help="Use unidirectional LSTM")
     model_group.add_argument("--classifier-dims", type=str, default="128,64",
                             help="Classifier hidden dims (comma-separated, default: 128,64)")
+    model_group.add_argument("--model-version", type=str, default="v1",
+                            choices=["v1", "v2"],
+                            help="Model version: v1=concatenation, v2=distance-based (default: v1)")
+    model_group.add_argument("--combination-mode", type=str, default="difference",
+                            choices=["difference", "distance", "hybrid"],
+                            help="V2 only: embedding combination mode (default: difference)")
     
     # Training
     train_group = parser.add_argument_group("Training")
@@ -178,21 +185,34 @@ def main():
     # Parse classifier dims
     classifier_dims = tuple(int(x) for x in args.classifier_dims.split(","))
     
-    # Create model
-    model = SiameseLSTMDiscriminator(
-        hidden_dim=args.hidden_dim,
-        num_layers=args.num_layers,
-        dropout=args.dropout,
-        bidirectional=not args.no_bidirectional,
-        classifier_hidden_dims=classifier_dims
-    )
+    # Create model based on version
+    if args.model_version == "v2":
+        model = SiameseLSTMDiscriminatorV2(
+            hidden_dim=args.hidden_dim,
+            num_layers=args.num_layers,
+            dropout=args.dropout,
+            bidirectional=not args.no_bidirectional,
+            classifier_hidden_dims=classifier_dims,
+            combination_mode=args.combination_mode
+        )
+    else:
+        model = SiameseLSTMDiscriminator(
+            hidden_dim=args.hidden_dim,
+            num_layers=args.num_layers,
+            dropout=args.dropout,
+            bidirectional=not args.no_bidirectional,
+            classifier_hidden_dims=classifier_dims
+        )
     
     if not args.quiet:
         print(f"\nModel architecture:")
+        print(f"  Model version: {args.model_version}")
         print(f"  Hidden dim: {args.hidden_dim}")
         print(f"  Num layers: {args.num_layers}")
         print(f"  Bidirectional: {not args.no_bidirectional}")
         print(f"  Classifier: {classifier_dims}")
+        if args.model_version == "v2":
+            print(f"  Combination mode: {args.combination_mode}")
         
         # Count parameters
         n_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
