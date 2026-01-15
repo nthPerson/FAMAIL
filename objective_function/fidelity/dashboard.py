@@ -904,6 +904,9 @@ Default 0.5 aligns with the paper's methodology."""
                     # Aggregate
                     fidelity_value = aggregate_fidelity_scores(scores, aggregation, threshold)
                     
+                    # Compute per-driver statistics
+                    per_driver_stats = compute_per_driver_statistics(scores, metadata)
+                    
                     # Build result structure
                     result = {
                         'value': fidelity_value,
@@ -921,6 +924,7 @@ Default 0.5 aligns with the paper's methodology."""
                             'above_threshold': float(np.mean(scores >= threshold)),
                             'above_0.7': float(np.mean(scores >= 0.7)),
                             'above_0.9': float(np.mean(scores >= 0.9)),
+                            'per_driver': per_driver_stats,
                         },
                         'diagnostics': {
                             'computation_time_seconds': 0,
