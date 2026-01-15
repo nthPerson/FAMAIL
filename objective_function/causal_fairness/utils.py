@@ -891,6 +891,365 @@ def verify_causal_fairness_gradient(
     return results
 
 
+def verify_gradient_with_estimation_method(
+    method: Literal["binning", "linear", "polynomial", "isotonic", "lowess"],
+    n_samples: int = 100,
+    seed: int = 42,
+    n_bins: int = 10,
+    poly_degree: int = 2,
+    lowess_frac: float = 0.3,
+    verbose: bool = False,
+) -> Dict[str, Any]:
+    """
+    Verify gradient flow when using a specific g(d) estimation method.
+    
+    This is the key validation function for ensuring that using Isotonic
+    or Binning estimation methods does not break gradient computation.
+    
+    The test validates that:
+    1. g(d) can be fitted using the specified method
+    2. Gradients flow through the causal fairness computation
+    3. Gradients are numerically valid (no NaN/Inf)
+    4. Gradient magnitudes are reasonable (not vanishing/exploding)
+    
+    CRITICAL INSIGHT:
+    The g(d) function is PRE-COMPUTED and FROZEN before optimization.
+    We are NOT differentiating through the fitting process - we only
+    need gradients to flow through R = Y - g(D), where Y depends on supply S.
+    
+    Args:
+        method: g(d) estimation method to test
+        n_samples: Number of test samples
+        seed: Random seed for reproducibility
+        n_bins: Number of bins (for binning method)
+        poly_degree: Polynomial degree (for polynomial method)
+        lowess_frac: Smoothing fraction (for lowess method)
+        verbose: Whether to print detailed output
+        
+    Returns:
+        Dictionary containing:
+        - method: The tested method name
+        - r2_fit: R² of the g(d) fit (how well g(d) fits the data)
+        - f_causal: Computed causal fairness value
+        - gradient_exists: Whether gradients were computed
+        - gradient_valid: Whether gradients are numerically valid
+        - gradient_stats: Statistics about gradient values
+        - gradients: Raw gradient values
+        - passed: Overall pass/fail status
+        - diagnostics: Additional method-specific diagnostics
+    """
+    import torch
+    
+    torch.manual_seed(seed)
+    np.random.seed(seed)
+    
+    results = {
+        'method': method,
+        'n_samples': n_samples,
+        'seed': seed,
+    }
+    
+    try:
+        # =================================================================
+        # STEP 1: Generate realistic test data
+        # =================================================================
+        # Create demand values (positive, mimicking real pickup counts)
+        demands_np = np.random.exponential(scale=10, size=n_samples).astype(np.float32)
+        demands_np = np.clip(demands_np, 1, 100)
+        
+        # Create supply values related to demand (with noise)
+        # Base relationship: supply tends to follow demand with some scatter
+        noise = np.random.normal(0, 0.3, size=n_samples)
+        supply_np = demands_np * (0.3 + 0.05 * noise) + np.random.uniform(0.5, 2, size=n_samples)
+        supply_np = np.clip(supply_np, 0.1, None).astype(np.float32)
+        
+        # Compute service ratios (Y = S/D)
+        ratios_np = supply_np / demands_np
+        
+        if verbose:
+            print(f"Data generated: demand range [{demands_np.min():.1f}, {demands_np.max():.1f}], "
+                  f"ratio range [{ratios_np.min():.3f}, {ratios_np.max():.3f}]")
+        
+        # =================================================================
+        # STEP 2: Fit g(d) using the specified method
+        # =================================================================
+        g_func, diagnostics = estimate_g_function(
+            demands_np, ratios_np,
+            method=method,
+            n_bins=n_bins,
+            poly_degree=poly_degree,
+            lowess_frac=lowess_frac,
+        )
+        results['diagnostics'] = diagnostics
+        
+        # Compute R² of the fit
+        predicted_ratios = g_func(demands_np)
+        r2_fit = compute_r_squared(ratios_np, predicted_ratios)
+        results['r2_fit'] = r2_fit
+        
+        if verbose:
+            print(f"g(d) fitted with {method}: R² = {r2_fit:.4f}")
+        
+        # =================================================================
+        # STEP 3: Convert to PyTorch and compute gradients
+        # =================================================================
+        # Create PyTorch tensors
+        demands_t = torch.tensor(demands_np, dtype=torch.float32)
+        supply_t = torch.tensor(supply_np, dtype=torch.float32, requires_grad=True)
+        
+        # Compute service ratios (Y = S/D) - this is differentiable
+        service_ratios_t = supply_t / (demands_t + 1e-8)
+        
+        # Get expected ratios from FROZEN g(d) lookup
+        # The key point: g_func is pre-computed, we just look up values
+        expected_ratios_np = g_func(demands_np)
+        expected_ratios_t = torch.tensor(expected_ratios_np, dtype=torch.float32)
+        # No requires_grad - this is frozen!
+        
+        # Compute causal fairness (R²)
+        f_causal = compute_causal_fairness_torch(service_ratios_t, expected_ratios_t)
+        results['f_causal'] = f_causal.item()
+        
+        if verbose:
+            print(f"F_causal = {f_causal.item():.6f}")
+        
+        # =================================================================
+        # STEP 4: Backward pass - compute gradients
+        # =================================================================
+        f_causal.backward()
+        
+        results['gradient_exists'] = supply_t.grad is not None
+        
+        if supply_t.grad is not None:
+            grad = supply_t.grad
+            
+            # Check for numerical issues
+            has_nan = torch.isnan(grad).any().item()
+            has_inf = torch.isinf(grad).any().item()
+            is_zero = (grad.abs() < 1e-12).all().item()
+            
+            results['gradient_has_nan'] = has_nan
+            results['gradient_has_inf'] = has_inf
+            results['gradient_is_zero'] = is_zero
+            results['gradient_valid'] = not has_nan and not has_inf and not is_zero
+            
+            # Gradient statistics
+            results['gradient_stats'] = {
+                'mean': grad.mean().item(),
+                'std': grad.std().item(),
+                'min': grad.min().item(),
+                'max': grad.max().item(),
+                'abs_mean': grad.abs().mean().item(),
+                'nonzero_count': (grad.abs() > 1e-12).sum().item(),
+                'nonzero_pct': (grad.abs() > 1e-12).float().mean().item() * 100,
+            }
+            
+            results['gradients'] = grad.numpy().copy()
+            
+            if verbose:
+                print(f"Gradient stats: mean={results['gradient_stats']['mean']:.6e}, "
+                      f"std={results['gradient_stats']['std']:.6e}")
+        else:
+            results['gradient_valid'] = False
+            results['gradient_stats'] = None
+        
+        # =================================================================
+        # STEP 5: Numerical gradient verification (finite differences)
+        # =================================================================
+        # Verify gradients match finite difference approximation
+        # IMPORTANT: Use float64 for numerical check due to precision requirements
+        eps_fd = 1e-4  # Larger epsilon needed for float32 precision
+        idx_to_check = min(5, n_samples)  # Check first few elements
+        
+        def compute_r2_for_numerical_check(supply_arr, demand_arr, expected_arr):
+            """Compute R² using PyTorch float64 for numerical precision."""
+            ratios = torch.tensor(supply_arr / demand_arr, dtype=torch.float64)
+            expected = torch.tensor(expected_arr, dtype=torch.float64)
+            residuals = ratios - expected
+            var_r = torch.var(residuals)
+            var_y = torch.var(ratios)
+            r2 = 1.0 - (var_r / (var_y + 1e-8))
+            return torch.clamp(r2, 0.0, 1.0).item()
+        
+        numerical_grads = []
+        analytic_grads = []
+        
+        expected_np = g_func(demands_np)  # Frozen g(d) lookup
+        
+        # Convert to float64 for numerical precision
+        supply_np_f64 = supply_np.astype(np.float64)
+        demands_np_f64 = demands_np.astype(np.float64)
+        expected_np_f64 = expected_np.astype(np.float64)
+        
+        for i in range(idx_to_check):
+            # Positive perturbation
+            supply_plus = supply_np_f64.copy()
+            supply_plus[i] += eps_fd
+            f_plus = compute_r2_for_numerical_check(supply_plus, demands_np_f64, expected_np_f64)
+            
+            # Negative perturbation
+            supply_minus = supply_np_f64.copy()
+            supply_minus[i] -= eps_fd
+            f_minus = compute_r2_for_numerical_check(supply_minus, demands_np_f64, expected_np_f64)
+            
+            # Numerical gradient
+            num_grad = (f_plus - f_minus) / (2 * eps_fd)
+            numerical_grads.append(num_grad)
+            
+            if supply_t.grad is not None:
+                analytic_grads.append(supply_t.grad[i].item())
+        
+        if numerical_grads and analytic_grads:
+            numerical_grads = np.array(numerical_grads)
+            analytic_grads = np.array(analytic_grads)
+            
+            # Relative error
+            denom = np.maximum(np.abs(numerical_grads), np.abs(analytic_grads))
+            denom = np.maximum(denom, 1e-8)
+            rel_errors = np.abs(numerical_grads - analytic_grads) / denom
+            
+            results['numerical_check'] = {
+                'numerical_grads': numerical_grads.tolist(),
+                'analytic_grads': analytic_grads.tolist(),
+                'relative_errors': rel_errors.tolist(),
+                'max_rel_error': rel_errors.max(),
+                'mean_rel_error': rel_errors.mean(),
+                'gradients_match': rel_errors.max() < 0.1,  # Within 10%
+            }
+            
+            if verbose:
+                print(f"Numerical check: max rel error = {rel_errors.max():.4f}")
+        
+        # =================================================================
+        # STEP 6: Determine overall pass/fail
+        # =================================================================
+        results['passed'] = (
+            results['gradient_exists'] and
+            results.get('gradient_valid', False) and
+            results.get('numerical_check', {}).get('gradients_match', True)
+        )
+        
+    except Exception as e:
+        results['error'] = str(e)
+        results['passed'] = False
+        import traceback
+        results['traceback'] = traceback.format_exc()
+    
+    return results
+
+
+def verify_all_estimation_methods(
+    n_samples: int = 100,
+    seed: int = 42,
+    verbose: bool = False,
+) -> Dict[str, Dict[str, Any]]:
+    """
+    Run gradient verification for all g(d) estimation methods.
+    
+    This comprehensive test validates that each estimation method
+    (binning, isotonic, polynomial, linear, lowess) allows gradients
+    to flow properly through the causal fairness computation.
+    
+    Args:
+        n_samples: Number of test samples
+        seed: Random seed
+        verbose: Whether to print progress
+        
+    Returns:
+        Dictionary mapping method names to verification results
+    """
+    methods = ["binning", "linear", "polynomial", "isotonic", "lowess"]
+    results = {}
+    
+    for method in methods:
+        if verbose:
+            print(f"\n{'='*50}")
+            print(f"Testing method: {method}")
+            print('='*50)
+        
+        results[method] = verify_gradient_with_estimation_method(
+            method=method,
+            n_samples=n_samples,
+            seed=seed,
+            verbose=verbose,
+        )
+    
+    return results
+
+
+def create_gradient_verification_report(
+    results: Dict[str, Dict[str, Any]],
+) -> str:
+    """
+    Create a formatted report from gradient verification results.
+    
+    Args:
+        results: Results from verify_all_estimation_methods
+        
+    Returns:
+        Formatted markdown report
+    """
+    lines = [
+        "# Gradient Verification Report",
+        "",
+        "## Summary",
+        "",
+        "| Method | R² Fit | F_causal | Gradient Valid | Numerical Check | Status |",
+        "|--------|--------|----------|----------------|-----------------|--------|",
+    ]
+    
+    for method, res in results.items():
+        if res.get('error'):
+            lines.append(f"| {method} | ERROR | - | - | - | ❌ FAILED |")
+            continue
+            
+        r2_fit = res.get('r2_fit', 0)
+        f_causal = res.get('f_causal', 0)
+        grad_valid = "✅" if res.get('gradient_valid', False) else "❌"
+        
+        num_check = res.get('numerical_check', {})
+        num_match = "✅" if num_check.get('gradients_match', False) else "⚠️"
+        
+        status = "✅ PASS" if res.get('passed', False) else "❌ FAIL"
+        
+        lines.append(
+            f"| {method} | {r2_fit:.4f} | {f_causal:.4f} | {grad_valid} | {num_match} | {status} |"
+        )
+    
+    lines.extend([
+        "",
+        "## Details",
+        "",
+    ])
+    
+    for method, res in results.items():
+        lines.append(f"### {method.title()}")
+        lines.append("")
+        
+        if res.get('error'):
+            lines.append(f"**Error**: {res['error']}")
+            lines.append("")
+            continue
+        
+        lines.append(f"- **R² Fit**: {res.get('r2_fit', 0):.6f}")
+        lines.append(f"- **F_causal**: {res.get('f_causal', 0):.6f}")
+        
+        grad_stats = res.get('gradient_stats', {})
+        if grad_stats:
+            lines.append(f"- **Gradient Mean**: {grad_stats.get('mean', 0):.6e}")
+            lines.append(f"- **Gradient Std**: {grad_stats.get('std', 0):.6e}")
+            lines.append(f"- **Non-zero %**: {grad_stats.get('nonzero_pct', 0):.1f}%")
+        
+        num_check = res.get('numerical_check', {})
+        if num_check:
+            lines.append(f"- **Max Rel Error**: {num_check.get('max_rel_error', 0):.6f}")
+            lines.append(f"- **Numerical Match**: {num_check.get('gradients_match', False)}")
+        
+        lines.append("")
+    
+    return "\n".join(lines)
+
+
 class DifferentiableCausalFairness:
     """
     Differentiable causal fairness computation using PyTorch.

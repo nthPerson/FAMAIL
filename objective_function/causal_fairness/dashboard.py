@@ -56,6 +56,9 @@ from utils import (
     get_data_statistics,
     validate_data_alignment,
     verify_causal_fairness_gradient,
+    verify_gradient_with_estimation_method,
+    verify_all_estimation_methods,
+    create_gradient_verification_report,
     DifferentiableCausalFairness,
     create_grid_heatmap_data,
     aggregate_to_grid,
@@ -623,6 +626,355 @@ def render_gradient_verification_tab(term: CausalFairnessTerm):
 
 
 # =============================================================================
+# ESTIMATION METHOD GRADIENT TESTS TAB
+# =============================================================================
+
+def render_method_gradient_tests_tab():
+    """
+    Render the estimation method gradient verification tab.
+    
+    This tab validates that each g(d) estimation method (especially Isotonic
+    and Binning) allows gradients to flow properly during optimization.
+    """
+    st.subheader("🧪 Estimation Method Gradient Validation")
+    
+    st.markdown("""
+    This tab validates that **each g(d) estimation method** allows gradients to flow
+    properly through the Causal Fairness computation. This is critical for ensuring
+    the trajectory modification algorithm can optimize using gradient descent.
+    
+    ### Why This Matters
+    
+    The Causal Fairness term uses R² as its score:
+    
+    $$F_{\\text{causal}} = R^2 = 1 - \\frac{\\text{Var}(Y - g(D))}{\\text{Var}(Y)}$$
+    
+    The g(d) function is **pre-computed and frozen** before optimization. We need
+    to verify that gradients can flow through the residual computation $R = Y - g(D)$
+    regardless of how g(d) was estimated.
+    
+    ### Key Insight
+    
+    > **Isotonic regression and Binning methods are NOT differentiable during fitting.**
+    > However, we don't differentiate through the fitting process — we only use the
+    > **frozen lookup values** during optimization. The gradients flow through:
+    > $$\\frac{\\partial F_{causal}}{\\partial S} = \\frac{\\partial F_{causal}}{\\partial Y} \\cdot \\frac{\\partial Y}{\\partial S}$$
+    > where $Y = S/D$ (service ratio).
+    """)
+    
+    # Check PyTorch availability
+    try:
+        import torch
+        pytorch_available = True
+        pytorch_version = torch.__version__
+    except ImportError:
+        pytorch_available = False
+        pytorch_version = None
+    
+    if not pytorch_available:
+        st.error("❌ PyTorch is required for gradient verification tests.")
+        return
+    
+    st.success(f"✅ PyTorch {pytorch_version} available")
+    
+    st.divider()
+    
+    # ==========================================================================
+    # TEST CONFIGURATION
+    # ==========================================================================
+    
+    st.markdown("### ⚙️ Test Configuration")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        n_samples = st.slider(
+            "Number of samples",
+            min_value=50,
+            max_value=500,
+            value=100,
+            step=50,
+            help="More samples = more robust test, but slower"
+        )
+    
+    with col2:
+        test_seed = st.number_input(
+            "Random seed",
+            min_value=0,
+            max_value=9999,
+            value=42,
+            help="For reproducibility"
+        )
+    
+    with col3:
+        methods_to_test = st.multiselect(
+            "Methods to test",
+            options=["binning", "isotonic", "polynomial", "linear", "lowess"],
+            default=["binning", "isotonic", "polynomial", "linear"],
+            help="Select estimation methods to validate"
+        )
+    
+    st.divider()
+    
+    # ==========================================================================
+    # RUN TESTS
+    # ==========================================================================
+    
+    st.markdown("### 🚀 Run Gradient Tests")
+    
+    col1, col2 = st.columns([1, 3])
+    
+    with col1:
+        run_all = st.button("Run All Methods", type="primary")
+    
+    with col2:
+        run_single = st.selectbox(
+            "Or test single method:",
+            options=["(Select method)"] + methods_to_test,
+            help="Run test for a specific method"
+        )
+    
+    # Store results in session state
+    if 'method_gradient_results' not in st.session_state:
+        st.session_state.method_gradient_results = {}
+    
+    # Run all methods
+    if run_all:
+        st.markdown("---")
+        st.markdown("### 📊 Running All Tests...")
+        
+        progress_bar = st.progress(0)
+        status_text = st.empty()
+        
+        results = {}
+        for i, method in enumerate(methods_to_test):
+            status_text.text(f"Testing {method}...")
+            progress_bar.progress((i + 1) / len(methods_to_test))
+            
+            result = verify_gradient_with_estimation_method(
+                method=method,
+                n_samples=n_samples,
+                seed=test_seed,
+                verbose=False,
+            )
+            results[method] = result
+        
+        st.session_state.method_gradient_results = results
+        status_text.text("✅ All tests complete!")
+        progress_bar.progress(1.0)
+    
+    # Run single method
+    elif run_single and run_single != "(Select method)":
+        st.markdown("---")
+        st.markdown(f"### 📊 Testing {run_single}...")
+        
+        with st.spinner(f"Running gradient test for {run_single}..."):
+            result = verify_gradient_with_estimation_method(
+                method=run_single,
+                n_samples=n_samples,
+                seed=test_seed,
+                verbose=False,
+            )
+            st.session_state.method_gradient_results[run_single] = result
+    
+    # ==========================================================================
+    # DISPLAY RESULTS
+    # ==========================================================================
+    
+    results = st.session_state.method_gradient_results
+    
+    if results:
+        st.markdown("---")
+        st.markdown("## 📋 Test Results")
+        
+        # Summary table
+        st.markdown("### Summary")
+        
+        summary_data = []
+        for method, res in results.items():
+            if res.get('error'):
+                summary_data.append({
+                    'Method': method,
+                    'R² Fit': 'ERROR',
+                    'F_causal': 'ERROR',
+                    'Gradient Valid': '❌',
+                    'Numerical Match': '❌',
+                    'Status': '❌ FAILED',
+                })
+            else:
+                grad_valid = "✅" if res.get('gradient_valid', False) else "❌"
+                num_check = res.get('numerical_check', {})
+                num_match = "✅" if num_check.get('gradients_match', False) else "⚠️"
+                status = "✅ PASS" if res.get('passed', False) else "❌ FAIL"
+                
+                summary_data.append({
+                    'Method': method,
+                    'R² Fit': f"{res.get('r2_fit', 0):.4f}",
+                    'F_causal': f"{res.get('f_causal', 0):.4f}",
+                    'Gradient Valid': grad_valid,
+                    'Numerical Match': num_match,
+                    'Status': status,
+                })
+        
+        df_summary = pd.DataFrame(summary_data)
+        st.dataframe(df_summary, use_container_width=True, hide_index=True)
+        
+        # Overall status
+        all_passed = all(res.get('passed', False) for res in results.values())
+        if all_passed:
+            st.success("✅ **All methods passed gradient verification!** "
+                      "Isotonic and Binning methods are safe to use for trajectory optimization.")
+        else:
+            failed_methods = [m for m, r in results.items() if not r.get('passed', False)]
+            st.warning(f"⚠️ **Some methods failed:** {', '.join(failed_methods)}")
+        
+        st.divider()
+        
+        # Detailed results per method
+        st.markdown("### 🔍 Detailed Results")
+        
+        for method, res in results.items():
+            with st.expander(f"📊 {method.title()} Method", expanded=(not res.get('passed', False))):
+                if res.get('error'):
+                    st.error(f"**Error:** {res['error']}")
+                    if res.get('traceback'):
+                        st.code(res['traceback'], language='python')
+                    continue
+                
+                # Key metrics
+                col1, col2, col3, col4 = st.columns(4)
+                
+                with col1:
+                    st.metric("R² Fit", f"{res.get('r2_fit', 0):.4f}",
+                             help="How well g(d) fits the data")
+                
+                with col2:
+                    st.metric("F_causal", f"{res.get('f_causal', 0):.4f}",
+                             help="Computed causal fairness score")
+                
+                with col3:
+                    grad_exists = "✅" if res.get('gradient_exists', False) else "❌"
+                    st.metric("Gradient Exists", grad_exists)
+                
+                with col4:
+                    passed = "✅ PASS" if res.get('passed', False) else "❌ FAIL"
+                    st.metric("Status", passed)
+                
+                # Gradient statistics
+                grad_stats = res.get('gradient_stats')
+                if grad_stats:
+                    st.markdown("**Gradient Statistics:**")
+                    
+                    cols = st.columns(5)
+                    stats_items = [
+                        ("Mean", f"{grad_stats.get('mean', 0):.6e}"),
+                        ("Std", f"{grad_stats.get('std', 0):.6e}"),
+                        ("Min", f"{grad_stats.get('min', 0):.6e}"),
+                        ("Max", f"{grad_stats.get('max', 0):.6e}"),
+                        ("Non-zero %", f"{grad_stats.get('nonzero_pct', 0):.1f}%"),
+                    ]
+                    
+                    for col, (label, value) in zip(cols, stats_items):
+                        col.metric(label, value)
+                
+                # Numerical check results
+                num_check = res.get('numerical_check', {})
+                if num_check:
+                    st.markdown("**Numerical Gradient Verification:**")
+                    
+                    match_status = "✅ Matches" if num_check.get('gradients_match', False) else "⚠️ Mismatch"
+                    st.write(f"- Status: {match_status}")
+                    st.write(f"- Max Relative Error: {num_check.get('max_rel_error', 0):.6f}")
+                    st.write(f"- Mean Relative Error: {num_check.get('mean_rel_error', 0):.6f}")
+                    
+                    # Show comparison table
+                    if num_check.get('numerical_grads') and num_check.get('analytic_grads'):
+                        compare_df = pd.DataFrame({
+                            'Numerical': num_check['numerical_grads'],
+                            'Analytic': num_check['analytic_grads'],
+                            'Rel Error': num_check['relative_errors'],
+                        })
+                        st.dataframe(compare_df.style.format('{:.6e}'), use_container_width=True)
+                
+                # Gradient distribution plot
+                if 'gradients' in res:
+                    fig = plot_gradient_distribution(res['gradients'])
+                    fig.update_layout(title=f"Gradient Distribution ({method})")
+                    st.plotly_chart(fig, use_container_width=True)
+                
+                # Method diagnostics
+                if res.get('diagnostics'):
+                    with st.expander("Method Diagnostics"):
+                        st.json(res['diagnostics'])
+        
+        st.divider()
+        
+        # Download report
+        st.markdown("### 📥 Export Results")
+        
+        report = create_gradient_verification_report(results)
+        st.download_button(
+            label="📥 Download Markdown Report",
+            data=report,
+            file_name="gradient_verification_report.md",
+            mime="text/markdown",
+        )
+        
+        # Show report preview
+        with st.expander("📄 Report Preview"):
+            st.markdown(report)
+    
+    st.divider()
+    
+    # ==========================================================================
+    # EXPLANATION
+    # ==========================================================================
+    
+    with st.expander("📝 Technical Explanation"):
+        st.markdown("""
+        ### How Gradient Verification Works
+        
+        For each estimation method, we:
+        
+        1. **Generate test data**: Create realistic demand and supply values
+        2. **Fit g(d)**: Use the specified method to estimate E[Y|D]
+        3. **Freeze g(d)**: Convert to tensor lookup (no gradients)
+        4. **Forward pass**: Compute F_causal with gradient tracking on supply
+        5. **Backward pass**: Call `.backward()` to compute gradients
+        6. **Validate**: Check gradients are non-zero and numerically correct
+        
+        ### Numerical Gradient Check
+        
+        We verify analytic gradients using finite differences:
+        
+        $$\\frac{\\partial F}{\\partial S_i} \\approx \\frac{F(S_i + \\epsilon) - F(S_i - \\epsilon)}{2\\epsilon}$$
+        
+        A test **passes** if:
+        - Gradients exist and are non-zero
+        - No NaN or Inf values
+        - Numerical and analytic gradients match within 10%
+        
+        ### Why Isotonic/Binning Methods Work
+        
+        Even though these methods use non-differentiable operations during **fitting**
+        (sorting, bin assignment), the **lookup** during optimization is differentiable:
+        
+        ```python
+        # FITTING (non-differentiable) - done ONCE before optimization
+        g_func, _ = estimate_g_isotonic(demands, ratios)
+        
+        # LOOKUP (differentiable) - done during optimization
+        expected = torch.tensor(g_func(demands_np))  # Just tensor values
+        Y = supply / demand  # Differentiable
+        R = Y - expected     # Differentiable (expected is constant)
+        ```
+        
+        The key is that `expected` values are **constants** during optimization.
+        Gradients flow through `Y = S/D`, not through `g(d)` fitting.
+        """)
+
+
+# =============================================================================
 # MAIN APPLICATION
 # =============================================================================
 
@@ -885,7 +1237,7 @@ def main():
     # TABS
     # ==========================================================================
     
-    tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
         "📈 Temporal Analysis",
         "🗺️ Spatial Distribution",
         "📊 Demand-Service Plot",
@@ -893,6 +1245,7 @@ def main():
         "🔄 Method Comparison",
         "📉 Statistics",
         "🔬 Gradient Verification",
+        "🧪 Method Gradient Tests",
     ])
     
     # --------------------------------------------------------------------------
@@ -1201,6 +1554,12 @@ def main():
     # --------------------------------------------------------------------------
     with tab7:
         render_gradient_verification_tab(term)
+    
+    # --------------------------------------------------------------------------
+    # TAB 8: Estimation Method Gradient Tests
+    # --------------------------------------------------------------------------
+    with tab8:
+        render_method_gradient_tests_tab()
     
     # ==========================================================================
     # FOOTER
