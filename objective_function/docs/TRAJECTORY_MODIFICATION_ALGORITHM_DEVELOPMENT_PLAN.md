@@ -1,13 +1,22 @@
 # Trajectory Modification Algorithm: Development Plan
 
-**Version**: 1.2.0  
-**Last Updated**: 2025-01-15  
-**Status**: Draft (Phase 0 — 75% Complete)  
+**Version**: 1.3.0  
+**Last Updated**: 2026-01-16  
+**Status**: Draft (Phase 0 — 80% Complete)  
 **Authors**: FAMAIL Research Team
 
 ---
 
 ## Changelog
+
+### v1.3.0 (2026-01-16)
+- **Task 0.4.1 INVESTIGATED**: Comprehensive discriminator validation completed via Fidelity Dashboard
+- Identified critical issue: 88% false positive rate on different-driver pairs
+- Discriminator architecture updated to match ST-SiameseNet (LSTM hidden dims: 200→100)
+- Added "Comprehensive Model Assessment" section to Fidelity Dashboard
+- Added fidelity threshold analysis and operational guidelines
+- Documented temporary workaround (higher threshold, conservative bounds)
+- Priority action: Retrain discriminator with hard negative mining
 
 ### v1.2.1 (2026-01-14)
 - **Task 0.3 VERIFIED**: Comprehensive gradient tests confirm Isotonic and Binning methods allow proper gradient flow
@@ -16,7 +25,7 @@
 - Updated Phase 0 status from 75% to 80% complete
 - All estimation methods pass gradient verification with <0.0001% relative error
 
-### v1.2.0 (2025-01-15)
+### v1.2.0 (2026-01-15)
 - Added Phase 0 Implementation Status Report (Section 9.0.1)
 - Updated Phase 0 task table with completion status
 - Added Causal Fairness R² benchmark results (Isotonic/Binning methods)
@@ -25,7 +34,7 @@
 - Documented Fidelity score calibration issue (Section 11.4.1)
 - Updated Section 11.1-11.4 with implementation status
 
-### v1.1.0 (2025-01-12)
+### v1.1.0 (2025-06-12)
 - Added gradient-based attribution analysis (Method C selection)
 - Added multi-period trajectory handling options
 - Added ST-iFGSM integration details
@@ -307,7 +316,7 @@ The ST-SiameseNet discriminator is built with standard PyTorch operations:
 
 **Conclusion**: No modifications required. The discriminator can be used directly in gradient computations.
 
-#### 3.4.2 Spatial Fairness Term ($F_{\text{spatial}}$) — ⚠️ Requires Modification
+#### 3.4.2 Spatial Fairness Term ($F_{\text{spatial}}$) — ⚠️ Requires Modification (completed)
 
 **Current Formulation**:
 $$
@@ -345,7 +354,7 @@ def differentiable_gini(x: torch.Tensor) -> torch.Tensor:
 
 **Action Required**: Update `spatial_fairness/DEVELOPMENT_PLAN.md` to use differentiable Gini computation.
 
-#### 3.4.3 Causal Fairness Term ($F_{\text{causal}}$) — ⚠️ Requires Modification
+#### 3.4.3 Causal Fairness Term ($F_{\text{causal}}$) — ⚠️ Requires Modification (completed using $g(d)$ pre-computation)
 
 **Current Formulation**:
 $$
@@ -1054,38 +1063,73 @@ The ST-SiameseNet discriminator gradient flow has been verified.
 
 > ⚠️ **cuDNN LSTM Backward Pass**: The `nn.LSTM` module with cuDNN backend requires `model.train()` during backward pass, even for inference. The `verify_fidelity_gradient()` function now handles this automatically.
 
-#### Task 0.4.1 — Fidelity Term Validation: ⚠️ REQUIRES INVESTIGATION
+#### Task 0.4.1 — Fidelity Term Validation: ⚠️ INVESTIGATION COMPLETED (January 2026)
 
-> ⚠️ **CONCERN**: Preliminary testing shows unexpectedly low fidelity scores, even in controlled scenarios.
+> 📋 **STATUS UPDATE**: Comprehensive validation testing of the ST-SiameseNet discriminator has been completed using the new Fidelity Term Dashboard.
 
-**Observed Issue**:
+**Observed Issues**:
 
-When testing the Fidelity Term with identical trajectories (comparing a trajectory with itself), the discriminator outputs a fidelity score of approximately **0.42** instead of the expected **~1.0**.
+| Test Scenario | Expected Behavior | Observed Behavior | Status |
+|---------------|-------------------|-------------------|--------|
+| Identical Trajectories | Score ≈ 1.0 | Score ≈ 0.45-0.55 | ⚠️ Low |
+| Same Driver, Same Day | Score > 0.5 | Score > 0.5 | ✅ Pass |
+| Same Driver, Different Days | Score > 0.5 | Score > 0.5 | ✅ Pass |
+| Different Drivers | Score < 0.5 | Score ~0.8 (88% FP) | ❌ Fail |
 
-**Possible Explanations**:
+**Root Cause Analysis**:
 
-1. **Model Interpretation**: The ST-SiameseNet discriminator was trained to distinguish whether two trajectories are from the **same driver**, not whether they are **identical trajectories**. A score of 0.42 may be reasonable if the model learned that even the same trajectory has some inherent uncertainty.
+1. **Same-Driver Recognition Works**: The model correctly identifies same-driver trajectory pairs with scores above 0.5.
 
-2. **Feature Normalization**: The `FeatureNormalizer` in the discriminator applies transformations (sin/cos for time features, normalization for grid coordinates) that may reduce distinguishability.
+2. **Different-Driver Discrimination Fails**: The model assigns high similarity scores (~0.8) to different-driver pairs, indicating it cannot reliably distinguish between drivers. This is a critical failure for the fidelity constraint.
 
-3. **Training Data Distribution**: The discriminator may have been trained on trajectory pairs with specific statistical properties that differ from our test data.
+3. **Model Architecture vs. Training Data**: The ST-SiameseNet architecture is correct (matches ST-iFGSM paper), but the model may need:
+   - More training data with harder negative examples
+   - Hard negative mining during training
+   - Triplet loss with larger margin
+   - Longer training or different learning rate schedule
 
-**ST-iFGSM Alignment Concern**:
+**Impact on Trajectory Modification Algorithm**:
 
-For the gradient-based trajectory modification to work as intended (per ST-iFGSM approach), we need to ensure:
+The current discriminator state has significant implications:
 
-1. **Fidelity as Constraint**: $F_{fidelity}(\tau', \tau) \geq \theta$ should constrain modifications to maintain trajectory authenticity.
+| Aspect | Impact | Severity |
+|--------|--------|----------|
+| **Fidelity Validation** | May accept edits that fundamentally change trajectory character | High |
+| **Constraint Enforcement** | $F_{fidelity} \geq \theta$ is ineffective if FP rate is 88% | Critical |
+| **Gradient Utility** | Gradients are valid but optimization target is miscalibrated | Medium |
 
-2. **Gradient Utility**: The gradient $\nabla_{\tau'} F_{fidelity}$ should point in a direction that increases trajectory similarity.
+**Recommended Fidelity Threshold Based on Testing**:
 
-3. **Score Calibration**: The fidelity score should have meaningful interpretation (e.g., 0.9+ = highly authentic).
+The dashboard now computes an optimal threshold that balances:
+- Valid edit acceptance rate (same-driver pairs passing)
+- Invalid edit rejection rate (different-driver pairs rejected)
 
-**Action Items**:
-1. [ ] Review ST-iFGSM paper for exact usage of discriminator scores
-2. [ ] Compare our discriminator output distribution to ST-iFGSM baselines
-3. [ ] Consider score calibration (sigmoid temperature, Platt scaling)
-4. [ ] Test on known-similar vs. known-different trajectory pairs
-5. [ ] Verify discriminator checkpoint is correctly loaded (architecture params)
+Based on current model performance, recommended thresholds may need to be higher than originally planned (0.8-0.9 instead of 0.7).
+
+**Action Items** (Updated Priority):
+
+1. [x] ~~Review ST-iFGSM paper for exact usage of discriminator scores~~
+2. [x] ~~Test on known-similar vs. known-different trajectory pairs~~ (Done via dashboard)
+3. [x] ~~Verify discriminator checkpoint is correctly loaded~~ (Architecture updated)
+4. [ ] **HIGH PRIORITY**: Retrain discriminator with hard negative mining
+5. [ ] Consider Platt scaling for score calibration
+6. [ ] Evaluate triplet loss with larger margin (current: 0.3, try: 0.5-1.0)
+
+**Fidelity Term Dashboard**:
+
+A comprehensive validation dashboard has been implemented at `objective_function/fidelity/dashboard.py` with:
+- Comprehensive "Run All Tests" assessment
+- Trajectory modification readiness evaluation
+- Fidelity threshold analysis across values (0.3-0.9)
+- Error analysis (False Negative/False Positive rates)
+- Operational guidelines for trajectory modification
+
+**Temporary Workaround**:
+
+Until the discriminator is retrained, the trajectory modification algorithm can proceed with:
+- Higher fidelity threshold (θ = 0.85-0.9)
+- More conservative perturbation bounds (ε = 1)
+- Additional constraint on modification magnitude
 
 #### Task 0.5 — Differentiable Objective Wrapper: 🔲 NOT STARTED
 
