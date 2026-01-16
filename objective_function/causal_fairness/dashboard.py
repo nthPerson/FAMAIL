@@ -60,6 +60,9 @@ from utils import (
     verify_all_estimation_methods,
     create_gradient_verification_report,
     DifferentiableCausalFairness,
+    DifferentiableCausalFairnessWithSoftCounts,
+    compute_demand_conditional_deviation,
+    compute_trajectory_causal_attribution,
     create_grid_heatmap_data,
     aggregate_to_grid,
 )
@@ -974,6 +977,416 @@ def render_method_gradient_tests_tab():
         """)
 
 
+def render_soft_cell_assignment_tab(term: CausalFairnessTerm, breakdown: Dict):
+    """
+    Render the Soft Cell Assignment and Trajectory Attribution tab for Causal Fairness.
+    
+    This tab provides:
+    1. Soft cell assignment configuration for pickup locations
+    2. End-to-end gradient verification with soft counts
+    3. DCD (Demand-Conditional Deviation) attribution visualization
+    4. Temperature annealing demonstration
+    
+    Args:
+        term: The configured CausalFairnessTerm instance
+        breakdown: The computed breakdown with demand/supply data
+    """
+    st.subheader("🔄 Soft Cell Assignment & Trajectory Attribution")
+    
+    st.markdown("""
+    This section demonstrates the **Soft Cell Assignment** module for causal fairness,
+    enabling differentiable trajectory optimization by converting discrete pickup locations
+    to probabilistic soft assignments.
+    
+    **Key Components:**
+    
+    1. **Soft Assignment** for pickup locations:
+       $$\\sigma_c(x, y) = \\frac{\\exp(-d_c^2 / 2\\tau^2)}{Z}$$
+    
+    2. **Differentiable R²** with frozen g(d):
+       $$R^2 = 1 - \\frac{\\text{Var}(Y - g(D))}{\\text{Var}(Y)}$$
+    
+    Where g(d) is **frozen** after initial fitting - gradients only flow through Y.
+    """)
+    
+    # Check PyTorch availability
+    try:
+        import torch
+        pytorch_available = True
+    except ImportError:
+        pytorch_available = False
+    
+    if not pytorch_available:
+        st.error("❌ PyTorch is required for soft cell assignment. Install with: `pip install torch`")
+        return
+    
+    import torch
+    
+    st.divider()
+    
+    # ==========================================================================
+    # Section 1: Soft Assignment Configuration
+    # ==========================================================================
+    st.markdown("### ⚙️ Soft Assignment Configuration")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        neighborhood_size = st.slider(
+            "Neighborhood Size",
+            min_value=3,
+            max_value=11,
+            value=5,
+            step=2,
+            key="causal_neighborhood",
+            help="Size of the neighborhood grid (must be odd)"
+        )
+    
+    with col2:
+        temperature = st.slider(
+            "Temperature (τ)",
+            min_value=0.1,
+            max_value=2.0,
+            value=0.5,
+            step=0.1,
+            key="causal_temperature",
+            help="Controls softness: lower = sharper, higher = softer"
+        )
+    
+    with col3:
+        grid_dims = term.config.grid_dims if hasattr(term, 'config') else (48, 90)
+        st.info(f"Grid: {grid_dims[0]} × {grid_dims[1]}")
+    
+    # Visualize soft assignment kernel
+    st.markdown("#### Soft Assignment Kernel Visualization")
+    
+    half = neighborhood_size // 2
+    kernel = np.zeros((neighborhood_size, neighborhood_size))
+    for i in range(neighborhood_size):
+        for j in range(neighborhood_size):
+            d_sq = (i - half)**2 + (j - half)**2
+            kernel[i, j] = np.exp(-d_sq / (2 * temperature**2))
+    kernel = kernel / kernel.sum()
+    
+    fig_kernel = px.imshow(
+        kernel,
+        title=f"Soft Assignment Kernel (τ={temperature})",
+        color_continuous_scale="Purples",
+        aspect="equal",
+    )
+    fig_kernel.update_layout(height=350)
+    st.plotly_chart(fig_kernel, use_container_width=True)
+    
+    st.divider()
+    
+    # ==========================================================================
+    # Section 2: End-to-End Gradient Verification
+    # ==========================================================================
+    st.markdown("### 🧪 End-to-End Gradient Verification")
+    
+    st.markdown("""
+    Test the complete gradient chain: 
+    **Pickup Location → Soft Assignment → Soft Demand → R² → Loss**
+    
+    Note: g(d) is frozen during this test - gradients only flow through the service ratio Y.
+    """)
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        test_grid_size = st.number_input(
+            "Test Grid Size",
+            min_value=5,
+            max_value=20,
+            value=10,
+            key="causal_test_grid",
+            help="Grid dimensions for testing"
+        )
+    
+    with col2:
+        n_test_trajectories = st.number_input(
+            "Number of Test Trajectories",
+            min_value=1,
+            max_value=20,
+            value=5,
+            key="causal_n_trajectories",
+            help="Number of trajectories to test"
+        )
+    
+    if st.button("🚀 Run End-to-End Gradient Test", key="causal_soft_grad_test"):
+        with st.spinner("Running gradient verification..."):
+            try:
+                # Run verification using the static method
+                result = DifferentiableCausalFairnessWithSoftCounts.verify_end_to_end_gradients(
+                    grid_dims=(int(test_grid_size), int(test_grid_size)),
+                    n_trajectories=int(n_test_trajectories),
+                    temperature=temperature,
+                )
+                
+                # Display results
+                if result.get('gradients_exist', False):
+                    st.success("✅ **End-to-End Gradients Flow Correctly!**")
+                    
+                    col1, col2, col3, col4 = st.columns(4)
+                    
+                    with col1:
+                        st.metric("R² Value", f"{result.get('r_squared', 0):.6f}")
+                    
+                    with col2:
+                        grad_stats = result.get('gradient_stats', {})
+                        st.metric("Grad Mean", f"{grad_stats.get('mean', 0):.2e}")
+                    
+                    with col3:
+                        st.metric("Grad Std", f"{grad_stats.get('std', 0):.2e}")
+                    
+                    with col4:
+                        st.metric("Non-zero Grads", f"{grad_stats.get('nonzero_count', 0)}")
+                    
+                    # Show gradient distribution
+                    gradients = result.get('gradients', [])
+                    if len(gradients) > 0:
+                        gradients = np.array(gradients)
+                        
+                        fig = go.Figure()
+                        fig.add_trace(go.Histogram(
+                            x=gradients.flatten(),
+                            nbinsx=30,
+                            name="Gradients",
+                            marker_color='purple',
+                        ))
+                        fig.update_layout(
+                            title="Distribution of Pickup Location Gradients ∂R²/∂(x,y)",
+                            xaxis_title="Gradient Value",
+                            yaxis_title="Count",
+                            height=300,
+                        )
+                        st.plotly_chart(fig, use_container_width=True)
+                    
+                    st.info("""
+                    **Note:** These gradients show how changing pickup locations affects the 
+                    causal fairness score (R²). The g(d) function remains frozen - only the 
+                    service ratio Y = S/D changes with pickup location modifications.
+                    """)
+                    
+                else:
+                    st.error("❌ **Gradient computation failed**")
+                    if 'error' in result:
+                        st.code(result['error'])
+                        
+            except Exception as e:
+                st.error(f"Error during verification: {str(e)}")
+                st.exception(e)
+    
+    st.divider()
+    
+    # ==========================================================================
+    # Section 3: Frozen g(d) Explanation
+    # ==========================================================================
+    st.markdown("### 🧊 Why g(d) Must Be Frozen")
+    
+    st.markdown("""
+    The expected service ratio function g(d) = E[Y|D] captures the **baseline relationship** 
+    between demand and service. It must be frozen during trajectory optimization for two reasons:
+    
+    1. **Conceptual**: g(d) represents the *structural relationship* we want to preserve - we 
+       want trajectories that maintain this relationship, not change it.
+    
+    2. **Technical**: g(d) estimation involves non-differentiable operations (sorting, 
+       binning). Freezing allows us to use any estimation method.
+    
+    **Gradient Flow:**
+    """)
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown("""
+        ✅ **During Optimization (Differentiable):**
+        ```
+        pickup_loc → soft_assign → demand_counts → Y = S/D
+                                                    ↓
+        R² = 1 - Var(Y - g(D))/Var(Y) ← gradients flow
+        ```
+        """)
+    
+    with col2:
+        st.markdown("""
+        ❄️ **Before Optimization (Frozen):**
+        ```
+        Historical data → demands, ratios
+                       → fit g(d) with isotonic/binning/etc.
+                       → freeze g(d) as lookup table
+        ```
+        """)
+    
+    st.divider()
+    
+    # ==========================================================================
+    # Section 4: DCD Attribution
+    # ==========================================================================
+    st.markdown("### 📊 Demand-Conditional Deviation (DCD) Attribution")
+    
+    st.markdown("""
+    The **DCD Score** measures how much each trajectory's pickup cell deviates from 
+    the expected service ratio given its demand:
+    
+    $$\\text{DCD}_t = |Y_{\\text{cell}} - g(D_{\\text{cell}})|$$
+    
+    High DCD indicates the cell receives unexpectedly high or low service relative to demand.
+    """)
+    
+    # Create sample visualization
+    if st.button("🎲 Generate Sample DCD Visualization", key="dcd_vis"):
+        with st.spinner("Computing DCD scores..."):
+            # Create synthetic data
+            np.random.seed(42)
+            n_cells = 100
+            
+            # Generate demand (exponential - some high demand areas)
+            demands = np.random.exponential(20, n_cells) + 5
+            
+            # Generate supply (correlated with demand but with noise)
+            supply = demands * (0.8 + 0.4 * np.random.rand(n_cells))
+            
+            # Compute service ratios
+            ratios = supply / demands
+            
+            # Fit g(d) - simple linear for visualization
+            from scipy.stats import linregress
+            slope, intercept, _, _, _ = linregress(demands, ratios)
+            expected = slope * demands + intercept
+            
+            # Compute residuals and DCD
+            residuals = ratios - expected
+            dcd_scores = np.abs(residuals)
+            
+            # Create grid visualization (10x10)
+            demand_grid = demands.reshape(10, 10)
+            ratio_grid = ratios.reshape(10, 10)
+            dcd_grid = dcd_scores.reshape(10, 10)
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                fig_demand = px.imshow(
+                    demand_grid,
+                    title="Demand Distribution (Synthetic)",
+                    color_continuous_scale="YlOrRd",
+                )
+                st.plotly_chart(fig_demand, use_container_width=True)
+            
+            with col2:
+                fig_dcd = px.imshow(
+                    dcd_grid,
+                    title="DCD Scores (|Y - g(D)|)",
+                    color_continuous_scale="RdBu_r",
+                )
+                st.plotly_chart(fig_dcd, use_container_width=True)
+            
+            # Scatter plot of demand vs ratio with g(d)
+            fig_scatter = go.Figure()
+            fig_scatter.add_trace(go.Scatter(
+                x=demands, y=ratios,
+                mode='markers',
+                marker=dict(
+                    size=8,
+                    color=dcd_scores,
+                    colorscale='RdBu_r',
+                    colorbar=dict(title="DCD"),
+                ),
+                name='Cells',
+            ))
+            
+            # Add g(d) line
+            d_sorted = np.sort(demands)
+            fig_scatter.add_trace(go.Scatter(
+                x=d_sorted,
+                y=slope * d_sorted + intercept,
+                mode='lines',
+                line=dict(color='black', dash='dash'),
+                name='g(d) = E[Y|D]',
+            ))
+            
+            fig_scatter.update_layout(
+                title="Service Ratio vs Demand with g(d)",
+                xaxis_title="Demand (D)",
+                yaxis_title="Service Ratio (Y = S/D)",
+                height=400,
+            )
+            st.plotly_chart(fig_scatter, use_container_width=True)
+            
+            # Show high-DCD cells
+            st.markdown("**Top 5 Cells by DCD Score (Candidates for Modification)**")
+            
+            top_indices = np.argsort(dcd_scores)[-5:][::-1]
+            
+            top_data = []
+            for idx in top_indices:
+                row, col = divmod(idx, 10)
+                top_data.append({
+                    'Cell': f"({row}, {col})",
+                    'Demand': f"{demands[idx]:.1f}",
+                    'Supply': f"{supply[idx]:.1f}",
+                    'Ratio Y': f"{ratios[idx]:.3f}",
+                    'Expected g(D)': f"{expected[idx]:.3f}",
+                    'DCD': f"{dcd_scores[idx]:.4f}",
+                    'Direction': "↓ Over-served" if residuals[idx] > 0 else "↑ Under-served",
+                })
+            
+            st.dataframe(pd.DataFrame(top_data), use_container_width=True)
+            
+            st.info("""
+            **Interpretation:** Cells with high DCD deviate most from the expected 
+            demand-service relationship. The optimization should modify trajectories 
+            to move supply from over-served cells (positive residual) to under-served 
+            cells (negative residual).
+            """)
+    
+    st.divider()
+    
+    # Integration code example
+    with st.expander("📝 Soft Cell Assignment Integration Code"):
+        st.code("""
+# Example: Using soft cell assignment for causal fairness optimization
+
+import torch
+from causal_fairness.term import CausalFairnessTerm
+from soft_cell_assignment import SoftCellAssignment
+
+# Initialize term
+term = CausalFairnessTerm(config)
+
+# Get historical data for g(d) fitting
+demands, ratios = get_historical_data()
+
+# Get soft count module (g(d) is fitted internally and frozen)
+soft_module = term.get_soft_count_module(
+    demands=demands,
+    ratios=ratios,
+    neighborhood_size=5,
+    initial_temperature=1.0,
+)
+
+# Create trajectory with differentiable pickup locations
+pickup_locs = torch.tensor([[24.5, 45.3], [12.1, 67.8]], requires_grad=True)
+pickup_cells = torch.tensor([[24, 45], [12, 67]])
+
+# Compute causal fairness from locations
+f_causal = soft_module.compute_from_locations(
+    pickup_locs, pickup_cells,
+    base_demand, supply,
+)
+
+# Backpropagate to get location gradients
+(-f_causal).backward()  # Negative because we maximize R²
+
+# Update trajectory (gradient ascent on R²)
+pickup_locs.data -= learning_rate * pickup_locs.grad
+
+# Note: g(d) remains frozen throughout - only Y = S/D changes
+        """, language="python")
+
+
 # =============================================================================
 # MAIN APPLICATION
 # =============================================================================
@@ -1237,7 +1650,7 @@ def main():
     # TABS
     # ==========================================================================
     
-    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9 = st.tabs([
         "📈 Temporal Analysis",
         "🗺️ Spatial Distribution",
         "📊 Demand-Service Plot",
@@ -1246,6 +1659,7 @@ def main():
         "📉 Statistics",
         "🔬 Gradient Verification",
         "🧪 Method Gradient Tests",
+        "🔄 Soft Cell Assignment",
     ])
     
     # --------------------------------------------------------------------------
@@ -1561,6 +1975,12 @@ def main():
     with tab8:
         render_method_gradient_tests_tab()
     
+    # --------------------------------------------------------------------------
+    # TAB 9: Soft Cell Assignment
+    # --------------------------------------------------------------------------
+    with tab9:
+        render_soft_cell_assignment_tab(term, breakdown)
+    
     # ==========================================================================
     # FOOTER
     # ==========================================================================
@@ -1568,9 +1988,9 @@ def main():
     st.divider()
     st.markdown("""
     ---
-    **FAMAIL Causal Fairness Dashboard** | Version 1.0.0 (Differentiable)  
+    **FAMAIL Causal Fairness Dashboard** | Version 1.1.0 (Soft Cell Assignment)  
     Based on counterfactual fairness principles and R² coefficient of determination.  
-    *Uses frozen g(d) lookup for gradient-based trajectory optimization.*
+    *With soft cell assignment and frozen g(d) for gradient-based trajectory optimization.*
     """)
 
 

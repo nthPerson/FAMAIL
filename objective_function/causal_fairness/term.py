@@ -474,4 +474,150 @@ class CausalFairnessTerm(ObjectiveFunctionTerm):
         Returns:
             Diagnostics dictionary if computed, else None
         """
-        return self._g_diagnostics
+        return self._g_diagnostics    
+    def get_soft_count_module(
+        self,
+        demands: np.ndarray,
+        ratios: np.ndarray,
+        neighborhood_size: int = 5,
+        initial_temperature: float = 1.0,
+    ) -> 'DifferentiableCausalFairnessWithSoftCounts':
+        """
+        Return a module for gradient-based trajectory optimization with soft counts.
+        
+        This module enables computing causal fairness from trajectory pickup
+        locations rather than pre-computed demand counts, with gradients
+        flowing back to the trajectory coordinates.
+        
+        Args:
+            demands: Original demand values for fitting g(d)
+            ratios: Original service ratios for fitting g(d)
+            neighborhood_size: Size of neighborhood for soft assignment (must be odd)
+            initial_temperature: Initial temperature for soft assignment
+            
+        Returns:
+            DifferentiableCausalFairnessWithSoftCounts instance
+            
+        Example:
+            >>> term = CausalFairnessTerm(config)
+            >>> soft_module = term.get_soft_count_module(
+            ...     demands, ratios, neighborhood_size=5
+            ... )
+            >>> 
+            >>> # Optimize trajectory pickup locations
+            >>> pickup_locs = torch.tensor([[24.5, 45.3]], requires_grad=True)
+            >>> pickup_cells = torch.tensor([[24, 45]])
+            >>> 
+            >>> f_causal = soft_module.compute_from_locations(
+            ...     pickup_locs, pickup_cells,
+            ...     base_demand, supply,
+            ... )
+            >>> f_causal.backward()
+            >>> print(pickup_locs.grad)  # Gradients for optimization
+        """
+        from causal_fairness.utils import DifferentiableCausalFairnessWithSoftCounts
+        
+        # Fit g(d) function
+        g_func, _ = estimate_g_function(
+            demands, ratios,
+            method=self.config.estimation_method,
+            n_bins=self.config.n_bins,
+            poly_degree=self.config.poly_degree,
+            lowess_frac=self.config.lowess_frac,
+        )
+        
+        return DifferentiableCausalFairnessWithSoftCounts(
+            grid_dims=self.config.grid_dims,
+            g_function=g_func,
+            neighborhood_size=neighborhood_size,
+            initial_temperature=initial_temperature,
+        )
+    
+    def compute_trajectory_attribution(
+        self,
+        trajectory_pickup_cell: Tuple[int, int],
+        auxiliary_data: AuxiliaryData,
+    ) -> Dict[str, float]:
+        """
+        Compute causal fairness attribution for a trajectory.
+        
+        This returns the Demand-Conditional Deviation (DCD) score which
+        measures how much the trajectory's pickup cell deviates from
+        the expected service ratio given its demand.
+        
+        Args:
+            trajectory_pickup_cell: (x, y) pickup cell (0-indexed)
+            auxiliary_data: Must contain demand and supply data
+            
+        Returns:
+            Dictionary with DCD score and related metrics
+        """
+        from causal_fairness.utils import compute_trajectory_causal_attribution
+        
+        # Compute full breakdown to get data
+        result = self.compute_with_breakdown({}, auxiliary_data)
+        
+        demands = np.array(result['components']['demands'], dtype=np.float32)
+        ratios = np.array(result['components']['ratios'], dtype=np.float32)
+        
+        if len(demands) == 0:
+            return {
+                'dcd': 0.0, 'residual': 0.0, 'service_ratio': 0.0,
+                'expected_ratio': 0.0, 'demand_at_cell': 0.0, 'supply_at_cell': 0.0,
+            }
+        
+        # Fit g(d) if not already cached
+        if self._g_function is None:
+            self._g_function, self._g_diagnostics = estimate_g_function(
+                demands, ratios,
+                method=self.config.estimation_method,
+                n_bins=self.config.n_bins,
+                poly_degree=self.config.poly_degree,
+                lowess_frac=self.config.lowess_frac,
+            )
+        
+        # Reshape to grid (assumes data is flattened)
+        # This is simplified; actual implementation should track cell mapping
+        n_cells = self.config.grid_dims[0] * self.config.grid_dims[1]
+        
+        if len(demands) == n_cells:
+            demand_grid = demands.reshape(self.config.grid_dims)
+            ratio_grid = ratios.reshape(self.config.grid_dims)
+            supply_grid = demand_grid * ratio_grid
+        else:
+            # Fallback: use overall statistics
+            return {
+                'dcd': abs(float(np.mean(ratios - self._g_function(demands)))),
+                'residual': float(np.mean(ratios - self._g_function(demands))),
+                'service_ratio': float(np.mean(ratios)),
+                'expected_ratio': float(np.mean(self._g_function(demands))),
+                'demand_at_cell': float(np.mean(demands)),
+                'supply_at_cell': float(np.mean(demands * ratios)),
+            }
+        
+        return compute_trajectory_causal_attribution(
+            demand_grid, supply_grid,
+            self._g_function, trajectory_pickup_cell,
+        )
+    
+    def verify_soft_count_gradients(
+        self,
+        grid_dims: Tuple[int, int] = (10, 10),
+        n_trajectories: int = 5,
+    ) -> Dict[str, Any]:
+        """
+        Verify end-to-end gradients with soft count integration.
+        
+        Args:
+            grid_dims: Grid dimensions for testing
+            n_trajectories: Number of test trajectories
+            
+        Returns:
+            Verification results dictionary
+        """
+        from causal_fairness.utils import DifferentiableCausalFairnessWithSoftCounts
+        
+        return DifferentiableCausalFairnessWithSoftCounts.verify_end_to_end_gradients(
+            grid_dims=grid_dims,
+            n_trajectories=n_trajectories,
+        )

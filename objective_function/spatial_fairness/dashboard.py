@@ -49,6 +49,10 @@ from utils import (
     get_active_taxis_statistics,
     verify_gini_gradient,
     DifferentiableSpatialFairness,
+    DifferentiableSpatialFairnessWithSoftCounts,
+    compute_local_inequality_score,
+    compute_batch_local_inequality_scores,
+    compute_trajectory_spatial_attribution,
 )
 # from spatial_fairness.config import SpatialFairnessConfig
 # from spatial_fairness.term import SpatialFairnessTerm
@@ -805,6 +809,367 @@ dropoff_gradients = dropoff_rates.grad  # ∂F/∂dropoff_rates
         """)
 
 
+def render_soft_cell_assignment_tab(term: SpatialFairnessTerm, breakdown: Dict):
+    """
+    Render the Soft Cell Assignment and Trajectory Attribution tab.
+    
+    This tab provides:
+    1. Soft cell assignment visualization and configuration
+    2. End-to-end gradient verification with soft counts
+    3. LIS (Local Inequality Score) attribution visualization
+    4. Temperature annealing demonstration
+    
+    Args:
+        term: The configured SpatialFairnessTerm instance
+        breakdown: The computed breakdown with per-period data
+    """
+    st.subheader("🔄 Soft Cell Assignment & Trajectory Attribution")
+    
+    st.markdown("""
+    This section demonstrates the **Soft Cell Assignment** module, which enables 
+    differentiable trajectory optimization by converting discrete grid cell assignments 
+    to probabilistic soft assignments.
+    
+    **Key Formula:**
+    
+    $$\\sigma_c(x, y) = \\frac{\\exp(-d_c^2 / 2\\tau^2)}{\\sum_{c' \\in N} \\exp(-d_{c'}^2 / 2\\tau^2)}$$
+    
+    Where:
+    - $d_c$ = distance from location to cell center
+    - $\\tau$ = temperature parameter (controls softness)
+    - $N$ = neighborhood of cells
+    """)
+    
+    # Check PyTorch availability
+    try:
+        import torch
+        pytorch_available = True
+    except ImportError:
+        pytorch_available = False
+    
+    if not pytorch_available:
+        st.error("❌ PyTorch is required for soft cell assignment. Install with: `pip install torch`")
+        return
+    
+    import torch
+    
+    st.divider()
+    
+    # ==========================================================================
+    # Section 1: Soft Assignment Configuration
+    # ==========================================================================
+    st.markdown("### ⚙️ Soft Assignment Configuration")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        neighborhood_size = st.slider(
+            "Neighborhood Size",
+            min_value=3,
+            max_value=11,
+            value=5,
+            step=2,
+            help="Size of the neighborhood grid (must be odd)"
+        )
+    
+    with col2:
+        temperature = st.slider(
+            "Temperature (τ)",
+            min_value=0.1,
+            max_value=2.0,
+            value=0.5,
+            step=0.1,
+            help="Controls softness: lower = sharper, higher = softer"
+        )
+    
+    with col3:
+        grid_dims = term.config.grid_dims if hasattr(term, 'config') else (48, 90)
+        st.info(f"Grid: {grid_dims[0]} × {grid_dims[1]}")
+    
+    # Visualize soft assignment kernel
+    st.markdown("#### Soft Assignment Kernel Visualization")
+    
+    # Create a sample kernel based on parameters
+    half = neighborhood_size // 2
+    kernel = np.zeros((neighborhood_size, neighborhood_size))
+    for i in range(neighborhood_size):
+        for j in range(neighborhood_size):
+            d_sq = (i - half)**2 + (j - half)**2
+            kernel[i, j] = np.exp(-d_sq / (2 * temperature**2))
+    kernel = kernel / kernel.sum()
+    
+    fig_kernel = px.imshow(
+        kernel,
+        title=f"Soft Assignment Kernel (τ={temperature})",
+        color_continuous_scale="Blues",
+        aspect="equal",
+    )
+    fig_kernel.update_layout(height=350)
+    st.plotly_chart(fig_kernel, use_container_width=True)
+    
+    # Show kernel properties
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Center Weight", f"{kernel[half, half]:.4f}")
+    with col2:
+        st.metric("Edge Weight", f"{kernel[0, half]:.6f}")
+    with col3:
+        st.metric("Entropy", f"{-np.sum(kernel * np.log(kernel + 1e-10)):.4f}")
+    
+    st.divider()
+    
+    # ==========================================================================
+    # Section 2: End-to-End Gradient Verification
+    # ==========================================================================
+    st.markdown("### 🧪 End-to-End Gradient Verification")
+    
+    st.markdown("""
+    Test the complete gradient chain: **Location → Soft Assignment → Soft Counts → Gini → Loss**
+    
+    This verifies that gradients flow correctly through all components.
+    """)
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        test_grid_size = st.number_input(
+            "Test Grid Size",
+            min_value=5,
+            max_value=20,
+            value=10,
+            help="Grid dimensions for testing"
+        )
+    
+    with col2:
+        n_test_trajectories = st.number_input(
+            "Number of Test Trajectories",
+            min_value=1,
+            max_value=20,
+            value=5,
+            help="Number of trajectories to test"
+        )
+    
+    if st.button("🚀 Run End-to-End Gradient Test", key="soft_grad_test"):
+        with st.spinner("Running gradient verification..."):
+            try:
+                # Run verification
+                result = DifferentiableSpatialFairnessWithSoftCounts.verify_end_to_end_gradients(
+                    grid_dims=(int(test_grid_size), int(test_grid_size)),
+                    n_trajectories=int(n_test_trajectories),
+                    temperature=temperature,
+                )
+                
+                # Display results
+                if result['gradients_exist']:
+                    st.success("✅ **End-to-End Gradients Flow Correctly!**")
+                    
+                    col1, col2, col3, col4 = st.columns(4)
+                    
+                    with col1:
+                        st.metric("Gini Value", f"{result['gini_value']:.6f}")
+                    
+                    with col2:
+                        st.metric("Grad Mean", f"{result['gradient_stats']['mean']:.2e}")
+                    
+                    with col3:
+                        st.metric("Grad Std", f"{result['gradient_stats']['std']:.2e}")
+                    
+                    with col4:
+                        st.metric("Non-zero Grads", f"{result['gradient_stats']['nonzero_count']}")
+                    
+                    # Show gradient distribution
+                    gradients = np.array(result['gradients'])
+                    
+                    fig = go.Figure()
+                    fig.add_trace(go.Histogram(
+                        x=gradients.flatten(),
+                        nbinsx=30,
+                        name="Gradients",
+                        marker_color='steelblue',
+                    ))
+                    fig.update_layout(
+                        title="Distribution of Location Gradients ∂G/∂(x,y)",
+                        xaxis_title="Gradient Value",
+                        yaxis_title="Count",
+                        height=300,
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
+                    
+                else:
+                    st.error("❌ **Gradient computation failed**")
+                    if 'error' in result:
+                        st.code(result['error'])
+                        
+            except Exception as e:
+                st.error(f"Error during verification: {str(e)}")
+                st.exception(e)
+    
+    st.divider()
+    
+    # ==========================================================================
+    # Section 3: Temperature Annealing
+    # ==========================================================================
+    st.markdown("### 🌡️ Temperature Annealing Schedule")
+    
+    st.markdown("""
+    During training, temperature is annealed from high (soft) to low (hard) to 
+    enable gradual convergence from exploration to exploitation.
+    """)
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        tau_max = st.number_input("τ_max (Initial)", value=1.0, min_value=0.1, max_value=5.0, step=0.1)
+    
+    with col2:
+        tau_min = st.number_input("τ_min (Final)", value=0.1, min_value=0.01, max_value=1.0, step=0.05)
+    
+    n_steps = 100
+    steps = np.arange(n_steps)
+    
+    # Different annealing schedules
+    linear_temps = tau_max - (tau_max - tau_min) * steps / n_steps
+    exponential_temps = tau_max * (tau_min / tau_max) ** (steps / n_steps)
+    cosine_temps = tau_min + (tau_max - tau_min) * 0.5 * (1 + np.cos(np.pi * steps / n_steps))
+    
+    fig_anneal = go.Figure()
+    fig_anneal.add_trace(go.Scatter(x=steps, y=linear_temps, name='Linear', line=dict(dash='solid')))
+    fig_anneal.add_trace(go.Scatter(x=steps, y=exponential_temps, name='Exponential', line=dict(dash='dot')))
+    fig_anneal.add_trace(go.Scatter(x=steps, y=cosine_temps, name='Cosine', line=dict(dash='dash')))
+    fig_anneal.update_layout(
+        title="Temperature Annealing Schedules",
+        xaxis_title="Training Step",
+        yaxis_title="Temperature (τ)",
+        height=350,
+    )
+    st.plotly_chart(fig_anneal, use_container_width=True)
+    
+    st.divider()
+    
+    # ==========================================================================
+    # Section 4: LIS Attribution
+    # ==========================================================================
+    st.markdown("### 📊 Local Inequality Score (LIS) Attribution")
+    
+    st.markdown("""
+    The **Local Inequality Score** measures how much each trajectory contributes to 
+    spatial inequality. Trajectories with high LIS scores are candidates for modification.
+    
+    $$\\text{LIS}_t = |\\text{pickup cell count} - \\mu| + |\\text{dropoff cell count} - \\mu|$$
+    
+    Where $\\mu$ is the mean count across cells.
+    """)
+    
+    # Create sample data for visualization
+    if st.button("🎲 Generate Sample LIS Visualization", key="lis_vis"):
+        with st.spinner("Computing LIS scores..."):
+            # Create synthetic data
+            np.random.seed(42)
+            n_cells = 100
+            
+            # Skewed distribution (some cells have high counts)
+            pickup_counts = np.random.exponential(10, n_cells)
+            dropoff_counts = np.random.exponential(8, n_cells)
+            
+            mean_pickup = pickup_counts.mean()
+            mean_dropoff = dropoff_counts.mean()
+            
+            # Compute per-cell deviation
+            pickup_deviation = np.abs(pickup_counts - mean_pickup)
+            dropoff_deviation = np.abs(dropoff_counts - mean_dropoff)
+            total_deviation = pickup_deviation + dropoff_deviation
+            
+            # Create grid visualization (10x10)
+            pickup_grid = pickup_counts.reshape(10, 10)
+            deviation_grid = total_deviation.reshape(10, 10)
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                fig_counts = px.imshow(
+                    pickup_grid,
+                    title="Service Counts (Synthetic)",
+                    color_continuous_scale="YlOrRd",
+                )
+                st.plotly_chart(fig_counts, use_container_width=True)
+            
+            with col2:
+                fig_deviation = px.imshow(
+                    deviation_grid,
+                    title="Deviation from Mean (|count - μ|)",
+                    color_continuous_scale="RdBu_r",
+                )
+                st.plotly_chart(fig_deviation, use_container_width=True)
+            
+            # Show high-deviation cells
+            st.markdown("**Top 5 Cells by Deviation (High LIS)**")
+            
+            top_indices = np.argsort(total_deviation)[-5:][::-1]
+            
+            top_data = []
+            for idx in top_indices:
+                row, col = divmod(idx, 10)
+                top_data.append({
+                    'Cell': f"({row}, {col})",
+                    'Pickup Count': f"{pickup_counts[idx]:.1f}",
+                    'Dropoff Count': f"{dropoff_counts[idx]:.1f}",
+                    'Total Deviation': f"{total_deviation[idx]:.2f}",
+                    'Action': "↓ Reduce service" if pickup_counts[idx] > mean_pickup else "↑ Increase service"
+                })
+            
+            st.dataframe(pd.DataFrame(top_data), use_container_width=True)
+            
+            st.info("""
+            **Interpretation:** Cells with high deviation from the mean contribute most to 
+            inequality. The optimization should modify trajectories to reduce service in 
+            over-served cells and increase it in under-served cells.
+            """)
+    
+    st.divider()
+    
+    # Integration code example
+    with st.expander("📝 Soft Cell Assignment Integration Code"):
+        st.code("""
+# Example: Using soft cell assignment for trajectory optimization
+
+import torch
+from spatial_fairness.term import SpatialFairnessTerm
+from soft_cell_assignment import SoftCellAssignment
+
+# Initialize term and get soft count module
+term = SpatialFairnessTerm(config)
+soft_module = term.get_soft_count_module(
+    neighborhood_size=5,
+    initial_temperature=1.0,
+)
+
+# Create trajectory with differentiable locations
+pickup_locs = torch.tensor([[24.5, 45.3], [12.1, 67.8]], requires_grad=True)
+pickup_cells = torch.tensor([[24, 45], [12, 67]])  # Discrete cell indices
+
+# Compute spatial fairness from locations
+f_spatial = soft_module.compute_from_locations(
+    pickup_locs, pickup_cells,
+    dropoff_locs, dropoff_cells,
+    base_pickup_counts,
+    base_dropoff_counts,
+)
+
+# Backpropagate to get location gradients
+(-f_spatial).backward()  # Negative because we maximize fairness
+
+# Update trajectory
+pickup_locs.data -= learning_rate * pickup_locs.grad
+
+# Anneal temperature during training
+for epoch in range(n_epochs):
+    progress = epoch / n_epochs
+    soft_module.soft_assign.set_temperature(
+        tau_max * (tau_min / tau_max) ** progress
+    )
+        """, language="python")
+
+
 # =============================================================================
 # MAIN APPLICATION
 # =============================================================================
@@ -1091,13 +1456,14 @@ def main():
     st.divider()
     
     # Tabs for different views
-    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
         "📈 Temporal Analysis",
         "🗺️ Spatial Distribution",
         "📊 Lorenz Curves",
         "📉 Statistics",
         "🔍 Raw Data",
         "🔬 Gradient Verification",
+        "🔄 Soft Cell Assignment",
     ])
     
     # Tab 1: Temporal Analysis
@@ -1431,13 +1797,17 @@ def main():
     with tab6:
         render_gradient_verification_tab(term)
     
+    # Tab 7: Soft Cell Assignment
+    with tab7:
+        render_soft_cell_assignment_tab(term, breakdown)
+    
     # Footer
     st.divider()
     st.markdown("""
     ---
-    **FAMAIL Spatial Fairness Dashboard** | Version 1.1.0 (Differentiable)  
+    **FAMAIL Spatial Fairness Dashboard** | Version 1.2.0 (Soft Cell Assignment)  
     Based on Su et al. (2018) "Uncovering Spatial Inequality in Taxi Services"  
-    *Now with differentiable Gini coefficient for gradient-based optimization*
+    *With differentiable Gini coefficient and soft cell assignment for gradient-based optimization*
     """)
 
 

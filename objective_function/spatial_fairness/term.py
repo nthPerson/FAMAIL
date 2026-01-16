@@ -51,6 +51,9 @@ from spatial_fairness.utils import (
     validate_active_taxis_period_alignment,
     verify_gini_gradient,
     DifferentiableSpatialFairness,
+    DifferentiableSpatialFairnessWithSoftCounts,
+    compute_trajectory_spatial_attribution,
+    compute_local_inequality_score,
 )
 
 
@@ -561,4 +564,143 @@ class SpatialFairnessTerm(ObjectiveFunctionTerm):
         )
         
         return results
-
+    
+    def get_soft_count_module(
+        self,
+        neighborhood_size: int = 5,
+        initial_temperature: float = 1.0,
+    ) -> 'DifferentiableSpatialFairnessWithSoftCounts':
+        """
+        Return a module for gradient-based trajectory optimization with soft counts.
+        
+        This module enables computing spatial fairness from trajectory locations
+        rather than pre-computed counts, with gradients flowing back to the
+        trajectory coordinates.
+        
+        Args:
+            neighborhood_size: Size of neighborhood for soft assignment (must be odd)
+            initial_temperature: Initial temperature for soft assignment
+            
+        Returns:
+            DifferentiableSpatialFairnessWithSoftCounts instance
+            
+        Example:
+            >>> term = SpatialFairnessTerm(config)
+            >>> soft_module = term.get_soft_count_module(neighborhood_size=5)
+            >>> 
+            >>> # Optimize trajectory pickup/dropoff locations
+            >>> pickup_locs = torch.tensor([[24.5, 45.3]], requires_grad=True)
+            >>> pickup_cells = torch.tensor([[24, 45]])
+            >>> dropoff_locs = torch.tensor([[30.1, 50.2]], requires_grad=True)
+            >>> dropoff_cells = torch.tensor([[30, 50]])
+            >>> 
+            >>> f_spatial = soft_module.compute_from_locations(
+            ...     pickup_locs, pickup_cells,
+            ...     dropoff_locs, dropoff_cells,
+            ...     base_pickup_counts, base_dropoff_counts,
+            ...     active_taxis, period_duration,
+            ... )
+            >>> f_spatial.backward()
+            >>> print(pickup_locs.grad)  # Gradients for optimization
+        """
+        from spatial_fairness.utils import DifferentiableSpatialFairnessWithSoftCounts
+        
+        return DifferentiableSpatialFairnessWithSoftCounts(
+            grid_dims=self.config.grid_dims,
+            neighborhood_size=neighborhood_size,
+            initial_temperature=initial_temperature,
+        )
+    
+    def compute_trajectory_attribution(
+        self,
+        trajectory_pickup_cell: Tuple[int, int],
+        trajectory_dropoff_cell: Tuple[int, int],
+        auxiliary_data: AuxiliaryData,
+    ) -> Dict[str, float]:
+        """
+        Compute spatial fairness attribution scores for a trajectory.
+        
+        This returns the Local Inequality Score (LIS) which measures how
+        much the trajectory contributes to spatial inequality.
+        
+        Args:
+            trajectory_pickup_cell: (x, y) pickup cell
+            trajectory_dropoff_cell: (x, y) dropoff cell
+            auxiliary_data: Must contain 'pickup_dropoff_counts'
+            
+        Returns:
+            Dictionary with LIS scores and related metrics
+        """
+        from spatial_fairness.utils import compute_trajectory_spatial_attribution
+        
+        if 'pickup_dropoff_counts' not in auxiliary_data:
+            raise ValueError("auxiliary_data must contain 'pickup_dropoff_counts'")
+        
+        data = auxiliary_data['pickup_dropoff_counts']
+        active_taxis_data = auxiliary_data.get('active_taxis_counts', None)
+        
+        # Aggregate data
+        pickups, dropoffs = aggregate_counts_by_period(
+            data, period_type="all",
+            days_filter=self.config.days_filter,
+            time_filter=self.config.time_filter,
+        )
+        
+        periods = get_unique_periods(pickups, dropoffs)
+        if not periods:
+            return {'lis_pickup': 0.0, 'lis_dropoff': 0.0, 'lis_combined': 0.0}
+        
+        period = periods[0]
+        period_duration = compute_period_duration_days(
+            period, "all", self.config.num_days
+        )
+        
+        # Build count grids
+        x_cells, y_cells = self.config.grid_dims
+        pickup_grid = np.zeros((x_cells, y_cells))
+        dropoff_grid = np.zeros((x_cells, y_cells))
+        active_taxis_grid = np.ones((x_cells, y_cells)) * self.config.num_taxis
+        
+        for x in range(1, x_cells + 1):
+            for y in range(1, y_cells + 1):
+                cell = (x, y)
+                key = (cell, period)
+                
+                pickup_grid[x-1, y-1] = pickups.get(key, 0)
+                dropoff_grid[x-1, y-1] = dropoffs.get(key, 0)
+                
+                if active_taxis_data:
+                    active_key = (x, y, 'all') if len(list(active_taxis_data.keys())[0]) == 3 else (x, y, 0, 0)
+                    active_taxis_grid[x-1, y-1] = active_taxis_data.get(active_key, self.config.num_taxis)
+        
+        # Convert 1-indexed cell to 0-indexed
+        pickup_cell_0idx = (trajectory_pickup_cell[0] - 1, trajectory_pickup_cell[1] - 1)
+        dropoff_cell_0idx = (trajectory_dropoff_cell[0] - 1, trajectory_dropoff_cell[1] - 1)
+        
+        return compute_trajectory_spatial_attribution(
+            pickup_grid, dropoff_grid,
+            active_taxis_grid, period_duration,
+            pickup_cell_0idx, dropoff_cell_0idx,
+        )
+    
+    def verify_soft_count_gradients(
+        self,
+        grid_dims: Tuple[int, int] = (10, 10),
+        n_trajectories: int = 5,
+    ) -> Dict[str, Any]:
+        """
+        Verify end-to-end gradients with soft count integration.
+        
+        Args:
+            grid_dims: Grid dimensions for testing
+            n_trajectories: Number of test trajectories
+            
+        Returns:
+            Verification results dictionary
+        """
+        from spatial_fairness.utils import DifferentiableSpatialFairnessWithSoftCounts
+        
+        return DifferentiableSpatialFairnessWithSoftCounts.verify_end_to_end_gradients(
+            grid_dims=grid_dims,
+            n_trajectories=n_trajectories,
+        )

@@ -1380,6 +1380,356 @@ class DifferentiableCausalFairness:
         return verify_causal_fairness_gradient(n_cells, seed)
 
 
+class DifferentiableCausalFairnessWithSoftCounts:
+    """
+    Extended differentiable causal fairness with soft count support.
+    
+    This class integrates the soft cell assignment mechanism with the
+    causal fairness computation, enabling gradient-based trajectory
+    optimization.
+    
+    The key extension over DifferentiableCausalFairness is the ability
+    to compute fairness from trajectory pickup locations rather than
+    pre-computed demand counts, with gradients flowing back to the locations.
+    
+    Note: Causal fairness measures how well service (supply/demand ratio)
+    aligns with what we expect given demand. Modifying pickups changes demand,
+    which affects the service ratio and residuals.
+    
+    Example:
+        >>> from soft_cell_assignment import SoftCellAssignment
+        >>> 
+        >>> # Pre-compute g(d) from original data
+        >>> g_func, _ = estimate_g_function(demands, ratios, 'binning')
+        >>> 
+        >>> # Create modules
+        >>> soft_assign = SoftCellAssignment(grid_dims=(48, 90), neighborhood_size=5)
+        >>> fairness_module = DifferentiableCausalFairnessWithSoftCounts(
+        ...     grid_dims=(48, 90),
+        ...     g_function=g_func,
+        ...     soft_assignment=soft_assign,
+        ... )
+        >>> 
+        >>> # Optimize trajectory locations
+        >>> locations = torch.tensor([[24.5, 45.3]], requires_grad=True)
+        >>> original_cells = torch.tensor([[24, 45]])
+        >>> 
+        >>> f_causal = fairness_module.compute_from_locations(
+        ...     locations, original_cells, base_demand, supply
+        ... )
+        >>> f_causal.backward()
+        >>> print(locations.grad)  # Gradient for optimization
+    """
+    
+    def __init__(
+        self,
+        grid_dims: Tuple[int, int],
+        g_function: Callable[[np.ndarray], np.ndarray],
+        soft_assignment: Optional['SoftCellAssignment'] = None,
+        neighborhood_size: int = 5,
+        initial_temperature: float = 1.0,
+        eps: float = 1e-8,
+    ):
+        """
+        Initialize the extended causal fairness module.
+        
+        Args:
+            grid_dims: Spatial grid dimensions (x_cells, y_cells)
+            g_function: Pre-computed g(d) function (MUST BE FROZEN)
+            soft_assignment: Pre-created SoftCellAssignment module, or None to create
+            neighborhood_size: Neighborhood size (if creating soft_assignment)
+            initial_temperature: Initial temperature (if creating soft_assignment)
+            eps: Numerical stability constant
+        """
+        import torch
+        
+        self.grid_dims = grid_dims
+        self.g_function = g_function
+        self.eps = eps
+        
+        # Create or use provided soft assignment module
+        if soft_assignment is not None:
+            self.soft_assignment = soft_assignment
+        else:
+            from objective_function.soft_cell_assignment import SoftCellAssignment
+            self.soft_assignment = SoftCellAssignment(
+                grid_dims=grid_dims,
+                neighborhood_size=neighborhood_size,
+                initial_temperature=initial_temperature,
+            )
+    
+    def compute_from_locations(
+        self,
+        pickup_locations: 'torch.Tensor',
+        pickup_original_cells: 'torch.Tensor',
+        base_demand: 'torch.Tensor',
+        supply: 'torch.Tensor',
+    ) -> 'torch.Tensor':
+        """
+        Compute causal fairness from trajectory pickup locations.
+        
+        This method:
+        1. Computes soft cell assignments for pickup locations
+        2. Updates demand counts using soft assignments
+        3. Computes service ratios (supply / demand)
+        4. Computes R²-based causal fairness
+        
+        Gradients flow back through the chain to the pickup locations.
+        
+        IMPORTANT: The g_function is evaluated on the CURRENT demand values,
+        but remains frozen (not re-fitted). This is correct behavior.
+        
+        Args:
+            pickup_locations: Continuous pickup coordinates [n_traj, 2]
+            pickup_original_cells: Original pickup cells [n_traj, 2]
+            base_demand: Demand from non-modified trajectories [x, y]
+            supply: Supply (active taxis) per cell [x, y]
+            
+        Returns:
+            Scalar tensor containing causal fairness value [0, 1]
+        """
+        import torch
+        from objective_function.soft_cell_assignment import compute_soft_counts
+        
+        # Compute soft pickup assignments
+        pickup_probs = self.soft_assignment(pickup_locations, pickup_original_cells)
+        
+        # Compute soft demand counts
+        soft_demand = compute_soft_counts(
+            pickup_probs, pickup_original_cells, self.grid_dims, base_demand
+        )
+        
+        # Compute service ratios Y = S / D
+        service_ratios = supply / (soft_demand + self.eps)
+        
+        # Get expected ratios from frozen g(d)
+        # NOTE: We evaluate g at the SOFT demand values
+        demand_np = soft_demand.detach().cpu().numpy()
+        expected_np = self.g_function(demand_np.flatten())
+        expected_ratios = torch.tensor(
+            expected_np.reshape(self.grid_dims),
+            dtype=service_ratios.dtype,
+            device=service_ratios.device,
+        )
+        
+        # Compute causal fairness
+        service_ratios_flat = service_ratios.view(-1)
+        expected_ratios_flat = expected_ratios.view(-1)
+        
+        return compute_causal_fairness_torch(
+            service_ratios_flat, expected_ratios_flat, self.eps
+        )
+    
+    def compute_from_single_trajectory(
+        self,
+        pickup_location: 'torch.Tensor',
+        pickup_original_cell: 'torch.Tensor',
+        current_demand: 'torch.Tensor',
+        supply: 'torch.Tensor',
+    ) -> 'torch.Tensor':
+        """
+        Compute causal fairness impact of modifying a single trajectory.
+        
+        This is optimized for modifying one trajectory at a time.
+        
+        Args:
+            pickup_location: Continuous pickup coordinate [2] or [1, 2]
+            pickup_original_cell: Original pickup cell [2] or [1, 2]
+            current_demand: Current demand counts [x, y]
+            supply: Supply counts [x, y]
+            
+        Returns:
+            Scalar tensor containing causal fairness value
+        """
+        import torch
+        from objective_function.soft_cell_assignment import update_counts_with_soft_assignment
+        
+        # Handle dimensions
+        if pickup_location.dim() == 1:
+            pickup_location = pickup_location.unsqueeze(0)
+            pickup_original_cell = pickup_original_cell.unsqueeze(0)
+        
+        # Compute soft assignment
+        pickup_probs = self.soft_assignment(pickup_location, pickup_original_cell)
+        
+        # Update demand (remove hard assignment, add soft)
+        updated_demand = update_counts_with_soft_assignment(
+            current_demand, pickup_probs, pickup_original_cell, subtract_original=True
+        )
+        
+        # Compute service ratios
+        service_ratios = supply / (updated_demand + self.eps)
+        
+        # Get expected ratios
+        demand_np = updated_demand.detach().cpu().numpy()
+        expected_np = self.g_function(demand_np.flatten())
+        expected_ratios = torch.tensor(
+            expected_np.reshape(self.grid_dims),
+            dtype=service_ratios.dtype,
+            device=service_ratios.device,
+        )
+        
+        # Compute causal fairness
+        return compute_causal_fairness_torch(
+            service_ratios.view(-1), expected_ratios.view(-1), self.eps
+        )
+    
+    def set_temperature(self, temperature: float) -> None:
+        """Update soft assignment temperature."""
+        self.soft_assignment.set_temperature(temperature)
+    
+    @staticmethod
+    def verify_end_to_end_gradients(
+        grid_dims: Tuple[int, int] = (10, 10),
+        n_trajectories: int = 5,
+        seed: int = 42,
+    ) -> Dict[str, Any]:
+        """
+        Verify gradients flow from trajectory locations to causal fairness.
+        
+        Args:
+            grid_dims: Grid dimensions for testing
+            n_trajectories: Number of test trajectories
+            seed: Random seed
+            
+        Returns:
+            Verification results dictionary
+        """
+        import torch
+        
+        torch.manual_seed(seed)
+        np.random.seed(seed)
+        
+        # Create a simple g function for testing
+        def simple_g(d):
+            d = np.atleast_1d(d)
+            return 10.0 / (d + 1.0)  # Simple inverse relationship
+        
+        # Create module
+        module = DifferentiableCausalFairnessWithSoftCounts(
+            grid_dims=grid_dims,
+            g_function=simple_g,
+            neighborhood_size=5,
+            initial_temperature=1.0,
+        )
+        
+        # Generate test data
+        k = 2  # neighborhood half-size
+        
+        pickup_locations = torch.tensor([
+            [np.random.uniform(k + 1, grid_dims[0] - k - 1),
+             np.random.uniform(k + 1, grid_dims[1] - k - 1)]
+            for _ in range(n_trajectories)
+        ], dtype=torch.float32, requires_grad=True)
+        
+        pickup_original_cells = pickup_locations.detach().round()
+        
+        # Base demand and supply
+        base_demand = torch.rand(grid_dims) * 10 + 1  # Avoid zeros
+        supply = torch.ones(grid_dims) * 5.0
+        
+        # Forward pass
+        f_causal = module.compute_from_locations(
+            pickup_locations, pickup_original_cells,
+            base_demand, supply,
+        )
+        
+        # Backward pass
+        f_causal.backward()
+        
+        # Check gradients
+        pickup_grad = pickup_locations.grad
+        
+        results = {
+            'f_causal': f_causal.item(),
+            'pickup_gradient_exists': pickup_grad is not None,
+            'pickup_gradient_has_nan': pickup_grad is not None and torch.isnan(pickup_grad).any().item(),
+        }
+        
+        if pickup_grad is not None and not torch.isnan(pickup_grad).any():
+            results['pickup_gradient_stats'] = {
+                'mean': pickup_grad.mean().item(),
+                'std': pickup_grad.std().item(),
+                'min': pickup_grad.min().item(),
+                'max': pickup_grad.max().item(),
+            }
+        
+        results['passed'] = (
+            results['pickup_gradient_exists'] and
+            not results['pickup_gradient_has_nan']
+        )
+        
+        return results
+
+
+def compute_demand_conditional_deviation(
+    service_ratios: np.ndarray,
+    g_function: Callable[[np.ndarray], np.ndarray],
+    demands: np.ndarray,
+) -> np.ndarray:
+    """
+    Compute Demand-Conditional Deviation (DCD) for all cells.
+    
+    DCD = |Y - g(D)| where Y is the service ratio and g(D) is expected.
+    
+    Args:
+        service_ratios: Array of service ratios Y = S/D
+        g_function: Pre-computed g(d) function
+        demands: Array of demand values
+        
+    Returns:
+        Array of DCD values (same shape as inputs)
+    """
+    expected = g_function(demands.flatten()).reshape(demands.shape)
+    return np.abs(service_ratios - expected)
+
+
+def compute_trajectory_causal_attribution(
+    demand: np.ndarray,
+    supply: np.ndarray,
+    g_function: Callable[[np.ndarray], np.ndarray],
+    trajectory_pickup_cell: Tuple[int, int],
+) -> Dict[str, float]:
+    """
+    Compute causal fairness attribution for a trajectory.
+    
+    Returns the DCD score for the trajectory's pickup cell.
+    
+    Args:
+        demand: Demand grid
+        supply: Supply grid
+        g_function: Pre-computed g(d) function
+        trajectory_pickup_cell: (x, y) pickup cell
+        
+    Returns:
+        Dictionary with attribution metrics
+    """
+    eps = 1e-8
+    
+    # Compute service ratios
+    service_ratios = supply / (demand + eps)
+    
+    # Compute expected ratios
+    expected = g_function(demand.flatten()).reshape(demand.shape)
+    
+    # Compute residuals
+    residuals = service_ratios - expected
+    
+    # Get values at trajectory's cell
+    x, y = trajectory_pickup_cell
+    
+    return {
+        'dcd': abs(residuals[x, y]),
+        'residual': float(residuals[x, y]),
+        'service_ratio': float(service_ratios[x, y]),
+        'expected_ratio': float(expected[x, y]),
+        'demand_at_cell': float(demand[x, y]),
+        'supply_at_cell': float(supply[x, y]),
+        'mean_residual': float(np.mean(residuals)),
+        'std_residual': float(np.std(residuals)),
+    }
+
+
 # =============================================================================
 # VISUALIZATION HELPERS
 # =============================================================================

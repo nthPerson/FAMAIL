@@ -1083,3 +1083,406 @@ class DifferentiableSpatialFairness:
         
         return results
 
+
+# =============================================================================
+# SOFT COUNT INTEGRATION FOR TRAJECTORY OPTIMIZATION
+# =============================================================================
+
+class DifferentiableSpatialFairnessWithSoftCounts:
+    """
+    Extended differentiable spatial fairness with soft count support.
+    
+    This class integrates the soft cell assignment mechanism with the
+    spatial fairness computation, enabling gradient-based trajectory
+    optimization.
+    
+    The key extension over DifferentiableSpatialFairness is the ability
+    to compute fairness from trajectory locations rather than pre-computed
+    counts, with gradients flowing back to the locations.
+    
+    Example:
+        >>> from soft_cell_assignment import SoftCellAssignment
+        >>> 
+        >>> # Create modules
+        >>> soft_assign = SoftCellAssignment(grid_dims=(48, 90), neighborhood_size=5)
+        >>> fairness_module = DifferentiableSpatialFairnessWithSoftCounts(
+        ...     grid_dims=(48, 90),
+        ...     soft_assignment=soft_assign,
+        ... )
+        >>> 
+        >>> # Optimize trajectory locations
+        >>> locations = torch.tensor([[24.5, 45.3]], requires_grad=True)
+        >>> original_cells = torch.tensor([[24, 45]])
+        >>> 
+        >>> f_spatial = fairness_module.compute_from_locations(
+        ...     locations, original_cells, base_counts, active_taxis, period_duration
+        ... )
+        >>> f_spatial.backward()
+        >>> print(locations.grad)  # Gradient for optimization
+    """
+    
+    def __init__(
+        self,
+        grid_dims: Tuple[int, int] = (48, 90),
+        soft_assignment: Optional['SoftCellAssignment'] = None,
+        neighborhood_size: int = 5,
+        initial_temperature: float = 1.0,
+        eps: float = 1e-8,
+    ):
+        """
+        Initialize the extended spatial fairness module.
+        
+        Args:
+            grid_dims: Spatial grid dimensions (x_cells, y_cells)
+            soft_assignment: Pre-created SoftCellAssignment module, or None to create
+            neighborhood_size: Neighborhood size (if creating soft_assignment)
+            initial_temperature: Initial temperature (if creating soft_assignment)
+            eps: Numerical stability constant
+        """
+        import torch
+        
+        self.grid_dims = grid_dims
+        self.eps = eps
+        self.n_cells = grid_dims[0] * grid_dims[1]
+        
+        # Create or use provided soft assignment module
+        if soft_assignment is not None:
+            self.soft_assignment = soft_assignment
+        else:
+            from objective_function.soft_cell_assignment import SoftCellAssignment
+            self.soft_assignment = SoftCellAssignment(
+                grid_dims=grid_dims,
+                neighborhood_size=neighborhood_size,
+                initial_temperature=initial_temperature,
+            )
+        
+        # Base spatial fairness computation
+        self._base_module = DifferentiableSpatialFairness(grid_dims=grid_dims, eps=eps)
+    
+    def compute_from_locations(
+        self,
+        pickup_locations: 'torch.Tensor',
+        pickup_original_cells: 'torch.Tensor',
+        dropoff_locations: 'torch.Tensor',
+        dropoff_original_cells: 'torch.Tensor',
+        base_pickup_counts: 'torch.Tensor',
+        base_dropoff_counts: 'torch.Tensor',
+        active_taxis: 'torch.Tensor',
+        period_duration: float,
+    ) -> 'torch.Tensor':
+        """
+        Compute spatial fairness from trajectory locations.
+        
+        This method:
+        1. Computes soft cell assignments for trajectory locations
+        2. Updates counts using soft assignments
+        3. Computes service rates
+        4. Computes Gini-based spatial fairness
+        
+        Gradients flow back through the entire chain to the locations.
+        
+        Args:
+            pickup_locations: Continuous pickup coordinates [n_traj, 2]
+            pickup_original_cells: Original pickup cells [n_traj, 2]
+            dropoff_locations: Continuous dropoff coordinates [n_traj, 2]
+            dropoff_original_cells: Original dropoff cells [n_traj, 2]
+            base_pickup_counts: Pickup counts from non-modified trajectories [x, y]
+            base_dropoff_counts: Dropoff counts from non-modified trajectories [x, y]
+            active_taxis: Active taxi counts per cell [x, y]
+            period_duration: Duration of period in days
+            
+        Returns:
+            Scalar tensor containing spatial fairness value [0, 1]
+        """
+        import torch
+        from objective_function.soft_cell_assignment import compute_soft_counts
+        
+        # Compute soft assignments
+        pickup_probs = self.soft_assignment(pickup_locations, pickup_original_cells)
+        dropoff_probs = self.soft_assignment(dropoff_locations, dropoff_original_cells)
+        
+        # Compute soft counts
+        soft_pickup_counts = compute_soft_counts(
+            pickup_probs, pickup_original_cells, self.grid_dims, base_pickup_counts
+        )
+        soft_dropoff_counts = compute_soft_counts(
+            dropoff_probs, dropoff_original_cells, self.grid_dims, base_dropoff_counts
+        )
+        
+        # Compute service rates
+        normalization = active_taxis * period_duration + self.eps
+        dsr = soft_pickup_counts / normalization
+        asr = soft_dropoff_counts / normalization
+        
+        # Compute spatial fairness
+        dsr_flat = dsr.view(-1)
+        asr_flat = asr.view(-1)
+        
+        return self._base_module.compute(dsr_flat, asr_flat)
+    
+    def compute_from_single_trajectory(
+        self,
+        pickup_location: 'torch.Tensor',
+        pickup_original_cell: 'torch.Tensor',
+        dropoff_location: 'torch.Tensor',
+        dropoff_original_cell: 'torch.Tensor',
+        current_pickup_counts: 'torch.Tensor',
+        current_dropoff_counts: 'torch.Tensor',
+        active_taxis: 'torch.Tensor',
+        period_duration: float,
+    ) -> 'torch.Tensor':
+        """
+        Compute spatial fairness impact of a single trajectory modification.
+        
+        This is optimized for modifying one trajectory at a time.
+        
+        Args:
+            pickup_location: Continuous pickup coordinate [2] or [1, 2]
+            pickup_original_cell: Original pickup cell [2] or [1, 2]
+            dropoff_location: Continuous dropoff coordinate [2] or [1, 2]
+            dropoff_original_cell: Original dropoff cell [2] or [1, 2]
+            current_pickup_counts: Current pickup counts [x, y]
+            current_dropoff_counts: Current dropoff counts [x, y]
+            active_taxis: Active taxi counts [x, y]
+            period_duration: Period duration in days
+            
+        Returns:
+            Scalar tensor containing spatial fairness value
+        """
+        import torch
+        from objective_function.soft_cell_assignment import update_counts_with_soft_assignment
+        
+        # Handle dimensions
+        if pickup_location.dim() == 1:
+            pickup_location = pickup_location.unsqueeze(0)
+            pickup_original_cell = pickup_original_cell.unsqueeze(0)
+        if dropoff_location.dim() == 1:
+            dropoff_location = dropoff_location.unsqueeze(0)
+            dropoff_original_cell = dropoff_original_cell.unsqueeze(0)
+        
+        # Compute soft assignments
+        pickup_probs = self.soft_assignment(pickup_location, pickup_original_cell)
+        dropoff_probs = self.soft_assignment(dropoff_location, dropoff_original_cell)
+        
+        # Update counts (remove hard assignment, add soft assignment)
+        updated_pickup_counts = update_counts_with_soft_assignment(
+            current_pickup_counts, pickup_probs, pickup_original_cell, subtract_original=True
+        )
+        updated_dropoff_counts = update_counts_with_soft_assignment(
+            current_dropoff_counts, dropoff_probs, dropoff_original_cell, subtract_original=True
+        )
+        
+        # Compute service rates
+        normalization = active_taxis * period_duration + self.eps
+        dsr = updated_pickup_counts / normalization
+        asr = updated_dropoff_counts / normalization
+        
+        # Compute spatial fairness
+        dsr_flat = dsr.view(-1)
+        asr_flat = asr.view(-1)
+        
+        return self._base_module.compute(dsr_flat, asr_flat)
+    
+    def set_temperature(self, temperature: float) -> None:
+        """Update soft assignment temperature."""
+        self.soft_assignment.set_temperature(temperature)
+    
+    @staticmethod
+    def verify_end_to_end_gradients(
+        grid_dims: Tuple[int, int] = (10, 10),
+        n_trajectories: int = 5,
+        seed: int = 42,
+    ) -> Dict[str, Any]:
+        """
+        Verify gradients flow from trajectory locations to spatial fairness.
+        
+        Args:
+            grid_dims: Grid dimensions for testing
+            n_trajectories: Number of test trajectories
+            seed: Random seed
+            
+        Returns:
+            Verification results dictionary
+        """
+        import torch
+        
+        torch.manual_seed(seed)
+        np.random.seed(seed)
+        
+        # Create module
+        module = DifferentiableSpatialFairnessWithSoftCounts(
+            grid_dims=grid_dims,
+            neighborhood_size=5,
+            initial_temperature=1.0,
+        )
+        
+        # Generate test data
+        k = 2  # neighborhood half-size
+        
+        pickup_locations = torch.tensor([
+            [np.random.uniform(k + 1, grid_dims[0] - k - 1),
+             np.random.uniform(k + 1, grid_dims[1] - k - 1)]
+            for _ in range(n_trajectories)
+        ], dtype=torch.float32, requires_grad=True)
+        
+        dropoff_locations = torch.tensor([
+            [np.random.uniform(k + 1, grid_dims[0] - k - 1),
+             np.random.uniform(k + 1, grid_dims[1] - k - 1)]
+            for _ in range(n_trajectories)
+        ], dtype=torch.float32, requires_grad=True)
+        
+        pickup_original_cells = pickup_locations.detach().round()
+        dropoff_original_cells = dropoff_locations.detach().round()
+        
+        # Base counts (from other trajectories)
+        base_pickup_counts = torch.rand(grid_dims) * 10
+        base_dropoff_counts = torch.rand(grid_dims) * 10
+        active_taxis = torch.ones(grid_dims) * 5.0
+        period_duration = 1.0
+        
+        # Forward pass
+        f_spatial = module.compute_from_locations(
+            pickup_locations, pickup_original_cells,
+            dropoff_locations, dropoff_original_cells,
+            base_pickup_counts, base_dropoff_counts,
+            active_taxis, period_duration,
+        )
+        
+        # Backward pass
+        f_spatial.backward()
+        
+        # Check gradients
+        pickup_grad = pickup_locations.grad
+        dropoff_grad = dropoff_locations.grad
+        
+        results = {
+            'f_spatial': f_spatial.item(),
+            'pickup_gradient_exists': pickup_grad is not None,
+            'dropoff_gradient_exists': dropoff_grad is not None,
+            'pickup_gradient_has_nan': pickup_grad is not None and torch.isnan(pickup_grad).any().item(),
+            'dropoff_gradient_has_nan': dropoff_grad is not None and torch.isnan(dropoff_grad).any().item(),
+        }
+        
+        if pickup_grad is not None:
+            results['pickup_gradient_stats'] = {
+                'mean': pickup_grad.mean().item(),
+                'std': pickup_grad.std().item(),
+                'min': pickup_grad.min().item(),
+                'max': pickup_grad.max().item(),
+            }
+        
+        if dropoff_grad is not None:
+            results['dropoff_gradient_stats'] = {
+                'mean': dropoff_grad.mean().item(),
+                'std': dropoff_grad.std().item(),
+                'min': dropoff_grad.min().item(),
+                'max': dropoff_grad.max().item(),
+            }
+        
+        results['passed'] = (
+            results['pickup_gradient_exists'] and
+            results['dropoff_gradient_exists'] and
+            not results['pickup_gradient_has_nan'] and
+            not results['dropoff_gradient_has_nan']
+        )
+        
+        return results
+
+
+def compute_local_inequality_score(
+    service_rates: np.ndarray,
+    trajectory_cell: Tuple[int, int],
+) -> float:
+    """
+    Compute the Local Inequality Score (LIS) for a trajectory.
+    
+    LIS measures how much a trajectory's cell deviates from the mean
+    service rate, indicating its contribution to inequality.
+    
+    Formula:
+        LIS = |DSR_c - mean(DSR)| / mean(DSR)
+    
+    Args:
+        service_rates: 2D array of service rates [x, y]
+        trajectory_cell: (x, y) cell index of the trajectory
+        
+    Returns:
+        Local inequality score (non-negative)
+    """
+    mean_rate = np.mean(service_rates)
+    if mean_rate < 1e-10:
+        return 0.0
+    
+    x, y = trajectory_cell
+    cell_rate = service_rates[x, y]
+    
+    return abs(cell_rate - mean_rate) / mean_rate
+
+
+def compute_batch_local_inequality_scores(
+    service_rates: np.ndarray,
+    trajectory_cells: np.ndarray,
+) -> np.ndarray:
+    """
+    Compute LIS scores for a batch of trajectories.
+    
+    Args:
+        service_rates: 2D array of service rates [x, y]
+        trajectory_cells: Array of cell indices [n_traj, 2]
+        
+    Returns:
+        Array of LIS scores [n_traj]
+    """
+    mean_rate = np.mean(service_rates)
+    if mean_rate < 1e-10:
+        return np.zeros(len(trajectory_cells))
+    
+    cell_rates = service_rates[trajectory_cells[:, 0], trajectory_cells[:, 1]]
+    return np.abs(cell_rates - mean_rate) / mean_rate
+
+
+def compute_trajectory_spatial_attribution(
+    pickup_counts: np.ndarray,
+    dropoff_counts: np.ndarray,
+    active_taxis: np.ndarray,
+    period_duration: float,
+    trajectory_pickup_cell: Tuple[int, int],
+    trajectory_dropoff_cell: Tuple[int, int],
+) -> Dict[str, float]:
+    """
+    Compute spatial fairness attribution scores for a trajectory.
+    
+    Returns LIS scores for both pickup and dropoff, plus combined score.
+    
+    Args:
+        pickup_counts: Pickup count grid
+        dropoff_counts: Dropoff count grid
+        active_taxis: Active taxi count grid
+        period_duration: Period duration in days
+        trajectory_pickup_cell: (x, y) pickup cell
+        trajectory_dropoff_cell: (x, y) dropoff cell
+        
+    Returns:
+        Dictionary with attribution scores
+    """
+    eps = 1e-8
+    normalization = active_taxis * period_duration + eps
+    
+    dsr = pickup_counts / normalization
+    asr = dropoff_counts / normalization
+    
+    lis_pickup = compute_local_inequality_score(dsr, trajectory_pickup_cell)
+    lis_dropoff = compute_local_inequality_score(asr, trajectory_dropoff_cell)
+    
+    # Combined score (average)
+    lis_combined = (lis_pickup + lis_dropoff) / 2.0
+    
+    return {
+        'lis_pickup': lis_pickup,
+        'lis_dropoff': lis_dropoff,
+        'lis_combined': lis_combined,
+        'dsr_at_pickup': dsr[trajectory_pickup_cell],
+        'asr_at_dropoff': asr[trajectory_dropoff_cell],
+        'mean_dsr': float(np.mean(dsr)),
+        'mean_asr': float(np.mean(asr)),
+    }
