@@ -25,9 +25,20 @@ This design choice enables:
 
 | Term | Differentiability Approach |
 |------|---------------------------|
-| **Spatial Fairness** ($F_{\text{spatial}}$) | Pairwise Gini coefficient (avoids sorting) |
-| **Causal Fairness** ($F_{\text{causal}}$) | Pre-computed frozen $g(d)$ lookup + differentiable $R^2$ |
+| **Spatial Fairness** ($F_{\text{spatial}}$) | Soft cell assignment + Pairwise Gini coefficient |
+| **Causal Fairness** ($F_{\text{causal}}$) | Soft cell assignment + Frozen $g(d)$ + differentiable $R^2$ |
 | **Fidelity** ($F_{\text{fidelity}}$) | Native PyTorch (ST-SiameseNet discriminator) |
+
+### Key Innovation: Soft Cell Assignment
+
+Traditional grid assignment uses hard cell boundaries (`cell = (int(x), int(y))`), which are non-differentiable. The **soft cell assignment** module enables gradient flow using a Gaussian softmax:
+
+$$
+\sigma_c(x, y) = \frac{\exp\left(-\frac{d^2_c(x,y)}{2\tau^2}\right)}{\sum_{c' \in \mathcal{N}} \exp\left(-\frac{d^2_{c'}(x,y)}{2\tau^2}\right)}
+$$
+
+- **Temperature annealing**: $\tau = 1.0$ (training) → $\tau = 0.1$ (inference)
+- **Implementation**: `spatial_fairness/soft_cell_assignment.py`
 
 ---
 
@@ -36,19 +47,34 @@ This design choice enables:
 ```
 objective_function/
 ├── README.md                           # This file
+├── base.py                             # Base class for objective terms
 ├── TERM_INTERFACE_SPECIFICATION.md     # Standard interface for all terms
 ├── INTEGRATION_DEVELOPMENT_PLAN.md     # Integration layer documentation
 │
 ├── spatial_fairness/
 │   ├── DEVELOPMENT_PLAN.md             # Spatial fairness design & implementation
-│   └── (term implementation TBD)
+│   ├── base.py                         # SpatialFairnessBase class
+│   ├── utils.py                        # Gini, differentiable implementations
+│   ├── soft_cell_assignment.py         # SoftCellAssignment module
+│   └── dashboard.py                    # Streamlit visualization
 │
 ├── causal_fairness/
-│   ├── DEVELOPMENT_PLAN.md             # Causal fairness design & implementation
-│   └── (term implementation TBD)
+│   ├── DEVELOPMENT_PLAN.md             # Causal fairness design & implementation  
+│   ├── base.py                         # CausalFairnessBase class
+│   ├── utils.py                        # R², g(d), differentiable implementations
+│   └── dashboard.py                    # Streamlit visualization
 │
-└── fidelity/
-    └── (term implementation TBD - wraps discriminator/model)
+├── fidelity/
+│   ├── base.py                         # FidelityBase class
+│   ├── utils.py                        # Gradient verification
+│   └── term.py                         # FidelityTerm implementation
+│
+├── quality/                            # (Merged into Fidelity)
+│
+└── docs/
+    ├── FAMAIL_OBJECTIVE_FUNCTION_SPECIFICATION.md
+    ├── FAIRNESS_TERM_FORMULATIONS.md
+    └── TRAJECTORY_MODIFICATION_ALGORITHM_DEVELOPMENT_PLAN.md
 ```
 
 ---
@@ -151,6 +177,7 @@ gradient = trajectory_coords.grad  # Shape: (100, 50, 2)
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.3.0 | 2026-01 | Added Soft Cell Assignment for end-to-end differentiability |
 | 1.2.0 | 2026-01-12 | Mandatory end-to-end differentiability for all terms |
 | 1.1.0 | 2026-01-12 | Removed Quality Term (overlap with Fidelity) |
 | 1.0.0 | 2026-01-09 | Initial framework with 4 terms |

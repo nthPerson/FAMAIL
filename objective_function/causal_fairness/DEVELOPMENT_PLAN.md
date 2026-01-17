@@ -6,9 +6,9 @@
 |----------|-------|
 | **Term Name** | Causal Fairness |
 | **Symbol** | $F_{\text{causal}}$ |
-| **Version** | 1.2.0 |
-| **Last Updated** | 2026-01-12 |
-| **Status** | Development Planning |
+| **Version** | 1.3.0 |
+| **Last Updated** | 2026-01 |
+| **Status** | Implementation Complete |
 | **Author** | FAMAIL Research Team |
 
 ---
@@ -651,6 +651,172 @@ def verify_causal_fairness_gradients():
 
 if __name__ == "__main__":
     verify_causal_fairness_gradients()
+```
+
+### 2.5 Soft Cell Assignment (Full Differentiable Pipeline)
+
+> **STATUS: IMPLEMENTED** — `objective_function/causal_fairness/utils.py`
+
+To enable end-to-end gradient flow from raw trajectory coordinates to causal fairness, we extend the differentiable causal fairness with soft cell assignment.
+
+#### 2.5.1 The Soft Assignment Approach
+
+Instead of hard cell assignment (`cell = (int(x), int(y))`), distribute trajectory points across cells using a Gaussian softmax (see [spatial_fairness/DEVELOPMENT_PLAN.md](../spatial_fairness/DEVELOPMENT_PLAN.md) Section 2.5 for full details):
+
+$$
+\sigma_c(x, y) = \frac{\exp\left(-\frac{d^2_c(x,y)}{2\tau^2}\right)}{\sum_{c' \in \mathcal{N}} \exp\left(-\frac{d^2_{c'}(x,y)}{2\tau^2}\right)}
+$$
+
+#### 2.5.2 Full Differentiable Pipeline
+
+```python
+class DifferentiableCausalFairnessWithSoftCounts(nn.Module):
+    """
+    Complete differentiable causal fairness with soft cell assignment.
+    
+    Enables gradient flow from F_causal back to raw trajectory coordinates.
+    """
+    
+    def __init__(self, g_function, grid_shape=(48, 90), 
+                 neighborhood_size=5, temperature=1.0):
+        super().__init__()
+        self.g_function = g_function  # Pre-fitted, FROZEN
+        self.soft_assign = SoftCellAssignment(
+            grid_shape=grid_shape,
+            neighborhood_size=neighborhood_size,
+            temperature=temperature
+        )
+        self.grid_shape = grid_shape
+    
+    def forward(self, pickup_coords, supply_tensor):
+        """
+        Compute differentiable causal fairness.
+        
+        Args:
+            pickup_coords: Tensor (N, 2) - pickup (x, y) coordinates
+            supply_tensor: Tensor (48, 90) - supply per cell (fixed)
+        
+        Returns:
+            F_causal: Scalar R² score ∈ [0, 1] (higher = more fair)
+        """
+        # Soft demand counts (DIFFERENTIABLE)
+        demand = self.soft_assign(pickup_coords).flatten()  # (4320,)
+        
+        # Compute Y = supply / demand
+        supply = supply_tensor.flatten()
+        mask = demand > 0.1  # Minimum demand threshold
+        
+        if mask.sum() < 2:
+            return torch.tensor(0.0, device=pickup_coords.device)
+        
+        Y = supply[mask] / (demand[mask] + 1e-8)
+        
+        # g(d) is FROZEN - no gradient
+        with torch.no_grad():
+            g_d = self.g_function(demand[mask].detach().cpu().numpy())
+        g_d = torch.tensor(g_d, device=Y.device, dtype=Y.dtype)
+        
+        # Residuals (differentiable w.r.t. Y)
+        R = Y - g_d
+        
+        # R² computation
+        var_Y = Y.var() + 1e-8
+        var_R = R.var()
+        r_squared = 1 - (var_R / var_Y)
+        
+        return torch.clamp(r_squared, 0.0, 1.0)
+```
+
+**Location**: `objective_function/causal_fairness/utils.py`
+
+#### 2.5.3 Key Design Decision: Frozen g(d)
+
+The expected service function $g(d)$ is **pre-computed and frozen**:
+
+```python
+# g(d) values are pre-computed and FROZEN (no gradient)
+# Gradients flow through: pickup_loc → soft_assign → demand → Y = S/D → R² 
+with torch.no_grad():
+    g_d = self.g_function(demand.detach().numpy())
+```
+
+**Rationale**: If $g(d)$ were also optimized, the model could trivially achieve $R^2 = 1$ by making $g(d) = Y$ everywhere, defeating the metric's purpose.
+
+#### 2.5.4 g(d) Estimation Method Benchmark
+
+| Method | R² Score | Differentiability | Recommendation |
+|--------|----------|-------------------|----------------|
+| **Isotonic** | **0.4453** | ✅ Compatible | 🥇 Best fit |
+| **Binning** | **0.4439** | ✅ Compatible | 🥈 Alternative |
+| Polynomial | 0.1949 | ✅ Compatible | Poor fit |
+| Linear | 0.1064 | ✅ Compatible | Poor fit |
+
+**Note**: All methods are "compatible" because $g(d)$ is frozen—the estimation method's differentiability is irrelevant.
+
+**Recommended Default**: Isotonic regression (best fit on real data).
+
+#### 2.5.5 Demand-Conditional Deviation (DCD) Attribution
+
+For trajectory-level attribution, compute each trajectory's contribution to unexplained variance:
+
+$$
+\text{DCD}_\tau = \sum_{c \in \mathcal{C}} \sigma_c(\tau) \cdot R_c^2
+$$
+
+Where $R_c = Y_c - g(D_c)$ is the squared residual for cell $c$.
+
+**Interpretation**: Higher DCD means the trajectory contributes more to cells with large deviations from expected service levels.
+
+```python
+def compute_demand_conditional_deviation(
+    trajectory_coords: torch.Tensor,
+    residuals_squared: torch.Tensor,
+    soft_assign: SoftCellAssignment
+) -> torch.Tensor:
+    """
+    Compute DCD attribution for a trajectory.
+    
+    Args:
+        trajectory_coords: Tensor (T, 2) - trajectory (x, y) positions
+        residuals_squared: Tensor (48, 90) - R_c² per cell
+        soft_assign: Soft cell assignment module
+    
+    Returns:
+        dcd: Scalar attribution score
+    """
+    soft_counts = soft_assign(trajectory_coords)
+    dcd = (soft_counts * residuals_squared).sum()
+    return dcd
+```
+
+**Location**: `objective_function/causal_fairness/utils.py::compute_demand_conditional_deviation()`
+
+#### 2.5.6 End-to-End Gradient Flow Verification
+
+```python
+def verify_causal_end_to_end():
+    """Verify gradients flow from F_causal to trajectory coordinates."""
+    # Create model with dummy g(d)
+    g_func = lambda d: np.ones_like(d) * 0.5  # Constant g(d) = 0.5
+    model = DifferentiableCausalFairnessWithSoftCounts(g_func)
+    
+    # Create trajectory with gradient tracking
+    pickups = torch.tensor([[10.5, 20.3], [15.2, 45.8]], requires_grad=True)
+    supply = torch.rand(48, 90)  # Fixed supply
+    
+    # Forward pass
+    F_causal = model(pickups, supply)
+    
+    # Backward pass
+    F_causal.backward()
+    
+    # Verify gradients exist
+    assert pickups.grad is not None, "No gradient for pickup coordinates"
+    assert not torch.all(pickups.grad == 0), "Zero gradient"
+    
+    print(f"F_causal = {F_causal.item():.4f}")
+    print(f"∂F/∂pickups = {pickups.grad}")
+    print("✅ End-to-end gradient verification passed")
 ```
 
 ---
@@ -1698,6 +1864,7 @@ sample_supply = {
 |---------|------|---------|
 | 1.0.0 | 2026-01-09 | Initial development plan |
 | 1.1.0 | 2026-01-12 | Updated supply data source from `latest_volume_pickups.pkl` to `active_taxis` output; changed default neighborhood to 5×5 (k=2); added visualization-first approach for g(d) estimation method selection |
+| 1.3.0 | 2026-01 | Added Soft Cell Assignment (Section 2.5), full differentiable pipeline, g(d) estimation benchmark results, DCD attribution; status updated to "Implementation Complete" |
 
 ---
 

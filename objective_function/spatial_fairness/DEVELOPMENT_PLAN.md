@@ -6,9 +6,9 @@
 |----------|-------|
 | **Term Name** | Spatial Fairness |
 | **Symbol** | $F_{\text{spatial}}$ |
-| **Version** | 1.1.0 |
-| **Last Updated** | 2026-01-12 |
-| **Status** | Development Planning |
+| **Version** | 1.2.0 |
+| **Last Updated** | 2026-01 |
+| **Status** | Implementation Complete |
 | **Author** | FAMAIL Research Team |
 
 ---
@@ -293,6 +293,201 @@ F_spatial = 1 - G
     ▼
 ∇_τ F_spatial  ←── gradient flows back
 ```
+
+### 2.5 Soft Cell Assignment (Full Differentiable Pipeline)
+
+> **STATUS: IMPLEMENTED** — `objective_function/spatial_fairness/soft_cell_assignment.py`
+
+The gradient flow diagram above assumes service rates are already computed. But to enable end-to-end gradient flow from raw trajectory coordinates $(x, y)$, we need **soft cell assignment**.
+
+#### 2.5.1 The Differentiability Problem
+
+Hard cell assignment (e.g., `cell = (int(x), int(y))`) is **non-differentiable** because:
+1. Integer casting discards fractional position information
+2. Small position changes don't change the assigned cell
+3. No gradient flows through discrete assignment
+
+#### 2.5.2 Soft Cell Assignment Solution
+
+Instead of assigning a point to exactly one cell, distribute it across nearby cells using a **Gaussian softmax**:
+
+$$
+\sigma_c(x, y) = \frac{\exp\left(-\frac{d^2_c(x,y)}{2\tau^2}\right)}{\sum_{c' \in \mathcal{N}} \exp\left(-\frac{d^2_{c'}(x,y)}{2\tau^2}\right)}
+$$
+
+Where:
+- $d_c(x, y)$ = Euclidean distance from point to cell center
+- $\tau$ = Temperature parameter (controls assignment sharpness)
+- $\mathcal{N}$ = Local neighborhood of cells (default: 5×5)
+
+**Properties**:
+- $\sum_c \sigma_c(x, y) = 1$ (probability distribution)
+- All operations are differentiable
+- As $\tau \to 0$, approaches hard assignment
+
+#### 2.5.3 Temperature Annealing
+
+| Phase | Temperature | Behavior |
+|-------|-------------|----------|
+| Training | $\tau = 1.0$ | Soft, exploratory (gradients flow broadly) |
+| Inference | $\tau = 0.1$ | Sharp, nearly deterministic |
+
+#### 2.5.4 Implementation
+
+```python
+class SoftCellAssignment(nn.Module):
+    """
+    Differentiable soft cell assignment using Gaussian softmax.
+    
+    Converts continuous (x, y) coordinates to soft cell probabilities,
+    enabling gradient flow from objective function to trajectory coordinates.
+    """
+    
+    def __init__(self, grid_shape=(48, 90), neighborhood_size=5, temperature=1.0):
+        super().__init__()
+        self.grid_shape = grid_shape
+        self.neighborhood_size = neighborhood_size
+        self.temperature = temperature
+        
+        # Pre-compute cell centers
+        x_centers = torch.arange(grid_shape[0], dtype=torch.float32) + 0.5
+        y_centers = torch.arange(grid_shape[1], dtype=torch.float32) + 0.5
+        self.register_buffer('x_centers', x_centers)
+        self.register_buffer('y_centers', y_centers)
+    
+    def forward(self, coords):
+        """
+        Compute soft counts for each grid cell.
+        
+        Args:
+            coords: Tensor of shape (N, 2) with (x, y) coordinates
+        
+        Returns:
+            soft_counts: Tensor of shape (grid_x, grid_y)
+        """
+        N = coords.shape[0]
+        soft_counts = torch.zeros(self.grid_shape, device=coords.device)
+        
+        for i in range(N):
+            x, y = coords[i, 0], coords[i, 1]
+            
+            # Get local neighborhood
+            cx, cy = int(x.item()), int(y.item())
+            half = self.neighborhood_size // 2
+            
+            x_min = max(0, cx - half)
+            x_max = min(self.grid_shape[0], cx + half + 1)
+            y_min = max(0, cy - half)
+            y_max = min(self.grid_shape[1], cy + half + 1)
+            
+            # Compute distances to nearby cell centers
+            local_x = self.x_centers[x_min:x_max]
+            local_y = self.y_centers[y_min:y_max]
+            
+            dx = (x - local_x).unsqueeze(1)  # (nx, 1)
+            dy = (y - local_y).unsqueeze(0)  # (1, ny)
+            
+            dist_sq = dx**2 + dy**2  # (nx, ny)
+            
+            # Gaussian softmax
+            weights = torch.exp(-dist_sq / (2 * self.temperature**2))
+            weights = weights / (weights.sum() + 1e-8)
+            
+            # Add to soft counts
+            soft_counts[x_min:x_max, y_min:y_max] += weights
+        
+        return soft_counts
+```
+
+**Location**: `objective_function/spatial_fairness/soft_cell_assignment.py`
+
+#### 2.5.5 Full Differentiable Pipeline
+
+```python
+class DifferentiableSpatialFairnessWithSoftCounts(nn.Module):
+    """Complete differentiable spatial fairness with soft cell assignment."""
+    
+    def __init__(self, grid_shape=(48, 90), neighborhood_size=5, temperature=1.0):
+        super().__init__()
+        self.soft_assign = SoftCellAssignment(grid_shape, neighborhood_size, temperature)
+    
+    def forward(self, pickup_coords, dropoff_coords):
+        """
+        Compute spatial fairness from raw trajectory coordinates.
+        
+        Args:
+            pickup_coords: Tensor (N, 2) - pickup (x, y) positions
+            dropoff_coords: Tensor (M, 2) - dropoff (x, y) positions
+        
+        Returns:
+            F_spatial: Scalar fairness score (higher = more fair)
+        """
+        # Soft counts (differentiable)
+        dsr = self.soft_assign(pickup_coords).flatten()   # Departure service rates
+        asr = self.soft_assign(dropoff_coords).flatten()  # Arrival service rates
+        
+        # Pairwise Gini (differentiable)
+        gini_d = self._pairwise_gini(dsr)
+        gini_a = self._pairwise_gini(asr)
+        
+        # Fairness = complement of average Gini
+        F_spatial = 1.0 - 0.5 * (gini_d + gini_a)
+        return F_spatial
+    
+    def _pairwise_gini(self, values):
+        n = values.numel()
+        if n <= 1:
+            return torch.tensor(0.0, device=values.device)
+        mean_val = values.mean() + 1e-8
+        diff_matrix = torch.abs(values.unsqueeze(0) - values.unsqueeze(1))
+        return diff_matrix.sum() / (2 * n * n * mean_val)
+```
+
+**Location**: `objective_function/spatial_fairness/utils.py`
+
+#### 2.5.6 Gradient Flow Verification
+
+```python
+def verify_end_to_end_gradient():
+    """Verify gradients flow from F_spatial to trajectory coordinates."""
+    model = DifferentiableSpatialFairnessWithSoftCounts()
+    
+    # Create trajectory coordinates with gradient tracking
+    pickups = torch.tensor([[10.5, 20.3], [15.2, 45.8]], requires_grad=True)
+    dropoffs = torch.tensor([[12.0, 22.1], [16.5, 47.2]], requires_grad=True)
+    
+    # Forward pass
+    F_spatial = model(pickups, dropoffs)
+    
+    # Backward pass
+    F_spatial.backward()
+    
+    # Verify gradients exist
+    assert pickups.grad is not None, "No gradient for pickup coordinates"
+    assert dropoffs.grad is not None, "No gradient for dropoff coordinates"
+    assert not torch.all(pickups.grad == 0), "Zero gradient for pickups"
+    
+    print(f"F_spatial = {F_spatial.item():.4f}")
+    print(f"∂F/∂pickups = {pickups.grad}")
+    print("✅ End-to-end gradient verification passed")
+```
+
+#### 2.5.7 Local Inequality Score (LIS) Attribution
+
+For trajectory-level attribution, compute each trajectory's contribution to spatial inequality:
+
+$$
+\text{LIS}_\tau = \sum_{c \in \mathcal{C}} \sigma_c(\tau) \cdot |x_c - \bar{x}|
+$$
+
+Where:
+- $\sigma_c(\tau)$ = soft contribution of trajectory $\tau$ to cell $c$
+- $x_c$ = service rate in cell $c$
+- $\bar{x}$ = mean service rate
+
+**Interpretation**: Higher LIS means the trajectory contributes more to cells that deviate from average service levels.
+
+**Implementation**: `objective_function/spatial_fairness/utils.py::compute_local_inequality_score()`
 
 ---
 
@@ -1325,6 +1520,7 @@ sample_data = {
 |---------|------|---------|
 | 1.0.0 | 2026-01-09 | Initial development plan |
 | 1.0.1 | 2026-01-10 | Clarify that only pickups can be inferred from `all_trajs.pkl` data |
+| 1.2.0 | 2026-01 | Added Soft Cell Assignment (Section 2.5), full differentiable pipeline, LIS attribution; status updated to "Implementation Complete" |
 
 ---
 

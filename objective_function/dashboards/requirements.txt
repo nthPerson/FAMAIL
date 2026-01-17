@@ -1,0 +1,18 @@
+# FAMAIL Integrated Dashboard Requirements
+# =========================================
+
+# Core dependencies
+streamlit>=1.28.0
+numpy>=1.21.0
+pandas>=1.3.0
+
+# Visualization
+plotly>=5.0.0
+
+# Machine learning
+torch>=1.12.0
+scikit-learn>=1.0.0
+scipy>=1.7.0
+
+# Optional: for isotonic regression
+# sklearn is included in scikit-learn
