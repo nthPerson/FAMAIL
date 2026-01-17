@@ -1451,7 +1451,7 @@ class DifferentiableCausalFairnessWithSoftCounts:
         if soft_assignment is not None:
             self.soft_assignment = soft_assignment
         else:
-            from objective_function.soft_cell_assignment import SoftCellAssignment
+            from soft_cell_assignment import SoftCellAssignment
             self.soft_assignment = SoftCellAssignment(
                 grid_dims=grid_dims,
                 neighborhood_size=neighborhood_size,
@@ -1489,7 +1489,8 @@ class DifferentiableCausalFairnessWithSoftCounts:
             Scalar tensor containing causal fairness value [0, 1]
         """
         import torch
-        from objective_function.soft_cell_assignment import compute_soft_counts
+        from soft_cell_assignment import compute_soft_counts
+        # from objective_function.soft_cell_assignment import compute_soft_counts
         
         # Compute soft pickup assignments
         pickup_probs = self.soft_assignment(pickup_locations, pickup_original_cells)

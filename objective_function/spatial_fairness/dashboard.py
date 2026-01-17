@@ -952,53 +952,50 @@ def render_soft_cell_assignment_tab(term: SpatialFairnessTerm, breakdown: Dict):
     if st.button("🚀 Run End-to-End Gradient Test", key="soft_grad_test"):
         with st.spinner("Running gradient verification..."):
             try:
-                # Run verification
+                # Run verification (temperature is set internally in the module)
                 result = DifferentiableSpatialFairnessWithSoftCounts.verify_end_to_end_gradients(
                     grid_dims=(int(test_grid_size), int(test_grid_size)),
                     n_trajectories=int(n_test_trajectories),
-                    temperature=temperature,
                 )
                 
                 # Display results
-                if result['gradients_exist']:
+                if result.get('passed', False):
                     st.success("✅ **End-to-End Gradients Flow Correctly!**")
                     
                     col1, col2, col3, col4 = st.columns(4)
                     
                     with col1:
-                        st.metric("Gini Value", f"{result['gini_value']:.6f}")
+                        st.metric("Spatial Fairness", f"{result.get('f_spatial', 0):.6f}")
                     
                     with col2:
-                        st.metric("Grad Mean", f"{result['gradient_stats']['mean']:.2e}")
+                        grad_stats = result.get('pickup_gradient_stats', {})
+                        st.metric("Pickup Grad Mean", f"{grad_stats.get('mean', 0):.2e}")
                     
                     with col3:
-                        st.metric("Grad Std", f"{result['gradient_stats']['std']:.2e}")
+                        st.metric("Pickup Grad Std", f"{grad_stats.get('std', 0):.2e}")
                     
                     with col4:
-                        st.metric("Non-zero Grads", f"{result['gradient_stats']['nonzero_count']}")
+                        dropoff_stats = result.get('dropoff_gradient_stats', {})
+                        st.metric("Dropoff Grad Mean", f"{dropoff_stats.get('mean', 0):.2e}")
                     
-                    # Show gradient distribution
-                    gradients = np.array(result['gradients'])
+                    # Show additional info
+                    st.markdown("#### Gradient Statistics")
+                    col1, col2 = st.columns(2)
                     
-                    fig = go.Figure()
-                    fig.add_trace(go.Histogram(
-                        x=gradients.flatten(),
-                        nbinsx=30,
-                        name="Gradients",
-                        marker_color='steelblue',
-                    ))
-                    fig.update_layout(
-                        title="Distribution of Location Gradients ∂G/∂(x,y)",
-                        xaxis_title="Gradient Value",
-                        yaxis_title="Count",
-                        height=300,
-                    )
-                    st.plotly_chart(fig, use_container_width=True)
+                    with col1:
+                        st.markdown("**Pickup Gradients**")
+                        if 'pickup_gradient_stats' in result:
+                            st.json(result['pickup_gradient_stats'])
+                    
+                    with col2:
+                        st.markdown("**Dropoff Gradients**")
+                        if 'dropoff_gradient_stats' in result:
+                            st.json(result['dropoff_gradient_stats'])
                     
                 else:
                     st.error("❌ **Gradient computation failed**")
-                    if 'error' in result:
-                        st.code(result['error'])
+                    st.markdown("**Debug Info:**")
+                    st.json(result)
                         
             except Exception as e:
                 st.error(f"Error during verification: {str(e)}")

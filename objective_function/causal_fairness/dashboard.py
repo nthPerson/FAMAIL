@@ -1116,51 +1116,35 @@ def render_soft_cell_assignment_tab(term: CausalFairnessTerm, breakdown: Dict):
     if st.button("🚀 Run End-to-End Gradient Test", key="causal_soft_grad_test"):
         with st.spinner("Running gradient verification..."):
             try:
-                # Run verification using the static method
+                # Run verification using the static method (temperature is set internally)
                 result = DifferentiableCausalFairnessWithSoftCounts.verify_end_to_end_gradients(
                     grid_dims=(int(test_grid_size), int(test_grid_size)),
                     n_trajectories=int(n_test_trajectories),
-                    temperature=temperature,
                 )
                 
                 # Display results
-                if result.get('gradients_exist', False):
+                if result.get('passed', False):
                     st.success("✅ **End-to-End Gradients Flow Correctly!**")
                     
                     col1, col2, col3, col4 = st.columns(4)
                     
                     with col1:
-                        st.metric("R² Value", f"{result.get('r_squared', 0):.6f}")
+                        st.metric("Causal Fairness", f"{result.get('f_causal', 0):.6f}")
                     
                     with col2:
-                        grad_stats = result.get('gradient_stats', {})
+                        grad_stats = result.get('pickup_gradient_stats', {})
                         st.metric("Grad Mean", f"{grad_stats.get('mean', 0):.2e}")
                     
                     with col3:
                         st.metric("Grad Std", f"{grad_stats.get('std', 0):.2e}")
                     
                     with col4:
-                        st.metric("Non-zero Grads", f"{grad_stats.get('nonzero_count', 0)}")
+                        st.metric("Grad Range", f"{grad_stats.get('max', 0) - grad_stats.get('min', 0):.2e}")
                     
-                    # Show gradient distribution
-                    gradients = result.get('gradients', [])
-                    if len(gradients) > 0:
-                        gradients = np.array(gradients)
-                        
-                        fig = go.Figure()
-                        fig.add_trace(go.Histogram(
-                            x=gradients.flatten(),
-                            nbinsx=30,
-                            name="Gradients",
-                            marker_color='purple',
-                        ))
-                        fig.update_layout(
-                            title="Distribution of Pickup Location Gradients ∂R²/∂(x,y)",
-                            xaxis_title="Gradient Value",
-                            yaxis_title="Count",
-                            height=300,
-                        )
-                        st.plotly_chart(fig, use_container_width=True)
+                    # Show gradient statistics
+                    st.markdown("#### Pickup Location Gradient Statistics")
+                    if 'pickup_gradient_stats' in result:
+                        st.json(result['pickup_gradient_stats'])
                     
                     st.info("""
                     **Note:** These gradients show how changing pickup locations affects the 
@@ -1170,8 +1154,8 @@ def render_soft_cell_assignment_tab(term: CausalFairnessTerm, breakdown: Dict):
                     
                 else:
                     st.error("❌ **Gradient computation failed**")
-                    if 'error' in result:
-                        st.code(result['error'])
+                    st.markdown("**Debug Info:**")
+                    st.json(result)
                         
             except Exception as e:
                 st.error(f"Error during verification: {str(e)}")
