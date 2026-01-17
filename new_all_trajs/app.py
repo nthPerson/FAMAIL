@@ -28,7 +28,7 @@ from config import (
     ACTION_CODES, 
     STATE_VECTOR_FIELDS
 )
-from processor import process_data, save_output, load_output
+from processor import process_data, process_data_low_memory, save_output, load_output
 
 
 # Page configuration
@@ -78,6 +78,13 @@ def render_sidebar():
     
     st.sidebar.subheader("⚙️ Processing Options")
     
+    memory_mode = st.sidebar.selectbox(
+        "Memory Mode",
+        options=["Standard", "Low Memory"],
+        index=0,
+        help="Standard: Faster but uses more memory (~10GB). Low Memory: Slower but uses ~70% less memory (~3GB). Use Low Memory if you experience crashes."
+    )
+    
     exclude_sunday = st.sidebar.checkbox(
         "Exclude Sunday",
         value=True,
@@ -124,6 +131,7 @@ def render_sidebar():
         "raw_data_dir": raw_data_dir,
         "source_data_dir": source_data_dir,
         "output_dir": output_dir,
+        "memory_mode": memory_mode,
         "exclude_sunday": exclude_sunday,
         "grid_size": grid_size,
         "time_interval": time_interval,
@@ -337,6 +345,12 @@ def render_generate_tab(config_params: dict):
     else:
         st.success("✅ All required files found")
     
+    # Show memory mode info
+    if config_params["memory_mode"] == "Low Memory":
+        st.info("🐢 **Low Memory Mode**: Processing will be slower but use ~70% less RAM. Recommended for WSL2 or memory-constrained environments.")
+    else:
+        st.info("🚀 **Standard Mode**: Faster processing but uses more memory (~10GB). Switch to Low Memory mode if you experience crashes.")
+    
     if st.button("🔄 Generate Dataset", disabled=len(validation_errors) > 0, type="primary"):
         # Create config
         config = ProcessingConfig(
@@ -359,7 +373,11 @@ def render_generate_tab(config_params: dict):
         
         try:
             with st.spinner("Processing..."):
-                all_trajs, stats = process_data(config, progress_callback)
+                # Choose processing function based on memory mode
+                if config_params["memory_mode"] == "Low Memory":
+                    all_trajs, stats = process_data_low_memory(config, progress_callback)
+                else:
+                    all_trajs, stats = process_data(config, progress_callback)
                 
                 # Save output
                 output_path = config.output_dir / output_filename
