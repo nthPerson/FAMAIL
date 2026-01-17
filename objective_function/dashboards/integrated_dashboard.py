@@ -608,8 +608,22 @@ def render_attribution_tab(config: Dict[str, Any]):
                             'supply_counts': supply_counts,
                         }
                         st.success(f"Loaded {len(trajectories)} trajectories")
+                        
+                        # Show diagnostic info
+                        with st.expander("📊 Data Statistics", expanded=False):
+                            n_pickup_cells = (pickup_counts > 0).sum()
+                            n_dropoff_cells = (dropoff_counts > 0).sum()
+                            st.write(f"Unique pickup cells: {n_pickup_cells}")
+                            st.write(f"Unique dropoff cells: {n_dropoff_cells}")
+                            st.write(f"Total pickups: {pickup_counts.sum():.0f}")
+                            st.write(f"Total dropoffs: {dropoff_counts.sum():.0f}")
+                            if trajectories:
+                                st.write(f"Sample trajectory: {trajectories[0]}")
+                                
                     except Exception as e:
                         st.error(f"Error loading data: {e}")
+                        import traceback
+                        st.code(traceback.format_exc())
         else:
             st.warning("No .pkl files found in workspace")
     

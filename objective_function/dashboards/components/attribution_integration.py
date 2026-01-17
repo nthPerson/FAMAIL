@@ -533,13 +533,29 @@ def load_trajectories_from_all_trajs(
     """
     Load trajectories from all_trajs.pkl file.
     
+    The all_trajs.pkl structure is:
+    {
+        driver_id: [
+            [state_0, state_1, ...],  # trajectory 0
+            [state_0, state_1, ...],  # trajectory 1
+            ...
+        ],
+        ...
+    }
+    
+    Where each state is a 126-element list with:
+    - Index 0: x_grid (horizontal cell)
+    - Index 1: y_grid (vertical cell)
+    - Index 2: time_bucket
+    - Index 125: action_code
+    
     Args:
         filepath: Path to all_trajs.pkl
         n_samples: Number of trajectories to sample (None = all)
         random_state: Random seed for sampling
         
     Returns:
-        List of trajectory dictionaries
+        List of trajectory dictionaries with pickup_cell and dropoff_cell
     """
     import pickle
     
@@ -551,42 +567,87 @@ def load_trajectories_from_all_trajs(
     with open(filepath, 'rb') as f:
         data = pickle.load(f)
     
-    # Handle different data formats
-    if isinstance(data, list):
-        trajectories = data
-    elif isinstance(data, dict):
-        # Try common keys
-        for key in ['trajectories', 'trajs', 'data']:
-            if key in data:
-                trajectories = data[key]
-                break
-        else:
-            # Assume dict values are trajectories
-            trajectories = list(data.values())
+    # Parse the nested structure: {driver_id: [[states], [states], ...]}
+    all_trajectories = []
+    traj_id = 0
+    
+    if isinstance(data, dict):
+        for driver_id, driver_trajs in data.items():
+            if not isinstance(driver_trajs, (list, tuple)):
+                continue
+                
+            for traj in driver_trajs:
+                if not isinstance(traj, (list, tuple)) or len(traj) < 2:
+                    continue
+                
+                # Each trajectory is a list of states
+                # First state = pickup, Last state = dropoff
+                first_state = traj[0]
+                last_state = traj[-1]
+                
+                # Extract x_grid (index 0) and y_grid (index 1)
+                if isinstance(first_state, (list, tuple)) and len(first_state) >= 2:
+                    pickup_x = int(first_state[0])
+                    pickup_y = int(first_state[1])
+                else:
+                    continue
+                    
+                if isinstance(last_state, (list, tuple)) and len(last_state) >= 2:
+                    dropoff_x = int(last_state[0])
+                    dropoff_y = int(last_state[1])
+                else:
+                    continue
+                
+                all_trajectories.append({
+                    'trajectory_id': traj_id,
+                    'driver_id': driver_id,
+                    'pickup_cell': (pickup_x, pickup_y),
+                    'dropoff_cell': (dropoff_x, dropoff_y),
+                    'n_states': len(traj),
+                    # Store time info if available
+                    'time_bucket': int(first_state[2]) if len(first_state) > 2 else None,
+                })
+                traj_id += 1
+                
+    elif isinstance(data, list):
+        # Alternative format: list of trajectories directly
+        for traj in data:
+            if isinstance(traj, dict):
+                # Already in dict format
+                t = traj.copy()
+                t['trajectory_id'] = traj.get('trajectory_id', traj.get('id', traj_id))
+                all_trajectories.append(t)
+            elif isinstance(traj, (list, tuple)) and len(traj) >= 2:
+                # List of states
+                first_state = traj[0]
+                last_state = traj[-1]
+                
+                if isinstance(first_state, (list, tuple)) and len(first_state) >= 2:
+                    pickup_x = int(first_state[0])
+                    pickup_y = int(first_state[1])
+                    dropoff_x = int(last_state[0]) if isinstance(last_state, (list, tuple)) and len(last_state) >= 2 else pickup_x
+                    dropoff_y = int(last_state[1]) if isinstance(last_state, (list, tuple)) and len(last_state) >= 2 else pickup_y
+                    
+                    all_trajectories.append({
+                        'trajectory_id': traj_id,
+                        'pickup_cell': (pickup_x, pickup_y),
+                        'dropoff_cell': (dropoff_x, dropoff_y),
+                        'n_states': len(traj),
+                    })
+            traj_id += 1
     else:
         raise ValueError(f"Unexpected data type: {type(data)}")
     
+    if not all_trajectories:
+        raise ValueError("No valid trajectories found in file. Check the file format.")
+    
     # Sample if requested
-    if n_samples is not None and n_samples < len(trajectories):
+    if n_samples is not None and n_samples < len(all_trajectories):
         np.random.seed(random_state)
-        indices = np.random.choice(len(trajectories), size=n_samples, replace=False)
-        trajectories = [trajectories[i] for i in indices]
+        indices = np.random.choice(len(all_trajectories), size=n_samples, replace=False)
+        all_trajectories = [all_trajectories[i] for i in indices]
     
-    # Standardize format
-    result = []
-    for i, traj in enumerate(trajectories):
-        if isinstance(traj, dict):
-            t = traj.copy()
-            t['trajectory_id'] = traj.get('trajectory_id', traj.get('id', i))
-        else:
-            # Assume array-like with coords
-            t = {
-                'trajectory_id': i,
-                'data': traj,
-            }
-        result.append(t)
-    
-    return result
+    return all_trajectories
 
 
 def extract_cells_from_trajectories(
