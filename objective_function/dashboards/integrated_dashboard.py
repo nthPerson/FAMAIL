@@ -126,14 +126,20 @@ st.markdown("""
 # =============================================================================
 
 def render_sidebar():
-    """Render sidebar with global configuration."""
+    """Render sidebar with comprehensive configuration for realistic testing."""
     st.sidebar.title("🎯 FAMAIL Dashboard")
     st.sidebar.markdown("---")
     
+    # =========================================================================
+    # GRID CONFIGURATION
+    # =========================================================================
     st.sidebar.header("📐 Grid Configuration")
     grid_x = st.sidebar.number_input("Grid X", min_value=5, max_value=100, value=48)
     grid_y = st.sidebar.number_input("Grid Y", min_value=5, max_value=100, value=90)
     
+    # =========================================================================
+    # OBJECTIVE WEIGHTS
+    # =========================================================================
     st.sidebar.header("⚖️ Objective Weights")
     alpha_spatial = st.sidebar.slider("α_spatial", 0.0, 1.0, 0.33, 0.01)
     alpha_causal = st.sidebar.slider("α_causal", 0.0, 1.0, 0.33, 0.01)
@@ -146,24 +152,232 @@ def render_sidebar():
         alpha_causal /= total_alpha
         alpha_fidelity /= total_alpha
     
-    st.sidebar.header("🌡️ Temperature")
-    temperature = st.sidebar.slider("Temperature τ", 0.01, 5.0, 1.0, 0.01)
-    neighborhood_size = st.sidebar.slider("Neighborhood Size k", 1, 10, 5)
+    # =========================================================================
+    # SOFT CELL ASSIGNMENT
+    # =========================================================================
+    st.sidebar.header("🌡️ Soft Cell Assignment")
+    temperature = st.sidebar.slider(
+        "Temperature τ", 0.01, 5.0, 1.0, 0.01,
+        help="Controls softness of cell assignment. Higher τ = softer assignment."
+    )
+    neighborhood_size = st.sidebar.select_slider(
+        "Neighborhood Size", 
+        options=[3, 5, 7, 9, 11],
+        value=5,
+        help="Window size for soft assignment (must be odd). 5 means 5×5 neighborhood."
+    )
+    
+    use_annealing = st.sidebar.checkbox(
+        "Use Temperature Annealing",
+        value=False,
+        help="Gradually decrease temperature during optimization."
+    )
+    if use_annealing:
+        annealing_schedule = st.sidebar.selectbox(
+            "Annealing Schedule",
+            ["exponential", "linear", "cosine"],
+            help="How temperature decreases over time."
+        )
+        final_temperature = st.sidebar.slider(
+            "Final Temperature", 0.01, 1.0, 0.1, 0.01,
+            help="Temperature at end of annealing."
+        )
+    else:
+        annealing_schedule = None
+        final_temperature = temperature
     
     st.sidebar.markdown("---")
+    
+    # =========================================================================
+    # CAUSAL FAIRNESS g(d) CONFIGURATION
+    # =========================================================================
+    st.sidebar.header("📈 g(d) Estimation")
+    
+    g_estimation_method = st.sidebar.selectbox(
+        "g(d) Approximation Method",
+        ["isotonic", "binning", "linear", "polynomial", "lowess"],
+        index=0,
+        help="""
+        Method to estimate E[Y|D=d]:
+        - **isotonic**: Monotonic regression (recommended for sparse data)
+        - **binning**: Group by demand bins, compute mean ratio per bin
+        - **linear**: Simple linear regression Y = β₀ + β₁D
+        - **polynomial**: Polynomial regression (degree configurable)
+        - **lowess**: Locally weighted scatterplot smoothing
+        """
+    )
+    
+    # Method-specific parameters
+    if g_estimation_method == "binning":
+        n_bins = st.sidebar.slider(
+            "Number of Bins", 5, 50, 10,
+            help="Number of bins for demand discretization."
+        )
+    else:
+        n_bins = 10  # Default
+    
+    if g_estimation_method == "polynomial":
+        poly_degree = st.sidebar.slider(
+            "Polynomial Degree", 1, 5, 2,
+            help="Degree of polynomial for g(d) approximation."
+        )
+    else:
+        poly_degree = 2
+    
+    if g_estimation_method == "lowess":
+        lowess_frac = st.sidebar.slider(
+            "LOWESS Fraction", 0.1, 0.9, 0.3, 0.05,
+            help="Fraction of data for each local regression."
+        )
+    else:
+        lowess_frac = 0.3
+    
+    freeze_g_function = st.sidebar.checkbox(
+        "🧊 Freeze g(d) Lookup",
+        value=True,
+        help="Use frozen g(d) lookup table (computed from historical data) rather than recomputing each step."
+    )
+    
+    st.sidebar.markdown("---")
+    
+    # =========================================================================
+    # TEMPORAL CONFIGURATION
+    # =========================================================================
+    st.sidebar.header("⏰ Temporal Settings")
+    
+    period_type = st.sidebar.selectbox(
+        "Period Type",
+        ["hourly", "time_bucket", "daily", "all"],
+        index=0,
+        help="""
+        Temporal granularity for aggregation:
+        - **hourly**: Aggregate to 24 hour-level periods (recommended)
+        - **time_bucket**: Use raw 5-minute buckets (288 per day)
+        - **daily**: Aggregate all times to single period per day
+        - **all**: Aggregate everything (no temporal dimension)
+        """
+    )
+    
+    # Day filtering
+    days_options = {
+        "Weekdays Only (Mon-Fri)": [0, 1, 2, 3, 4],
+        "Weekends Only (Sat-Sun)": [5, 6],
+        "All Days": [0, 1, 2, 3, 4, 5, 6],
+        "Custom": None,
+    }
+    
+    days_selection = st.sidebar.selectbox(
+        "Days of Week",
+        list(days_options.keys()),
+        index=0,
+        help="Filter data to specific days of week."
+    )
+    
+    if days_selection == "Custom":
+        day_names = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+        selected_days = st.sidebar.multiselect(
+            "Select Days",
+            options=list(range(7)),
+            default=[0, 1, 2, 3, 4],
+            format_func=lambda x: day_names[x]
+        )
+    else:
+        selected_days = days_options[days_selection]
+    
+    st.sidebar.markdown("---")
+    
+    # =========================================================================
+    # DATA FILTERING OPTIONS
+    # =========================================================================
+    st.sidebar.header("🔍 Data Filtering")
+    
+    include_zero_supply = st.sidebar.checkbox(
+        "Include Zero Supply Cells",
+        value=False,
+        help="Include cells with zero taxi supply in causal fairness calculation."
+    )
+    
+    include_zero_demand = st.sidebar.checkbox(
+        "Include Zero Demand Cells",
+        value=False,
+        help="Include cells with zero demand in calculations."
+    )
+    
+    min_demand_threshold = st.sidebar.number_input(
+        "Min Demand Threshold",
+        min_value=0, max_value=100, value=0,
+        help="Exclude cells with demand below this threshold."
+    )
+    
+    st.sidebar.markdown("---")
+    
+    # =========================================================================
+    # ATTRIBUTION CONFIGURATION
+    # =========================================================================
     st.sidebar.header("📊 Attribution Weights")
-    lis_weight = st.sidebar.slider("LIS Weight (Spatial)", 0.0, 1.0, 0.5, 0.01)
-    dcd_weight = st.sidebar.slider("DCD Weight (Causal)", 0.0, 1.0, 0.5, 0.01)
+    
+    lis_weight = st.sidebar.slider(
+        "LIS Weight (Spatial)", 0.0, 1.0, 0.5, 0.01,
+        help="Weight for Location Impact Score in trajectory selection."
+    )
+    dcd_weight = st.sidebar.slider(
+        "DCD Weight (Causal)", 0.0, 1.0, 0.5, 0.01,
+        help="Weight for Demand-Conditioned Deviation in trajectory selection."
+    )
+    
+    # Trajectory selection method
+    selection_method = st.sidebar.selectbox(
+        "Trajectory Selection Method",
+        ["Combined Score", "LIS Only", "DCD Only", "Demand Hierarchy Filter"],
+        index=0,
+        help="""
+        How to select trajectories for modification:
+        - **Combined Score**: Weighted combination of LIS and DCD
+        - **LIS Only**: Pure spatial impact
+        - **DCD Only**: Pure causal deviation
+        - **Demand Hierarchy Filter**: Hierarchical selection (high-demand first, then fair selection)
+        """
+    )
+    
+    st.sidebar.markdown("---")
+    st.sidebar.caption("💡 Tip: Use 'Realistic Test Config' expander in Integration Testing for preset configurations.")
     
     return {
+        # Grid
         'grid_dims': (grid_x, grid_y),
+        
+        # Weights
         'alpha_spatial': alpha_spatial,
         'alpha_causal': alpha_causal,
         'alpha_fidelity': alpha_fidelity,
+        
+        # Soft cell assignment
         'temperature': temperature,
         'neighborhood_size': neighborhood_size,
+        'use_annealing': use_annealing,
+        'annealing_schedule': annealing_schedule,
+        'final_temperature': final_temperature,
+        
+        # g(d) estimation
+        'g_estimation_method': g_estimation_method,
+        'n_bins': n_bins,
+        'poly_degree': poly_degree,
+        'lowess_frac': lowess_frac,
+        'freeze_g_function': freeze_g_function,
+        
+        # Temporal
+        'period_type': period_type,
+        'selected_days': selected_days,
+        
+        # Filtering
+        'include_zero_supply': include_zero_supply,
+        'include_zero_demand': include_zero_demand,
+        'min_demand_threshold': min_demand_threshold,
+        
+        # Attribution
         'lis_weight': lis_weight,
         'dcd_weight': dcd_weight,
+        'selection_method': selection_method,
     }
 
 
@@ -181,7 +395,7 @@ def render_gradient_flow_tab(config: Dict[str, Any]):
     """)
     
     # Mathematical Formulation Section
-    with st.expander("📐 Mathematical Formulation", expanded=True):
+    with st.expander("📐 Mathematical Formulation", expanded=False):
         st.markdown("""
         ### Combined Objective Function
         
@@ -274,7 +488,7 @@ def render_gradient_flow_tab(config: Dict[str, Any]):
         col3.metric("α_fidelity", f"{config['alpha_fidelity']:.3f}")
     
     # Gradient Flow Diagram
-    with st.expander("📊 Gradient Flow Diagram", expanded=True):
+    with st.expander("📊 Gradient Flow Diagram", expanded=False):
         diagram = create_gradient_flow_diagram(format='ascii')
         st.code(diagram, language=None)
     
@@ -709,7 +923,7 @@ def render_attribution_tab(config: Dict[str, Any]):
     """)
     
     # Formulas
-    with st.expander("📐 Attribution Formulas", expanded=True):
+    with st.expander("📐 Attribution Formulas", expanded=False):
         st.markdown("""
         Attribution methods identify **which trajectories contribute most to unfairness**.
         By modifying high-attribution trajectories, we can improve fairness most efficiently.
@@ -1163,71 +1377,478 @@ def _load_real_data_for_testing(
         return None
 
 
+def _load_supply_demand_data(
+    config: Dict[str, Any],
+) -> Optional[Dict[str, Any]]:
+    """
+    Load real supply (active_taxis) and demand (pickup_dropoff_counts) data.
+    
+    Uses the full data processing pipeline with proper temporal filtering
+    and g(d) estimation.
+    
+    Args:
+        config: Dashboard configuration with period_type, selected_days, etc.
+        
+    Returns:
+        Dict with 'demand', 'supply', 'g_function', 'diagnostics' or None
+    """
+    from causal_fairness.utils import (
+        load_pickup_dropoff_counts,
+        load_active_taxis_data,
+        extract_demand_from_counts,
+        aggregate_to_period,
+        filter_by_days,
+        estimate_g_function,
+        compute_service_ratios,
+        extract_demand_ratio_arrays,
+    )
+    
+    # Paths to data files
+    pickup_dropoff_path = PROJECT_ROOT / 'pickup_dropoff_counts' / 'output' / 'pickup_dropoff_counts.pkl'
+    active_taxis_path = PROJECT_ROOT / 'active_taxis' / 'output' / 'active_taxis_5x5_hourly.pkl'
+    
+    # Select appropriate active_taxis file based on period_type
+    period_type = config.get('period_type', 'hourly')
+    if period_type == 'time_bucket':
+        active_taxis_path = PROJECT_ROOT / 'active_taxis' / 'output' / 'active_taxis_5x5_time_bucket.pkl'
+    elif period_type == 'daily':
+        active_taxis_path = PROJECT_ROOT / 'active_taxis' / 'output' / 'active_taxis_5x5_daily.pkl'
+    elif period_type == 'all':
+        active_taxis_path = PROJECT_ROOT / 'active_taxis' / 'output' / 'active_taxis_5x5_all.pkl'
+    
+    diagnostics = {
+        'pickup_dropoff_path': str(pickup_dropoff_path),
+        'active_taxis_path': str(active_taxis_path),
+        'period_type': period_type,
+    }
+    
+    # Check if files exist
+    if not pickup_dropoff_path.exists():
+        diagnostics['error'] = f"pickup_dropoff_counts.pkl not found at {pickup_dropoff_path}"
+        return {'diagnostics': diagnostics, 'error': True}
+    
+    if not active_taxis_path.exists():
+        diagnostics['error'] = f"active_taxis file not found at {active_taxis_path}"
+        return {'diagnostics': diagnostics, 'error': True}
+    
+    try:
+        # Load raw data
+        pickup_dropoff_data = load_pickup_dropoff_counts(str(pickup_dropoff_path))
+        active_taxis_data = load_active_taxis_data(str(active_taxis_path))
+        
+        diagnostics['n_pickup_dropoff_entries'] = len(pickup_dropoff_data)
+        diagnostics['n_active_taxis_entries'] = len(active_taxis_data)
+        
+        # Extract demand from pickup counts
+        demand = extract_demand_from_counts(pickup_dropoff_data)
+        
+        # Aggregate to desired period
+        if period_type != 'time_bucket':
+            demand = aggregate_to_period(demand, period_type)
+            # Note: active_taxis data should already be at the right granularity
+        
+        # Filter by days if specified
+        selected_days = config.get('selected_days', [0, 1, 2, 3, 4, 5, 6])
+        if selected_days and len(selected_days) < 7:
+            demand = filter_by_days(demand, selected_days)
+            active_taxis_data = filter_by_days(active_taxis_data, selected_days)
+        
+        diagnostics['n_demand_after_filter'] = len(demand)
+        diagnostics['n_supply_after_filter'] = len(active_taxis_data)
+        diagnostics['selected_days'] = selected_days
+        
+        # Handle zero filtering
+        include_zero_supply = config.get('include_zero_supply', False)
+        include_zero_demand = config.get('include_zero_demand', False)
+        min_demand_threshold = config.get('min_demand_threshold', 0)
+        
+        # Compute service ratios
+        # The min_demand parameter controls zero demand filtering
+        ratios = compute_service_ratios(
+            demand,
+            active_taxis_data,
+            min_demand=0 if include_zero_demand else max(1, min_demand_threshold),
+            include_zero_supply=include_zero_supply,
+        )
+        
+        diagnostics['n_ratio_entries'] = len(ratios)
+        
+        # Apply minimum demand threshold
+        if min_demand_threshold > 0:
+            ratios = {k: v for k, v in ratios.items() if demand.get(k, 0) >= min_demand_threshold}
+            diagnostics['n_ratios_after_threshold'] = len(ratios)
+        
+        # Prepare data for g(d) estimation
+        demands_arr, ratios_arr, common_keys = extract_demand_ratio_arrays(demand, ratios)
+        
+        diagnostics['n_common_entries'] = len(common_keys)
+        diagnostics['demand_range'] = [float(demands_arr.min()), float(demands_arr.max())] if len(demands_arr) > 0 else [0, 0]
+        diagnostics['ratio_range'] = [float(ratios_arr.min()), float(ratios_arr.max())] if len(ratios_arr) > 0 else [0, 0]
+        
+        # Estimate g(d) function
+        g_method = config.get('g_estimation_method', 'isotonic')
+        n_bins = config.get('n_bins', 10)
+        poly_degree = config.get('poly_degree', 2)
+        lowess_frac = config.get('lowess_frac', 0.3)
+        
+        g_function, g_diagnostics = estimate_g_function(
+            demands_arr,
+            ratios_arr,
+            method=g_method,
+            n_bins=n_bins,
+            poly_degree=poly_degree,
+            lowess_frac=lowess_frac,
+        )
+        
+        diagnostics['g_estimation'] = g_diagnostics
+        
+        # Compute R² for diagnostics
+        if len(demands_arr) > 0:
+            from causal_fairness.utils import compute_r_squared
+            g_predictions = g_function(demands_arr)
+            r_squared = compute_r_squared(ratios_arr, g_predictions)
+            diagnostics['g_r_squared'] = r_squared
+        
+        return {
+            'demand': demand,
+            'supply': active_taxis_data,
+            'ratios': ratios,
+            'g_function': g_function,
+            'demands_array': demands_arr,
+            'ratios_array': ratios_arr,
+            'diagnostics': diagnostics,
+            'error': False,
+        }
+        
+    except Exception as e:
+        import traceback
+        diagnostics['error'] = str(e)
+        diagnostics['traceback'] = traceback.format_exc()
+        return {'diagnostics': diagnostics, 'error': True}
+
+
+def _create_supply_tensor_from_data(
+    supply_data: Dict[Tuple, int],
+    grid_dims: Tuple[int, int],
+    period: Optional[Tuple[int, int]] = None,
+) -> 'torch.Tensor':
+    """
+    Convert supply dictionary to grid tensor.
+    
+    If period is specified, uses only that (time, day) period.
+    Otherwise, sums across all periods.
+    
+    Args:
+        supply_data: Dictionary {(x, y, time, day): count}
+        grid_dims: Grid dimensions (x, y)
+        period: Optional (time, day) tuple to filter
+        
+    Returns:
+        Tensor of shape grid_dims with supply counts
+    """
+    import torch
+    
+    supply_tensor = torch.zeros(grid_dims, dtype=torch.float32)
+    
+    for key, value in supply_data.items():
+        if len(key) >= 4:
+            x, y, time_val, day_val = key[0], key[1], key[2], key[3]
+            
+            if period is not None:
+                if (time_val, day_val) != period:
+                    continue
+            
+            if 0 <= x < grid_dims[0] and 0 <= y < grid_dims[1]:
+                supply_tensor[x, y] += value
+    
+    return supply_tensor
+
+
+class FrozenGFunctionLookup:
+    """
+    Frozen g(d) lookup table for efficient use during optimization.
+    
+    Pre-computes g(d) values for a range of demand values and stores
+    them for fast lookup during forward passes. This avoids recomputing
+    g(d) estimation at each step.
+    """
+    
+    def __init__(
+        self,
+        g_function: callable,
+        demand_range: Tuple[float, float],
+        n_lookup_points: int = 1000,
+    ):
+        """
+        Initialize frozen lookup table.
+        
+        Args:
+            g_function: The fitted g(d) function
+            demand_range: (min_demand, max_demand) range
+            n_lookup_points: Number of points in lookup table
+        """
+        import numpy as np
+        
+        self.min_demand, self.max_demand = demand_range
+        self.n_points = n_lookup_points
+        
+        # Create lookup table
+        self.demand_values = np.linspace(
+            self.min_demand,
+            self.max_demand,
+            n_lookup_points
+        )
+        self.g_values = g_function(self.demand_values)
+        
+        # Pre-compute step size for fast indexing
+        self.step = (self.max_demand - self.min_demand) / (n_lookup_points - 1) if n_lookup_points > 1 else 1.0
+    
+    def __call__(self, demands):
+        """
+        Look up g(d) values using linear interpolation.
+        
+        Args:
+            demands: Array of demand values
+            
+        Returns:
+            Array of g(d) values
+        """
+        import numpy as np
+        
+        demands = np.atleast_1d(demands)
+        
+        # Clamp to valid range
+        clamped = np.clip(demands, self.min_demand, self.max_demand)
+        
+        # Compute indices
+        indices = (clamped - self.min_demand) / self.step
+        lower_idx = np.floor(indices).astype(int)
+        lower_idx = np.clip(lower_idx, 0, self.n_points - 2)
+        upper_idx = lower_idx + 1
+        
+        # Linear interpolation weights
+        alpha = indices - lower_idx
+        
+        # Interpolate
+        result = (1 - alpha) * self.g_values[lower_idx] + alpha * self.g_values[upper_idx]
+        
+        return result
+    
+    def get_lookup_table(self) -> Dict[str, np.ndarray]:
+        """Return the lookup table for visualization."""
+        return {
+            'demands': self.demand_values.copy(),
+            'g_values': self.g_values.copy(),
+        }
+
+
+def _create_frozen_g_function(
+    supply_demand_data: Dict[str, Any],
+    config: Dict[str, Any],
+) -> Tuple[callable, Dict[str, Any]]:
+    """
+    Create a frozen g(d) lookup function from loaded data.
+    
+    This is the recommended approach for optimization: estimate g(d)
+    once from historical data, then freeze it for use in the objective.
+    
+    Args:
+        supply_demand_data: Output from _load_supply_demand_data
+        config: Dashboard configuration
+        
+    Returns:
+        Tuple of (frozen_g_function, diagnostics)
+    """
+    if supply_demand_data.get('error'):
+        # Return identity function if data loading failed
+        def identity_g(d):
+            return np.ones_like(np.atleast_1d(d))
+        return identity_g, {'error': 'data_loading_failed'}
+    
+    g_function = supply_demand_data['g_function']
+    diagnostics = supply_demand_data['diagnostics'].copy()
+    
+    # Get demand range
+    demands_arr = supply_demand_data.get('demands_array', np.array([0, 100]))
+    if len(demands_arr) > 0:
+        demand_range = (float(demands_arr.min()), float(demands_arr.max()))
+    else:
+        demand_range = (0.0, 100.0)
+    
+    # Create frozen lookup
+    if config.get('freeze_g_function', True):
+        frozen = FrozenGFunctionLookup(
+            g_function=g_function,
+            demand_range=demand_range,
+            n_lookup_points=1000,
+        )
+        diagnostics['frozen'] = True
+        diagnostics['n_lookup_points'] = 1000
+        return frozen, diagnostics
+    else:
+        diagnostics['frozen'] = False
+        return g_function, diagnostics
+
+
 def _run_comprehensive_gradient_test(
     config: Dict[str, Any],
     pickup_coords: 'torch.Tensor',
     dropoff_coords: 'torch.Tensor',
     use_real_data: bool = False,
     metadata: Optional[Dict] = None,
+    use_real_supply_demand: bool = False,
+    use_hard_counts: bool = True,
 ) -> Dict[str, Any]:
     """
     Run comprehensive gradient test with all objective terms.
     
-    Returns detailed results for all terms.
+    When use_real_supply_demand=True, loads actual supply/demand data
+    and uses the full data processing pipeline with configured g(d) estimation.
+    
+    Args:
+        config: Dashboard configuration (including g(d) settings, period_type, etc.)
+        pickup_coords: Tensor of pickup coordinates
+        dropoff_coords: Tensor of dropoff coordinates
+        use_real_data: Whether trajectory data came from real file
+        metadata: Optional trajectory metadata
+        use_real_supply_demand: Whether to load real active_taxis/pickup_dropoff data
+        use_hard_counts: Use fast hard cell assignment instead of soft (recommended for large datasets)
+    
+    Returns:
+        Dict with test results
     """
     import torch
     
-    # Create supply data for causal term
-    # In reality, supply represents taxi availability which is somewhat correlated with
-    # historical demand patterns but not identical to current demand.
-    # For testing, we create supply that has a reasonable relationship with demand.
+    n_trajectories = pickup_coords.shape[0]
     
-    # First compute soft counts (what the module will compute internally)
-    # We need to create supply that's consistent with soft counts for good R²
-    from soft_cell_assignment import SoftCellAssignment
+    results = {
+        'passed': True,
+        'use_real_data': use_real_data,
+        'use_real_supply_demand': use_real_supply_demand,
+        'use_hard_counts': use_hard_counts,
+        'n_trajectories': n_trajectories,
+        'grid_dims': config['grid_dims'],
+        'temperature': config['temperature'],
+        'config_summary': {
+            'period_type': config.get('period_type', 'hourly'),
+            'g_estimation_method': config.get('g_estimation_method', 'isotonic'),
+            'selected_days': config.get('selected_days', [0,1,2,3,4,5,6]),
+            'include_zero_supply': config.get('include_zero_supply', False),
+            'freeze_g_function': config.get('freeze_g_function', True),
+            'neighborhood_size': config.get('neighborhood_size', 5),
+        }
+    }
     
-    soft_assign = SoftCellAssignment(
-        grid_dims=config['grid_dims'],
-        initial_temperature=config['temperature'],
-    )
+    # =========================================================================
+    # COMPUTE DEMAND COUNTS
+    # =========================================================================
     
-    # Compute soft demand counts (matching what the module will compute)
-    soft_demand = torch.zeros(config['grid_dims'], dtype=torch.float32)
-    k = soft_assign.k
-    
-    for i in range(pickup_coords.shape[0]):
-        loc = pickup_coords[i:i+1].float()
-        cell = loc.floor().long().clamp(
+    if use_hard_counts:
+        # FAST: Use hard (discrete) cell assignment - O(n) time, O(grid) memory
+        demand_counts = torch.zeros(config['grid_dims'], dtype=torch.float32)
+        
+        # Compute cell indices
+        cells = pickup_coords.floor().long()
+        cells = cells.clamp(
             min=torch.tensor([0, 0]),
             max=torch.tensor([config['grid_dims'][0]-1, config['grid_dims'][1]-1])
         )
         
-        probs = soft_assign(loc, cell.float())
-        cx, cy = cell[0, 0].item(), cell[0, 1].item()
+        # Count occurrences per cell (vectorized)
+        for i in range(n_trajectories):
+            cx, cy = cells[i, 0].item(), cells[i, 1].item()
+            demand_counts[cx, cy] += 1.0
         
-        for di in range(-k, k+1):
-            for dj in range(-k, k+1):
-                ni, nj = int(cx + di), int(cy + dj)
-                if 0 <= ni < config['grid_dims'][0] and 0 <= nj < config['grid_dims'][1]:
-                    soft_demand[ni, nj] = soft_demand[ni, nj] + probs[0, di + k, dj + k].item()
+        results['count_method'] = 'hard'
+    else:
+        # SLOW: Use soft cell assignment - O(n * k²) time, more memory
+        from soft_cell_assignment import SoftCellAssignment
+        
+        soft_assign = SoftCellAssignment(
+            grid_dims=config['grid_dims'],
+            initial_temperature=config['temperature'],
+        )
+        
+        demand_counts = torch.zeros(config['grid_dims'], dtype=torch.float32)
+        k = soft_assign.k
+        
+        # Process in batches to reduce memory pressure
+        batch_size = 1000
+        for batch_start in range(0, n_trajectories, batch_size):
+            batch_end = min(batch_start + batch_size, n_trajectories)
+            
+            for i in range(batch_start, batch_end):
+                loc = pickup_coords[i:i+1].float()
+                cell = loc.floor().long().clamp(
+                    min=torch.tensor([0, 0]),
+                    max=torch.tensor([config['grid_dims'][0]-1, config['grid_dims'][1]-1])
+                )
+                
+                probs = soft_assign(loc, cell.float())
+                cx, cy = cell[0, 0].item(), cell[0, 1].item()
+                
+                for di in range(-k, k+1):
+                    for dj in range(-k, k+1):
+                        ni, nj = int(cx + di), int(cy + dj)
+                        if 0 <= ni < config['grid_dims'][0] and 0 <= nj < config['grid_dims'][1]:
+                            demand_counts[ni, nj] = demand_counts[ni, nj] + probs[0, di + k, dj + k].item()
+        
+        results['count_method'] = 'soft'
     
-    # Create supply that follows a known relationship with soft demand
-    # S = factor * D + baseline, so Y = S/D = factor + baseline/D
-    # This creates a predictable relationship that g(d) can capture
-    baseline_supply = 3.0
-    supply_factor = 1.5
-    supply_tensor = soft_demand * supply_factor + baseline_supply
+    # =========================================================================
+    # SUPPLY AND g(d) CREATION
+    # =========================================================================
     
-    # Add small noise to make it more realistic (but not too much to destroy R²)
-    torch.manual_seed(42)
-    noise = torch.randn_like(supply_tensor) * 0.1 * supply_tensor.mean()
-    supply_tensor = supply_tensor + noise
-    supply_tensor = torch.clamp(supply_tensor, min=0.1)  # Ensure positive supply
+    if use_real_supply_demand:
+        # Load real supply/demand data with full pipeline
+        supply_demand_result = _load_supply_demand_data(config)
+        
+        if supply_demand_result.get('error'):
+            results['supply_demand_error'] = supply_demand_result.get('diagnostics', {}).get('error', 'Unknown error')
+            results['passed'] = False
+            # Fall back to synthetic supply
+            use_real_supply_demand = False
+        else:
+            results['supply_demand_diagnostics'] = supply_demand_result['diagnostics']
+            
+            # Create frozen g(d) function
+            g_function, g_diagnostics = _create_frozen_g_function(supply_demand_result, config)
+            results['g_function_diagnostics'] = g_diagnostics
+            
+            # Create supply tensor from real data
+            # Sum across all periods to get total supply per cell
+            supply_tensor = _create_supply_tensor_from_data(
+                supply_demand_result['supply'],
+                config['grid_dims'],
+                period=None,  # Sum all periods
+            )
+            # No scaling - use actual supply values as-is
     
-    # Create g(d) function that approximates the supply relationship
-    # Y = S/D ≈ factor + baseline/D (plus noise)
-    def g_function(d):
-        return supply_factor + baseline_supply / (np.array(d) + 1e-8)
+    if not use_real_supply_demand:
+        # Create synthetic supply with known relationship to demand
+        baseline_supply = 3.0
+        supply_factor = 1.5
+        supply_tensor = demand_counts * supply_factor + baseline_supply
+        
+        # Add small noise
+        torch.manual_seed(42)
+        noise = torch.randn_like(supply_tensor) * 0.1 * supply_tensor.mean()
+        supply_tensor = supply_tensor + noise
+        supply_tensor = torch.clamp(supply_tensor, min=0.1)
+        
+        # Create corresponding g(d) function
+        def g_function(d):
+            return supply_factor + baseline_supply / (np.array(d) + 1e-8)
+        
+        results['supply_type'] = 'synthetic'
+        results['g_function_type'] = 'synthetic_inverse'
+    else:
+        results['supply_type'] = 'real_active_taxis'
+        results['g_function_type'] = f"real_{config.get('g_estimation_method', 'isotonic')}"
+    
+    # =========================================================================
+    # CREATE AND RUN MODULE
+    # =========================================================================
     
     # Create module with all terms enabled
     module = DifferentiableFAMAILObjective(
@@ -1249,14 +1870,11 @@ def _run_comprehensive_gradient_test(
     # Backward pass
     total.backward()
     
-    # Gather comprehensive results
-    results = {
-        'passed': True,
-        'use_real_data': use_real_data,
-        'n_trajectories': pickup_coords.shape[0],
-        'grid_dims': config['grid_dims'],
-        'temperature': config['temperature'],
-        
+    # =========================================================================
+    # GATHER RESULTS
+    # =========================================================================
+    
+    results.update({
         # Objective values
         'total_objective': total.item(),
         'f_spatial': terms['f_spatial'].item(),
@@ -1267,7 +1885,23 @@ def _run_comprehensive_gradient_test(
         'alpha_spatial': config['alpha_spatial'],
         'alpha_causal': config['alpha_causal'],
         'alpha_fidelity': config['alpha_fidelity'],
-    }
+        
+        # Supply/demand statistics
+        'supply_stats': {
+            'mean': float(supply_tensor.mean()),
+            'std': float(supply_tensor.std()),
+            'min': float(supply_tensor.min()),
+            'max': float(supply_tensor.max()),
+            'nonzero_cells': int((supply_tensor > 0).sum()),
+        },
+        'demand_stats': {
+            'mean': float(demand_counts.mean()),
+            'std': float(demand_counts.std()),
+            'min': float(demand_counts.min()),
+            'max': float(demand_counts.max()),
+            'nonzero_cells': int((demand_counts > 0).sum()),
+        },
+    })
     
     # Add causal debug info if available
     if hasattr(module, '_last_causal_debug'):
@@ -1326,8 +1960,7 @@ def render_integration_tab(config: Dict[str, Any]):
     
     st.markdown("""
     Test the complete pipeline from trajectory coordinates through objective computation
-    to trajectory selection. Each test can be run on **generated (synthetic)** data or 
-    **real trajectory data** from `all_trajs.pkl`.
+    to trajectory selection. Tests can use **synthetic** or **real** data sources.
     """)
     
     if not TORCH_AVAILABLE:
@@ -1336,43 +1969,127 @@ def render_integration_tab(config: Dict[str, Any]):
     
     import torch
     
-    # Global data source selection
+    # =========================================================================
+    # DATA SOURCE SELECTION
+    # =========================================================================
     st.subheader("📊 Data Source Selection")
     
     col_ds1, col_ds2 = st.columns([2, 1])
     with col_ds1:
-        data_source = st.radio(
-            "Select data source for tests",
+        trajectory_source = st.radio(
+            "Trajectory Data Source",
             ["Generated (Synthetic)", "Real Data (all_trajs.pkl)"],
             horizontal=True,
-            help="Generated data creates random trajectories. Real data loads from all_trajs.pkl file."
+            help="Generated creates random trajectories. Real loads from all_trajs.pkl."
         )
     
     with col_ds2:
-        n_test_samples = st.number_input(
-            "Number of test trajectories",
-            min_value=20, max_value=500, value=100, step=10,
-            help="Number of trajectories to use in tests"
+        # Trajectory count options
+        trajectory_count_mode = st.selectbox(
+            "Trajectory Count",
+            ["Sample (5,000)", "Sample (10,000)", "Sample (20,000)", "All (~44K, slow)"],
+            index=0,
+            help="More trajectories = more accurate but slower. 5-10K recommended for quick testing."
+        )
+        
+        # Map selection to actual count
+        count_map = {
+            "Sample (5,000)": 5000,
+            "Sample (10,000)": 10000,
+            "Sample (20,000)": 20000,
+            "All (~44K, slow)": None,
+        }
+        n_test_samples = count_map[trajectory_count_mode]
+    
+    use_real_trajectories = trajectory_source == "Real Data (all_trajs.pkl)"
+    
+    # Memory efficiency options
+    col_mem1, col_mem2 = st.columns(2)
+    with col_mem1:
+        use_hard_counts = st.checkbox(
+            "Use hard cell counts (faster)",
+            value=True,
+            help="Use discrete cell assignment instead of soft. Much faster for large datasets while maintaining statistical validity."
         )
     
-    use_real_data = data_source == "Real Data (all_trajs.pkl)"
+    # Supply/Demand data source
+    col_sd1, col_sd2 = st.columns([2, 1])
+    with col_sd1:
+        supply_source = st.radio(
+            "Supply/Demand Data Source",
+            ["Synthetic (Generated)", "Real Data (active_taxis + pickup_dropoff_counts)"],
+            horizontal=True,
+            help="""
+            **Synthetic**: Creates supply with known relationship to demand for testing.
+            **Real Data**: Loads actual active_taxis and pickup_dropoff_counts files
+            with full processing pipeline (period aggregation, day filtering, g(d) estimation).
+            """
+        )
     
-    # Pre-load data based on selection
+    use_real_supply_demand = supply_source == "Real Data (active_taxis + pickup_dropoff_counts)"
+    
+    # =========================================================================
+    # REALISTIC TEST CONFIGURATION (EXPANDER)
+    # =========================================================================
+    with st.expander("⚙️ Realistic Test Configuration", expanded=use_real_supply_demand):
+        st.markdown("""
+        **Configure data processing options for realistic tests.**
+        These settings match how the optimization will process data.
+        """)
+        
+        col_cfg1, col_cfg2, col_cfg3 = st.columns(3)
+        
+        with col_cfg1:
+            st.markdown("**Temporal Settings**")
+            st.info(f"Period Type: **{config.get('period_type', 'hourly')}**")
+            st.info(f"Days: **{config.get('selected_days', [0,1,2,3,4,5,6])}**")
+            
+        with col_cfg2:
+            st.markdown("**g(d) Estimation**")
+            st.info(f"Method: **{config.get('g_estimation_method', 'isotonic')}**")
+            st.info(f"Frozen: **{'Yes' if config.get('freeze_g_function', True) else 'No'}**")
+            if config.get('g_estimation_method') == 'binning':
+                st.info(f"Bins: **{config.get('n_bins', 10)}**")
+        
+        with col_cfg3:
+            st.markdown("**Data Filtering**")
+            st.info(f"Zero Supply: **{'Include' if config.get('include_zero_supply', False) else 'Exclude'}**")
+            st.info(f"Zero Demand: **{'Include' if config.get('include_zero_demand', False) else 'Exclude'}**")
+            st.info(f"Min Demand: **{config.get('min_demand_threshold', 0)}**")
+        
+        st.markdown("---")
+        st.markdown("**Soft Cell Assignment**")
+        col_sca1, col_sca2, col_sca3 = st.columns(3)
+        with col_sca1:
+            st.info(f"Temperature τ: **{config.get('temperature', 1.0):.2f}**")
+        with col_sca2:
+            ns = config.get('neighborhood_size', 5)
+            st.info(f"Neighborhood: **{ns}×{ns}** window")
+        with col_sca3:
+            if config.get('use_annealing', False):
+                st.info(f"Annealing: **{config.get('annealing_schedule', 'exponential')}** to τ={config.get('final_temperature', 0.1):.2f}")
+            else:
+                st.info("Annealing: **Disabled**")
+        
+        st.caption("💡 Modify these settings in the sidebar.")
+    
+    # Pre-load trajectory data based on selection
     @st.cache_data
-    def get_test_data(use_real: bool, n_samples: int, grid_dims: Tuple[int, int], seed: int = 42):
+    def get_test_data(use_real: bool, n_samples: Optional[int], grid_dims: Tuple[int, int], seed: int = 42):
         if use_real:
             return _load_real_data_for_testing({'grid_dims': grid_dims}, n_samples=n_samples)
         else:
-            # Generate synthetic data
+            # Generate synthetic data - need a concrete number
+            actual_n = n_samples if n_samples is not None else 5000
             torch.manual_seed(seed)
-            pickup_coords = torch.rand(n_samples, 2) * torch.tensor(grid_dims, dtype=torch.float32)
-            dropoff_coords = torch.rand(n_samples, 2) * torch.tensor(grid_dims, dtype=torch.float32)
+            pickup_coords = torch.rand(actual_n, 2) * torch.tensor(grid_dims, dtype=torch.float32)
+            dropoff_coords = torch.rand(actual_n, 2) * torch.tensor(grid_dims, dtype=torch.float32)
             return {
                 'trajectories': None,
                 'pickup_coords': pickup_coords,
                 'dropoff_coords': dropoff_coords,
                 'metadata': {
-                    'n_trajectories': n_samples,
+                    'n_trajectories': actual_n,
                     'data_type': 'synthetic',
                     'grid_dims': grid_dims,
                     'seed': seed,
@@ -1415,10 +2132,13 @@ def render_integration_tab(config: Dict[str, Any]):
         - Gradient magnitude (mean, std) indicates learning signal strength
         """)
         
+        # Show data source summary
+        st.info(f"📂 Trajectory source: **{trajectory_source}** | Supply/Demand source: **{supply_source}**")
+        
         if st.button("🚀 Run Basic Gradient Test", key="run_basic_grad"):
             with st.spinner("Running comprehensive gradient test..."):
                 # Load data
-                test_data = get_test_data(use_real_data, n_test_samples, config['grid_dims'])
+                test_data = get_test_data(use_real_trajectories, n_test_samples, config['grid_dims'])
                 
                 if test_data is None:
                     st.error("❌ Could not load test data. Ensure all_trajs.pkl exists.")
@@ -1429,8 +2149,10 @@ def render_integration_tab(config: Dict[str, Any]):
                     config=config,
                     pickup_coords=test_data['pickup_coords'],
                     dropoff_coords=test_data['dropoff_coords'],
-                    use_real_data=use_real_data,
+                    use_real_data=use_real_trajectories,
                     metadata=test_data.get('metadata'),
+                    use_real_supply_demand=use_real_supply_demand,
+                    use_hard_counts=use_hard_counts,
                 )
             
             # Display pass/fail status
@@ -1440,10 +2162,44 @@ def render_integration_tab(config: Dict[str, Any]):
                 st.error("❌ Basic gradient test FAILED. See details below.")
             
             # Data source info
-            if use_real_data and 'data_metadata' in result:
-                st.info(f"📁 **Real Data**: {result['data_metadata'].get('n_trajectories', 'N/A')} trajectories from {result['data_metadata'].get('n_drivers', 'N/A')} drivers")
-            else:
-                st.info(f"🎲 **Synthetic Data**: {result['n_trajectories']} randomly generated trajectories")
+            st.markdown("#### 📂 Data Sources Used")
+            col_src1, col_src2 = st.columns(2)
+            with col_src1:
+                if use_real_trajectories and 'data_metadata' in result:
+                    st.info(f"**Trajectories**: Real data - {result['data_metadata'].get('n_trajectories', 'N/A')} trajectories from {result['data_metadata'].get('n_drivers', 'N/A')} drivers")
+                else:
+                    st.info(f"**Trajectories**: Synthetic - {result['n_trajectories']} randomly generated")
+            
+            with col_src2:
+                if result.get('use_real_supply_demand'):
+                    diag = result.get('supply_demand_diagnostics', {})
+                    st.info(f"**Supply/Demand**: Real active_taxis data\n- Period: {diag.get('period_type', 'hourly')}\n- g(d) R²: {diag.get('g_r_squared', 0):.3f}")
+                else:
+                    st.info(f"**Supply/Demand**: Synthetic\n- Type: {result.get('g_function_type', 'synthetic')}")
+            
+            # Show supply/demand diagnostics if using real data
+            if result.get('use_real_supply_demand') and 'supply_demand_diagnostics' in result:
+                with st.expander("📈 Supply/Demand Data Diagnostics", expanded=False):
+                    diag = result['supply_demand_diagnostics']
+                    col_d1, col_d2, col_d3 = st.columns(3)
+                    with col_d1:
+                        st.markdown("**Data Loading**")
+                        st.write(f"Pickup/Dropoff entries: {diag.get('n_pickup_dropoff_entries', 'N/A'):,}")
+                        st.write(f"Active taxis entries: {diag.get('n_active_taxis_entries', 'N/A'):,}")
+                        st.write(f"After day filter: {diag.get('n_demand_after_filter', 'N/A'):,}")
+                    with col_d2:
+                        st.markdown("**Data Range**")
+                        d_range = diag.get('demand_range', [0, 0])
+                        r_range = diag.get('ratio_range', [0, 0])
+                        st.write(f"Demand range: [{d_range[0]:.0f}, {d_range[1]:.0f}]")
+                        st.write(f"Ratio range: [{r_range[0]:.2f}, {r_range[1]:.2f}]")
+                        st.write(f"Common entries: {diag.get('n_common_entries', 'N/A'):,}")
+                    with col_d3:
+                        st.markdown("**g(d) Estimation**")
+                        g_diag = diag.get('g_estimation', {})
+                        st.write(f"Method: {g_diag.get('method', 'N/A')}")
+                        st.write(f"Frozen: {diag.get('frozen', False)}")
+                        st.write(f"R²: {diag.get('g_r_squared', 0):.4f}")
             
             # Objective Function Values
             st.markdown("#### 📊 Objective Function Values")
@@ -1674,7 +2430,7 @@ def render_integration_tab(config: Dict[str, Any]):
             results = []
             
             # Load data once
-            test_data = get_test_data(use_real_data, n_test_samples, config['grid_dims'])
+            test_data = get_test_data(use_real_trajectories, n_test_samples, config['grid_dims'])
             
             if test_data is None:
                 st.error("❌ Could not load test data.")
@@ -1694,7 +2450,9 @@ def render_integration_tab(config: Dict[str, Any]):
                     config=temp_config,
                     pickup_coords=test_data['pickup_coords'].clone(),
                     dropoff_coords=test_data['dropoff_coords'].clone(),
-                    use_real_data=use_real_data,
+                    use_real_data=use_real_trajectories,
+                    use_real_supply_demand=use_real_supply_demand,
+                    use_hard_counts=use_hard_counts,
                 )
                 
                 results.append({
@@ -1853,7 +2611,7 @@ def render_integration_tab(config: Dict[str, Any]):
         
         if st.button("🚀 Run Attribution Consistency Test", key="run_attr"):
             # Load data
-            test_data = get_test_data(use_real_data, n_test_samples, config['grid_dims'])
+            test_data = get_test_data(use_real_trajectories, n_test_samples, config['grid_dims'])
             
             if test_data is None:
                 st.error("❌ Could not load test data.")
@@ -1861,7 +2619,7 @@ def render_integration_tab(config: Dict[str, Any]):
             
             with st.spinner("Computing attribution scores..."):
                 # Compute cell counts from coordinates
-                if use_real_data and test_data['trajectories']:
+                if use_real_trajectories and test_data['trajectories']:
                     trajs = test_data['trajectories']
                     pickup_counts = np.zeros(config['grid_dims'])
                     dropoff_counts = np.zeros(config['grid_dims'])
@@ -2079,7 +2837,7 @@ def render_integration_tab(config: Dict[str, Any]):
                 # Step 1: Load/generate data
                 status.text("Step 1/6: Loading trajectory data...")
                 
-                test_data = get_test_data(use_real_data, n_test_samples, config['grid_dims'])
+                test_data = get_test_data(use_real_trajectories, n_test_samples, config['grid_dims'])
                 
                 if test_data is None:
                     st.error("❌ Could not load test data.")
@@ -2092,10 +2850,11 @@ def render_integration_tab(config: Dict[str, Any]):
                 step_results['data'] = {
                     'status': 'success',
                     'n_trajectories': n_trajs,
-                    'data_source': 'real' if use_real_data else 'synthetic',
+                    'data_source': 'real' if use_real_trajectories else 'synthetic',
+                    'supply_source': 'real' if use_real_supply_demand else 'synthetic',
                 }
                 
-                if use_real_data and test_data.get('metadata'):
+                if use_real_trajectories and test_data.get('metadata'):
                     step_results['data']['metadata'] = test_data['metadata']
                 
                 progress.progress(1/6)
@@ -2103,50 +2862,90 @@ def render_integration_tab(config: Dict[str, Any]):
                 # Step 2: Create objective module
                 status.text("Step 2/6: Creating objective module...")
                 
-                # Create supply tensor that's consistent with soft demand counts
-                # This requires computing soft counts first, then creating supply based on them
-                from soft_cell_assignment import SoftCellAssignment
-                
-                soft_assign = SoftCellAssignment(
-                    grid_dims=config['grid_dims'],
-                    initial_temperature=config['temperature'],
-                )
-                
-                # Compute soft demand counts
-                soft_demand = torch.zeros(config['grid_dims'], dtype=torch.float32)
-                k = soft_assign.k
-                
-                for i in range(n_trajs):
-                    loc = pickup_coords[i:i+1].float()
-                    cell = loc.floor().long().clamp(
-                        min=torch.tensor([0, 0]),
-                        max=torch.tensor([config['grid_dims'][0]-1, config['grid_dims'][1]-1])
+                # Compute demand counts (hard or soft based on use_hard_counts setting)
+                if use_hard_counts:
+                    # Fast vectorized hard cell assignment
+                    cell_indices = pickup_coords.floor().long()
+                    cell_indices[:, 0] = cell_indices[:, 0].clamp(0, config['grid_dims'][0] - 1)
+                    cell_indices[:, 1] = cell_indices[:, 1].clamp(0, config['grid_dims'][1] - 1)
+                    
+                    demand_counts = torch.zeros(config['grid_dims'], dtype=torch.float32)
+                    for i in range(n_trajs):
+                        x, y = cell_indices[i, 0].item(), cell_indices[i, 1].item()
+                        demand_counts[x, y] += 1.0
+                else:
+                    # Slower soft cell assignment (memory intensive)
+                    from soft_cell_assignment import SoftCellAssignment
+                    
+                    soft_assign = SoftCellAssignment(
+                        grid_dims=config['grid_dims'],
+                        initial_temperature=config['temperature'],
                     )
                     
-                    probs = soft_assign(loc, cell.float())
-                    cx, cy = cell[0, 0].item(), cell[0, 1].item()
+                    demand_counts = torch.zeros(config['grid_dims'], dtype=torch.float32)
+                    k = soft_assign.k
                     
-                    for di in range(-k, k+1):
-                        for dj in range(-k, k+1):
-                            ni, nj = int(cx + di), int(cy + dj)
-                            if 0 <= ni < config['grid_dims'][0] and 0 <= nj < config['grid_dims'][1]:
-                                soft_demand[ni, nj] = soft_demand[ni, nj] + probs[0, di + k, dj + k].item()
+                    # Process in batches to reduce memory pressure
+                    batch_size = 1000
+                    for batch_start in range(0, n_trajs, batch_size):
+                        batch_end = min(batch_start + batch_size, n_trajs)
+                        for i in range(batch_start, batch_end):
+                            loc = pickup_coords[i:i+1].float()
+                            cell = loc.floor().long().clamp(
+                                min=torch.tensor([0, 0]),
+                                max=torch.tensor([config['grid_dims'][0]-1, config['grid_dims'][1]-1])
+                            )
+                            
+                            probs = soft_assign(loc, cell.float())
+                            cx, cy = cell[0, 0].item(), cell[0, 1].item()
+                            
+                            for di in range(-k, k+1):
+                                for dj in range(-k, k+1):
+                                    ni, nj = int(cx + di), int(cy + dj)
+                                    if 0 <= ni < config['grid_dims'][0] and 0 <= nj < config['grid_dims'][1]:
+                                        demand_counts[ni, nj] = demand_counts[ni, nj] + probs[0, di + k, dj + k].item()
                 
-                # Create supply following: S = factor * D + baseline
-                # This gives Y = S/D = factor + baseline/D
-                baseline_supply = 3.0
-                supply_factor = 1.5
-                supply_tensor = soft_demand * supply_factor + baseline_supply
+                # Create supply and g(d) based on data source selection
+                if use_real_supply_demand:
+                    # Load real supply/demand data
+                    supply_demand_result = _load_supply_demand_data(config)
+                    
+                    if supply_demand_result.get('error'):
+                        st.warning(f"⚠️ Could not load real supply data: {supply_demand_result.get('diagnostics', {}).get('error', 'Unknown')}. Falling back to synthetic.")
+                        use_real_supply = False
+                    else:
+                        use_real_supply = True
+                        step_results['supply_demand_diagnostics'] = supply_demand_result['diagnostics']
+                        
+                        # Create frozen g(d)
+                        g_function, g_diag = _create_frozen_g_function(supply_demand_result, config)
+                        step_results['g_function_diagnostics'] = g_diag
+                        
+                        # Create supply tensor from real data
+                        supply_tensor = _create_supply_tensor_from_data(
+                            supply_demand_result['supply'],
+                            config['grid_dims'],
+                        )
+                        # No scaling - use actual supply values as-is
+                else:
+                    use_real_supply = False
                 
-                # Add small noise for realism
-                torch.manual_seed(42)
-                noise = torch.randn_like(supply_tensor) * 0.1 * supply_tensor.mean()
-                supply_tensor = supply_tensor + noise
-                supply_tensor = torch.clamp(supply_tensor, min=0.1)
-                
-                # g(d) function matching the supply relationship
-                def g_function(d):
-                    return supply_factor + baseline_supply / (np.array(d) + 1e-8)
+                if not use_real_supply:
+                    # Create synthetic supply following: S = factor * D + baseline
+                    # This gives Y = S/D = factor + baseline/D
+                    baseline_supply = 3.0
+                    supply_factor = 1.5
+                    supply_tensor = demand_counts * supply_factor + baseline_supply
+                    
+                    # Add small noise for realism
+                    torch.manual_seed(42)
+                    noise = torch.randn_like(supply_tensor) * 0.1 * supply_tensor.mean()
+                    supply_tensor = supply_tensor + noise
+                    supply_tensor = torch.clamp(supply_tensor, min=0.1)
+                    
+                    # g(d) function matching the supply relationship
+                    def g_function(d):
+                        return supply_factor + baseline_supply / (np.array(d) + 1e-8)
                 
                 module = DifferentiableFAMAILObjective(
                     alpha_spatial=config['alpha_spatial'],
@@ -2309,7 +3108,7 @@ def render_integration_tab(config: Dict[str, Any]):
                 
                 # Data source info
                 st.markdown("#### Step 1: Data Loading")
-                if use_real_data and 'metadata' in step_results['data']:
+                if use_real_trajectories and 'metadata' in step_results['data']:
                     meta = step_results['data']['metadata']
                     st.info(f"""
                     📁 **Real Trajectory Data Loaded**
@@ -2322,6 +3121,17 @@ def render_integration_tab(config: Dict[str, Any]):
                     """)
                 else:
                     st.info(f"🎲 **Synthetic Data Generated**: {step_results['data']['n_trajectories']} random trajectories")
+                
+                # Supply/Demand source info
+                if use_real_supply_demand:
+                    st.info(f"""
+                    📈 **Real Supply/Demand Data**
+                    - Supply Source: active_taxis
+                    - Period Type: {config.get('period_type', 'hourly')}
+                    - g(d) Method: {config.get('g_estimation_method', 'isotonic')}
+                    """)
+                else:
+                    st.info("🎲 **Synthetic Supply/Demand**: Generated with known relationship")
                 
                 # Objective values
                 st.markdown("#### Step 3: Objective Function Values")
