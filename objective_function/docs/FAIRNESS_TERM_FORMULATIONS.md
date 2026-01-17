@@ -1,8 +1,8 @@
 # Fairness Term Formulations for Per-Trajectory Gradient Optimization
 
-**Version**: 1.0.0  
-**Date**: 2026-01-15  
-**Status**: Specification Document  
+**Version**: 1.1.0  
+**Date**: 2026-01  
+**Status**: Implementation Complete  
 **Authors**: FAMAIL Research Team
 
 ---

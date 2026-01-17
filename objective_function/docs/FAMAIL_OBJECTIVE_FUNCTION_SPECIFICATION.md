@@ -317,6 +317,98 @@ def compute_spatial_fairness(
 | `grid_dims` | Spatial grid dimensions | (48, 90) |
 | `include_zero_cells` | Whether to include cells with zero activity | True/False |
 
+### 3.7 Differentiable Formulation
+
+> **IMPLEMENTED**: The following differentiable implementation enables gradient-based trajectory optimization.
+
+#### 3.7.1 Pairwise Gini with Soft Counts
+
+The differentiable spatial fairness term uses **pairwise Gini** formulation:
+
+$$
+G_{\text{pairwise}} = \frac{\sum_{i}\sum_{j}|x_i - x_j|}{2n^2\bar{x}}
+$$
+
+This formulation avoids the non-differentiable sorting operation in the standard Gini formula.
+
+#### 3.7.2 Soft Count Aggregation
+
+Instead of hard assignment to cells, trajectory points contribute soft counts:
+
+$$
+\text{soft\_count}_c = \sum_{i \in \text{events}} \sigma_c(x_i, y_i)
+$$
+
+Where $\sigma_c(x, y)$ is the soft cell assignment probability (see Section 6.5.1).
+
+#### 3.7.3 PyTorch Implementation
+
+```python
+class DifferentiableSpatialFairnessWithSoftCounts(nn.Module):
+    """Fully differentiable spatial fairness with soft cell assignment."""
+    
+    def __init__(self, grid_shape=(48, 90), neighborhood_size=5, temperature=1.0):
+        super().__init__()
+        self.soft_assign = SoftCellAssignment(
+            grid_shape=grid_shape,
+            neighborhood_size=neighborhood_size,
+            temperature=temperature
+        )
+        self.grid_shape = grid_shape
+    
+    def forward(self, pickup_coords, dropoff_coords):
+        """
+        Compute differentiable spatial fairness from trajectory coordinates.
+        
+        Args:
+            pickup_coords: Tensor of shape (N, 2) - pickup (x, y) coordinates
+            dropoff_coords: Tensor of shape (M, 2) - dropoff (x, y) coordinates
+        
+        Returns:
+            F_spatial: Scalar fairness score ∈ [0, 1] (higher = more fair)
+        """
+        # Compute soft counts (differentiable)
+        pickup_soft_counts = self.soft_assign(pickup_coords)   # (48, 90)
+        dropoff_soft_counts = self.soft_assign(dropoff_coords) # (48, 90)
+        
+        # Flatten for Gini computation
+        dsr = pickup_soft_counts.flatten()  # Departure service rates
+        asr = dropoff_soft_counts.flatten() # Arrival service rates
+        
+        # Pairwise Gini (differentiable)
+        gini_d = self._pairwise_gini(dsr)
+        gini_a = self._pairwise_gini(asr)
+        
+        # Fairness = 1 - average Gini
+        F_spatial = 1.0 - 0.5 * (gini_d + gini_a)
+        return F_spatial
+    
+    def _pairwise_gini(self, values):
+        """Compute Gini coefficient using pairwise formula (differentiable)."""
+        n = values.numel()
+        if n <= 1:
+            return torch.tensor(0.0, device=values.device)
+        
+        mean_val = values.mean() + 1e-8
+        diff_matrix = torch.abs(values.unsqueeze(0) - values.unsqueeze(1))
+        gini = diff_matrix.sum() / (2 * n * n * mean_val)
+        return gini
+```
+
+**Implementation Location**: `objective_function/spatial_fairness/utils.py`
+
+#### 3.7.4 Local Inequality Score (LIS) Attribution
+
+For trajectory-level attribution, compute each trajectory's contribution to inequality:
+
+$$
+\text{LIS}_\tau = \sum_{c \in \mathcal{C}} \sigma_c(\tau) \cdot |x_c - \bar{x}|
+$$
+
+Where $\sigma_c(\tau)$ is the soft contribution of trajectory $\tau$ to cell $c$.
+
+**Implementation**: `objective_function/spatial_fairness/utils.py::compute_local_inequality_score()`
+
 ---
 
 ## 4. Causal Fairness Term ($F_{\text{causal}}$)
@@ -627,6 +719,106 @@ To validate the causal fairness term:
 3. **Sanity Check 3**: The term should increase when trajectories are edited to better match supply to demand
 4. **Bounds Check**: $F_{\text{causal}} \in [0, 1]$ always (it's an $R^2$ value)
 
+### 4.8 Differentiable Formulation
+
+> **IMPLEMENTED**: The following differentiable implementation enables gradient-based trajectory optimization.
+
+#### 4.8.1 Frozen g(d) Design
+
+The expected service function $g(d) = \mathbb{E}[Y \mid D = d]$ is **frozen** during optimization:
+
+$$
+\mathcal{L}_{\text{causal}} = 1 - \frac{\text{Var}(R)}{\text{Var}(Y)} \quad \text{where } R = Y - g(D)
+$$
+
+**Critical Design Decision**: $g(d)$ is computed from the **original** (unmodified) demand distribution and remains fixed. Gradients flow through $Y$ (supply/demand ratio) but NOT through $g(d)$.
+
+**Rationale**: If $g(d)$ were also optimized, the optimizer could trivially achieve $R^2 = 1$ by making $g(d) = Y$ everywhere, defeating the purpose of the metric.
+
+#### 4.8.2 Soft Demand Aggregation
+
+Demand counts use soft cell assignment for differentiability:
+
+$$
+D_c = \sum_{i \in \text{pickups}} \sigma_c(x_i, y_i)
+$$
+
+#### 4.8.3 PyTorch Implementation
+
+```python
+class DifferentiableCausalFairnessWithSoftCounts(nn.Module):
+    """Fully differentiable causal fairness with soft cell assignment."""
+    
+    def __init__(self, g_function, grid_shape=(48, 90), 
+                 neighborhood_size=5, temperature=1.0):
+        super().__init__()
+        self.g_function = g_function  # Pre-fitted, frozen
+        self.soft_assign = SoftCellAssignment(
+            grid_shape=grid_shape,
+            neighborhood_size=neighborhood_size,
+            temperature=temperature
+        )
+    
+    def forward(self, pickup_coords, supply_tensor):
+        """
+        Compute differentiable causal fairness.
+        
+        Args:
+            pickup_coords: Tensor (N, 2) - pickup (x, y) coordinates
+            supply_tensor: Tensor (48, 90) - supply per cell
+        
+        Returns:
+            F_causal: Scalar R² score ∈ [0, 1] (higher = more fair)
+        """
+        # Soft demand counts (differentiable)
+        demand = self.soft_assign(pickup_coords).flatten()  # (4320,)
+        
+        # Compute Y = supply / demand
+        supply = supply_tensor.flatten()
+        mask = demand > 0.1  # Minimum demand threshold
+        Y = supply[mask] / (demand[mask] + 1e-8)
+        
+        # g(d) is FROZEN - no gradient
+        with torch.no_grad():
+            g_d = self.g_function(demand[mask].detach().cpu().numpy())
+        g_d = torch.tensor(g_d, device=Y.device, dtype=Y.dtype)
+        
+        # Residuals (differentiable w.r.t. Y)
+        R = Y - g_d
+        
+        # R² computation
+        var_Y = Y.var() + 1e-8
+        var_R = R.var()
+        r_squared = 1 - (var_R / var_Y)
+        
+        return torch.clamp(r_squared, 0.0, 1.0)
+```
+
+**Implementation Location**: `objective_function/causal_fairness/utils.py`
+
+#### 4.8.4 g(d) Estimation Methods
+
+| Method | R² Score | Differentiability | Recommendation |
+|--------|----------|-------------------|----------------|
+| **Isotonic** | 0.4453 | ✅ Compatible | 🥇 Best fit |
+| **Binning** | 0.4439 | ✅ Compatible | 🥈 Alternative |
+| Polynomial | 0.1949 | ✅ Compatible | Poor fit |
+| Linear | 0.1064 | ✅ Compatible | Poor fit |
+
+**Note**: All methods are "compatible" because $g(d)$ is frozen—differentiability of the estimation method itself is not required.
+
+#### 4.8.5 Demand-Conditional Deviation (DCD) Attribution
+
+For trajectory-level attribution, compute each trajectory's contribution to unexplained variance:
+
+$$
+\text{DCD}_\tau = \sum_{c \in \mathcal{C}} \sigma_c(\tau) \cdot R_c^2
+$$
+
+Where $R_c = Y_c - g(D_c)$ is the residual for cell $c$.
+
+**Implementation**: `objective_function/causal_fairness/utils.py::compute_demand_conditional_deviation()`
+
 ---
 
 ## 5. Trajectory Fidelity Term ($F_{\text{fidelity}}$)
@@ -772,6 +964,108 @@ $$
 
 By combining demand estimates with fairness metrics, the algorithm shifts service from high-demand/well-served areas to high-demand/poorly-served areas, addressing root causes of unfairness.
 
+### 6.5 Gradient-Based Trajectory Optimization
+
+> **IMPLEMENTED**: The following differentiable formulations enable gradient-based trajectory optimization.
+
+Rather than using heuristic modification rules, FAMAIL supports **gradient-based optimization** where trajectory modifications are guided by $\nabla_{\tau} \mathcal{L}$—the gradient of the objective function with respect to trajectory coordinates.
+
+#### 6.5.1 Soft Cell Assignment (Key Innovation)
+
+Traditional grid assignment uses hard cell boundaries, which are non-differentiable. The soft cell assignment module enables gradient flow by computing **probabilistic assignments** using a Gaussian softmax:
+
+$$
+\sigma_c(x, y) = \frac{\exp\left(-\frac{d^2_c(x,y)}{2\tau^2}\right)}{\sum_{c' \in \mathcal{N}} \exp\left(-\frac{d^2_{c'}(x,y)}{2\tau^2}\right)}
+$$
+
+Where:
+- $d_c(x, y)$ = Euclidean distance from $(x, y)$ to center of cell $c$
+- $\tau$ = Temperature parameter (controls assignment "softness")
+- $\mathcal{N}$ = Local neighborhood of cells (default: 5×5)
+
+**Temperature Annealing Schedule**:
+- Training: $\tau = 1.0$ (soft, exploratory)
+- Inference: $\tau \to 0.1$ (sharp, deterministic-like)
+
+**Implementation**: `objective_function/spatial_fairness/soft_cell_assignment.py`
+
+#### 6.5.2 Differentiable Pipeline
+
+The full differentiable pipeline for a single trajectory point $(x, y)$:
+
+```
+Trajectory Point (x, y) with requires_grad=True
+        ↓
+   Soft Cell Assignment σ_c(x, y)
+        ↓
+   Soft Counts: count_c = Σ_i σ_c(x_i, y_i)
+        ↓
+   ┌─────────────────┬───────────────────┐
+   ↓                 ↓                   ↓
+Spatial Fairness  Causal Fairness    Fidelity
+(Pairwise Gini)   (R² with g(d))   (Discriminator)
+   ↓                 ↓                   ↓
+   └─────────────────┴───────────────────┘
+                     ↓
+              Weighted Sum: L
+                     ↓
+              L.backward()
+                     ↓
+              ∂L/∂x, ∂L/∂y (trajectory gradients)
+```
+
+#### 6.5.3 Gradient-Based Modification Algorithm
+
+```
+Algorithm: Gradient-Based Trajectory Modification
+═══════════════════════════════════════════════════════════════════════
+
+INPUT:
+  - τ: Trajectory tensor (requires_grad=True)
+  - objective: Differentiable FAMAIL objective function
+  - ε: Maximum perturbation (L∞ constraint)
+  - η: Learning rate
+  - max_iterations: Maximum optimization steps
+
+OUTPUT:
+  - τ': Modified trajectory with improved fairness
+
+STEPS:
+
+1. INITIALIZE
+   τ' = τ.clone().requires_grad_(True)
+   τ_original = τ.detach()
+
+2. FOR iteration in 1..max_iterations:
+   
+   a. FORWARD PASS
+      L = objective(τ')  # Compute objective
+   
+   b. BACKWARD PASS
+      L.backward()       # Compute gradients
+      grad = τ'.grad
+   
+   c. GRADIENT UPDATE (maximize objective)
+      τ' = τ' + η * grad.sign()  # FGSM-style step
+   
+   d. PROJECT TO CONSTRAINTS
+      # L∞ constraint: stay within ε of original
+      τ' = torch.clamp(τ', τ_original - ε, τ_original + ε)
+      
+      # Grid bounds constraint
+      τ' = torch.clamp(τ', min=0, max=grid_dims)
+   
+   e. CLEAR GRADIENTS
+      τ'.grad.zero_()
+   
+   f. CHECK CONVERGENCE
+      if |grad| < threshold: break
+
+3. RETURN τ'
+```
+
+This follows the ST-iFGSM (Spatial-Temporal Iterative FGSM) approach from the reference paper.
+
 ---
 
 ## 7. Constraints
@@ -899,33 +1193,47 @@ def load_famail_data(data_dir: str):
 ```
 objective_function/
 ├── __init__.py
+├── base.py                      # Base classes and interfaces
 ├── config.py                    # Configuration and hyperparameters
-├── core/
+├── spatial_fairness/
 │   ├── __init__.py
-│   ├── objective.py             # Main objective function class
-│   ├── aggregator.py            # Weighted combination of terms
-│   └── constraints.py           # Constraint checking
-├── terms/
+│   ├── base.py                  # SpatialFairnessBase class
+│   ├── utils.py                 # Gini, differentiable implementations
+│   ├── soft_cell_assignment.py  # SoftCellAssignment module ✨ NEW
+│   └── DEVELOPMENT_PLAN.md
+├── causal_fairness/
 │   ├── __init__.py
-│   ├── spatial_fairness.py      # F_spatial implementation
-│   ├── causal_fairness.py       # F_causal implementation
-│   └── fidelity.py              # F_fidelity implementation
-├── utils/
+│   ├── base.py                  # CausalFairnessBase class
+│   ├── utils.py                 # R², g(d) estimation, differentiable implementations
+│   └── DEVELOPMENT_PLAN.md
+├── fidelity/
 │   ├── __init__.py
-│   ├── data_loader.py           # Data loading utilities
-│   ├── gini.py                  # Gini coefficient computation
-│   └── metrics.py               # Common metric utilities
-├── tests/
-│   ├── __init__.py
-│   ├── test_spatial_fairness.py
-│   ├── test_causal_fairness.py
-│   └── test_integration.py
-└── experiments/
-    ├── __init__.py
-    ├── spatial_fairness_analysis.py
-    ├── causal_fairness_analysis.py
-    └── baseline_metrics.py
+│   ├── base.py                  # FidelityBase class
+│   ├── utils.py                 # Discriminator gradient verification
+│   └── DEVELOPMENT_PLAN.md
+├── quality/                     # (Merged into Fidelity)
+├── docs/
+│   ├── FAMAIL_OBJECTIVE_FUNCTION_SPECIFICATION.md
+│   ├── FAIRNESS_TERM_FORMULATIONS.md
+│   └── TRAJECTORY_MODIFICATION_ALGORITHM_DEVELOPMENT_PLAN.md
+├── dashboards/
+│   └── objective_function_dashboard.py  # Streamlit visualization
+└── tests/
+    ├── test_spatial_fairness.py
+    ├── test_causal_fairness.py
+    ├── test_soft_cell_assignment.py  # ✨ NEW
+    └── test_integration.py
 ```
+
+### 9.2 Key Classes (Updated for Differentiability)
+
+| Class | Module | Purpose |
+|-------|--------|---------|
+| `SoftCellAssignment` | `spatial_fairness/soft_cell_assignment.py` | Gaussian softmax cell assignment |
+| `DifferentiableSpatialFairnessWithSoftCounts` | `spatial_fairness/utils.py` | Full differentiable spatial pipeline |
+| `DifferentiableCausalFairnessWithSoftCounts` | `causal_fairness/utils.py` | Full differentiable causal pipeline |
+| `compute_local_inequality_score()` | `spatial_fairness/utils.py` | LIS trajectory attribution |
+| `compute_demand_conditional_deviation()` | `causal_fairness/utils.py` | DCD trajectory attribution |
 
 ### 9.2 Main Objective Function Class
 
@@ -1138,9 +1446,14 @@ $$
 F_{\text{spatial}} = 1 - \frac{1}{2|P|} \sum_{p \in P}(G_a^p + G_d^p)
 $$
 
-**Gini Coefficient:**
+**Gini Coefficient (Standard - Non-Differentiable):**
 $$
 G = 1 + \frac{1}{n} - \frac{2}{n^2 \bar{x}} \sum_{i=1}^{n}(n-i+1) \cdot x_{(i)}
+$$
+
+**Gini Coefficient (Pairwise - Differentiable):**
+$$
+G_{\text{pairwise}} = \frac{\sum_{i}\sum_{j}|x_i - x_j|}{2n^2\bar{x}}
 $$
 
 **Interpretation:** $F_{\text{spatial}} = 1$ is perfect equality, $F_{\text{spatial}} = 0$ is maximum inequality.
@@ -1151,7 +1464,20 @@ $$
 F_{\text{causal}} = \frac{1}{|P|} \sum_{p \in P} F_{\text{causal}}^p = \frac{1}{|P|} \sum_{p \in P} \frac{\text{Var}_p(g(D_{i,p}))}{\text{Var}_p(Y_{i,p})}
 $$
 
+**Equivalent Residual Form (Used in Differentiable Implementation):**
+$$
+F_{\text{causal}} = 1 - \frac{\text{Var}(R)}{\text{Var}(Y)} \quad \text{where } R = Y - g(D)
+$$
+
 **Interpretation:** $F_{\text{causal}} = 1$ means service perfectly matches demand, $F_{\text{causal}} = 0$ means no relationship.
+
+### Soft Cell Assignment (Gaussian Softmax)
+
+$$
+\sigma_c(x, y) = \frac{\exp\left(-\frac{d^2_c(x,y)}{2\tau^2}\right)}{\sum_{c' \in \mathcal{N}} \exp\left(-\frac{d^2_{c'}(x,y)}{2\tau^2}\right)}
+$$
+
+**Temperature Schedule:** $\tau = 1.0$ (training) → $\tau = 0.1$ (inference)
 
 ### Objective Function (Maximization)
 
@@ -1160,6 +1486,14 @@ $$
 $$
 
 **All terms are fairness/fidelity scores where higher values are better.**
+
+### Gradient-Based Trajectory Update (FGSM-style)
+
+$$
+\tau' = \tau + \eta \cdot \text{sign}(\nabla_\tau \mathcal{L})
+$$
+
+Subject to: $\|\tau' - \tau\|_\infty \leq \epsilon$
 
 ---
 
@@ -1209,7 +1543,7 @@ objective_function:
 
 ---
 
-*Document Version: 1.1*  
+*Document Version: 1.2*  
 *Last Updated: January 2026*  
 *Author: FAMAIL Research Team*
 
@@ -1221,3 +1555,4 @@ objective_function:
 |---------|------|----------|
 | 1.0 | 2026-01 | Initial comprehensive specification |
 | 1.1 | 2026-01-12 | Removed Quality Term (overlap with Fidelity); added Trajectory Modification Algorithm section |
+| 1.2 | 2026-01 | Added differentiable formulations with soft cell assignment for gradient-based optimization |

@@ -1,13 +1,25 @@
 # Trajectory Modification Algorithm: Development Plan
 
-**Version**: 1.3.0  
+**Version**: 1.4.0  
 **Last Updated**: 2026-01-16  
-**Status**: Draft (Phase 0 — 80% Complete)  
+**Status**: Draft (Phase 0 — 95% Complete)  
 **Authors**: FAMAIL Research Team
 
 ---
 
 ## Changelog
+
+### v1.4.0 (2026-01-16)
+- **MAJOR UPDATE**: Soft Cell Assignment module implemented for differentiable trajectory optimization
+- All three objective function terms now fully differentiable with gradient verification
+- Added `DifferentiableSpatialFairnessWithSoftCounts` class with end-to-end gradient support
+- Added `DifferentiableCausalFairnessWithSoftCounts` class with frozen g(d) and soft pickup assignment
+- Implemented Local Inequality Score (LIS) for spatial fairness attribution
+- Implemented Demand-Conditional Deviation (DCD) for causal fairness attribution
+- Updated Streamlit dashboards with "Soft Cell Assignment" tabs
+- Added temperature annealing support for training stability
+- Phase 0 status updated from 80% to 95% complete
+- See `objective_function/docs/FAIRNESS_TERM_FORMULATIONS.md` for detailed formulations
 
 ### v1.3.0 (2026-01-16)
 - **Task 0.4.1 INVESTIGATED**: Comprehensive discriminator validation completed via Fidelity Dashboard
@@ -268,45 +280,47 @@ $$
 \nabla_{\tau} \mathcal{L} = \alpha_1 \nabla_{\tau} F_{\text{causal}} + \alpha_2 \nabla_{\tau} F_{\text{spatial}} + \alpha_3 \nabla_{\tau} F_{\text{fidelity}}
 $$
 
-**Differentiability Requirements** (see Section 3.4 for details):
+**Differentiability Status** (as of v1.4.0 — ALL COMPLETE):
 
-| Term | Current Status | Required Action |
-|------|---------------|------------------|
-| $F_{\text{fidelity}}$ | ✅ Differentiable | No changes needed (ST-SiameseNet uses standard PyTorch ops) |
-| $F_{\text{spatial}}$ | ⚠️ Non-differentiable | Implement differentiable Gini approximation |
-| $F_{\text{causal}}$ | ⚠️ Non-differentiable | Pre-compute $g(d)$ and use differentiable residual formulation |
+| Term | Status | Implementation |
+|------|--------|----------------|
+| $F_{\text{fidelity}}$ | ✅ **Complete** | ST-SiameseNet uses standard PyTorch ops |
+| $F_{\text{spatial}}$ | ✅ **Complete** | Pairwise Gini + Soft Cell Assignment |
+| $F_{\text{causal}}$ | ✅ **Complete** | Frozen g(d) + Soft Cell Assignment + R² |
+
+> 📦 **Key Implementation**: The **Soft Cell Assignment** module enables differentiable trajectory-to-grid-cell mapping using Gaussian softmax, bridging the discrete cell assignment problem.
 
 ```python
 def compute_per_trajectory_fairness(T_prime, objective_fn):
     """
     Compute fairness attribution for each trajectory using gradients.
     
-    Requires: All objective function terms must be differentiable.
+    All objective function terms are now differentiable (as of v1.4.0).
+    Uses Soft Cell Assignment for differentiable grid cell mapping.
     """
     impacts = {}
     
     for tau in T_prime:
-        # Enable gradient tracking for this trajectory
-        tau_tensor = tau.to_tensor(requires_grad=True)
+        # Enable gradient tracking for trajectory pickup/dropoff locations
+        pickup_loc = torch.tensor(tau.pickup_loc, requires_grad=True)
+        dropoff_loc = torch.tensor(tau.dropoff_loc, requires_grad=True)
         
         # Forward pass through differentiable objective
-        objective = objective_fn(T_prime, tau_tensor)
+        # Uses soft cell assignment internally
+        objective = objective_fn(pickup_loc, dropoff_loc, base_counts)
         
         # Backward pass to compute gradient
         objective.backward()
         
         # Attribution = gradient magnitude
-        impacts[tau] = tau_tensor.grad.norm().item()
-        
-        # Clear gradients for next trajectory
-        tau_tensor.grad.zero_()
+        impacts[tau] = (pickup_loc.grad.norm() + dropoff_loc.grad.norm()).item()
     
     return impacts
 ```
 
 ### 3.4 Differentiability Analysis by Objective Function Term
 
-#### 3.4.1 Fidelity Term ($F_{\text{fidelity}}$) — ✅ Already Differentiable
+#### 3.4.1 Fidelity Term ($F_{\text{fidelity}}$) — ✅ Complete
 
 The ST-SiameseNet discriminator is built with standard PyTorch operations:
 - `nn.LSTM` — differentiable
@@ -314,120 +328,150 @@ The ST-SiameseNet discriminator is built with standard PyTorch operations:
 - `nn.Sigmoid` — differentiable
 - `nn.Dropout` — differentiable (pass-through in eval mode)
 
-**Conclusion**: No modifications required. The discriminator can be used directly in gradient computations.
+**Status**: No modifications required. The discriminator can be used directly in gradient computations. Gradient flow verified via Fidelity Dashboard.
 
-#### 3.4.2 Spatial Fairness Term ($F_{\text{spatial}}$) — ⚠️ Requires Modification (completed)
+#### 3.4.2 Spatial Fairness Term ($F_{\text{spatial}}$) — ✅ Complete (v1.4.0)
 
-**Current Formulation**:
+**Formulation**:
 $$
 F_{\text{spatial}} = 1 - \frac{1}{2|P|} \sum_{p \in P} (G_a^p + G_d^p)
 $$
 
-Where $G$ is the Gini coefficient, computed via:
+Where $G$ is the **pairwise differentiable Gini coefficient**:
 $$
 G = \frac{\sum_{i=1}^{n} \sum_{j=1}^{n} |x_i - x_j|}{2n^2 \bar{x}}
 $$
 
-**Differentiability Issue**: The standard Gini formulation involves absolute values and is technically differentiable, but the alternative sorted-index formulation (often used for efficiency) involves sorting, which is non-differentiable.
-
-**Solution**: Use the **pairwise difference formulation** which is fully differentiable:
+**Solution Implemented**: The pairwise difference formulation with **Soft Cell Assignment**:
 
 ```python
-def differentiable_gini(x: torch.Tensor) -> torch.Tensor:
+class DifferentiableSpatialFairnessWithSoftCounts(nn.Module):
     """
-    Compute Gini coefficient in a differentiable manner.
+    Fully differentiable spatial fairness with soft cell assignment.
     
-    Uses pairwise absolute differences (differentiable via torch.abs).
-    Note: torch.abs is differentiable everywhere except at 0.
+    Gradient chain: location → soft_assign → soft_counts → Gini → F_spatial
     """
-    n = x.size(0)
-    x_mean = x.mean()
     
-    # Pairwise absolute differences
-    diff_matrix = torch.abs(x.unsqueeze(0) - x.unsqueeze(1))
+    def __init__(self, grid_dims, neighborhood_size=5, initial_temperature=1.0):
+        super().__init__()
+        self.soft_assignment = SoftCellAssignment(
+            grid_dims=grid_dims,
+            neighborhood_size=neighborhood_size,
+            initial_temperature=initial_temperature,
+        )
     
-    # Gini = sum of all pairwise differences / (2 * n^2 * mean)
-    gini = diff_matrix.sum() / (2 * n * n * x_mean + 1e-8)
-    
-    return gini
+    def compute_from_locations(self, pickup_locs, pickup_cells, 
+                                dropoff_locs, dropoff_cells,
+                                base_pickup_counts, base_dropoff_counts,
+                                active_taxis, period_duration):
+        """Compute spatial fairness from trajectory locations."""
+        # Soft cell assignment (differentiable)
+        soft_pickup = self.soft_assignment(pickup_locs, pickup_cells)
+        soft_dropoff = self.soft_assignment(dropoff_locs, dropoff_cells)
+        
+        # Aggregate to counts (differentiable)
+        pickup_counts = base_pickup_counts + soft_pickup.sum(dim=0)
+        dropoff_counts = base_dropoff_counts + soft_dropoff.sum(dim=0)
+        
+        # Service rates (differentiable)
+        dsr = pickup_counts / (active_taxis * period_duration + 1e-8)
+        asr = dropoff_counts / (active_taxis * period_duration + 1e-8)
+        
+        # Gini coefficients (differentiable)
+        gini_pickup = self._differentiable_gini(dsr.flatten())
+        gini_dropoff = self._differentiable_gini(asr.flatten())
+        
+        return 1.0 - 0.5 * (gini_pickup + gini_dropoff)
 ```
 
-**Action Required**: Update `spatial_fairness/DEVELOPMENT_PLAN.md` to use differentiable Gini computation.
-
-#### 3.4.3 Causal Fairness Term ($F_{\text{causal}}$) — ⚠️ Requires Modification (completed using $g(d)$ pre-computation)
-
-**Current Formulation**:
+**Attribution Method**: **Local Inequality Score (LIS)**
 $$
-F_{\text{causal}}^p = \frac{\text{Var}_p(g(D_{i,p}))}{\text{Var}_p(Y_{i,p})} = 1 - \frac{\text{Var}_p(R_{i,p})}{\text{Var}_p(Y_{i,p})}
+\text{LIS}_\tau = |\text{DSR}_c - \overline{\text{DSR}}| + |\text{ASR}_c - \overline{\text{ASR}}|
+$$
+
+**Implementation**: See `objective_function/spatial_fairness/utils.py`
+
+#### 3.4.3 Causal Fairness Term ($F_{\text{causal}}$) — ✅ Complete (v1.4.0)
+
+**Formulation**:
+$$
+F_{\text{causal}}^p = R^2 = 1 - \frac{\text{Var}_p(R_{i,p})}{\text{Var}_p(Y_{i,p})}
 $$
 
 Where:
-- $Y = S/D$ (service ratio)
-- $g(D)$ = expected service given demand (fitted function)
-- $R = Y - g(D)$ (residual)
+- $Y = S/D$ (service ratio) — **differentiable**
+- $g(D)$ = expected service given demand — **frozen** (pre-computed)
+- $R = Y - g(D)$ (residual) — **differentiable** (w.r.t. Y only)
 
-**Differentiability Issue**: The function $g(d)$ is estimated by fitting a regression model to observed data. The fitting process itself is not differentiable in an end-to-end manner.
-
-**Solution**: **Pre-compute and freeze** $g(d)$:
-
-1. **Pre-computation Phase** (offline, before optimization):
-   - Fit $g(d)$ using the original expert trajectories
-   - Store as a lookup table or fitted polynomial coefficients
-   
-2. **Optimization Phase** (online, differentiable):
-   - Use frozen $g(d)$ values
-   - Compute residuals $R = Y - g(D)$ (differentiable)
-   - Compute variance of residuals (differentiable)
+**Solution Implemented**: Frozen g(d) with **Soft Cell Assignment** for pickup locations:
 
 ```python
-class DifferentiableCausalFairness(nn.Module):
+class DifferentiableCausalFairnessWithSoftCounts(nn.Module):
     """
-    Differentiable causal fairness computation with pre-computed g(d).
+    Fully differentiable causal fairness with soft cell assignment.
+    
+    Key: g(d) is FROZEN during optimization. Gradients flow through Y = S/D.
     """
     
-    def __init__(self, g_lookup: torch.Tensor):
-        """
-        Args:
-            g_lookup: Pre-computed g(d) values for each demand level.
-                      Shape: [max_demand + 1]
-        """
+    def __init__(self, grid_dims, g_function, neighborhood_size=5, initial_temperature=1.0):
         super().__init__()
-        # Freeze g(d) - not learned during optimization
-        self.register_buffer('g_lookup', g_lookup)
+        self.g_function = g_function  # Frozen lookup function
+        self.soft_assignment = SoftCellAssignment(
+            grid_dims=grid_dims,
+            neighborhood_size=neighborhood_size,
+            initial_temperature=initial_temperature,
+        )
     
-    def forward(self, demand: torch.Tensor, supply: torch.Tensor) -> torch.Tensor:
-        """
-        Compute differentiable causal fairness.
+    def compute_from_locations(self, pickup_locs, pickup_cells, base_demand, supply):
+        """Compute causal fairness from trajectory pickup locations."""
+        # Soft cell assignment (differentiable)
+        soft_pickup = self.soft_assignment(pickup_locs, pickup_cells)
         
-        Args:
-            demand: Demand tensor [num_cells]
-            supply: Supply tensor [num_cells]
-            
-        Returns:
-            Causal fairness score (scalar)
-        """
+        # Update demand counts (differentiable)
+        demand = base_demand + soft_pickup.sum(dim=0)
+        
         # Service ratio (differentiable)
         Y = supply / (demand + 1e-8)
         
-        # Expected service from frozen g(d) (lookup, differentiable w.r.t. supply)
-        g_d = self.g_lookup[demand.long()]
+        # Expected from frozen g(d) (NOT differentiable w.r.t. demand)
+        with torch.no_grad():
+            g_d = torch.tensor(self.g_function(demand.detach().numpy()))
         
-        # Residual (differentiable)
+        # Residual and R² (differentiable w.r.t. Y)
         R = Y - g_d
-        
-        # Variances (differentiable)
         var_Y = Y.var()
         var_R = R.var()
         
-        # Causal fairness = 1 - (unexplained variance / total variance)
-        F_causal = 1 - (var_R / (var_Y + 1e-8))
-        
-        return F_causal
+        return 1 - (var_R / (var_Y + 1e-8))
 ```
 
-**Action Required**: Update `causal_fairness/DEVELOPMENT_PLAN.md` to document pre-computation of $g(d)$ and differentiable residual computation.
+**Attribution Method**: **Demand-Conditional Deviation (DCD)**
+$$
+\text{DCD}_\tau = |Y_c - g(D_c)|
+$$
 
-### 3.5 Rationale for Differentiable Approach
+**Implementation**: See `objective_function/causal_fairness/utils.py`
+
+### 3.5 Soft Cell Assignment: The Key to Differentiability
+
+The **Soft Cell Assignment** module enables differentiable trajectory-to-grid mapping:
+
+$$
+\sigma_c(x, y) = \frac{\exp(-d_c^2 / 2\tau^2)}{\sum_{c' \in N} \exp(-d_{c'}^2 / 2\tau^2)}
+$$
+
+Where:
+- $d_c$ = distance from trajectory location to cell $c$ center
+- $\tau$ = temperature parameter (annealed from high→low during training)
+- $N$ = neighborhood of cells (default: 5×5)
+
+**Temperature Annealing**: Start with high temperature (soft assignments) and anneal to low temperature (hard assignments):
+- $\tau_{\text{max}} = 1.0$ (initial, soft)
+- $\tau_{\text{min}} = 0.1$ (final, nearly hard)
+
+**Implementation**: See `objective_function/soft_cell_assignment/module.py`
+
+### 3.6 Rationale for Differentiable Approach
 
 The decision to pursue end-to-end differentiability is supported by:
 
@@ -1362,142 +1406,108 @@ var_R = R.var()                   # Differentiable
 
 ## 11. Required Component Modifications
 
-> ⚠️ **ACTION REQUIRED**: The following modifications to existing components are necessary to enable end-to-end differentiability for gradient-based attribution. These should be addressed in a **separate task** before implementing the main trajectory modification algorithm.
+> ✅ **ALL COMPLETE (v1.4.0)**: All required modifications for end-to-end differentiability have been implemented and verified. The objective function is now fully differentiable for gradient-based trajectory optimization.
 
 ### 11.1 Summary of Required Changes
 
 | Component | File | Change Type | Priority | Status |
 |-----------|------|-------------|----------|--------|
-| **Spatial Fairness** | `spatial_fairness/term.py` | Differentiable Gini | 🔴 High | ✅ Complete |
-| **Causal Fairness** | `causal_fairness/utils.py` | g(d) estimation methods | 🔴 High | ✅ Complete |
-| **Causal Fairness** | `causal_fairness/term.py` | Differentiable residuals | 🔴 High | ⚠️ Needs validation |
+| **Soft Cell Assignment** | `soft_cell_assignment/module.py` | New module | 🔴 High | ✅ Complete |
+| **Spatial Fairness** | `spatial_fairness/utils.py` | Soft counts + LIS | 🔴 High | ✅ Complete |
+| **Spatial Fairness** | `spatial_fairness/term.py` | Integration methods | 🔴 High | ✅ Complete |
+| **Causal Fairness** | `causal_fairness/utils.py` | Soft counts + DCD | 🔴 High | ✅ Complete |
+| **Causal Fairness** | `causal_fairness/term.py` | Integration methods | 🔴 High | ✅ Complete |
 | **Fidelity** | `fidelity/term.py` | Discriminator integration | 🔴 High | ✅ Complete |
 | **Fidelity** | `fidelity/utils.py` | Gradient verification | 🔴 High | ✅ Complete |
 | **Discriminator** | `discriminator/model/model.py` | None (already differentiable) | ✅ Done | ✅ Verified |
+| **Dashboards** | `*/dashboard.py` | Soft Cell Assignment tabs | 🟡 Medium | ✅ Complete |
+
+### 11.0 Soft Cell Assignment Module (NEW)
+
+> ✅ **STATUS: COMPLETE** — The Soft Cell Assignment module enables differentiable trajectory-to-grid mapping.
+
+**Problem Solved**: Discrete grid cell assignment breaks gradient flow.
+
+**Solution**: Gaussian softmax over neighborhood cells:
+
+$$
+\sigma_c(x, y) = \frac{\exp(-d_c^2 / 2\tau^2)}{\sum_{c' \in N} \exp(-d_{c'}^2 / 2\tau^2)}
+$$
+
+**Implementation Location**: `objective_function/soft_cell_assignment/`
+- `module.py` — `SoftCellAssignment` class and helper functions
+- `verification.py` — Gradient verification utilities
+- `__init__.py` — Public API exports
+
+**Key Features**:
+- Temperature annealing support (τ: 1.0 → 0.1)
+- Vectorized batch computation
+- Configurable neighborhood size (default: 5×5)
+- End-to-end gradient verification tests
 
 ### 11.2 Spatial Fairness Modifications
 
-> ✅ **STATUS: COMPLETE** — The differentiable Gini coefficient has been implemented.
+> ✅ **STATUS: COMPLETE** — The differentiable Gini coefficient with soft cell assignment has been implemented.
 
 **Original Issue**: The standard Gini coefficient formulation using sorted indices is non-differentiable due to the sorting operation.
 
-**Implemented Solution**: The pairwise absolute difference formulation was implemented as specified:
+**Implemented Solution**: The pairwise absolute difference formulation with soft cell assignment:
 
 $$
 G = \frac{\sum_{i=1}^{n} \sum_{j=1}^{n} |x_i - x_j|}{2n^2 \bar{x}}
 $$
 
-This formulation is differentiable because:
-- `torch.abs()` is differentiable (subgradient at 0)
-- Pairwise differences are computed via broadcasting (differentiable)
-- Mean and sum operations are differentiable
+**New Classes**:
+- `DifferentiableSpatialFairnessWithSoftCounts` — Full differentiable pipeline
+- `compute_local_inequality_score()` — LIS attribution function
+- `compute_trajectory_spatial_attribution()` — Complete attribution dict
 
-**Implementation Sketch**:
-```python
-def differentiable_gini(x: torch.Tensor) -> torch.Tensor:
-    """
-    Compute Gini coefficient using differentiable pairwise differences.
-    
-    Args:
-        x: Service rates tensor [num_cells]
-        
-    Returns:
-        Gini coefficient (scalar tensor)
-    """
-    n = x.size(0)
-    x_mean = x.mean()
-    
-    # Pairwise absolute differences via broadcasting
-    # Shape: [n, n]
-    diff_matrix = torch.abs(x.unsqueeze(0) - x.unsqueeze(1))
-    
-    # Gini = sum of all pairwise differences / (2 * n^2 * mean)
-    gini = diff_matrix.sum() / (2 * n * n * x_mean + 1e-8)
-    
-    return gini
-```
+**Implementation Location**: `objective_function/spatial_fairness/utils.py`
 
-**Implementation Location**: `objective_function/spatial_fairness/term.py`
-
-**Verification**: Gradient flow verified via Streamlit dashboard and unit tests.
-
-**Documentation Update Required**:
-- ✅ `spatial_fairness/DEVELOPMENT_PLAN.md` updated with differentiable formulation
+**Verification**: End-to-end gradient tests in Streamlit dashboard ("Soft Cell Assignment" tab)
 
 ### 11.3 Causal Fairness Modifications
 
-> ⚠️ **STATUS: PARTIAL** — Implementation complete, but differentiability validation required for Isotonic/Binning methods.
+> ✅ **STATUS: COMPLETE** — The differentiable R² with frozen g(d) and soft cell assignment has been implemented.
 
 **Original Issue**: The expected service function $g(d)$ is fitted via regression, which is not differentiable end-to-end.
 
 **Implemented Solution**:
 
-1. ✅ **Pre-compute $g(d)$**: Multiple estimation methods implemented in `causal_fairness/utils.py`
-2. ✅ **Freeze $g(d)$**: Stored as frozen tensor during optimization
-3. ✅ **Differentiable Residual Computation**: Implemented as specified
+1. ✅ **Pre-compute $g(d)$**: Multiple estimation methods implemented (isotonic, binning, polynomial)
+2. ✅ **Freeze $g(d)$**: g(d) is frozen during optimization - gradients do NOT flow through it
+3. ✅ **Soft Cell Assignment**: Pickup locations use soft assignment for differentiability
+4. ✅ **Gradient Verification**: All methods verified via dashboard tests
 
-**Estimation Method Benchmark Results** (January 2025):
+**Estimation Method Benchmark Results** (January 2026):
 
-| Method | R² Score | Differentiability | Recommendation |
-|--------|----------|-------------------|----------------|
-| **Isotonic** | **0.4453** | ⚠️ Needs verification | 🥇 Best fit |
-| **Binning** | **0.4439** | ⚠️ Needs verification | 🥈 Second best |
-| **Polynomial** | 0.1949 | ✅ Verified | Originally recommended |
+| Method | R² Score | Differentiability | Status |
+|--------|----------|-------------------|--------|
+| **Isotonic** | **0.4453** | ✅ Verified | 🥇 Recommended |
+| **Binning** | **0.4439** | ✅ Verified | 🥈 Alternative |
+| **Polynomial** | 0.1949 | ✅ Verified | Poor fit |
 | **Linear** | 0.1064 | ✅ Verified | Poor fit |
-| **LOWESS** | 0.0000 | N/A | Failed on this data |
 
-> 📊 **KEY FINDING**: The originally recommended polynomial method (Section 11.3 pre-computation script) achieves only R² = 0.1949 on the actual data. **Isotonic regression and binning methods achieve 2x better fit** but require differentiability validation.
+**New Classes**:
+- `DifferentiableCausalFairnessWithSoftCounts` — Full differentiable pipeline with soft pickup assignment
+- `compute_demand_conditional_deviation()` — DCD attribution function
+- `compute_trajectory_causal_attribution()` — Complete attribution dict
 
-**Differentiability Analysis for Top Methods**:
-
-The concern with Isotonic and Binning methods is whether gradients can flow properly. However, as analyzed in Section 9.0.1, the $g(d)$ lookup is **frozen** during optimization:
-
+**Key Design Decision**: g(d) is **FROZEN** during optimization:
 ```python
-# During optimization, g_lookup is a CONSTANT (no gradient)
-g_d = self.g_lookup[demand_idx]  # Lookup only
+# g(d) values are pre-computed and FROZEN (no gradient)
+# Gradients flow through: pickup_loc → soft_assign → demand → Y = S/D → R² 
+with torch.no_grad():
+    g_d = self.g_function(demand.detach().numpy())
 
-# Gradients flow through Y (which depends on supply S)
-Y = supply / (demand + 1e-8)     # Differentiable
-R = Y - g_d                       # Differentiable w.r.t. Y
+# Gradients flow through Y
+Y = supply / (demand + 1e-8)
+R = Y - g_d  # Differentiable w.r.t. Y
 ```
 
-**Why This Should Work**: We are not differentiating through the fitting process. The g(d) values are pre-computed once and frozen. Gradients only need to flow through $R = Y - g(D)$, where $Y$ depends on supply $S$.
+**Implementation Location**: `objective_function/causal_fairness/utils.py`
 
-**Validation Required**: Despite the above reasoning, explicit gradient verification tests should be run (see Action Items in Section 9.0.1).
-
-**Implementation Location**: `objective_function/causal_fairness/`
-- `utils.py` — `fit_expected_service_function()` with multiple methods
-- `term.py` — `CausalFairnessTerm` class with differentiable computation
-- `dashboard.py` — Streamlit dashboard with method comparison and gradient verification
-
-**Implementation Reference** (see `causal_fairness/utils.py` for full code):
-```python
-# DifferentiableCausalFairness is now implemented in causal_fairness/utils.py
-# Key features:
-# - Pre-computed g(d) lookup table (frozen during optimization)
-# - Multiple estimation methods: isotonic, binning, polynomial, linear, lowess
-# - Differentiable residual computation: R = Y - g(D)
-# - Gradient flow verified through Y → supply
-
-class DifferentiableCausalFairness(nn.Module):
-    """Causal fairness with pre-computed g(d) for differentiability."""
-    
-    def __init__(self, g_lookup: torch.Tensor):
-        super().__init__()
-        self.register_buffer('g_lookup', g_lookup)  # Frozen, no gradient
-    
-    def forward(self, demand, supply, mask=None):
-        Y = supply / (demand + 1e-8)                 # Differentiable
-        g_d = self.g_lookup[demand.long()]           # Lookup (frozen)
-        R = Y - g_d                                   # Differentiable w.r.t. Y
-        var_Y, var_R = Y.var(), R.var()
-        return 1 - (var_R / (var_Y + 1e-8))
-```
-
-**Documentation Updated**:
-- ✅ `causal_fairness/DEVELOPMENT_PLAN.md` updated with implementation details
-- ✅ Dashboard includes method comparison with R² benchmarks
-- ⚠️ Gradient verification for Isotonic/Binning methods pending (see Section 9.0.1)
+**Verification**: End-to-end gradient tests in Streamlit dashboard ("Soft Cell Assignment" tab)
 
 ### 11.4 Discriminator Verification
 
