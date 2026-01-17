@@ -2007,9 +2007,9 @@ def render_integration_tab(config: Dict[str, Any]):
     col_mem1, col_mem2 = st.columns(2)
     with col_mem1:
         use_hard_counts = st.checkbox(
-            "Use hard cell counts (faster)",
+            "Use hard cell counts during initialization (faster)",
             value=True,
-            help="Use discrete cell assignment instead of soft. Much faster for large datasets while maintaining statistical validity."
+            help="Use discrete cell assignment instead of soft during tensor initialization. Much faster for large datasets while maintaining statistical validity."
         )
     
     # Supply/Demand data source
