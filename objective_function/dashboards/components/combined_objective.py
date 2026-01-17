@@ -263,10 +263,27 @@ if TORCH_AVAILABLE:
             R = Y - g_d
             
             # R² computation
+            # Note: R² = 1 - SS_res/SS_tot = 1 - Var(R)/Var(Y)
+            # If g(d) explains variance well, Var(R) << Var(Y), so R² → 1
+            # If g(d) is poor, Var(R) ≈ Var(Y), so R² → 0
             var_Y = Y.var() + self.eps
             var_R = R.var()
             
+            # Handle edge case: if var_R > var_Y, R² would be negative
+            # This can happen if g(d) is a poor fit
             r_squared = 1.0 - var_R / var_Y
+            
+            # Store debug info as attributes for inspection
+            self._last_causal_debug = {
+                'n_active_cells': int(mask.sum().item()),
+                'demand_range': (D.min().item(), D.max().item()),
+                'supply_range': (S.min().item(), S.max().item()),
+                'Y_range': (Y.min().item(), Y.max().item()),
+                'g_d_range': (g_d.min().item(), g_d.max().item()),
+                'var_Y': var_Y.item(),
+                'var_R': var_R.item(),
+                'r_squared_raw': r_squared.item(),
+            }
             
             return torch.clamp(r_squared, 0.0, 1.0)
         

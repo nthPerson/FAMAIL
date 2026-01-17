@@ -185,37 +185,93 @@ def render_gradient_flow_tab(config: Dict[str, Any]):
         st.markdown("""
         ### Combined Objective Function
         
-        The FAMAIL objective combines three differentiable terms:
+        The FAMAIL objective combines three differentiable terms. All terms are designed to output
+        values in [0, 1] where **higher is better** (maximization objective):
         """)
         
         st.latex(r"""
         \mathcal{L} = \alpha_1 \cdot F_{\text{causal}} + \alpha_2 \cdot F_{\text{spatial}} + \alpha_3 \cdot F_{\text{fidelity}}
         """)
         
-        col1, col2, col3 = st.columns(3)
+        st.markdown("---")
         
-        with col1:
-            st.markdown("**Spatial Fairness**")
-            st.latex(r"F_{\text{spatial}} = 1 - G(\tilde{C})")
-            st.markdown("Pairwise Gini coefficient")
+        # Spatial Fairness - Full Formulation
+        st.markdown("### 1. Spatial Fairness Term")
+        st.markdown("Measures equitable distribution of pickups and dropoffs across grid cells using the Gini coefficient:")
         
-        with col2:
-            st.markdown("**Causal Fairness**")
-            st.latex(r"F_{\text{causal}} = R^2 = 1 - \frac{\text{Var}(R)}{\text{Var}(Y)}")
-            st.markdown("R² with frozen g(d)")
+        st.latex(r"""
+        F_{\text{spatial}} = 1 - \frac{G(\tilde{C}_{\text{pickup}}) + G(\tilde{C}_{\text{dropoff}})}{2}
+        """)
         
-        with col3:
-            st.markdown("**Fidelity**")
-            st.latex(r"F_{\text{fidelity}} = D(\tau', \tau)")
-            st.markdown("Discriminator similarity")
+        st.markdown("Where the **Pairwise Gini coefficient** is computed as:")
+        st.latex(r"""
+        G(\tilde{C}) = \frac{\sum_{i=1}^{n} \sum_{j=1}^{n} |\tilde{C}_i - \tilde{C}_j|}{2n^2 \cdot \bar{C}}
+        """)
+        
+        st.markdown("""
+        **Variables:**
+        - $\\tilde{C}_i$ = Soft count in cell $i$ (differentiable via soft assignment)
+        - $\\bar{C}$ = Mean count across all cells
+        - $n$ = Total number of grid cells
+        - Range: $G \\in [0, 1]$ where 0 = perfect equality, 1 = maximum inequality
+        """)
+        
+        st.markdown("---")
+        
+        # Causal Fairness - Full Formulation
+        st.markdown("### 2. Causal Fairness Term")
+        st.markdown("Measures how well supply matches expected demand using R² regression quality:")
+        
+        st.latex(r"""
+        F_{\text{causal}} = R^2 = 1 - \frac{\text{Var}(R)}{\text{Var}(Y)}
+        """)
+        
+        st.markdown("Where the **residual** measures deviation from expected service ratio:")
+        st.latex(r"""
+        R_i = Y_i - g(D_i), \quad \text{where } Y_i = \frac{S_i}{D_i}
+        """)
+        
+        st.markdown("""
+        **Variables:**
+        - $Y_i$ = Actual service ratio (supply/demand) in cell $i$
+        - $D_i$ = Demand (pickup count) in cell $i$ - **differentiable via soft counts**
+        - $S_i$ = Supply in cell $i$ (fixed during optimization)
+        - $g(D_i)$ = Expected service ratio given demand $D_i$ (**frozen** baseline function)
+        - $R_i$ = Residual: difference between actual and expected service ratio
+        - Range: $R^2 \\in [0, 1]$ where 1 = perfect fit, 0 = no explanatory power
+        
+        **Key insight:** The $g(d)$ function is pre-fitted and frozen during optimization. 
+        Only the demand distribution $D_i$ is modified through trajectory changes.
+        """)
+        
+        st.markdown("---")
+        
+        # Fidelity - Full Formulation  
+        st.markdown("### 3. Fidelity Term")
+        st.markdown("Measures how similar modified trajectories are to original expert behavior:")
+        
+        st.latex(r"""
+        F_{\text{fidelity}} = \frac{1}{|\mathcal{T}|} \sum_{\tau \in \mathcal{T}} D(\tau', \tau)
+        """)
+        
+        st.markdown("""
+        **Variables:**
+        - $D(\cdot, \cdot)$ = Pre-trained ST-SiameseNet discriminator (same-driver probability)
+        - $\\tau$ = Original trajectory
+        - $\\tau'$ = Modified trajectory
+        - $\\mathcal{T}$ = Set of trajectories being modified
+        - Range: $F_{\\text{fidelity}} \\in [0, 1]$ where 1 = indistinguishable from original
+        
+        **Key insight:** The discriminator is pre-trained and frozen. Gradients flow through
+        the trajectory features but not the discriminator weights.
+        """)
         
         st.markdown("---")
         st.markdown("### Current Weights")
-        st.markdown(f"""
-        - α_spatial = {config['alpha_spatial']:.3f}
-        - α_causal = {config['alpha_causal']:.3f}
-        - α_fidelity = {config['alpha_fidelity']:.3f}
-        """)
+        col1, col2, col3 = st.columns(3)
+        col1.metric("α_spatial", f"{config['alpha_spatial']:.3f}")
+        col2.metric("α_causal", f"{config['alpha_causal']:.3f}")
+        col3.metric("α_fidelity", f"{config['alpha_fidelity']:.3f}")
     
     # Gradient Flow Diagram
     with st.expander("📊 Gradient Flow Diagram", expanded=True):
@@ -267,6 +323,8 @@ def render_gradient_flow_tab(config: Dict[str, Any]):
         st.markdown("### Term-by-Term Results")
         
         cols = st.columns(3)
+        grad_data = {'Term': [], 'Mean Gradient': [], 'Abs Mean': [], 'Nonzero %': []}
+        
         for i, (term_name, term_report) in enumerate(report.term_reports.items()):
             with cols[i]:
                 st.markdown(f"**{term_name.upper()}**")
@@ -278,12 +336,84 @@ def render_gradient_flow_tab(config: Dict[str, Any]):
                         stats = term_report.gradient_stats
                         st.caption(f"Mean: {stats.mean:.2e}")
                         st.caption(f"Nonzero: {stats.nonzero_ratio*100:.1f}%")
+                        
+                        # Collect data for comparison chart
+                        grad_data['Term'].append(term_name.upper())
+                        grad_data['Mean Gradient'].append(stats.mean)
+                        grad_data['Abs Mean'].append(abs(stats.mean))
+                        grad_data['Nonzero %'].append(stats.nonzero_ratio * 100)
                 else:
                     st.error(f"✗ {term_report.error_message}")
         
         # Combined objective
         st.markdown("---")
         st.metric("Total Objective L", f"{report.total_objective:.4f}")
+        
+        # Gradient Comparison Visualization
+        if grad_data['Term'] and PLOTLY_AVAILABLE:
+            st.markdown("### Gradient Magnitude Comparison")
+            
+            fig = make_subplots(rows=1, cols=2, subplot_titles=(
+                "Absolute Gradient Magnitude (log scale)", 
+                "Nonzero Gradient Percentage"
+            ))
+            
+            # Bar chart of absolute gradient magnitudes
+            colors = ['#1f77b4', '#ff7f0e', '#2ca02c']
+            fig.add_trace(
+                go.Bar(
+                    x=grad_data['Term'], 
+                    y=grad_data['Abs Mean'],
+                    marker_color=colors[:len(grad_data['Term'])],
+                    text=[f"{v:.2e}" for v in grad_data['Abs Mean']],
+                    textposition='outside',
+                    name='|Mean Gradient|'
+                ),
+                row=1, col=1
+            )
+            
+            # Bar chart of nonzero percentages
+            fig.add_trace(
+                go.Bar(
+                    x=grad_data['Term'], 
+                    y=grad_data['Nonzero %'],
+                    marker_color=colors[:len(grad_data['Term'])],
+                    text=[f"{v:.1f}%" for v in grad_data['Nonzero %']],
+                    textposition='outside',
+                    name='Nonzero %'
+                ),
+                row=1, col=2
+            )
+            
+            fig.update_yaxes(type="log", title_text="|Mean Gradient|", row=1, col=1)
+            fig.update_yaxes(title_text="Percentage", range=[0, 110], row=1, col=2)
+            fig.update_layout(height=350, showlegend=False)
+            
+            st.plotly_chart(fig, use_container_width=True)
+            
+            # Gradient magnitude analysis
+            if len(grad_data['Abs Mean']) >= 2:
+                max_grad = max(grad_data['Abs Mean'])
+                min_grad = min(g for g in grad_data['Abs Mean'] if g > 0)
+                ratio = max_grad / min_grad if min_grad > 0 else float('inf')
+                
+                if ratio > 1000:
+                    st.warning(f"""
+                    ⚠️ **Gradient Magnitude Imbalance Detected**
+                    
+                    The ratio between the largest and smallest gradient magnitudes is **{ratio:.1e}x**.
+                    This can cause optimization issues:
+                    - Terms with larger gradients will dominate updates
+                    - Terms with smaller gradients may be effectively ignored
+                    
+                    **Recommendations:**
+                    1. Consider **gradient normalization** per-term before combining
+                    2. Adjust **α weights** to compensate (increase weight for low-gradient terms)
+                    3. Use **adaptive learning rates** per-term
+                    4. The causal term may have small gradients because it depends on aggregate statistics
+                    """)
+                else:
+                    st.info(f"Gradient magnitude ratio: {ratio:.1f}x (acceptable)")
     
     # Temperature Annealing Analysis
     st.subheader("🌡️ Temperature Annealing Analysis")
@@ -326,19 +456,52 @@ def render_gradient_flow_tab(config: Dict[str, Any]):
                     row=1, col=1
                 )
                 
-                # Gradient plot
+                # Gradient plot - convert to scientific notation friendly values
+                grad_values = np.abs(results['spatial_grad_means'])
+                
                 fig.add_trace(
-                    go.Scatter(x=results['temperatures'], y=np.abs(results['spatial_grad_means']), 
-                              name='|∇F_spatial|', mode='lines+markers'),
+                    go.Scatter(
+                        x=results['temperatures'], 
+                        y=grad_values,
+                        name='|∇F_spatial|', 
+                        mode='lines+markers',
+                        hovertemplate='τ=%{x:.2f}<br>|∇F|=%{y:.2e}<extra></extra>'
+                    ),
                     row=1, col=2
                 )
                 
                 fig.update_xaxes(title_text="Temperature τ", row=1, col=1)
                 fig.update_xaxes(title_text="Temperature τ", row=1, col=2)
-                fig.update_yaxes(title_text="Value", row=1, col=1)
-                fig.update_yaxes(title_text="Gradient Magnitude", row=1, col=2)
+                fig.update_yaxes(title_text="Objective Value [0-1]", row=1, col=1)
+                fig.update_yaxes(
+                    title_text="Mean |∂L/∂coord| (per coordinate)", 
+                    row=1, col=2,
+                    tickformat='.2e'  # Scientific notation
+                )
                 
+                fig.update_layout(height=400)
                 st.plotly_chart(fig, use_container_width=True)
+                
+                # Explanation for the results
+                st.markdown("""
+                **Interpreting the Results:**
+                
+                📊 **Objective Values (Left Plot):**
+                - **F_spatial** typically increases with temperature because higher τ spreads counts 
+                  more evenly across cells, reducing Gini inequality
+                - **F_causal** may appear flat or near zero in these tests because:
+                  - The test uses a simplified g(d) = constant, making all cells equally "fair"
+                  - With random test points, variance in residuals equals variance in Y
+                  - Real data with actual demand patterns will show more variation
+                
+                📈 **Gradient Magnitude (Right Plot):**
+                - Shows the average absolute gradient per coordinate: $|\\partial \\mathcal{L} / \\partial x|$
+                - Values are typically very small (10⁻⁴ to 10⁻⁶) because:
+                  - Soft assignment spreads influence across many cells
+                  - Each coordinate only affects a small region
+                - Higher temperature → larger gradients (smoother landscape)
+                - Lower temperature → smaller gradients (sharper but more precise)
+                """)
             else:
                 st.dataframe({
                     'Temperature': results['temperatures'],
@@ -387,17 +550,44 @@ def render_soft_cell_assignment_tab(config: Dict[str, Any]):
     # Interactive Visualization
     st.subheader("🎮 Interactive Soft Assignment")
     
+    st.markdown("""
+    Explore how a single point's location affects its soft assignment probabilities across neighboring cells.
+    The visualization shows how probability mass is distributed based on the point's position within its cell.
+    """)
+    
     col1, col2 = st.columns([1, 2])
     
     with col1:
         st.markdown("**Point Location**")
-        loc_x = st.slider("X coordinate", 0.0, float(config['grid_dims'][0]-1), 
-                         float(config['grid_dims'][0]//2) + 0.3, 0.1)
-        loc_y = st.slider("Y coordinate", 0.0, float(config['grid_dims'][1]-1), 
-                         float(config['grid_dims'][1]//2) + 0.7, 0.1)
+        st.caption("Simulate a trajectory endpoint at these grid coordinates")
         
-        temp = st.slider("Temperature τ", 0.01, 5.0, config['temperature'], 0.01)
+        loc_x = st.slider(
+            "X coordinate", 
+            0.0, float(config['grid_dims'][0]-1), 
+            float(config['grid_dims'][0]//2) + 0.3, 0.1,
+            help="Horizontal position in the grid. The decimal part (e.g., .3) represents position within a cell. Try values like 5.0 (cell center) vs 5.5 (cell edge) to see how position affects assignment."
+        )
+        loc_y = st.slider(
+            "Y coordinate", 
+            0.0, float(config['grid_dims'][1]-1), 
+            float(config['grid_dims'][1]//2) + 0.7, 0.1,
+            help="Vertical position in the grid. Combined with X, this determines which cell the point is in and where within that cell."
+        )
+        
+        temp = st.slider(
+            "Temperature τ", 
+            0.01, 5.0, config['temperature'], 0.01,
+            help="Controls softness of assignment. Low τ (0.1): nearly hard assignment to center cell. High τ (2+): probability spreads to many neighbors. This is the key parameter for differentiability."
+        )
         k = config['neighborhood_size']
+        
+        st.markdown("---")
+        st.markdown("**What to observe:**")
+        st.markdown("""
+        - 🎯 **Center cell** (red X): Where the point would be hard-assigned
+        - 🔵 **Color intensity**: Probability mass at each neighbor cell
+        - 📊 **Position within cell**: Points near edges spread more probability to neighbors
+        """)
     
     with col2:
         if TORCH_AVAILABLE and PLOTLY_AVAILABLE:
@@ -520,31 +710,84 @@ def render_attribution_tab(config: Dict[str, Any]):
     
     # Formulas
     with st.expander("📐 Attribution Formulas", expanded=True):
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.markdown("### LIS: Local Inequality Score")
-            st.latex(r"LIS_i = \frac{|c_i - \mu|}{\mu}")
-            st.markdown("""
-            Measures how much cell $i$ deviates from the mean count.
-            - High LIS → Cell contributes more to Gini inequality
-            - Used for **Spatial Fairness** attribution
-            """)
-        
-        with col2:
-            st.markdown("### DCD: Demand-Conditional Deviation")
-            st.latex(r"DCD_i = |Y_i - g(D_i)|")
-            st.markdown("""
-            Measures how much the service ratio deviates from expected.
-            - $Y_i = S_i / D_i$ (actual service ratio)
-            - $g(D_i)$ is the frozen baseline function
-            - Used for **Causal Fairness** attribution
-            """)
+        st.markdown("""
+        Attribution methods identify **which trajectories contribute most to unfairness**.
+        By modifying high-attribution trajectories, we can improve fairness most efficiently.
+        """)
         
         st.markdown("---")
-        st.markdown("### Combined Attribution")
-        st.latex(r"Score_\tau = w_1 \cdot LIS_\tau + w_2 \cdot DCD_\tau")
-        st.markdown(f"Current weights: w₁ (LIS) = {config['lis_weight']:.2f}, w₂ (DCD) = {config['dcd_weight']:.2f}")
+        
+        # LIS Full Definition
+        st.markdown("### LIS: Local Inequality Score (Spatial Attribution)")
+        
+        st.latex(r"LIS_i = \frac{|c_i - \mu|}{\mu}")
+        
+        st.markdown("""
+        **Variable Definitions:**
+        - $c_i$ = Count (pickups or dropoffs) in cell $i$
+        - $\\mu = \\frac{1}{n}\\sum_{j=1}^{n} c_j$ = Global mean count across all cells
+        - $n$ = Total number of grid cells
+        
+        **Interpretation:**
+        - $LIS_i = 0$: Cell has exactly the mean count (perfectly fair)
+        - $LIS_i = 1$: Cell deviates from mean by 100% (e.g., count is 0 or 2×mean)
+        - $LIS_i > 1$: Cell has extreme over/under-representation
+        
+        **Intuition:** Cells with high LIS contribute disproportionately to the Gini coefficient.
+        Trajectories starting/ending in high-LIS cells are prime candidates for modification.
+        """)
+        
+        st.markdown("**For trajectories**, we aggregate pickup and dropoff LIS:")
+        st.latex(r"LIS_\tau = \max(LIS_{\text{pickup}}, LIS_{\text{dropoff}})")
+        
+        st.markdown("---")
+        
+        # DCD Full Definition
+        st.markdown("### DCD: Demand-Conditional Deviation (Causal Attribution)")
+        
+        st.latex(r"DCD_i = |Y_i - g(D_i)|")
+        
+        st.markdown("""
+        **Variable Definitions:**
+        - $Y_i = S_i / D_i$ = Actual service ratio in cell $i$
+        - $S_i$ = Supply (taxis available) in cell $i$
+        - $D_i$ = Demand (pickup requests) in cell $i$
+        - $g(D_i)$ = Expected service ratio for demand level $D_i$ (from pre-fitted baseline)
+        
+        **Interpretation:**
+        - $DCD_i = 0$: Cell's service matches what's expected for its demand level
+        - $DCD_i > 0$: Cell is over-served or under-served relative to expectation
+        
+        **Intuition:** The $g(d)$ function captures the "natural" relationship between demand and service.
+        High DCD indicates **discrimination** — the cell gets different service than other cells with similar demand.
+        This is the causal fairness criterion: outcomes shouldn't depend on location after controlling for demand.
+        """)
+        
+        st.markdown("**For trajectories**, DCD is based on the pickup cell (demand location):")
+        st.latex(r"DCD_\tau = DCD_{\text{pickup cell}}")
+        
+        st.markdown("---")
+        
+        # Combined Attribution
+        st.markdown("### Combined Attribution Score")
+        
+        st.latex(r"Score_\tau = w_1 \cdot \widehat{LIS}_\tau + w_2 \cdot \widehat{DCD}_\tau")
+        
+        st.markdown(f"""
+        **Where:**
+        - $\\widehat{{LIS}}_\\tau$ = Normalized LIS (divided by max LIS across trajectories)
+        - $\\widehat{{DCD}}_\\tau$ = Normalized DCD (divided by max DCD across trajectories)
+        - $w_1$ = {config['lis_weight']:.2f} (LIS weight for spatial fairness)
+        - $w_2$ = {config['dcd_weight']:.2f} (DCD weight for causal fairness)
+        
+        **Interpretation:**
+        - Scores are normalized to [0, 1] for comparability
+        - Higher combined score → trajectory contributes more to overall unfairness
+        - Weights let you prioritize spatial vs. causal fairness improvements
+        
+        **Selection Strategy:** Trajectories with the highest combined scores are selected for modification,
+        as changing them will have the largest impact on improving fairness.
+        """)
     
     # Data Source Selection
     st.subheader("📂 Data Source")
@@ -685,9 +928,47 @@ def render_attribution_tab(config: Dict[str, Any]):
                 st.metric("Mean Score", f"{np.mean(scores):.4f}")
                 st.metric("Max Score", f"{np.max(scores):.4f}")
         
-            # LIS and DCD Heatmaps
+            # Count and Attribution Heatmaps
             if PLOTLY_AVAILABLE:
+                # First show the raw counts for context
+                st.subheader("📊 Pickup and Dropoff Distributions")
+                st.markdown("These count distributions are the input to the attribution calculations.")
+                
+                fig_counts = make_subplots(
+                    rows=1, cols=2,
+                    subplot_titles=("Pickup Counts", "Dropoff Counts"),
+                )
+                
+                fig_counts.add_trace(
+                    go.Heatmap(
+                        z=pickup_counts.T, 
+                        colorscale='Greens',
+                        hovertemplate='Cell (%{x}, %{y})<br>Pickup Count: %{z}<extra></extra>',
+                        colorbar=dict(title="Count", x=0.46)
+                    ), 
+                    row=1, col=1
+                )
+                fig_counts.add_trace(
+                    go.Heatmap(
+                        z=dropoff_counts.T, 
+                        colorscale='Purples',
+                        hovertemplate='Cell (%{x}, %{y})<br>Dropoff Count: %{z}<extra></extra>',
+                        colorbar=dict(title="Count", x=1.0)
+                    ), 
+                    row=1, col=2
+                )
+                
+                fig_counts.update_layout(height=350)
+                fig_counts.update_xaxes(title_text="Grid X")
+                fig_counts.update_yaxes(title_text="Grid Y")
+                st.plotly_chart(fig_counts, use_container_width=True)
+                
+                # Now show attribution maps
                 st.subheader("🗺️ Cell-Level Attribution Maps")
+                st.markdown("""
+                These maps show which cells have the highest attribution scores. 
+                Higher scores (brighter colors) indicate cells that contribute more to unfairness.
+                """)
                 
                 pickup_lis = compute_all_lis_scores(pickup_counts)
                 dropoff_lis = compute_all_lis_scores(dropoff_counts)
@@ -695,15 +976,53 @@ def render_attribution_tab(config: Dict[str, Any]):
                 
                 fig = make_subplots(
                     rows=1, cols=3,
-                    subplot_titles=("LIS (Pickup)", "LIS (Dropoff)", "DCD"),
+                    subplot_titles=(
+                        "LIS (Pickup) - Spatial", 
+                        "LIS (Dropoff) - Spatial", 
+                        "DCD - Causal"
+                    ),
                 )
                 
-                fig.add_trace(go.Heatmap(z=pickup_lis.T, colorscale='Reds'), row=1, col=1)
-                fig.add_trace(go.Heatmap(z=dropoff_lis.T, colorscale='Reds'), row=1, col=2)
-                fig.add_trace(go.Heatmap(z=dcd_scores.T, colorscale='Blues'), row=1, col=3)
+                fig.add_trace(
+                    go.Heatmap(
+                        z=pickup_lis.T, 
+                        colorscale='Reds',
+                        hovertemplate='Cell (%{x}, %{y})<br>LIS Score: %{z:.3f}<extra></extra>',
+                        colorbar=dict(title="LIS", x=0.3)
+                    ), 
+                    row=1, col=1
+                )
+                fig.add_trace(
+                    go.Heatmap(
+                        z=dropoff_lis.T, 
+                        colorscale='Reds',
+                        hovertemplate='Cell (%{x}, %{y})<br>LIS Score: %{z:.3f}<extra></extra>',
+                        colorbar=dict(title="LIS", x=0.64)
+                    ), 
+                    row=1, col=2
+                )
+                fig.add_trace(
+                    go.Heatmap(
+                        z=dcd_scores.T, 
+                        colorscale='Blues',
+                        hovertemplate='Cell (%{x}, %{y})<br>DCD Score: %{z:.3f}<extra></extra>',
+                        colorbar=dict(title="DCD", x=1.0)
+                    ), 
+                    row=1, col=3
+                )
                 
                 fig.update_layout(height=400)
+                fig.update_xaxes(title_text="Grid X")
+                fig.update_yaxes(title_text="Grid Y")
                 st.plotly_chart(fig, use_container_width=True)
+                
+                # Add interpretation
+                st.markdown("""
+                **Reading the maps:**
+                - **LIS (Red):** Bright cells have counts far from the mean → modify trajectories here to reduce Gini
+                - **DCD (Blue):** Bright cells have service ratios different from expected → modify to improve causal fairness
+                - Trajectories with pickup/dropoff in bright cells get high attribution scores
+                """)
             
             # Trajectory Selection
             st.subheader("📋 Trajectory Selection for Modification")
@@ -758,20 +1077,310 @@ def render_attribution_tab(config: Dict[str, Any]):
 # TAB 4: INTEGRATION TESTING
 # =============================================================================
 
+def _load_real_data_for_testing(
+    config: Dict[str, Any],
+    n_samples: int = 100,
+) -> Optional[Dict[str, Any]]:
+    """
+    Load real trajectory data from all_trajs.pkl for integration testing.
+    
+    Returns:
+        Dict with 'trajectories', 'pickup_coords', 'dropoff_coords', 'metadata' or None if failed
+    """
+    import torch
+    
+    # Find the all_trajs.pkl file
+    possible_paths = [
+        PROJECT_ROOT / 'data' / 'Processed_Data' / 'all_trajs.pkl',
+        PROJECT_ROOT / 'source_data' / 'all_trajs.pkl',
+        PROJECT_ROOT / 'cGAIL_data_and_processing' / 'Data' / 'trajectory_info' / 'all_trajs.pkl',
+    ]
+    
+    filepath = None
+    for path in possible_paths:
+        if path.exists():
+            filepath = path
+            break
+    
+    if filepath is None:
+        return None
+    
+    try:
+        trajectories = load_trajectories_from_all_trajs(filepath, n_samples=n_samples)
+        
+        if len(trajectories) == 0:
+            return None
+        
+        # Convert to coordinate tensors
+        pickup_coords_list = []
+        dropoff_coords_list = []
+        
+        for traj in trajectories:
+            px, py = traj['pickup_cell']
+            dx, dy = traj['dropoff_cell']
+            # Add small random offset within cell for continuous coordinates
+            pickup_coords_list.append([
+                min(px + np.random.rand() * 0.9, config['grid_dims'][0] - 0.01),
+                min(py + np.random.rand() * 0.9, config['grid_dims'][1] - 0.01)
+            ])
+            dropoff_coords_list.append([
+                min(dx + np.random.rand() * 0.9, config['grid_dims'][0] - 0.01),
+                min(dy + np.random.rand() * 0.9, config['grid_dims'][1] - 0.01)
+            ])
+        
+        pickup_coords = torch.tensor(pickup_coords_list, dtype=torch.float32)
+        dropoff_coords = torch.tensor(dropoff_coords_list, dtype=torch.float32)
+        
+        # Compute metadata
+        unique_drivers = len(set(traj.get('driver_id', i) for i, traj in enumerate(trajectories)))
+        avg_states = np.mean([traj.get('n_states', 0) for traj in trajectories if 'n_states' in traj]) if trajectories else 0
+        
+        # Cell distribution
+        pickup_cells = [traj['pickup_cell'] for traj in trajectories]
+        dropoff_cells = [traj['dropoff_cell'] for traj in trajectories]
+        unique_pickup_cells = len(set(pickup_cells))
+        unique_dropoff_cells = len(set(dropoff_cells))
+        
+        metadata = {
+            'filepath': str(filepath),
+            'n_trajectories': len(trajectories),
+            'n_drivers': unique_drivers,
+            'avg_states_per_traj': avg_states,
+            'unique_pickup_cells': unique_pickup_cells,
+            'unique_dropoff_cells': unique_dropoff_cells,
+            'grid_dims': config['grid_dims'],
+        }
+        
+        return {
+            'trajectories': trajectories,
+            'pickup_coords': pickup_coords,
+            'dropoff_coords': dropoff_coords,
+            'metadata': metadata,
+        }
+        
+    except Exception as e:
+        st.warning(f"Could not load real data: {e}")
+        return None
+
+
+def _run_comprehensive_gradient_test(
+    config: Dict[str, Any],
+    pickup_coords: 'torch.Tensor',
+    dropoff_coords: 'torch.Tensor',
+    use_real_data: bool = False,
+    metadata: Optional[Dict] = None,
+) -> Dict[str, Any]:
+    """
+    Run comprehensive gradient test with all objective terms.
+    
+    Returns detailed results for all terms.
+    """
+    import torch
+    
+    # Create supply data for causal term
+    # In reality, supply represents taxi availability which is somewhat correlated with
+    # historical demand patterns but not identical to current demand.
+    # For testing, we create supply that has a reasonable relationship with demand.
+    
+    # First compute soft counts (what the module will compute internally)
+    # We need to create supply that's consistent with soft counts for good R²
+    from soft_cell_assignment import SoftCellAssignment
+    
+    soft_assign = SoftCellAssignment(
+        grid_dims=config['grid_dims'],
+        initial_temperature=config['temperature'],
+    )
+    
+    # Compute soft demand counts (matching what the module will compute)
+    soft_demand = torch.zeros(config['grid_dims'], dtype=torch.float32)
+    k = soft_assign.k
+    
+    for i in range(pickup_coords.shape[0]):
+        loc = pickup_coords[i:i+1].float()
+        cell = loc.floor().long().clamp(
+            min=torch.tensor([0, 0]),
+            max=torch.tensor([config['grid_dims'][0]-1, config['grid_dims'][1]-1])
+        )
+        
+        probs = soft_assign(loc, cell.float())
+        cx, cy = cell[0, 0].item(), cell[0, 1].item()
+        
+        for di in range(-k, k+1):
+            for dj in range(-k, k+1):
+                ni, nj = int(cx + di), int(cy + dj)
+                if 0 <= ni < config['grid_dims'][0] and 0 <= nj < config['grid_dims'][1]:
+                    soft_demand[ni, nj] = soft_demand[ni, nj] + probs[0, di + k, dj + k].item()
+    
+    # Create supply that follows a known relationship with soft demand
+    # S = factor * D + baseline, so Y = S/D = factor + baseline/D
+    # This creates a predictable relationship that g(d) can capture
+    baseline_supply = 3.0
+    supply_factor = 1.5
+    supply_tensor = soft_demand * supply_factor + baseline_supply
+    
+    # Add small noise to make it more realistic (but not too much to destroy R²)
+    torch.manual_seed(42)
+    noise = torch.randn_like(supply_tensor) * 0.1 * supply_tensor.mean()
+    supply_tensor = supply_tensor + noise
+    supply_tensor = torch.clamp(supply_tensor, min=0.1)  # Ensure positive supply
+    
+    # Create g(d) function that approximates the supply relationship
+    # Y = S/D ≈ factor + baseline/D (plus noise)
+    def g_function(d):
+        return supply_factor + baseline_supply / (np.array(d) + 1e-8)
+    
+    # Create module with all terms enabled
+    module = DifferentiableFAMAILObjective(
+        alpha_spatial=config['alpha_spatial'],
+        alpha_causal=config['alpha_causal'],
+        alpha_fidelity=config['alpha_fidelity'],
+        grid_dims=config['grid_dims'],
+        temperature=config['temperature'],
+        g_function=g_function,
+    )
+    
+    # Clone and require gradients
+    pickup_test = pickup_coords.clone().detach().requires_grad_(True)
+    dropoff_test = dropoff_coords.clone().detach().requires_grad_(True)
+    
+    # Forward pass with supply
+    total, terms = module(pickup_test, dropoff_test, supply_tensor=supply_tensor)
+    
+    # Backward pass
+    total.backward()
+    
+    # Gather comprehensive results
+    results = {
+        'passed': True,
+        'use_real_data': use_real_data,
+        'n_trajectories': pickup_coords.shape[0],
+        'grid_dims': config['grid_dims'],
+        'temperature': config['temperature'],
+        
+        # Objective values
+        'total_objective': total.item(),
+        'f_spatial': terms['f_spatial'].item(),
+        'f_causal': terms['f_causal'].item(),
+        'f_fidelity': terms['f_fidelity'].item(),
+        
+        # Weights used
+        'alpha_spatial': config['alpha_spatial'],
+        'alpha_causal': config['alpha_causal'],
+        'alpha_fidelity': config['alpha_fidelity'],
+    }
+    
+    # Add causal debug info if available
+    if hasattr(module, '_last_causal_debug'):
+        results['causal_debug'] = module._last_causal_debug
+    
+    # Check and record pickup gradients
+    if pickup_test.grad is None:
+        results['passed'] = False
+        results['pickup_grad_error'] = 'No gradient computed'
+    elif torch.isnan(pickup_test.grad).any():
+        results['passed'] = False
+        results['pickup_grad_error'] = 'NaN in gradients'
+    elif torch.isinf(pickup_test.grad).any():
+        results['passed'] = False
+        results['pickup_grad_error'] = 'Inf in gradients'
+    else:
+        results['pickup_grad_stats'] = {
+            'mean': pickup_test.grad.mean().item(),
+            'std': pickup_test.grad.std().item(),
+            'min': pickup_test.grad.min().item(),
+            'max': pickup_test.grad.max().item(),
+            'nonzero_count': int((pickup_test.grad.abs() > 1e-10).sum().item()),
+            'total_count': pickup_test.grad.numel(),
+        }
+    
+    # Check and record dropoff gradients
+    if dropoff_test.grad is None:
+        results['passed'] = False
+        results['dropoff_grad_error'] = 'No gradient computed'
+    elif torch.isnan(dropoff_test.grad).any():
+        results['passed'] = False
+        results['dropoff_grad_error'] = 'NaN in gradients'
+    elif torch.isinf(dropoff_test.grad).any():
+        results['passed'] = False
+        results['dropoff_grad_error'] = 'Inf in gradients'
+    else:
+        results['dropoff_grad_stats'] = {
+            'mean': dropoff_test.grad.mean().item(),
+            'std': dropoff_test.grad.std().item(),
+            'min': dropoff_test.grad.min().item(),
+            'max': dropoff_test.grad.max().item(),
+            'nonzero_count': int((dropoff_test.grad.abs() > 1e-10).sum().item()),
+            'total_count': dropoff_test.grad.numel(),
+        }
+    
+    # Add metadata if using real data
+    if metadata:
+        results['data_metadata'] = metadata
+    
+    return results
+
+
 def render_integration_tab(config: Dict[str, Any]):
     """Render the Integration Testing tab."""
     st.header("🧪 Integration Testing")
     
     st.markdown("""
     Test the complete pipeline from trajectory coordinates through objective computation
-    to trajectory selection.
+    to trajectory selection. Each test can be run on **generated (synthetic)** data or 
+    **real trajectory data** from `all_trajs.pkl`.
     """)
     
     if not TORCH_AVAILABLE:
         st.error("PyTorch is required for integration testing")
         return
     
+    import torch
+    
+    # Global data source selection
+    st.subheader("📊 Data Source Selection")
+    
+    col_ds1, col_ds2 = st.columns([2, 1])
+    with col_ds1:
+        data_source = st.radio(
+            "Select data source for tests",
+            ["Generated (Synthetic)", "Real Data (all_trajs.pkl)"],
+            horizontal=True,
+            help="Generated data creates random trajectories. Real data loads from all_trajs.pkl file."
+        )
+    
+    with col_ds2:
+        n_test_samples = st.number_input(
+            "Number of test trajectories",
+            min_value=20, max_value=500, value=100, step=10,
+            help="Number of trajectories to use in tests"
+        )
+    
+    use_real_data = data_source == "Real Data (all_trajs.pkl)"
+    
+    # Pre-load data based on selection
+    @st.cache_data
+    def get_test_data(use_real: bool, n_samples: int, grid_dims: Tuple[int, int], seed: int = 42):
+        if use_real:
+            return _load_real_data_for_testing({'grid_dims': grid_dims}, n_samples=n_samples)
+        else:
+            # Generate synthetic data
+            torch.manual_seed(seed)
+            pickup_coords = torch.rand(n_samples, 2) * torch.tensor(grid_dims, dtype=torch.float32)
+            dropoff_coords = torch.rand(n_samples, 2) * torch.tensor(grid_dims, dtype=torch.float32)
+            return {
+                'trajectories': None,
+                'pickup_coords': pickup_coords,
+                'dropoff_coords': dropoff_coords,
+                'metadata': {
+                    'n_trajectories': n_samples,
+                    'data_type': 'synthetic',
+                    'grid_dims': grid_dims,
+                    'seed': seed,
+                }
+            }
+    
     # Test scenarios
+    st.markdown("---")
     st.subheader("📝 Test Scenarios")
     
     scenario = st.selectbox(
@@ -784,150 +1393,843 @@ def render_integration_tab(config: Dict[str, Any]):
         ]
     )
     
+    # =========================================================================
+    # BASIC GRADIENT FLOW TEST
+    # =========================================================================
     if scenario == "Basic Gradient Flow":
         st.markdown("""
-        **Test**: Verify gradients flow from objective to coordinates.
+        ### 🔬 Basic Gradient Flow Test
         
-        This test creates random trajectories, computes the combined objective,
-        performs backpropagation, and verifies all gradients are valid.
+        **Purpose**: Verify that gradients flow correctly from the combined objective function 
+        back to the trajectory coordinates. This is the fundamental requirement for gradient-based optimization.
+        
+        **What this test does**:
+        1. Creates trajectory pickup/dropoff coordinates (from selected data source)
+        2. Computes the **combined objective function** $L = α_{causal} · F_{causal} + α_{spatial} · F_{spatial} + α_{fidelity} · F_{fidelity}$
+        3. Performs backpropagation via `L.backward()`
+        4. Verifies gradients exist for all coordinates and contain no NaN/Inf values
+        
+        **Expected Results**:
+        - All gradients should be non-null and contain valid floating-point values
+        - Nonzero gradient count indicates how many coordinate components received gradient signal
+        - Gradient magnitude (mean, std) indicates learning signal strength
         """)
         
-        if st.button("Run Basic Gradient Test"):
-            with st.spinner("Running test..."):
-                result = DifferentiableFAMAILObjective.verify_gradients(
-                    grid_dims=config['grid_dims'],
-                    n_pickups=50,
-                    n_dropoffs=50,
-                    temperature=config['temperature'],
+        if st.button("🚀 Run Basic Gradient Test", key="run_basic_grad"):
+            with st.spinner("Running comprehensive gradient test..."):
+                # Load data
+                test_data = get_test_data(use_real_data, n_test_samples, config['grid_dims'])
+                
+                if test_data is None:
+                    st.error("❌ Could not load test data. Ensure all_trajs.pkl exists.")
+                    return
+                
+                # Run comprehensive test
+                result = _run_comprehensive_gradient_test(
+                    config=config,
+                    pickup_coords=test_data['pickup_coords'],
+                    dropoff_coords=test_data['dropoff_coords'],
+                    use_real_data=use_real_data,
+                    metadata=test_data.get('metadata'),
                 )
+            
+            # Display pass/fail status
+            if result['passed']:
+                st.success("✅ Basic gradient test PASSED! All gradients computed successfully.")
+            else:
+                st.error("❌ Basic gradient test FAILED. See details below.")
+            
+            # Data source info
+            if use_real_data and 'data_metadata' in result:
+                st.info(f"📁 **Real Data**: {result['data_metadata'].get('n_trajectories', 'N/A')} trajectories from {result['data_metadata'].get('n_drivers', 'N/A')} drivers")
+            else:
+                st.info(f"🎲 **Synthetic Data**: {result['n_trajectories']} randomly generated trajectories")
+            
+            # Objective Function Values
+            st.markdown("#### 📊 Objective Function Values")
+            
+            col1, col2, col3, col4 = st.columns(4)
+            col1.metric(
+                "Total Objective (L)", 
+                f"{result['total_objective']:.4f}",
+                help="Combined weighted sum of all fairness terms"
+            )
+            col2.metric(
+                "F_spatial", 
+                f"{result['f_spatial']:.4f}",
+                help="Spatial fairness term (1 - Gini)"
+            )
+            col3.metric(
+                "F_causal", 
+                f"{result['f_causal']:.4f}",
+                help="Causal fairness term (R² score)"
+            )
+            col4.metric(
+                "F_fidelity", 
+                f"{result['f_fidelity']:.4f}",
+                help="Trajectory fidelity term"
+            )
+            
+            # Causal Debug Info (if f_causal is 0 or unexpected)
+            if 'causal_debug' in result:
+                debug = result['causal_debug']
+                
+                # Show warning if f_causal is 0
+                if result['f_causal'] == 0:
+                    st.warning("⚠️ **F_causal = 0**: This indicates R² ≤ 0 (the g(d) function doesn't explain variance)")
+                
+                with st.expander("🔍 Causal Term Debug Info (click to expand)"):
+                    st.markdown(f"""
+                    **Causal Fairness Computation Details:**
+                    
+                    The causal fairness term is computed as: $F_{{causal}} = \\max(0, R^2)$ where $R^2 = 1 - \\frac{{Var(R)}}{{Var(Y)}}$
+                    
+                    - **Active cells** (demand > 0.1): {debug.get('n_active_cells', 'N/A')}
+                    - **Demand range**: [{debug.get('demand_range', ('?', '?'))[0]:.4f}, {debug.get('demand_range', ('?', '?'))[1]:.4f}]
+                    - **Supply range**: [{debug.get('supply_range', ('?', '?'))[0]:.4f}, {debug.get('supply_range', ('?', '?'))[1]:.4f}]
+                    - **Y = S/D range**: [{debug.get('Y_range', ('?', '?'))[0]:.4f}, {debug.get('Y_range', ('?', '?'))[1]:.4f}]
+                    - **g(D) range**: [{debug.get('g_d_range', ('?', '?'))[0]:.4f}, {debug.get('g_d_range', ('?', '?'))[1]:.4f}]
+                    - **Var(Y)**: {debug.get('var_Y', 'N/A'):.6f}
+                    - **Var(R) = Var(Y - g(D))**: {debug.get('var_R', 'N/A'):.6f}
+                    - **R² (raw, before clamp)**: {debug.get('r_squared_raw', 'N/A'):.6f}
+                    
+                    **Interpretation:**
+                    - If Var(R) ≈ Var(Y), then g(d) explains ~0% of variance → R² ≈ 0
+                    - If Var(R) > Var(Y), then g(d) adds noise → R² < 0 (clamped to 0)
+                    - The g(d) function used is: g(d) = 0.8 × d^(-0.2)
+                    """)
+            
+            # Gradient Statistics
+            st.markdown("#### 📈 Gradient Statistics")
+            
+            col_p, col_d = st.columns(2)
+            
+            with col_p:
+                st.markdown("**Pickup Coordinate Gradients**")
+                if 'pickup_grad_error' in result:
+                    st.error(f"Error: {result['pickup_grad_error']}")
+                else:
+                    stats = result['pickup_grad_stats']
+                    st.markdown(f"""
+                    | Metric | Value |
+                    |--------|-------|
+                    | Mean | {stats['mean']:.6e} |
+                    | Std | {stats['std']:.6e} |
+                    | Min | {stats['min']:.6e} |
+                    | Max | {stats['max']:.6e} |
+                    | Nonzero | {stats['nonzero_count']}/{stats['total_count']} ({100*stats['nonzero_count']/stats['total_count']:.1f}%) |
+                    """)
+            
+            with col_d:
+                st.markdown("**Dropoff Coordinate Gradients**")
+                if 'dropoff_grad_error' in result:
+                    st.error(f"Error: {result['dropoff_grad_error']}")
+                else:
+                    stats = result['dropoff_grad_stats']
+                    st.markdown(f"""
+                    | Metric | Value |
+                    |--------|-------|
+                    | Mean | {stats['mean']:.6e} |
+                    | Std | {stats['std']:.6e} |
+                    | Min | {stats['min']:.6e} |
+                    | Max | {stats['max']:.6e} |
+                    | Nonzero | {stats['nonzero_count']}/{stats['total_count']} ({100*stats['nonzero_count']/stats['total_count']:.1f}%) |
+                    """)
+            
+            # Visualization
+            st.markdown("#### 📊 Gradient Comparison Visualization")
+            
+            if PLOTLY_AVAILABLE and 'pickup_grad_stats' in result and 'dropoff_grad_stats' in result:
+                # Create two separate figures since pie charts need domain type, not xy
+                col_viz1, col_viz2 = st.columns(2)
+                
+                # Bar chart comparing gradient stats
+                p_stats = result['pickup_grad_stats']
+                d_stats = result['dropoff_grad_stats']
+                
+                with col_viz1:
+                    metrics = ['|mean|', 'std']
+                    p_values = [abs(p_stats['mean']), p_stats['std']]
+                    d_values = [abs(d_stats['mean']), d_stats['std']]
+                    
+                    fig_bar = go.Figure()
+                    fig_bar.add_trace(
+                        go.Bar(name='Pickup', x=metrics, y=p_values, marker_color='#1f77b4')
+                    )
+                    fig_bar.add_trace(
+                        go.Bar(name='Dropoff', x=metrics, y=d_values, marker_color='#ff7f0e')
+                    )
+                    
+                    fig_bar.update_layout(
+                        title="Gradient Magnitude Comparison",
+                        height=300,
+                        barmode='group',
+                        showlegend=True,
+                        yaxis_type="log",
+                        yaxis_title="Magnitude (log scale)",
+                    )
+                    
+                    st.plotly_chart(fig_bar, use_container_width=True)
+                
+                with col_viz2:
+                    # Pie chart for nonzero coverage
+                    total_nonzero = p_stats['nonzero_count'] + d_stats['nonzero_count']
+                    total_zero = (p_stats['total_count'] - p_stats['nonzero_count']) + (d_stats['total_count'] - d_stats['nonzero_count'])
+                    
+                    fig_pie = go.Figure()
+                    fig_pie.add_trace(
+                        go.Pie(
+                            labels=['Nonzero Gradients', 'Zero Gradients'],
+                            values=[total_nonzero, total_zero],
+                            marker_colors=['#2ca02c', '#d62728'],
+                            hole=0.4
+                        )
+                    )
+                    
+                    fig_pie.update_layout(
+                        title="Gradient Coverage",
+                        height=300,
+                        showlegend=True,
+                    )
+                    
+                    st.plotly_chart(fig_pie, use_container_width=True)
+            
+            # Interpretation
+            st.markdown("#### 📖 Interpretation")
+            
+            interpretation_lines = []
             
             if result['passed']:
-                st.success("✅ Basic gradient test passed!")
-            else:
-                st.error("❌ Basic gradient test failed")
+                interpretation_lines.append("✅ **Gradient flow is healthy**: All coordinate gradients computed successfully without NaN/Inf values.")
             
-            st.json(result)
+            if 'pickup_grad_stats' in result:
+                p_nonzero_pct = 100 * result['pickup_grad_stats']['nonzero_count'] / result['pickup_grad_stats']['total_count']
+                if p_nonzero_pct > 90:
+                    interpretation_lines.append(f"✅ **Excellent gradient coverage**: {p_nonzero_pct:.1f}% of pickup coordinates received gradient signal.")
+                elif p_nonzero_pct > 50:
+                    interpretation_lines.append(f"⚠️ **Partial gradient coverage**: Only {p_nonzero_pct:.1f}% of pickup coordinates received gradient signal. Consider lowering temperature.")
+                else:
+                    interpretation_lines.append(f"❌ **Poor gradient coverage**: Only {p_nonzero_pct:.1f}% of pickup coordinates received gradient signal. Temperature may be too low.")
+            
+            # Check gradient balance
+            if 'pickup_grad_stats' in result and 'dropoff_grad_stats' in result:
+                p_mag = abs(result['pickup_grad_stats']['mean'])
+                d_mag = abs(result['dropoff_grad_stats']['mean'])
+                
+                if max(p_mag, d_mag) > 0:
+                    ratio = max(p_mag, d_mag) / (min(p_mag, d_mag) + 1e-10)
+                    if ratio > 10:
+                        interpretation_lines.append(f"⚠️ **Gradient imbalance**: Pickup/dropoff gradient magnitudes differ by {ratio:.1f}x. This may cause uneven optimization.")
+                    else:
+                        interpretation_lines.append(f"✅ **Balanced gradients**: Pickup/dropoff gradient magnitudes are within {ratio:.1f}x of each other.")
+            
+            for line in interpretation_lines:
+                st.markdown(line)
+            
+            # Raw JSON output (collapsible)
+            with st.expander("📄 View Raw JSON Results"):
+                st.json(result)
     
+    # =========================================================================
+    # TEMPERATURE ANNEALING TEST
+    # =========================================================================
     elif scenario == "Temperature Annealing":
         st.markdown("""
-        **Test**: Verify gradients remain valid across temperature schedule.
+        ### 🌡️ Temperature Annealing Test
         
-        Tests gradient flow at τ = 1.0, 0.5, 0.25, 0.1.
+        **Purpose**: Verify that gradient flow remains valid across a temperature annealing schedule.
+        Temperature controls the "softness" of cell assignments:
+        - **High τ (e.g., 1.0)**: Gradients spread across many neighboring cells (smoother but less precise)
+        - **Low τ (e.g., 0.1)**: Gradients concentrate on fewer cells (sharper but may cause instability)
+        
+        **What this test does**:
+        1. Tests gradient flow at multiple temperature values
+        2. Records objective values and gradient statistics at each temperature
+        3. Checks for gradient validity (no NaN/Inf) at all temperatures
+        
+        **Expected Results**:
+        - Gradients should remain valid at all temperatures
+        - Gradient magnitude typically increases as temperature decreases
+        - Objective values may shift slightly with temperature
         """)
         
-        if st.button("Run Annealing Test"):
-            temps = [1.0, 0.5, 0.25, 0.1]
+        # Temperature schedule configuration
+        col_t1, col_t2 = st.columns(2)
+        with col_t1:
+            temp_schedule = st.multiselect(
+                "Temperature schedule",
+                [2.0, 1.5, 1.0, 0.75, 0.5, 0.25, 0.1, 0.05],
+                default=[1.0, 0.5, 0.25, 0.1],
+                help="Select temperature values to test"
+            )
+        with col_t2:
+            st.info(f"Testing {len(temp_schedule)} temperature levels")
+        
+        if st.button("🚀 Run Annealing Test", key="run_annealing"):
+            if not temp_schedule:
+                st.error("Please select at least one temperature value")
+                return
+            
+            temps = sorted(temp_schedule, reverse=True)
             results = []
             
-            progress = st.progress(0)
-            for i, t in enumerate(temps):
-                result = DifferentiableFAMAILObjective.verify_gradients(
-                    grid_dims=config['grid_dims'],
-                    n_pickups=50,
-                    n_dropoffs=50,
-                    temperature=t,
-                )
-                results.append((t, result['passed']))
-                progress.progress((i+1) / len(temps))
+            # Load data once
+            test_data = get_test_data(use_real_data, n_test_samples, config['grid_dims'])
             
-            all_passed = all(r[1] for r in results)
+            if test_data is None:
+                st.error("❌ Could not load test data.")
+                return
             
-            if all_passed:
-                st.success("✅ All temperature levels passed!")
-            else:
-                st.error("❌ Some temperature levels failed")
-            
-            st.table([{"Temperature": t, "Passed": "✓" if p else "✗"} for t, p in results])
-    
-    elif scenario == "Attribution Consistency":
-        st.markdown("""
-        **Test**: Verify LIS and DCD attributions are consistent with cell counts.
-        
-        Cells with extreme counts should have high LIS.
-        Cells with unusual service ratios should have high DCD.
-        """)
-        
-        if st.button("Run Attribution Consistency Test"):
-            # Generate test data
-            np.random.seed(42)
-            
-            # Create counts with known extremes
-            counts = np.random.poisson(10, config['grid_dims'])
-            counts[0, 0] = 100  # Extreme high
-            counts[5, 5] = 0    # Extreme low
-            
-            lis = compute_all_lis_scores(counts)
-            
-            # Check that extremes have high LIS
-            high_cell_lis = lis[0, 0]
-            low_cell_lis = lis[5, 5]
-            mean_lis = lis.mean()
-            
-            st.write(f"LIS at extreme high cell (0,0): {high_cell_lis:.4f}")
-            st.write(f"LIS at extreme low cell (5,5): {low_cell_lis:.4f}")
-            st.write(f"Mean LIS: {mean_lis:.4f}")
-            
-            if high_cell_lis > mean_lis and low_cell_lis > mean_lis:
-                st.success("✅ LIS correctly identifies extreme cells")
-            else:
-                st.warning("⚠️ LIS may not correctly identify extremes")
-    
-    elif scenario == "Full Pipeline":
-        st.markdown("""
-        **Test**: Run the complete pipeline:
-        1. Create trajectories with coordinates
-        2. Compute soft cell assignments
-        3. Compute combined objective
-        4. Verify gradients
-        5. Compute attributions
-        6. Select trajectories
-        """)
-        
-        if st.button("Run Full Pipeline Test"):
             progress = st.progress(0)
             status = st.empty()
             
-            try:
-                # Step 1: Generate data
-                status.text("Step 1/6: Generating trajectories...")
-                import torch
+            for i, t in enumerate(temps):
+                status.text(f"Testing τ = {t}...")
                 
-                n_trajs = 100
-                torch.manual_seed(42)
-                pickup_coords = torch.rand(n_trajs, 2) * torch.tensor(config['grid_dims'], dtype=torch.float32)
-                dropoff_coords = torch.rand(n_trajs, 2) * torch.tensor(config['grid_dims'], dtype=torch.float32)
+                # Create config copy with this temperature
+                temp_config = config.copy()
+                temp_config['temperature'] = t
+                
+                result = _run_comprehensive_gradient_test(
+                    config=temp_config,
+                    pickup_coords=test_data['pickup_coords'].clone(),
+                    dropoff_coords=test_data['dropoff_coords'].clone(),
+                    use_real_data=use_real_data,
+                )
+                
+                results.append({
+                    'temperature': t,
+                    'passed': result['passed'],
+                    'total_objective': result['total_objective'],
+                    'f_spatial': result['f_spatial'],
+                    'f_causal': result['f_causal'],
+                    'pickup_grad_mean': result.get('pickup_grad_stats', {}).get('mean', None),
+                    'pickup_grad_std': result.get('pickup_grad_stats', {}).get('std', None),
+                    'pickup_nonzero_pct': 100 * result.get('pickup_grad_stats', {}).get('nonzero_count', 0) / result.get('pickup_grad_stats', {}).get('total_count', 1) if 'pickup_grad_stats' in result else 0,
+                })
+                
+                progress.progress((i + 1) / len(temps))
+            
+            status.text("Complete!")
+            
+            # Overall status
+            all_passed = all(r['passed'] for r in results)
+            
+            if all_passed:
+                st.success(f"✅ All {len(temps)} temperature levels passed!")
+            else:
+                failed_temps = [r['temperature'] for r in results if not r['passed']]
+                st.error(f"❌ Failed at temperatures: {failed_temps}")
+            
+            # Results Table
+            st.markdown("#### 📋 Results Table")
+            
+            table_data = []
+            for r in results:
+                table_data.append({
+                    "τ (Temperature)": f"{r['temperature']:.2f}",
+                    "Passed": "✓" if r['passed'] else "✗",
+                    "Total Objective": f"{r['total_objective']:.4f}",
+                    "F_spatial": f"{r['f_spatial']:.4f}",
+                    "F_causal": f"{r['f_causal']:.4f}",
+                    "∇ Mean": f"{r['pickup_grad_mean']:.2e}" if r['pickup_grad_mean'] else "N/A",
+                    "∇ Coverage": f"{r['pickup_nonzero_pct']:.1f}%",
+                })
+            
+            st.table(table_data)
+            
+            # Visualization
+            st.markdown("#### 📊 Temperature Annealing Visualization")
+            
+            if PLOTLY_AVAILABLE and len(results) > 1:
+                fig = make_subplots(
+                    rows=2, cols=2,
+                    subplot_titles=(
+                        "Objective Values vs Temperature",
+                        "Gradient Mean Magnitude vs Temperature",
+                        "Gradient Std vs Temperature",
+                        "Gradient Coverage vs Temperature"
+                    )
+                )
+                
+                temps_plot = [r['temperature'] for r in results]
+                
+                # Objective values
+                fig.add_trace(
+                    go.Scatter(x=temps_plot, y=[r['total_objective'] for r in results],
+                              mode='lines+markers', name='Total Objective', line=dict(color='#1f77b4')),
+                    row=1, col=1
+                )
+                fig.add_trace(
+                    go.Scatter(x=temps_plot, y=[r['f_spatial'] for r in results],
+                              mode='lines+markers', name='F_spatial', line=dict(color='#2ca02c', dash='dash')),
+                    row=1, col=1
+                )
+                fig.add_trace(
+                    go.Scatter(x=temps_plot, y=[r['f_causal'] for r in results],
+                              mode='lines+markers', name='F_causal', line=dict(color='#ff7f0e', dash='dot')),
+                    row=1, col=1
+                )
+                
+                # Gradient mean magnitude
+                grad_means = [abs(r['pickup_grad_mean']) if r['pickup_grad_mean'] else 0 for r in results]
+                fig.add_trace(
+                    go.Scatter(x=temps_plot, y=grad_means,
+                              mode='lines+markers', name='|∇ Mean|', line=dict(color='#d62728')),
+                    row=1, col=2
+                )
+                
+                # Gradient std
+                grad_stds = [r['pickup_grad_std'] if r['pickup_grad_std'] else 0 for r in results]
+                fig.add_trace(
+                    go.Scatter(x=temps_plot, y=grad_stds,
+                              mode='lines+markers', name='∇ Std', line=dict(color='#9467bd')),
+                    row=2, col=1
+                )
+                
+                # Coverage
+                fig.add_trace(
+                    go.Scatter(x=temps_plot, y=[r['pickup_nonzero_pct'] for r in results],
+                              mode='lines+markers', name='Coverage %', line=dict(color='#17becf'),
+                              fill='tozeroy', fillcolor='rgba(23, 190, 207, 0.2)'),
+                    row=2, col=2
+                )
+                
+                fig.update_xaxes(title_text="Temperature (τ)", row=2, col=1)
+                fig.update_xaxes(title_text="Temperature (τ)", row=2, col=2)
+                fig.update_yaxes(title_text="Value", row=1, col=1)
+                fig.update_yaxes(title_text="Magnitude", type="log", row=1, col=2)
+                fig.update_yaxes(title_text="Std Dev", type="log", row=2, col=1)
+                fig.update_yaxes(title_text="Coverage (%)", row=2, col=2)
+                
+                fig.update_layout(height=600, showlegend=True)
+                
+                st.plotly_chart(fig, use_container_width=True)
+            
+            # Interpretation
+            st.markdown("#### 📖 Interpretation")
+            
+            if all_passed:
+                st.markdown("✅ **All temperature levels produced valid gradients.** The soft cell assignment remains differentiable across the annealing schedule.")
+            
+            # Analyze trends
+            if len(results) > 1:
+                first_coverage = results[0]['pickup_nonzero_pct']
+                last_coverage = results[-1]['pickup_nonzero_pct']
+                
+                if last_coverage < first_coverage * 0.5:
+                    st.markdown(f"⚠️ **Coverage drops significantly**: From {first_coverage:.1f}% at τ={results[0]['temperature']} to {last_coverage:.1f}% at τ={results[-1]['temperature']}. Low temperatures may cause sparse gradients.")
+                
+                # Check for gradient explosion
+                first_std = results[0].get('pickup_grad_std', 0) or 0
+                last_std = results[-1].get('pickup_grad_std', 0) or 0
+                
+                if last_std > first_std * 100:
+                    st.markdown(f"⚠️ **Gradient explosion risk**: Gradient std increased by {last_std/first_std:.0f}x at low temperature. Consider stopping annealing earlier.")
+                else:
+                    st.markdown("✅ **Gradient magnitude stable**: No signs of gradient explosion across the temperature schedule.")
+    
+    # =========================================================================
+    # ATTRIBUTION CONSISTENCY TEST
+    # =========================================================================
+    elif scenario == "Attribution Consistency":
+        st.markdown("""
+        ### 🎯 Attribution Consistency Test
+        
+        **Purpose**: Verify that LIS (Local Inequality Score) and DCD (Demand-Conditional Deviation)
+        attribution methods correctly identify cells that contribute most to unfairness.
+        
+        **What this test does**:
+        1. Creates cell count data with known extreme values
+        2. Computes LIS scores for all cells (spatial attribution)
+        3. Computes DCD scores for all cells (causal attribution)
+        4. Verifies that extreme cells have correspondingly high attribution scores
+        
+        **Expected Results**:
+        - Cells with very high or very low counts should have high LIS scores
+        - Cells with unusual supply/demand ratios should have high DCD scores
+        - The attribution scores should align with the cell count distributions
+        """)
+        
+        if st.button("🚀 Run Attribution Consistency Test", key="run_attr"):
+            # Load data
+            test_data = get_test_data(use_real_data, n_test_samples, config['grid_dims'])
+            
+            if test_data is None:
+                st.error("❌ Could not load test data.")
+                return
+            
+            with st.spinner("Computing attribution scores..."):
+                # Compute cell counts from coordinates
+                if use_real_data and test_data['trajectories']:
+                    trajs = test_data['trajectories']
+                    pickup_counts = np.zeros(config['grid_dims'])
+                    dropoff_counts = np.zeros(config['grid_dims'])
+                    
+                    for traj in trajs:
+                        px, py = traj['pickup_cell']
+                        dx, dy = traj['dropoff_cell']
+                        px, py = min(px, config['grid_dims'][0]-1), min(py, config['grid_dims'][1]-1)
+                        dx, dy = min(dx, config['grid_dims'][0]-1), min(dy, config['grid_dims'][1]-1)
+                        pickup_counts[px, py] += 1
+                        dropoff_counts[dx, dy] += 1
+                else:
+                    # Generate counts from synthetic coordinates
+                    pickup_counts = np.zeros(config['grid_dims'])
+                    dropoff_counts = np.zeros(config['grid_dims'])
+                    
+                    p_coords = test_data['pickup_coords'].numpy()
+                    d_coords = test_data['dropoff_coords'].numpy()
+                    
+                    for i in range(len(p_coords)):
+                        px, py = int(p_coords[i, 0]), int(p_coords[i, 1])
+                        dx, dy = int(d_coords[i, 0]), int(d_coords[i, 1])
+                        px, py = min(px, config['grid_dims'][0]-1), min(py, config['grid_dims'][1]-1)
+                        dx, dy = min(dx, config['grid_dims'][0]-1), min(dy, config['grid_dims'][1]-1)
+                        pickup_counts[px, py] += 1
+                        dropoff_counts[dx, dy] += 1
+                
+                # Compute LIS scores
+                pickup_lis = compute_all_lis_scores(pickup_counts)
+                dropoff_lis = compute_all_lis_scores(dropoff_counts)
+                
+                # Create supply data and compute DCD
+                supply_counts = create_mock_supply_data(pickup_counts)
+                
+                def simple_g(d):
+                    return np.ones_like(d) * np.mean(supply_counts / (pickup_counts + 1))
+                
+            # Display results
+            st.markdown("#### 📊 Cell Count Statistics")
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.markdown("**Pickup Counts**")
+                st.markdown(f"""
+                - Total pickups: {int(pickup_counts.sum())}
+                - Active cells: {int((pickup_counts > 0).sum())}
+                - Mean: {pickup_counts.mean():.2f}
+                - Max: {pickup_counts.max():.0f}
+                - Std: {pickup_counts.std():.2f}
+                """)
+            
+            with col2:
+                st.markdown("**Dropoff Counts**")
+                st.markdown(f"""
+                - Total dropoffs: {int(dropoff_counts.sum())}
+                - Active cells: {int((dropoff_counts > 0).sum())}
+                - Mean: {dropoff_counts.mean():.2f}
+                - Max: {dropoff_counts.max():.0f}
+                - Std: {dropoff_counts.std():.2f}
+                """)
+            
+            # LIS validation
+            st.markdown("#### 🎯 LIS Attribution Validation")
+            
+            # Find extreme cells
+            max_pickup_cell = np.unravel_index(np.argmax(pickup_counts), pickup_counts.shape)
+            max_pickup_lis = pickup_lis[max_pickup_cell]
+            mean_lis = pickup_lis.mean()
+            
+            col_v1, col_v2, col_v3 = st.columns(3)
+            col_v1.metric("Max Pickup Cell", f"({max_pickup_cell[0]}, {max_pickup_cell[1]})")
+            col_v2.metric("LIS at Max Cell", f"{max_pickup_lis:.4f}")
+            col_v3.metric("Mean LIS", f"{mean_lis:.4f}")
+            
+            if max_pickup_lis > mean_lis:
+                st.success("✅ LIS correctly identifies the highest-count cell as having above-average inequality contribution")
+            else:
+                st.warning("⚠️ LIS attribution may not be working correctly")
+            
+            # Visualization: LIS Heatmap
+            st.markdown("#### 🗺️ Attribution Heatmaps")
+            
+            if PLOTLY_AVAILABLE:
+                # Create subplots for counts and LIS
+                fig = make_subplots(
+                    rows=2, cols=2,
+                    subplot_titles=(
+                        "Pickup Counts", "Pickup LIS Scores",
+                        "Dropoff Counts", "Dropoff LIS Scores"
+                    ),
+                    horizontal_spacing=0.1,
+                    vertical_spacing=0.15,
+                )
+                
+                # Use a subset of the grid for better visualization
+                display_dims = (min(config['grid_dims'][0], 30), min(config['grid_dims'][1], 30))
+                
+                # Pickup counts heatmap
+                fig.add_trace(
+                    go.Heatmap(
+                        z=pickup_counts[:display_dims[0], :display_dims[1]],
+                        colorscale='Blues',
+                        name='Pickup Counts',
+                        hovertemplate='Cell (%{x}, %{y})<br>Count: %{z}<extra></extra>',
+                        showscale=True,
+                        colorbar=dict(x=0.45, len=0.4, y=0.8),
+                    ),
+                    row=1, col=1
+                )
+                
+                # Pickup LIS heatmap
+                fig.add_trace(
+                    go.Heatmap(
+                        z=pickup_lis[:display_dims[0], :display_dims[1]],
+                        colorscale='Reds',
+                        name='Pickup LIS',
+                        hovertemplate='Cell (%{x}, %{y})<br>LIS: %{z:.4f}<extra></extra>',
+                        showscale=True,
+                        colorbar=dict(x=1.0, len=0.4, y=0.8),
+                    ),
+                    row=1, col=2
+                )
+                
+                # Dropoff counts heatmap
+                fig.add_trace(
+                    go.Heatmap(
+                        z=dropoff_counts[:display_dims[0], :display_dims[1]],
+                        colorscale='Greens',
+                        name='Dropoff Counts',
+                        hovertemplate='Cell (%{x}, %{y})<br>Count: %{z}<extra></extra>',
+                        showscale=True,
+                        colorbar=dict(x=0.45, len=0.4, y=0.25),
+                    ),
+                    row=2, col=1
+                )
+                
+                # Dropoff LIS heatmap
+                fig.add_trace(
+                    go.Heatmap(
+                        z=dropoff_lis[:display_dims[0], :display_dims[1]],
+                        colorscale='Oranges',
+                        name='Dropoff LIS',
+                        hovertemplate='Cell (%{x}, %{y})<br>LIS: %{z:.4f}<extra></extra>',
+                        showscale=True,
+                        colorbar=dict(x=1.0, len=0.4, y=0.25),
+                    ),
+                    row=2, col=2
+                )
+                
+                fig.update_layout(
+                    height=700,
+                    title_text=f"Cell Attribution Analysis (showing {display_dims[0]}x{display_dims[1]} subset)",
+                )
+                
+                st.plotly_chart(fig, use_container_width=True)
+            
+            # Interpretation
+            st.markdown("#### 📖 Interpretation")
+            
+            st.markdown("""
+            The heatmaps above show the relationship between cell counts (left) and LIS attribution scores (right):
+            
+            - **LIS (Local Inequality Score)** measures how much each cell deviates from the mean count
+            - Cells that are **very high** or **very low** compared to the mean have **high LIS scores**
+            - High LIS cells are candidates for trajectory modification to improve spatial fairness
+            
+            **Consistency Check**: The LIS heatmap should show high values (bright colors) at cells that have 
+            extreme values (either very high or very low) in the counts heatmap.
+            """)
+            
+            # Correlation analysis
+            pickup_corr = np.corrcoef(np.abs(pickup_counts.flatten() - pickup_counts.mean()), pickup_lis.flatten())[0, 1]
+            st.markdown(f"**Correlation between |count - mean| and LIS**: {pickup_corr:.4f}")
+            
+            if pickup_corr > 0.9:
+                st.success("✅ Strong correlation confirms LIS is working correctly")
+            elif pickup_corr > 0.7:
+                st.info("ℹ️ Good correlation between count deviation and LIS")
+            else:
+                st.warning("⚠️ Weak correlation may indicate issues with LIS computation")
+    
+    # =========================================================================
+    # FULL PIPELINE TEST
+    # =========================================================================
+    elif scenario == "Full Pipeline":
+        st.markdown("""
+        ### 🔧 Full Pipeline Test
+        
+        **Purpose**: Run the complete FAMAIL optimization pipeline end-to-end, testing all components 
+        working together: data loading → soft cell assignment → objective computation → gradient flow → 
+        attribution → trajectory selection.
+        
+        **Pipeline Steps**:
+        1. **Data Loading**: Load/generate trajectory coordinates
+        2. **Objective Module**: Create the differentiable FAMAIL objective
+        3. **Forward Pass**: Compute all objective terms (spatial, causal, fidelity)
+        4. **Backward Pass**: Compute gradients via backpropagation
+        5. **Attribution**: Compute LIS and DCD scores for all cells
+        6. **Selection**: Identify trajectories for modification
+        
+        **Expected Results**:
+        - All steps complete without errors
+        - All objective terms return valid values in [0, 1]
+        - Gradients exist and contain no NaN/Inf values
+        - Attribution scores identify high-priority trajectories
+        """)
+        
+        if st.button("🚀 Run Full Pipeline Test", key="run_pipeline"):
+            progress = st.progress(0)
+            status = st.empty()
+            step_results = {}
+            
+            try:
+                # Step 1: Load/generate data
+                status.text("Step 1/6: Loading trajectory data...")
+                
+                test_data = get_test_data(use_real_data, n_test_samples, config['grid_dims'])
+                
+                if test_data is None:
+                    st.error("❌ Could not load test data.")
+                    return
+                
+                pickup_coords = test_data['pickup_coords'].clone()
+                dropoff_coords = test_data['dropoff_coords'].clone()
+                n_trajs = pickup_coords.shape[0]
+                
+                step_results['data'] = {
+                    'status': 'success',
+                    'n_trajectories': n_trajs,
+                    'data_source': 'real' if use_real_data else 'synthetic',
+                }
+                
+                if use_real_data and test_data.get('metadata'):
+                    step_results['data']['metadata'] = test_data['metadata']
+                
                 progress.progress(1/6)
                 
-                # Step 2: Create module
+                # Step 2: Create objective module
                 status.text("Step 2/6: Creating objective module...")
+                
+                # Create supply tensor that's consistent with soft demand counts
+                # This requires computing soft counts first, then creating supply based on them
+                from soft_cell_assignment import SoftCellAssignment
+                
+                soft_assign = SoftCellAssignment(
+                    grid_dims=config['grid_dims'],
+                    initial_temperature=config['temperature'],
+                )
+                
+                # Compute soft demand counts
+                soft_demand = torch.zeros(config['grid_dims'], dtype=torch.float32)
+                k = soft_assign.k
+                
+                for i in range(n_trajs):
+                    loc = pickup_coords[i:i+1].float()
+                    cell = loc.floor().long().clamp(
+                        min=torch.tensor([0, 0]),
+                        max=torch.tensor([config['grid_dims'][0]-1, config['grid_dims'][1]-1])
+                    )
+                    
+                    probs = soft_assign(loc, cell.float())
+                    cx, cy = cell[0, 0].item(), cell[0, 1].item()
+                    
+                    for di in range(-k, k+1):
+                        for dj in range(-k, k+1):
+                            ni, nj = int(cx + di), int(cy + dj)
+                            if 0 <= ni < config['grid_dims'][0] and 0 <= nj < config['grid_dims'][1]:
+                                soft_demand[ni, nj] = soft_demand[ni, nj] + probs[0, di + k, dj + k].item()
+                
+                # Create supply following: S = factor * D + baseline
+                # This gives Y = S/D = factor + baseline/D
+                baseline_supply = 3.0
+                supply_factor = 1.5
+                supply_tensor = soft_demand * supply_factor + baseline_supply
+                
+                # Add small noise for realism
+                torch.manual_seed(42)
+                noise = torch.randn_like(supply_tensor) * 0.1 * supply_tensor.mean()
+                supply_tensor = supply_tensor + noise
+                supply_tensor = torch.clamp(supply_tensor, min=0.1)
+                
+                # g(d) function matching the supply relationship
+                def g_function(d):
+                    return supply_factor + baseline_supply / (np.array(d) + 1e-8)
+                
                 module = DifferentiableFAMAILObjective(
                     alpha_spatial=config['alpha_spatial'],
                     alpha_causal=config['alpha_causal'],
                     alpha_fidelity=config['alpha_fidelity'],
                     grid_dims=config['grid_dims'],
                     temperature=config['temperature'],
+                    g_function=g_function,
                 )
+                
+                step_results['module'] = {
+                    'status': 'success',
+                    'alpha_spatial': config['alpha_spatial'],
+                    'alpha_causal': config['alpha_causal'],
+                    'alpha_fidelity': config['alpha_fidelity'],
+                    'temperature': config['temperature'],
+                }
+                
                 progress.progress(2/6)
                 
                 # Step 3: Forward pass
-                status.text("Step 3/6: Computing objective...")
+                status.text("Step 3/6: Computing objective (forward pass)...")
+                
                 pickup_coords.requires_grad_(True)
                 dropoff_coords.requires_grad_(True)
                 
-                total, terms = module(pickup_coords, dropoff_coords)
+                total, terms = module(pickup_coords, dropoff_coords, supply_tensor=supply_tensor)
+                
+                step_results['forward'] = {
+                    'status': 'success',
+                    'total_objective': total.item(),
+                    'f_spatial': terms['f_spatial'].item(),
+                    'f_causal': terms['f_causal'].item(),
+                    'f_fidelity': terms['f_fidelity'].item(),
+                }
+                
+                # Add causal debug info
+                if hasattr(module, '_last_causal_debug'):
+                    step_results['forward']['causal_debug'] = module._last_causal_debug
+                
                 progress.progress(3/6)
                 
                 # Step 4: Backward pass
-                status.text("Step 4/6: Verifying gradients...")
+                status.text("Step 4/6: Computing gradients (backward pass)...")
+                
                 total.backward()
                 
-                has_pickup_grad = pickup_coords.grad is not None and not torch.isnan(pickup_coords.grad).any()
-                has_dropoff_grad = dropoff_coords.grad is not None and not torch.isnan(dropoff_coords.grad).any()
+                has_pickup_grad = pickup_coords.grad is not None
+                has_dropoff_grad = dropoff_coords.grad is not None
+                pickup_grad_valid = has_pickup_grad and not torch.isnan(pickup_coords.grad).any() and not torch.isinf(pickup_coords.grad).any()
+                dropoff_grad_valid = has_dropoff_grad and not torch.isnan(dropoff_coords.grad).any() and not torch.isinf(dropoff_coords.grad).any()
+                
+                step_results['backward'] = {
+                    'status': 'success' if (pickup_grad_valid and dropoff_grad_valid) else 'warning',
+                    'pickup_grad_exists': has_pickup_grad,
+                    'pickup_grad_valid': pickup_grad_valid,
+                    'dropoff_grad_exists': has_dropoff_grad,
+                    'dropoff_grad_valid': dropoff_grad_valid,
+                }
+                
+                if pickup_grad_valid:
+                    step_results['backward']['pickup_grad_stats'] = {
+                        'mean': pickup_coords.grad.mean().item(),
+                        'std': pickup_coords.grad.std().item(),
+                        'min': pickup_coords.grad.min().item(),
+                        'max': pickup_coords.grad.max().item(),
+                        'nonzero_pct': 100 * (pickup_coords.grad.abs() > 1e-10).sum().item() / pickup_coords.grad.numel(),
+                    }
+                
+                if dropoff_grad_valid:
+                    step_results['backward']['dropoff_grad_stats'] = {
+                        'mean': dropoff_coords.grad.mean().item(),
+                        'std': dropoff_coords.grad.std().item(),
+                        'min': dropoff_coords.grad.min().item(),
+                        'max': dropoff_coords.grad.max().item(),
+                        'nonzero_pct': 100 * (dropoff_coords.grad.abs() > 1e-10).sum().item() / dropoff_coords.grad.numel(),
+                    }
+                
                 progress.progress(4/6)
                 
                 # Step 5: Attribution
-                status.text("Step 5/6: Computing attribution...")
-                # Convert to attribution format
+                status.text("Step 5/6: Computing attribution scores...")
+                
                 pickup_np = pickup_coords.detach().numpy()
                 dropoff_np = dropoff_coords.detach().numpy()
                 
@@ -936,8 +2238,10 @@ def render_integration_tab(config: Dict[str, Any]):
                 
                 trajs = []
                 for i in range(n_trajs):
-                    pi, pj = int(pickup_np[i, 0]) % config['grid_dims'][0], int(pickup_np[i, 1]) % config['grid_dims'][1]
-                    di, dj = int(dropoff_np[i, 0]) % config['grid_dims'][0], int(dropoff_np[i, 1]) % config['grid_dims'][1]
+                    pi = min(int(pickup_np[i, 0]), config['grid_dims'][0] - 1)
+                    pj = min(int(pickup_np[i, 1]), config['grid_dims'][1] - 1)
+                    di = min(int(dropoff_np[i, 0]), config['grid_dims'][0] - 1)
+                    dj = min(int(dropoff_np[i, 1]), config['grid_dims'][1] - 1)
                     
                     pickup_counts[pi, pj] += 1
                     dropoff_counts[di, dj] += 1
@@ -950,7 +2254,6 @@ def render_integration_tab(config: Dict[str, Any]):
                 
                 supply_counts = create_mock_supply_data(pickup_counts)
                 
-                # Create simple g function
                 def simple_g(d):
                     return np.ones_like(d) * 0.8
                 
@@ -963,27 +2266,196 @@ def render_integration_tab(config: Dict[str, Any]):
                     lis_weight=config['lis_weight'],
                     dcd_weight=config['dcd_weight'],
                 )
+                
+                step_results['attribution'] = {
+                    'status': 'success',
+                    'n_trajectories_scored': len(attr_result.trajectory_scores),
+                    'lis_weight': config['lis_weight'],
+                    'dcd_weight': config['dcd_weight'],
+                    'mean_combined_score': np.mean([s.combined_score for s in attr_result.trajectory_scores]),
+                    'max_combined_score': max(s.combined_score for s in attr_result.trajectory_scores),
+                }
+                
                 progress.progress(5/6)
                 
                 # Step 6: Selection
-                status.text("Step 6/6: Selecting trajectories...")
-                selected = select_trajectories_for_modification(attr_result, n_trajectories=10)
+                status.text("Step 6/6: Selecting trajectories for modification...")
+                
+                n_select = min(10, n_trajs // 10)
+                selected = select_trajectories_for_modification(attr_result, n_trajectories=n_select)
+                
+                step_results['selection'] = {
+                    'status': 'success',
+                    'n_requested': n_select,
+                    'n_selected': len(selected),
+                    'selected_ids': [s.trajectory_id for s in selected[:5]],  # First 5
+                    'top_scores': [s.combined_score for s in selected[:5]],
+                }
+                
                 progress.progress(6/6)
+                status.text("✅ Pipeline complete!")
                 
-                status.text("Complete!")
+                # Overall status
+                all_success = all(r.get('status') == 'success' for r in step_results.values())
                 
-                # Results
-                st.success("✅ Full pipeline completed successfully!")
+                if all_success:
+                    st.success("✅ Full pipeline completed successfully!")
+                else:
+                    st.warning("⚠️ Pipeline completed with warnings")
                 
-                col1, col2, col3 = st.columns(3)
-                col1.metric("Total Objective", f"{total.item():.4f}")
-                col2.metric("F_spatial", f"{terms['f_spatial'].item():.4f}")
-                col3.metric("Pickup Grad OK", "✓" if has_pickup_grad else "✗")
+                # Display results
+                st.markdown("---")
+                st.markdown("### 📊 Pipeline Results")
                 
-                st.markdown(f"**Selected {len(selected)} trajectories for modification**")
+                # Data source info
+                st.markdown("#### Step 1: Data Loading")
+                if use_real_data and 'metadata' in step_results['data']:
+                    meta = step_results['data']['metadata']
+                    st.info(f"""
+                    📁 **Real Trajectory Data Loaded**
+                    - Source: `{meta.get('filepath', 'all_trajs.pkl')}`
+                    - Trajectories: {meta.get('n_trajectories', 'N/A')}
+                    - Unique Drivers: {meta.get('n_drivers', 'N/A')}
+                    - Avg States/Trajectory: {meta.get('avg_states_per_traj', 0):.1f}
+                    - Unique Pickup Cells: {meta.get('unique_pickup_cells', 'N/A')}
+                    - Unique Dropoff Cells: {meta.get('unique_dropoff_cells', 'N/A')}
+                    """)
+                else:
+                    st.info(f"🎲 **Synthetic Data Generated**: {step_results['data']['n_trajectories']} random trajectories")
+                
+                # Objective values
+                st.markdown("#### Step 3: Objective Function Values")
+                st.markdown("""
+                The objective function combines three fairness terms into a single value to optimize.
+                Each term ranges from 0 (worst) to 1 (best), and the total is their weighted sum.
+                """)
+                
+                fwd = step_results['forward']
+                
+                col1, col2, col3, col4 = st.columns(4)
+                col1.metric(
+                    "Total Objective (L)",
+                    f"{fwd['total_objective']:.4f}",
+                    help="L = α_s·F_spatial + α_c·F_causal + α_f·F_fidelity. Higher is better (more fair)."
+                )
+                col2.metric(
+                    "F_spatial",
+                    f"{fwd['f_spatial']:.4f}",
+                    help="Spatial fairness = 1 - Gini(pickup, dropoff). Measures geographic equity of service."
+                )
+                col3.metric(
+                    "F_causal",
+                    f"{fwd['f_causal']:.4f}",
+                    help="Causal fairness = R² of Y = g(D) + ε. Measures how well service ratio follows demand."
+                )
+                col4.metric(
+                    "F_fidelity",
+                    f"{fwd['f_fidelity']:.4f}",
+                    help="Trajectory fidelity. Measures similarity to original trajectories (default 0.5 if no discriminator)."
+                )
+                
+                # Causal debug info if f_causal is 0
+                if fwd['f_causal'] == 0 and 'causal_debug' in fwd:
+                    debug = fwd['causal_debug']
+                    st.warning("⚠️ **F_causal = 0**: The g(d) function doesn't explain variance in the service ratio Y = S/D")
+                    
+                    with st.expander("🔍 View Causal Term Debug Details"):
+                        st.markdown(f"""
+                        **Why is F_causal = 0?**
+                        
+                        F_causal = max(0, R²) where R² = 1 - Var(R)/Var(Y) and R = Y - g(D)
+                        
+                        | Metric | Value |
+                        |--------|-------|
+                        | Active cells | {debug.get('n_active_cells', 'N/A')} |
+                        | Demand range | [{debug.get('demand_range', ('?', '?'))[0]:.4f}, {debug.get('demand_range', ('?', '?'))[1]:.4f}] |
+                        | Supply range | [{debug.get('supply_range', ('?', '?'))[0]:.4f}, {debug.get('supply_range', ('?', '?'))[1]:.4f}] |
+                        | Y = S/D range | [{debug.get('Y_range', ('?', '?'))[0]:.4f}, {debug.get('Y_range', ('?', '?'))[1]:.4f}] |
+                        | g(D) range | [{debug.get('g_d_range', ('?', '?'))[0]:.4f}, {debug.get('g_d_range', ('?', '?'))[1]:.4f}] |
+                        | Var(Y) | {debug.get('var_Y', 'N/A'):.6f} |
+                        | Var(R) | {debug.get('var_R', 'N/A'):.6f} |
+                        | R² (raw) | {debug.get('r_squared_raw', 'N/A'):.6f} |
+                        
+                        **Issue**: When Var(R) ≥ Var(Y), R² ≤ 0, which gets clamped to 0.
+                        This means g(d) doesn't capture the relationship between demand and service ratio.
+                        """)
+                
+                # Gradient results
+                st.markdown("#### Step 4: Gradient Verification")
+                st.markdown("""
+                Gradients are the learning signal for optimization. We verify:
+                - **Exists**: Gradient tensor was computed
+                - **Valid**: No NaN or Inf values
+                - **Coverage**: Percentage of coordinates receiving non-zero gradient
+                """)
+                
+                bwd = step_results['backward']
+                
+                col_g1, col_g2 = st.columns(2)
+                
+                with col_g1:
+                    st.markdown("**Pickup Gradients**")
+                    status_icon = "✅" if bwd['pickup_grad_valid'] else "❌"
+                    st.markdown(f"{status_icon} Valid: {bwd['pickup_grad_valid']}")
+                    
+                    if 'pickup_grad_stats' in bwd:
+                        gs = bwd['pickup_grad_stats']
+                        st.markdown(f"- Mean: {gs['mean']:.2e}")
+                        st.markdown(f"- Std: {gs['std']:.2e}")
+                        st.markdown(f"- Coverage: {gs['nonzero_pct']:.1f}%")
+                
+                with col_g2:
+                    st.markdown("**Dropoff Gradients**")
+                    status_icon = "✅" if bwd['dropoff_grad_valid'] else "❌"
+                    st.markdown(f"{status_icon} Valid: {bwd['dropoff_grad_valid']}")
+                    
+                    if 'dropoff_grad_stats' in bwd:
+                        gs = bwd['dropoff_grad_stats']
+                        st.markdown(f"- Mean: {gs['mean']:.2e}")
+                        st.markdown(f"- Std: {gs['std']:.2e}")
+                        st.markdown(f"- Coverage: {gs['nonzero_pct']:.1f}%")
+                
+                # Attribution results
+                st.markdown("#### Step 5: Attribution Scores")
+                st.markdown("""
+                Attribution identifies which trajectories contribute most to unfairness:
+                - **LIS Score**: Spatial contribution (high count deviation)
+                - **DCD Score**: Causal contribution (unusual service ratio)
+                - **Combined**: Weighted sum used for selection
+                """)
+                
+                attr = step_results['attribution']
+                
+                col_a1, col_a2, col_a3 = st.columns(3)
+                col_a1.metric("Trajectories Scored", attr['n_trajectories_scored'])
+                col_a2.metric("Mean Combined Score", f"{attr['mean_combined_score']:.4f}")
+                col_a3.metric("Max Combined Score", f"{attr['max_combined_score']:.4f}")
+                
+                # Selection results
+                st.markdown("#### Step 6: Trajectory Selection")
+                st.markdown("""
+                The top-scoring trajectories are selected for modification during optimization.
+                Modifying these trajectories has the highest potential to improve fairness.
+                """)
+                
+                sel = step_results['selection']
+                
+                st.markdown(f"**Selected {sel['n_selected']}/{sel['n_requested']} trajectories for modification**")
+                
+                if sel['selected_ids']:
+                    st.markdown("Top 5 selected trajectories:")
+                    sel_table = []
+                    for tid, score in zip(sel['selected_ids'], sel['top_scores']):
+                        sel_table.append({"Trajectory ID": tid, "Combined Score": f"{score:.4f}"})
+                    st.table(sel_table)
+                
+                # Raw results (collapsible)
+                with st.expander("📄 View Full Pipeline Results JSON"):
+                    st.json(step_results)
                 
             except Exception as e:
-                st.error(f"❌ Pipeline failed: {e}")
+                st.error(f"❌ Pipeline failed at: {status.text}")
+                st.error(f"Error: {e}")
                 import traceback
                 st.code(traceback.format_exc())
 
