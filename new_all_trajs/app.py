@@ -1,650 +1,633 @@
 """
-Streamlit Dashboard for All Trajs Dataset Generation and Analysis
+New All Trajs - Streamlit Dashboard
 
-This dashboard provides:
-- Configuration options for data source paths
-- Dataset generation interface
-- Dataset statistics and analysis
-- Visualizations
+A tool for recreating the all_trajs.pkl dataset in two steps:
+1. Extract passenger-seeking trajectories from raw GPS data
+2. Generate state features using cGAIL feature generation logic
+
+This dashboard provides tabs for:
+- Generate Passenger Seeking: Step 1 - Extract trajectories
+- Generate State Features: Step 2 - Add 122 additional features
+- Analyze: Examine output datasets from either step
 """
 
 import streamlit as st
 import pickle
-import pandas as pd
 import numpy as np
+import pandas as pd
 from pathlib import Path
+from datetime import datetime
 import plotly.express as px
 import plotly.graph_objects as go
-from typing import Dict, List, Optional
-import sys
-import os
+from plotly.subplots import make_subplots
 
-# Add parent directory to path for imports
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
-from config import (
-    ProcessingConfig, 
-    NORMALIZATION_CONSTANTS, 
-    ACTION_CODES, 
-    STATE_VECTOR_FIELDS
-)
-from processor import process_data, process_data_low_memory, save_output, load_output
+# Import processors
+from config import ProcessingConfig, Step1Stats, Step2Stats, FEATURE_INDICES, NORMALIZATION_CONSTANTS
 
 
 # Page configuration
 st.set_page_config(
-    page_title="All Trajs Dataset Generator",
+    page_title="New All Trajs Generator",
     page_icon="🚕",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-
-def get_default_paths():
-    """Get default paths relative to the module location."""
-    base_dir = Path(__file__).resolve().parent.parent
-    return {
-        "raw_data_dir": str(base_dir / "raw_data"),
-        "source_data_dir": str(base_dir / "source_data"),
-        "output_dir": str(base_dir / "new_all_trajs" / "output"),
-    }
-
-
-def render_sidebar():
-    """Render the sidebar with configuration options."""
-    st.sidebar.title("🚕 Configuration")
-    
-    defaults = get_default_paths()
-    
-    st.sidebar.subheader("📁 Data Source Paths")
-    
-    raw_data_dir = st.sidebar.text_input(
-        "Raw Data Directory",
-        value=defaults["raw_data_dir"],
-        help="Path to directory containing taxi_record_*.pkl files"
-    )
-    
-    source_data_dir = st.sidebar.text_input(
-        "Source Data Directory",
-        value=defaults["source_data_dir"],
-        help="Path to directory containing feature data files"
-    )
-    
-    output_dir = st.sidebar.text_input(
-        "Output Directory",
-        value=defaults["output_dir"],
-        help="Path to directory for output files"
-    )
-    
-    st.sidebar.subheader("⚙️ Processing Options")
-    
-    memory_mode = st.sidebar.selectbox(
-        "Memory Mode",
-        options=["Standard", "Low Memory"],
-        index=0,
-        help="Standard: Faster but uses more memory (~10GB). Low Memory: Slower but uses ~70% less memory (~3GB). Use Low Memory if you experience crashes."
-    )
-    
-    exclude_sunday = st.sidebar.checkbox(
-        "Exclude Sunday",
-        value=True,
-        help="Exclude Sunday data from processing"
-    )
-    
-    grid_size = st.sidebar.number_input(
-        "Grid Size (degrees)",
-        value=0.01,
-        min_value=0.001,
-        max_value=0.1,
-        step=0.001,
-        format="%.3f",
-        help="Size of each grid cell in degrees"
-    )
-    
-    time_interval = st.sidebar.number_input(
-        "Time Interval (minutes)",
-        value=5,
-        min_value=1,
-        max_value=60,
-        step=1,
-        help="Duration of each time bucket in minutes"
-    )
-    
-    st.sidebar.subheader("📊 Input Files")
-    
-    input_files = st.sidebar.multiselect(
-        "Raw Data Files",
-        options=[
-            "taxi_record_07_50drivers.pkl",
-            "taxi_record_08_50drivers.pkl",
-            "taxi_record_09_50drivers.pkl",
-        ],
-        default=[
-            "taxi_record_07_50drivers.pkl",
-            "taxi_record_08_50drivers.pkl",
-            "taxi_record_09_50drivers.pkl",
-        ],
-        help="Select which months to include"
-    )
-    
-    return {
-        "raw_data_dir": raw_data_dir,
-        "source_data_dir": source_data_dir,
-        "output_dir": output_dir,
-        "memory_mode": memory_mode,
-        "exclude_sunday": exclude_sunday,
-        "grid_size": grid_size,
-        "time_interval": time_interval,
-        "input_files": tuple(input_files),
-    }
+# Session state initialization
+if 'step1_output' not in st.session_state:
+    st.session_state.step1_output = None
+if 'step1_stats' not in st.session_state:
+    st.session_state.step1_stats = None
+if 'step2_output' not in st.session_state:
+    st.session_state.step2_output = None
+if 'step2_stats' not in st.session_state:
+    st.session_state.step2_stats = None
+if 'progress_text' not in st.session_state:
+    st.session_state.progress_text = ""
+if 'progress_value' not in st.session_state:
+    st.session_state.progress_value = 0.0
 
 
-def render_generate_tab(config_params: dict):
-    """Render the Generate tab content."""
-    st.header("📦 Dataset Structure Overview")
+def load_pickle_file(filepath: Path):
+    """Load a pickle file safely."""
+    try:
+        with open(filepath, 'rb') as f:
+            return pickle.load(f)
+    except Exception as e:
+        st.error(f"Failed to load {filepath}: {e}")
+        return None
+
+
+# Sidebar configuration
+st.sidebar.title("🚕 Configuration")
+
+# Data source paths
+st.sidebar.subheader("Data Sources")
+
+config = ProcessingConfig()
+
+raw_data_dir = st.sidebar.text_input(
+    "Raw Data Directory",
+    value=str(config.raw_data_dir),
+    help="Directory containing taxi_record_07/08/09_50drivers.pkl files"
+)
+
+source_data_dir = st.sidebar.text_input(
+    "Source Data Directory", 
+    value=str(config.source_data_dir),
+    help="Directory containing latest_traffic.pkl, latest_volume_pickups.pkl, train_airport.pkl"
+)
+
+output_dir = st.sidebar.text_input(
+    "Output Directory",
+    value=str(config.output_dir),
+    help="Directory for output pickle files"
+)
+
+# Update config with user inputs
+config.raw_data_dir = Path(raw_data_dir)
+config.source_data_dir = Path(source_data_dir)
+config.output_dir = Path(output_dir)
+
+st.sidebar.divider()
+
+# Processing parameters
+st.sidebar.subheader("Processing Parameters")
+
+config.min_trajectory_length = st.sidebar.number_input(
+    "Min Trajectory Length",
+    min_value=1,
+    max_value=100,
+    value=2,
+    help="Minimum number of states in a trajectory to include"
+)
+
+config.exclude_sunday = st.sidebar.checkbox(
+    "Exclude Sundays",
+    value=True,
+    help="Filter out records from Sundays"
+)
+
+# Main content tabs
+tab1, tab2, tab3 = st.tabs([
+    "🔄 Generate Passenger Seeking",
+    "🧮 Generate State Features", 
+    "📊 Analyze"
+])
+
+
+# Tab 1: Step 1 - Generate Passenger Seeking Trajectories
+with tab1:
+    st.header("Step 1: Extract Passenger-Seeking Trajectories")
     
-    # Dataset structure explanation
-    col1, col2 = st.columns(2)
+    st.markdown("""
+    This step extracts passenger-seeking trajectories from raw taxi GPS data.
     
-    with col1:
-        st.subheader("Data Hierarchy")
-        st.markdown("""
-        ```
-        new_all_trajs.pkl
-        ├── driver_key_0 (int)
-        │   ├── trajectory_0 (list of states)
-        │   │   ├── state_0 (126 elements)
-        │   │   ├── state_1 (126 elements)
-        │   │   └── ...
-        │   ├── trajectory_1
-        │   └── ...
-        ├── driver_key_1
-        │   └── ...
-        └── ... (50 drivers total)
-        ```
-        """)
+    **Definition:** A passenger-seeking trajectory begins when the passenger indicator 
+    changes from 1 to 0 (dropoff) and ends when it changes from 0 to 1 (pickup).
     
+    **Output format:** `{driver_index: [[trajectory], ...]}` where each trajectory 
+    is a list of states: `[x_grid, y_grid, time_bucket, day]`
+    """)
+    
+    # Input file selection
+    st.subheader("Input Files")
+    
+    input_files_exist = []
+    for filename in config.input_files:
+        filepath = config.raw_data_dir / filename
+        exists = filepath.exists()
+        input_files_exist.append(exists)
+        status = "✅" if exists else "❌"
+        st.text(f"{status} {filename}")
+    
+    if not any(input_files_exist):
+        st.error("No input files found. Please check the raw data directory.")
+    
+    # Output file path
+    st.subheader("Output")
+    step1_output_path = st.text_input(
+        "Output File",
+        value=str(config.output_dir / config.step1_output_filename),
+        key="step1_output_path"
+    )
+    
+    # Generate button
+    col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        st.subheader("Key Properties")
-        st.markdown("""
-        - **Number of Drivers:** 50
-        - **State Vector Length:** 126 elements
-        - **Time Buckets:** 288 (5-minute intervals)
-        - **Spatial Grid:** ~50×90 cells
-        - **Action Codes:** 10 (0-9)
-        """)
+        if st.button("🚀 Generate Passenger-Seeking Trajectories", type="primary", use_container_width=True):
+            if not any(input_files_exist):
+                st.error("No valid input files found!")
+            else:
+                from step1_processor import process_step1, save_step1_output
+                
+                progress_bar = st.progress(0)
+                status_text = st.empty()
+                
+                def progress_callback(stage, progress):
+                    progress_bar.progress(progress)
+                    status_text.text(stage)
+                
+                try:
+                    with st.spinner("Processing..."):
+                        trajectories, stats, index_to_plate = process_step1(config, progress_callback)
+                    
+                    st.session_state.step1_output = trajectories
+                    st.session_state.step1_stats = stats
+                    
+                    # Save output
+                    output_path = Path(step1_output_path)
+                    save_step1_output(trajectories, output_path, index_to_plate)
+                    
+                    st.success(f"✅ Successfully generated {stats.total_trajectories:,} trajectories!")
+                    st.info(f"Saved to: {output_path}")
+                    
+                except Exception as e:
+                    st.error(f"Processing failed: {e}")
+                    import traceback
+                    st.code(traceback.format_exc())
     
-    st.divider()
+    # Display statistics if available
+    if st.session_state.step1_stats:
+        st.subheader("Processing Statistics")
+        stats = st.session_state.step1_stats
+        
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("Total Raw Records", f"{stats.total_raw_records:,}")
+            st.metric("After Sunday Filter", f"{stats.records_after_sunday_filter:,}")
+        with col2:
+            st.metric("Unique Drivers", stats.unique_drivers)
+            st.metric("Total Trajectories", f"{stats.total_trajectories:,}")
+        with col3:
+            st.metric("Total States", f"{stats.total_states:,}")
+            st.metric("Avg Trajectory Length", f"{stats.avg_trajectory_length:.2f}")
+        with col4:
+            st.metric("Min Trajectory Length", stats.min_trajectory_length)
+            st.metric("Max Trajectory Length", stats.max_trajectory_length)
+        
+        st.metric("Processing Time", f"{stats.processing_time_seconds:.2f}s")
+
+
+# Tab 2: Step 2 - Generate State Features
+with tab2:
+    st.header("Step 2: Generate State Features")
     
-    # State vector schema
-    st.header("🔢 State Vector Schema")
+    st.markdown("""
+    This step adds 122 additional state features to the basic trajectories from Step 1.
     
-    schema_data = [
-        {"Index Range": "0", "Field Name": "x_grid", "Data Type": "int", "Description": "Grid index for longitude position"},
-        {"Index Range": "1", "Field Name": "y_grid", "Data Type": "int", "Description": "Grid index for latitude position"},
-        {"Index Range": "2", "Field Name": "time_bucket", "Data Type": "int", "Description": "Discretized time-of-day slot ∈ [1, 288]"},
-        {"Index Range": "3", "Field Name": "day_index", "Data Type": "int", "Description": "Day-of-week indicator [1-6]"},
-        {"Index Range": "4–24", "Field Name": "poi_manhattan_distance", "Data Type": "float", "Description": "Manhattan distances to 21 POIs"},
-        {"Index Range": "25–49", "Field Name": "pickup_count_norm", "Data Type": "float", "Description": "Normalized pickup counts (5×5 window)"},
-        {"Index Range": "50–74", "Field Name": "traffic_volume_norm", "Data Type": "float", "Description": "Normalized traffic volumes (5×5 window)"},
-        {"Index Range": "75–99", "Field Name": "traffic_speed_norm", "Data Type": "float", "Description": "Normalized traffic speeds (5×5 window)"},
-        {"Index Range": "100–124", "Field Name": "traffic_wait_norm", "Data Type": "float", "Description": "Normalized traffic waiting times (5×5 window)"},
-        {"Index Range": "125", "Field Name": "action_code", "Data Type": "int", "Description": "Movement action label (0-9)"},
+    **Features added:**
+    - 21 Manhattan distances to POIs (train stations, airports)
+    - 25 normalized pickup counts (5×5 window)
+    - 25 normalized traffic volumes (5×5 window)
+    - 25 normalized traffic speeds (5×5 window)
+    - 25 normalized traffic wait times (5×5 window)
+    - Action code (0-9)
+    
+    **Output format:** `{driver_index: [[full_state_trajectory], ...]}` where each 
+    state is a 126-element vector.
+    """)
+    
+    # Input file selection
+    st.subheader("Input")
+    
+    step1_input_source = st.radio(
+        "Step 1 Input Source",
+        ["From File", "From Memory (last Step 1 run)"],
+        help="Choose whether to load from file or use the result from the last Step 1 run"
+    )
+    
+    if step1_input_source == "From File":
+        step1_input_path = st.text_input(
+            "Step 1 Output File",
+            value=str(config.output_dir / config.step1_output_filename),
+            key="step2_input_path"
+        )
+        step1_file_exists = Path(step1_input_path).exists()
+        if step1_file_exists:
+            st.success(f"✅ File exists: {step1_input_path}")
+        else:
+            st.warning(f"⚠️ File not found: {step1_input_path}")
+    else:
+        if st.session_state.step1_output is not None:
+            st.success(f"✅ Step 1 output available in memory ({len(st.session_state.step1_output)} drivers)")
+            step1_input_path = None
+        else:
+            st.warning("⚠️ No Step 1 output in memory. Run Step 1 first or load from file.")
+            step1_input_path = None
+    
+    # Feature data files check
+    st.subheader("Feature Data Files")
+    
+    feature_files = [
+        (config.traffic_file, "Traffic data (speed, wait)"),
+        (config.volume_file, "Volume data (pickups, traffic)"),
+        (config.train_airport_file, "POI locations (21 places)"),
     ]
     
-    st.dataframe(pd.DataFrame(schema_data), use_container_width=True, hide_index=True)
+    all_features_exist = True
+    for filename, desc in feature_files:
+        filepath = config.source_data_dir / filename
+        exists = filepath.exists()
+        all_features_exist = all_features_exist and exists
+        status = "✅" if exists else "❌"
+        st.text(f"{status} {filename} - {desc}")
     
-    st.divider()
-    
-    # Feature generation logic
-    st.header("⚙️ Feature Generation Logic")
-    
-    with st.expander("📍 POI Manhattan Distances (Indices 4-24)", expanded=False):
-        st.markdown("""
-        **Source:** `train_airport.pkl`
-        
-        **Logic:**
-        ```python
-        for place in train_airport:
-            distance = abs(x - train_airport[place][0][0]) + abs(y - train_airport[place][0][1])
-        ```
-        
-        **Description:** Computes Manhattan distance from current (x, y) position to each of 21 POIs including:
-        - 深圳北站 (Shenzhen North Railway Station)
-        - 深圳东站 (Shenzhen East Railway Station)
-        - 深圳站 (Shenzhen Railway Station)
-        - 福田站 (Futian Station)
-        - 宝安机场 (Bao'an Airport)
-        - And 16 additional POIs
-        """)
-    
-    with st.expander("📊 Pickup Counts (Indices 25-49)", expanded=False):
-        st.markdown(f"""
-        **Source:** `latest_volume_pickups.pkl[key][0]`
-        
-        **Logic:**
-        ```python
-        for i in range(x-2, x+3):
-            for j in range(y-2, y+3):
-                if (i, j, t, day) in volume:
-                    n_p = (volume[(i,j,t,day)][0] - {NORMALIZATION_CONSTANTS['pickup_mean']:.4f}) / {NORMALIZATION_CONSTANTS['pickup_std']:.4f}
-                else:
-                    n_p = -{NORMALIZATION_CONSTANTS['pickup_mean']:.4f} / {NORMALIZATION_CONSTANTS['pickup_std']:.4f}
-        ```
-        
-        **Description:** Normalized pickup counts over a 5×5 spatial window centered on current position.
-        """)
-    
-    with st.expander("🚗 Traffic Volumes (Indices 50-74)", expanded=False):
-        st.markdown(f"""
-        **Source:** `latest_volume_pickups.pkl[key][1]`
-        
-        **Logic:**
-        ```python
-        for i in range(x-2, x+3):
-            for j in range(y-2, y+3):
-                if (i, j, t, day) in volume:
-                    n_v = (volume[(i,j,t,day)][1] - {NORMALIZATION_CONSTANTS['volume_mean']:.4f}) / {NORMALIZATION_CONSTANTS['volume_std']:.4f}
-                else:
-                    n_v = -{NORMALIZATION_CONSTANTS['volume_mean']:.4f} / {NORMALIZATION_CONSTANTS['volume_std']:.4f}
-        ```
-        
-        **Description:** Normalized traffic volumes over a 5×5 spatial window centered on current position.
-        """)
-    
-    with st.expander("🏎️ Traffic Speeds (Indices 75-99)", expanded=False):
-        st.markdown(f"""
-        **Source:** `latest_traffic.pkl[key][0]`
-        
-        **Logic:**
-        ```python
-        for i in range(x-2, x+3):
-            for j in range(y-2, y+3):
-                if (i, j, t, day) in traffic:
-                    t_s = (traffic[(i,j,t,day)][0] - {NORMALIZATION_CONSTANTS['speed_mean']:.6f}) / {NORMALIZATION_CONSTANTS['speed_std']:.6f}
-                else:
-                    t_s = -{NORMALIZATION_CONSTANTS['speed_mean']:.6f} / {NORMALIZATION_CONSTANTS['speed_std']:.6f}
-        ```
-        
-        **Description:** Normalized traffic speeds over a 5×5 spatial window centered on current position.
-        """)
-    
-    with st.expander("⏱️ Traffic Waiting Times (Indices 100-124)", expanded=False):
-        st.markdown(f"""
-        **Source:** `latest_traffic.pkl[key][1]`
-        
-        **Logic:**
-        ```python
-        for i in range(x-2, x+3):
-            for j in range(y-2, y+3):
-                if (i, j, t, day) in traffic:
-                    t_w = (traffic[(i,j,t,day)][1] - {NORMALIZATION_CONSTANTS['wait_mean']:.4f}) / {NORMALIZATION_CONSTANTS['wait_std']:.4f}
-                else:
-                    t_w = -{NORMALIZATION_CONSTANTS['wait_mean']:.4f} / {NORMALIZATION_CONSTANTS['wait_std']:.4f}
-        ```
-        
-        **Description:** Normalized traffic waiting times over a 5×5 spatial window centered on current position.
-        """)
-    
-    with st.expander("🎯 Action Codes (Index 125)", expanded=False):
-        st.markdown("""
-        **Source:** Computed from consecutive positions
-        
-        **Logic:**
-        ```python
-        def judging_action(x, y, nx, ny):
-            if x == 0 and y == 0: return 9
-            if nx == 0 and ny == 0: return 9  # stop
-            if x == nx and ny > y: return 0   # north
-            if x < nx and ny > y: return 1    # northeast
-            if x < nx and ny == y: return 2   # east
-            if x < nx and ny < y: return 3    # southeast
-            if x == nx and ny < y: return 4   # south
-            if x > nx and ny < y: return 5    # southwest
-            if x > nx and ny == y: return 6   # west
-            if x > nx and ny > y: return 7    # northwest
-            if x == nx and y == ny: return 8  # stay
-        ```
-        """)
-        
-        action_df = pd.DataFrame([
-            {"Code": k, "Movement": v} for k, v in ACTION_CODES.items()
-        ])
-        st.dataframe(action_df, use_container_width=True, hide_index=True)
-    
-    st.divider()
-    
-    # Generation interface
-    st.header("🚀 Generate Dataset")
-    
-    output_filename = st.text_input(
-        "Output File Name",
-        value="new_all_trajs.pkl",
-        help="Name of the output pickle file"
+    # Output file path
+    st.subheader("Output")
+    step2_output_path = st.text_input(
+        "Output File",
+        value=str(config.output_dir / config.step2_output_filename),
+        key="step2_output_path"
     )
     
-    # Validate paths
-    raw_data_path = Path(config_params["raw_data_dir"])
-    source_data_path = Path(config_params["source_data_dir"])
-    
-    validation_errors = []
-    if not raw_data_path.exists():
-        validation_errors.append(f"❌ Raw data directory not found: {raw_data_path}")
-    if not source_data_path.exists():
-        validation_errors.append(f"❌ Source data directory not found: {source_data_path}")
-    
-    # Check for required files
-    required_source_files = ["latest_traffic.pkl", "latest_volume_pickups.pkl", "train_airport.pkl"]
-    for f in required_source_files:
-        if source_data_path.exists() and not (source_data_path / f).exists():
-            validation_errors.append(f"❌ Required file not found: {f}")
-    
-    if validation_errors:
-        for error in validation_errors:
-            st.error(error)
-    else:
-        st.success("✅ All required files found")
-    
-    # Show memory mode info
-    if config_params["memory_mode"] == "Low Memory":
-        st.info("🐢 **Low Memory Mode**: Processing will be slower but use ~70% less RAM. Recommended for WSL2 or memory-constrained environments.")
-    else:
-        st.info("🚀 **Standard Mode**: Faster processing but uses more memory (~10GB). Switch to Low Memory mode if you experience crashes.")
-    
-    if st.button("🔄 Generate Dataset", disabled=len(validation_errors) > 0, type="primary"):
-        # Create config
-        config = ProcessingConfig(
-            raw_data_dir=Path(config_params["raw_data_dir"]),
-            source_data_dir=Path(config_params["source_data_dir"]),
-            output_dir=Path(config_params["output_dir"]),
-            exclude_sunday=config_params["exclude_sunday"],
-            grid_size=config_params["grid_size"],
-            time_interval=config_params["time_interval"],
-            input_files=config_params["input_files"],
-            output_filename=output_filename,
+    # Generate button
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        can_run = all_features_exist and (
+            (step1_input_source == "From File" and Path(step1_input_path).exists()) or
+            (step1_input_source == "From Memory (last Step 1 run)" and st.session_state.step1_output is not None)
         )
         
-        progress_bar = st.progress(0)
-        status_text = st.empty()
-        
-        def progress_callback(stage: str, progress: float):
-            progress_bar.progress(progress)
-            status_text.text(stage)
-        
-        try:
-            with st.spinner("Processing..."):
-                # Choose processing function based on memory mode
-                if config_params["memory_mode"] == "Low Memory":
-                    all_trajs, stats = process_data_low_memory(config, progress_callback)
-                else:
-                    all_trajs, stats = process_data(config, progress_callback)
+        if st.button("🧮 Generate State Features", type="primary", use_container_width=True, disabled=not can_run):
+            from step2_processor import process_step2, save_step2_output, load_step1_output, load_feature_data, process_trajectories
+            
+            progress_bar = st.progress(0)
+            status_text = st.empty()
+            
+            def progress_callback(stage, progress):
+                progress_bar.progress(progress)
+                status_text.text(stage)
+            
+            try:
+                with st.spinner("Processing..."):
+                    if step1_input_source == "From Memory (last Step 1 run)":
+                        # Use in-memory data
+                        status_text.text("Loading feature data files...")
+                        traffic, volume, train_airport = load_feature_data(config)
+                        
+                        status_text.text("Processing trajectories...")
+                        all_trajs, stats = process_trajectories(
+                            st.session_state.step1_output,
+                            traffic,
+                            volume,
+                            train_airport,
+                            lambda stage, prog: progress_callback(stage, 0.2 + prog * 0.8)
+                        )
+                    else:
+                        # Load from file
+                        all_trajs, stats = process_step2(
+                            config, 
+                            Path(step1_input_path), 
+                            progress_callback
+                        )
+                
+                st.session_state.step2_output = all_trajs
+                st.session_state.step2_stats = stats
                 
                 # Save output
-                output_path = config.output_dir / output_filename
-                save_output(all_trajs, output_path)
+                output_path = Path(step2_output_path)
+                save_step2_output(all_trajs, output_path)
                 
-                st.success(f"✅ Dataset generated successfully!")
+                st.success(f"✅ Successfully generated {stats.output_states:,} states with full features!")
+                st.info(f"Saved to: {output_path}")
                 
-                # Display stats
-                col1, col2, col3, col4 = st.columns(4)
-                col1.metric("Total Drivers", stats.total_drivers)
-                col2.metric("Total Trajectories", f"{stats.total_trajectories:,}")
-                col3.metric("Total States", f"{stats.total_states:,}")
-                col4.metric("Processing Time", f"{stats.processing_time_seconds:.2f}s")
-                
-                st.info(f"💾 Saved to: {output_path}")
-                
-        except Exception as e:
-            st.error(f"❌ Error during processing: {str(e)}")
-            import traceback
-            st.code(traceback.format_exc())
-
-
-def compute_dataset_stats(data: Dict) -> Dict:
-    """Compute comprehensive statistics for the dataset."""
-    stats = {
-        "num_drivers": len(data),
-        "trajectories_per_driver": [],
-        "states_per_trajectory": [],
-        "all_states": [],
-    }
+            except Exception as e:
+                st.error(f"Processing failed: {e}")
+                import traceback
+                st.code(traceback.format_exc())
     
-    for driver_id, trajectories in data.items():
-        stats["trajectories_per_driver"].append(len(trajectories))
-        for traj in trajectories:
-            stats["states_per_trajectory"].append(len(traj))
-            for state in traj:
-                stats["all_states"].append(state)
-    
-    return stats
+    # Display statistics if available
+    if st.session_state.step2_stats:
+        st.subheader("Processing Statistics")
+        stats = st.session_state.step2_stats
+        
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("Input Trajectories", f"{stats.input_trajectories:,}")
+            st.metric("Input States", f"{stats.input_states:,}")
+        with col2:
+            st.metric("Output States", f"{stats.output_states:,}")
+            st.metric("Unique Drivers", stats.unique_drivers)
+        with col3:
+            st.metric("Traffic Keys Found", f"{stats.traffic_keys_found:,}")
+            st.metric("Traffic Keys Missing", f"{stats.traffic_keys_missing:,}")
+        with col4:
+            st.metric("Volume Keys Found", f"{stats.volume_keys_found:,}")
+            st.metric("Volume Keys Missing", f"{stats.volume_keys_missing:,}")
+        
+        st.metric("Processing Time", f"{stats.processing_time_seconds:.2f}s")
 
 
-def render_analyze_tab(config_params: dict):
-    """Render the Analyze tab content."""
+# Tab 3: Analyze
+with tab3:
     st.header("📊 Dataset Analysis")
     
-    # File selector
-    output_dir = Path(config_params["output_dir"])
-    source_dir = Path(config_params["source_data_dir"])
+    st.markdown("""
+    Analyze output datasets from Step 1 (passenger-seeking trajectories) or 
+    Step 2 (full state features).
+    """)
     
-    # List available files
-    available_files = []
+    # Dataset selection
+    st.subheader("Select Dataset")
     
-    if output_dir.exists():
-        available_files.extend([str(f) for f in output_dir.glob("*.pkl")])
-    
-    if source_dir.exists():
-        all_trajs_path = source_dir / "all_trajs.pkl"
-        if all_trajs_path.exists():
-            available_files.append(str(all_trajs_path))
-    
-    if not available_files:
-        st.warning("No dataset files found. Generate a dataset first or check your paths.")
-        return
-    
-    selected_file = st.selectbox(
-        "Select Dataset File",
-        options=available_files,
-        help="Choose a dataset file to analyze"
+    analysis_source = st.radio(
+        "Dataset Source",
+        ["Load from file", "From memory (last run)"],
+        horizontal=True
     )
     
-    if st.button("📥 Load Dataset", type="primary"):
-        try:
-            with st.spinner("Loading dataset..."):
-                data = load_output(Path(selected_file))
-                st.session_state["loaded_data"] = data
-                st.session_state["loaded_file"] = selected_file
-                st.success(f"✅ Loaded {len(data)} drivers from {Path(selected_file).name}")
-        except Exception as e:
-            st.error(f"❌ Error loading file: {str(e)}")
-            return
+    analysis_data = None
+    data_type = None
     
-    if "loaded_data" not in st.session_state:
-        st.info("👆 Load a dataset to view analysis")
-        return
-    
-    data = st.session_state["loaded_data"]
-    
-    st.divider()
-    
-    # Compute stats
-    with st.spinner("Computing statistics..."):
-        stats = compute_dataset_stats(data)
-    
-    # Overview metrics
-    st.subheader("📈 Overview")
-    
-    total_trajectories = sum(stats["trajectories_per_driver"])
-    total_states = len(stats["all_states"])
-    
-    col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Total Drivers", stats["num_drivers"])
-    col2.metric("Total Trajectories", f"{total_trajectories:,}")
-    col3.metric("Total States", f"{total_states:,}")
-    col4.metric("Avg States/Traj", f"{np.mean(stats['states_per_trajectory']):.1f}")
-    
-    st.divider()
-    
-    # State Vector Statistics
-    st.subheader("🔢 State Vector Statistics")
-    
-    if len(stats["all_states"]) > 0:
-        # Sample states for efficiency
-        sample_size = min(100000, len(stats["all_states"]))
-        sample_indices = np.random.choice(len(stats["all_states"]), sample_size, replace=False)
-        sample_states = [stats["all_states"][i] for i in sample_indices]
-        
-        state_array = np.array(sample_states)
-        
-        # Build statistics table
-        stat_rows = []
-        feature_groups = [
-            (0, 0, "x_grid", "Longitude grid index"),
-            (1, 1, "y_grid", "Latitude grid index"),
-            (2, 2, "time_bucket", "Time bucket [1-288]"),
-            (3, 3, "day_index", "Day of week [1-6]"),
-            (4, 24, "poi_distances", "POI Manhattan distances"),
-            (25, 49, "pickup_counts", "Normalized pickup counts"),
-            (50, 74, "traffic_volumes", "Normalized traffic volumes"),
-            (75, 99, "traffic_speeds", "Normalized traffic speeds"),
-            (100, 124, "traffic_waits", "Normalized traffic waits"),
-            (125, 125, "action_code", "Movement action [0-9]"),
-        ]
-        
-        for start_idx, end_idx, name, desc in feature_groups:
-            if end_idx < state_array.shape[1]:
-                values = state_array[:, start_idx:end_idx+1].flatten()
-                stat_rows.append({
-                    "Index Range": f"{start_idx}" if start_idx == end_idx else f"{start_idx}-{end_idx}",
-                    "Feature Group": name,
-                    "Description": desc,
-                    "Min": f"{np.min(values):.4f}",
-                    "Max": f"{np.max(values):.4f}",
-                    "Range": f"{np.max(values) - np.min(values):.4f}",
-                    "Mean": f"{np.mean(values):.4f}",
-                    "Std": f"{np.std(values):.4f}",
-                })
-        
-        st.dataframe(pd.DataFrame(stat_rows), use_container_width=True, hide_index=True)
-    
-    st.divider()
-    
-    # Driver Statistics
-    st.subheader("👤 Driver Statistics")
-    
-    driver_stats = []
-    for driver_id in sorted(data.keys()):
-        trajectories = data[driver_id]
-        traj_lengths = [len(t) for t in trajectories]
-        
-        driver_stats.append({
-            "Driver ID": driver_id,
-            "Trajectory Count": len(trajectories),
-            "Avg Traj Length": f"{np.mean(traj_lengths):.1f}" if traj_lengths else "N/A",
-            "Min Traj Length": min(traj_lengths) if traj_lengths else "N/A",
-            "Max Traj Length": max(traj_lengths) if traj_lengths else "N/A",
-            "Total States": sum(traj_lengths),
-        })
-    
-    st.dataframe(pd.DataFrame(driver_stats), use_container_width=True, hide_index=True)
-    
-    st.divider()
-    
-    # Visualizations
-    st.subheader("📊 Visualizations")
-    
-    tab1, tab2, tab3, tab4 = st.tabs([
-        "Trajectory Length Distribution",
-        "Spatial Coverage",
-        "Temporal Distribution",
-        "Action Distribution"
-    ])
-    
-    with tab1:
-        fig = px.histogram(
-            x=stats["states_per_trajectory"],
-            nbins=50,
-            title="Distribution of Trajectory Lengths",
-            labels={"x": "Trajectory Length (states)", "y": "Count"},
+    if analysis_source == "Load from file":
+        analysis_file = st.text_input(
+            "Dataset File Path",
+            value=str(config.output_dir / config.step2_output_filename),
+            key="analysis_file"
         )
-        fig.update_layout(showlegend=False)
-        st.plotly_chart(fig, use_container_width=True)
+        
+        if st.button("Load Dataset"):
+            analysis_path = Path(analysis_file)
+            if analysis_path.exists():
+                analysis_data = load_pickle_file(analysis_path)
+                if analysis_data:
+                    st.session_state.analysis_data = analysis_data
+                    # Detect data type
+                    sample_driver = list(analysis_data.keys())[0]
+                    sample_traj = analysis_data[sample_driver][0] if analysis_data[sample_driver] else None
+                    if sample_traj:
+                        sample_state = sample_traj[0]
+                        if len(sample_state) == 4:
+                            data_type = "step1"
+                            st.info("Detected Step 1 output (4-element states)")
+                        elif len(sample_state) == 126:
+                            data_type = "step2"
+                            st.info("Detected Step 2 output (126-element states)")
+                        else:
+                            data_type = "unknown"
+                            st.warning(f"Unknown state vector length: {len(sample_state)}")
+                    st.session_state.data_type = data_type
+            else:
+                st.error(f"File not found: {analysis_file}")
+    else:
+        memory_options = []
+        if st.session_state.step1_output is not None:
+            memory_options.append("Step 1 Output")
+        if st.session_state.step2_output is not None:
+            memory_options.append("Step 2 Output")
+        
+        if not memory_options:
+            st.warning("No data in memory. Run Step 1 or Step 2 first, or load from file.")
+        else:
+            selected_memory = st.selectbox("Select memory data", memory_options)
+            if selected_memory == "Step 1 Output":
+                analysis_data = st.session_state.step1_output
+                data_type = "step1"
+            else:
+                analysis_data = st.session_state.step2_output
+                data_type = "step2"
+            st.session_state.analysis_data = analysis_data
+            st.session_state.data_type = data_type
     
-    with tab2:
-        if len(stats["all_states"]) > 0:
-            sample_size = min(50000, len(stats["all_states"]))
-            sample_indices = np.random.choice(len(stats["all_states"]), sample_size, replace=False)
-            sample_states = [stats["all_states"][i] for i in sample_indices]
+    # Load from session state if previously loaded
+    if 'analysis_data' in st.session_state and st.session_state.analysis_data is not None:
+        analysis_data = st.session_state.analysis_data
+        data_type = st.session_state.get('data_type', 'unknown')
+    
+    if analysis_data:
+        st.divider()
+        
+        # Overview statistics
+        st.subheader("Overview Statistics")
+        
+        num_drivers = len(analysis_data)
+        all_traj_lengths = []
+        all_states = []
+        
+        for driver_idx, trajectories in analysis_data.items():
+            for traj in trajectories:
+                all_traj_lengths.append(len(traj))
+                all_states.extend(traj)
+        
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("Drivers", num_drivers)
+        with col2:
+            st.metric("Trajectories", f"{len(all_traj_lengths):,}")
+        with col3:
+            st.metric("Total States", f"{len(all_states):,}")
+        with col4:
+            if all_traj_lengths:
+                st.metric("Avg Trajectory Length", f"{np.mean(all_traj_lengths):.2f}")
+        
+        # Trajectory length distribution
+        st.subheader("Trajectory Length Distribution")
+        
+        if all_traj_lengths:
+            fig = px.histogram(
+                x=all_traj_lengths,
+                nbins=50,
+                title="Distribution of Trajectory Lengths",
+                labels={'x': 'Trajectory Length', 'y': 'Count'}
+            )
+            st.plotly_chart(fig, use_container_width=True)
             
-            x_coords = [s[0] for s in sample_states]
-            y_coords = [s[1] for s in sample_states]
+            # Summary stats
+            col1, col2, col3, col4, col5 = st.columns(5)
+            with col1:
+                st.metric("Min Length", min(all_traj_lengths))
+            with col2:
+                st.metric("Max Length", max(all_traj_lengths))
+            with col3:
+                st.metric("Median Length", f"{np.median(all_traj_lengths):.0f}")
+            with col4:
+                st.metric("Mean Length", f"{np.mean(all_traj_lengths):.2f}")
+            with col5:
+                st.metric("Std Dev", f"{np.std(all_traj_lengths):.2f}")
+        
+        # Per-driver statistics
+        st.subheader("Per-Driver Statistics")
+        
+        driver_stats = []
+        for driver_idx, trajectories in analysis_data.items():
+            traj_lengths = [len(t) for t in trajectories]
+            driver_stats.append({
+                'Driver Index': driver_idx,
+                'Num Trajectories': len(trajectories),
+                'Total States': sum(traj_lengths),
+                'Avg Traj Length': np.mean(traj_lengths) if traj_lengths else 0,
+                'Min Traj Length': min(traj_lengths) if traj_lengths else 0,
+                'Max Traj Length': max(traj_lengths) if traj_lengths else 0,
+            })
+        
+        driver_df = pd.DataFrame(driver_stats)
+        
+        # Trajectories per driver
+        fig = px.bar(
+            driver_df,
+            x='Driver Index',
+            y='Num Trajectories',
+            title="Trajectories per Driver"
+        )
+        st.plotly_chart(fig, use_container_width=True)
+        
+        st.dataframe(driver_df, use_container_width=True)
+        
+        # Step 2 specific analysis
+        if data_type == "step2" and len(all_states) > 0 and len(all_states[0]) == 126:
+            st.divider()
+            st.subheader("State Feature Analysis (Step 2)")
             
+            # Convert to numpy for analysis
+            states_array = np.array(all_states)
+            
+            # Feature groups
+            feature_groups = {
+                'Grid Position': [0, 1],
+                'Time & Day': [2, 3],
+                'POI Distances': list(range(4, 25)),
+                'Pickup Counts': list(range(25, 50)),
+                'Traffic Volumes': list(range(50, 75)),
+                'Traffic Speeds': list(range(75, 100)),
+                'Traffic Wait Times': list(range(100, 125)),
+                'Action': [125],
+            }
+            
+            # Feature statistics
+            st.markdown("**Feature Statistics by Group**")
+            
+            for group_name, indices in feature_groups.items():
+                with st.expander(f"{group_name} (indices {indices[0]}-{indices[-1]})"):
+                    group_data = states_array[:, indices]
+                    
+                    col1, col2, col3, col4 = st.columns(4)
+                    with col1:
+                        st.metric("Min", f"{np.min(group_data):.4f}")
+                    with col2:
+                        st.metric("Max", f"{np.max(group_data):.4f}")
+                    with col3:
+                        st.metric("Mean", f"{np.mean(group_data):.4f}")
+                    with col4:
+                        st.metric("Std", f"{np.std(group_data):.4f}")
+                    
+                    # Distribution histogram for normalized features
+                    if group_name not in ['Grid Position', 'Time & Day', 'Action']:
+                        fig = px.histogram(
+                            x=group_data.flatten(),
+                            nbins=50,
+                            title=f"{group_name} Value Distribution"
+                        )
+                        st.plotly_chart(fig, use_container_width=True)
+            
+            # Action distribution
+            st.markdown("**Action Distribution**")
+            actions = states_array[:, 125].astype(int)
+            action_counts = pd.Series(actions).value_counts().sort_index()
+            
+            action_labels = {
+                0: 'North', 1: 'NE', 2: 'East', 3: 'SE',
+                4: 'South', 5: 'SW', 6: 'West', 7: 'NW',
+                8: 'Stay', 9: 'Stop'
+            }
+            
+            action_df = pd.DataFrame({
+                'Action': [action_labels.get(i, str(i)) for i in action_counts.index],
+                'Count': action_counts.values,
+                'Percentage': (action_counts.values / len(actions) * 100)
+            })
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                fig = px.bar(action_df, x='Action', y='Count', title="Action Distribution")
+                st.plotly_chart(fig, use_container_width=True)
+            with col2:
+                fig = px.pie(action_df, values='Count', names='Action', title="Action Proportion")
+                st.plotly_chart(fig, use_container_width=True)
+            
+            # Spatial distribution
+            st.markdown("**Spatial Distribution**")
+            x_coords = states_array[:, 0]
+            y_coords = states_array[:, 1]
+            
+            # 2D histogram
             fig = px.density_heatmap(
                 x=x_coords,
                 y=y_coords,
                 nbinsx=50,
-                nbinsy=90,
-                title="Spatial Coverage Heatmap",
-                labels={"x": "X Grid", "y": "Y Grid"},
-                color_continuous_scale="Viridis",
+                nbinsy=50,
+                title="Spatial State Distribution",
+                labels={'x': 'X Grid', 'y': 'Y Grid'}
             )
             st.plotly_chart(fig, use_container_width=True)
-    
-    with tab3:
-        if len(stats["all_states"]) > 0:
-            time_buckets = [s[2] for s in stats["all_states"][:100000]]
+            
+            # Time distribution
+            st.markdown("**Temporal Distribution**")
+            time_buckets = states_array[:, 2].astype(int)
             
             fig = px.histogram(
                 x=time_buckets,
                 nbins=288,
-                title="Temporal Distribution (5-minute buckets)",
-                labels={"x": "Time Bucket", "y": "Count"},
+                title="States by Time of Day (5-minute buckets)",
+                labels={'x': 'Time Bucket (0-287)', 'y': 'Count'}
             )
-            fig.update_layout(showlegend=False)
             st.plotly_chart(fig, use_container_width=True)
-    
-    with tab4:
-        if len(stats["all_states"]) > 0:
-            actions = [s[125] for s in stats["all_states"]]
-            action_counts = pd.Series(actions).value_counts().sort_index()
-            
-            action_df = pd.DataFrame({
-                "Action Code": action_counts.index,
-                "Count": action_counts.values,
-                "Movement": [ACTION_CODES.get(i, "Unknown") for i in action_counts.index]
-            })
-            
-            fig = px.bar(
-                action_df,
-                x="Action Code",
-                y="Count",
-                text="Movement",
-                title="Action Code Distribution",
-            )
-            fig.update_traces(textposition='outside')
-            st.plotly_chart(fig, use_container_width=True)
+        
+        # Data export
+        st.divider()
+        st.subheader("Export Options")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("Export Statistics to CSV"):
+                driver_df.to_csv(config.output_dir / "driver_statistics.csv", index=False)
+                st.success(f"Saved to {config.output_dir / 'driver_statistics.csv'}")
 
 
-def main():
-    """Main entry point for the Streamlit app."""
-    st.title("🚕 All Trajs Dataset Generator")
-    st.markdown("""
-    Generate and analyze feature-augmented taxi trajectory datasets for the FAMAIL project.
-    This tool processes raw GPS data and creates state vectors with spatial and temporal features.
-    """)
-    
-    # Render sidebar and get configuration
-    config_params = render_sidebar()
-    
-    # Create tabs
-    tab1, tab2 = st.tabs(["📦 Generate", "📊 Analyze"])
-    
-    with tab1:
-        render_generate_tab(config_params)
-    
-    with tab2:
-        render_analyze_tab(config_params)
-
-
-if __name__ == "__main__":
-    main()
+# Footer
+st.divider()
+st.markdown("""
+<div style='text-align: center; color: gray;'>
+    New All Trajs Generator | Part of FAMAIL Project
+</div>
+""", unsafe_allow_html=True)

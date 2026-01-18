@@ -1,8 +1,9 @@
 """
-New All Trajs Dataset Generator
+New All Trajs Dataset Generation Tool
 
-This module provides tools for generating the all_trajs dataset from raw GPS trajectory data.
-It uses consistent quantization logic aligned with other datasets in the FAMAIL project.
+This package provides tools for generating the all_trajs.pkl dataset in two steps:
+1. Extract passenger-seeking trajectories from raw GPS data
+2. Generate state features using the cGAIL feature generation logic
 """
 
 __version__ = "1.0.0"

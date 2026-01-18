@@ -1,5 +1,13 @@
-# Required dependencies for new_all_trajs
+# New All Trajs - Dependencies
+# Requirements for the all_trajs.pkl dataset regeneration tool
+
+# Core dependencies
+numpy>=1.21.0
+pandas>=1.3.0
 streamlit>=1.28.0
-pandas>=2.0.0
-numpy>=1.24.0
-plotly>=5.15.0
+
+# Visualization
+plotly>=5.0.0
+
+# Standard library (included for reference - no pip install needed)
+# pickle, pathlib, datetime, collections, time, dataclasses, typing
