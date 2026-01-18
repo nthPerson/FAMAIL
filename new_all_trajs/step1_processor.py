@@ -62,9 +62,33 @@ def load_raw_data(filepath: Path) -> Tuple[Dict[str, List], int]:
     if not isinstance(data, dict):
         raise ValueError(f"Expected dict, got {type(data).__name__}")
     
-    total_records = sum(len(records) for records in data.values())
+    # Flatten nested structure: dict[plate_id] -> list[list[record]] to dict[plate_id] -> list[record]
+    # The raw data has structure: plate_id -> list of day-lists -> list of GPS records
+    flattened_data = {}
+    total_records = 0
     
-    return data, total_records
+    for plate_id, day_lists in data.items():
+        flattened_records = []
+        
+        # Handle nested structure (list of lists)
+        if day_lists and isinstance(day_lists[0], list) and len(day_lists[0]) > 0 and isinstance(day_lists[0][0], list):
+            # It's a list of day-lists containing records
+            for day_list in day_lists:
+                for record in day_list:
+                    if isinstance(record, (list, tuple)) and len(record) >= 6:
+                        flattened_records.append(record)
+                        total_records += 1
+        else:
+            # It's already a flat list of records
+            for record in day_lists:
+                if isinstance(record, (list, tuple)) and len(record) >= 6:
+                    flattened_records.append(record)
+                    total_records += 1
+        
+        if flattened_records:
+            flattened_data[plate_id] = flattened_records
+    
+    return flattened_data, total_records
 
 
 def compute_global_bounds(raw_data_files: List[Dict[str, List]]) -> GlobalBounds:
@@ -77,6 +101,7 @@ def compute_global_bounds(raw_data_files: List[Dict[str, List]]) -> GlobalBounds
     
     Args:
         raw_data_files: List of raw data dicts loaded from pickle files
+                       (already flattened by load_raw_data)
         
     Returns:
         GlobalBounds object with min/max lat/lon
@@ -87,8 +112,13 @@ def compute_global_bounds(raw_data_files: List[Dict[str, List]]) -> GlobalBounds
     for data in raw_data_files:
         for plate_id, records in data.items():
             for record in records:
-                all_lats.append(record[1])  # latitude
-                all_lons.append(record[2])  # longitude
+                # Record format: [plate_id, lat, lon, seconds, passenger, timestamp]
+                if isinstance(record, (list, tuple)) and len(record) >= 3:
+                    all_lats.append(record[1])  # latitude
+                    all_lons.append(record[2])  # longitude
+    
+    if not all_lats:
+        raise ValueError("No valid GPS coordinates found in raw data")
     
     return GlobalBounds(
         lat_min=min(all_lats),
@@ -147,28 +177,31 @@ def seconds_to_time_bin(seconds: int, time_interval: int = 5) -> int:
     return int(time_bin)
 
 
-def timestamp_to_day(timestamp_str: str, exclude_sunday: bool = True) -> Optional[int]:
+def timestamp_to_day(timestamp_str: str, exclude_weekends: bool = True) -> Optional[int]:
     """
     Extract day-of-week from timestamp string.
     
-    Monday = 1, Tuesday = 2, ..., Saturday = 6
-    Sunday returns None if exclude_sunday is True.
+    Returns 1-indexed day: Monday = 1, Tuesday = 2, ..., Friday = 5
+    Saturday (6) and Sunday (7) return None if exclude_weekends is True.
+    
+    Note: The raw GPS data only contains weekday data (Monday-Friday),
+    so Saturday and Sunday exclusion is effectively a safety filter.
     
     Args:
         timestamp_str: Timestamp string in format 'YYYY-MM-DD HH:MM:SS'
-        exclude_sunday: If True, return None for Sundays
+        exclude_weekends: If True, return None for Saturday and Sunday
         
     Returns:
-        Day index [1, 6] or None for Sundays if excluded
+        Day index [1, 5] for weekdays, or None for weekends if excluded
     """
     try:
         dt = datetime.strptime(timestamp_str, '%Y-%m-%d %H:%M:%S')
-        dow = dt.weekday()  # Monday=0, Sunday=6
+        dow = dt.weekday()  # Monday=0, ..., Saturday=5, Sunday=6
         
-        if exclude_sunday and dow == 6:
+        if exclude_weekends and dow >= 5:  # Saturday=5, Sunday=6
             return None
         
-        return dow + 1  # Convert to 1-indexed
+        return dow + 1  # Convert to 1-indexed (Monday=1, ..., Friday=5)
     except ValueError:
         return None
 
@@ -226,8 +259,8 @@ def extract_passenger_seeking_trajectories(
             passenger = record[4]
             timestamp = record[5]
             
-            # Extract day and filter Sundays if configured
-            day = timestamp_to_day(timestamp, config.exclude_sunday)
+            # Extract day and filter weekends if configured
+            day = timestamp_to_day(timestamp, config.exclude_weekends)
             if day is None:
                 filtered_records += 1
                 prev_passenger = passenger
@@ -249,19 +282,17 @@ def extract_passenger_seeking_trajectories(
                 # Transition from passenger to empty (dropoff) - start new trajectory
                 if prev_passenger == 1 and passenger == 0:
                     if current_trajectory:
-                        # Save previous trajectory if it exists and meets minimum length
-                        if len(current_trajectory) >= config.min_trajectory_length:
-                            if config.max_trajectory_length is None or len(current_trajectory) <= config.max_trajectory_length:
-                                plate_trajectories.append(current_trajectory)
-                                total_states += len(current_trajectory)
+                        # Save previous trajectory if it exists and meets length constraints
+                        if len(current_trajectory) >= config.min_trajectory_length and len(current_trajectory) <= config.max_trajectory_length:
+                            plate_trajectories.append(current_trajectory)
+                            total_states += len(current_trajectory)
                     current_trajectory = []
                 
                 # Transition from empty to passenger (pickup) - end current trajectory
                 elif prev_passenger == 0 and passenger == 1:
-                    if current_trajectory and len(current_trajectory) >= config.min_trajectory_length:
-                        if config.max_trajectory_length is None or len(current_trajectory) <= config.max_trajectory_length:
-                            plate_trajectories.append(current_trajectory)
-                            total_states += len(current_trajectory)
+                    if current_trajectory and len(current_trajectory) >= config.min_trajectory_length and len(current_trajectory) <= config.max_trajectory_length:
+                        plate_trajectories.append(current_trajectory)
+                        total_states += len(current_trajectory)
                     current_trajectory = []
             
             # Add state to current trajectory if passenger seeking (passenger = 0)
@@ -273,9 +304,22 @@ def extract_passenger_seeking_trajectories(
         
         # Don't forget the last trajectory if it's valid
         if current_trajectory and len(current_trajectory) >= config.min_trajectory_length:
-            if config.max_trajectory_length is None or len(current_trajectory) <= config.max_trajectory_length:
+            if len(current_trajectory) <= config.max_trajectory_length:
                 plate_trajectories.append(current_trajectory)
                 total_states += len(current_trajectory)
+        
+        # Apply max trajectories per driver limit (keep the longest trajectories)
+        if len(plate_trajectories) > config.max_trajectories_per_driver:
+            # Sort by trajectory length (descending) and keep the longest N trajectories
+            sorted_trajs = sorted(plate_trajectories, key=lambda t: len(t), reverse=True)
+            kept_trajs = sorted_trajs[:config.max_trajectories_per_driver]
+            removed_trajs = sorted_trajs[config.max_trajectories_per_driver:]
+            
+            # Recalculate total_states for the removed trajectories
+            for traj in removed_trajs:
+                total_states -= len(traj)
+            
+            plate_trajectories = kept_trajs
         
         trajectories[plate_id] = plate_trajectories
         
