@@ -14,7 +14,10 @@ class ProcessingConfig:
     # Grid quantization parameters
     grid_size: float = 0.01  # degrees
     time_interval: int = 5   # minutes (288 buckets per day)
-    exclude_sunday: bool = True
+    
+    # Day filtering: raw data only contains Monday-Friday (weekdays)
+    # Saturday (weekday=5) and Sunday (weekday=6) are excluded by default
+    exclude_weekends: bool = True
     
     # Index offsets for alignment with existing datasets
     # These match the pickup_dropoff_counts and active_taxis processors
@@ -22,11 +25,12 @@ class ProcessingConfig:
     y_grid_offset: int = 1  # Add 1 to y_grid indices
     time_offset: int = 0    # No offset for time buckets (0-287)
     
-    # Minimum trajectory length (in states) to include
-    min_trajectory_length: int = 2
+    # Trajectory length constraints
+    min_trajectory_length: int = 2      # Minimum states to include trajectory
+    max_trajectory_length: int = 1000   # Maximum states per trajectory
     
-    # Maximum trajectory length (in states) - for filtering outliers
-    max_trajectory_length: Optional[int] = None
+    # Trajectory count constraint per driver
+    max_trajectories_per_driver: int = 5000  # Maximum trajectories to keep per driver
     
     # Paths
     raw_data_dir: Path = field(default_factory=lambda: Path(__file__).parent.parent / "raw_data")
