@@ -102,11 +102,24 @@ config.min_trajectory_length = st.sidebar.number_input(
     help="Minimum number of states in a trajectory to include"
 )
 
-config.exclude_sunday = st.sidebar.checkbox(
-    "Exclude Sundays",
-    value=True,
-    help="Filter out records from Sundays"
+config.max_trajectory_length = st.sidebar.number_input(
+    "Max Trajectory Length",
+    min_value=10,
+    max_value=10000,
+    value=1000,
+    help="Maximum number of states in a trajectory (longer trajectories are excluded)"
 )
+
+config.max_trajectories_per_driver = st.sidebar.number_input(
+    "Max Trajectories per Driver",
+    min_value=100,
+    max_value=50000,
+    value=5000,
+    help="Maximum number of trajectories to retain per driver"
+)
+
+# Note: Raw data only contains Monday-Friday, so weekends are excluded by default
+config.exclude_weekends = True
 
 # Main content tabs
 tab1, tab2, tab3 = st.tabs([
@@ -238,16 +251,25 @@ with tab2:
     )
     
     if step1_input_source == "From File":
-        step1_input_path = st.text_input(
-            "Step 1 Output File",
-            value=str(config.output_dir / config.step1_output_filename),
-            key="step2_input_path"
-        )
-        step1_file_exists = Path(step1_input_path).exists()
-        if step1_file_exists:
-            st.success(f"✅ File exists: {step1_input_path}")
+        # Find all .pkl files in output directory
+        output_dir = config.output_dir
+        pkl_files = []
+        if output_dir.exists():
+            pkl_files = sorted([f.name for f in output_dir.glob("*.pkl")])
+        
+        if pkl_files:
+            step1_input_path = st.selectbox(
+                "Step 1 Output File",
+                options=pkl_files,
+                index=0 if config.step1_output_filename not in pkl_files else pkl_files.index(config.step1_output_filename),
+                key="step2_input_path"
+            )
+            step1_file_path = output_dir / step1_input_path
+            st.success(f"✅ Selected: {step1_file_path}")
+            step1_input_path = str(step1_file_path)
         else:
-            st.warning(f"⚠️ File not found: {step1_input_path}")
+            st.warning(f"⚠️ No .pkl files found in {output_dir}")
+            step1_input_path = None
     else:
         if st.session_state.step1_output is not None:
             st.success(f"✅ Step 1 output available in memory ({len(st.session_state.step1_output)} drivers)")
@@ -381,15 +403,26 @@ with tab3:
     data_type = None
     
     if analysis_source == "Load from file":
-        analysis_file = st.text_input(
-            "Dataset File Path",
-            value=str(config.output_dir / config.step2_output_filename),
-            key="analysis_file"
-        )
+        # Find all .pkl files in output directory
+        output_dir = config.output_dir
+        pkl_files = []
+        if output_dir.exists():
+            pkl_files = sorted([f.name for f in output_dir.glob("*.pkl")])
         
-        if st.button("Load Dataset"):
-            analysis_path = Path(analysis_file)
-            if analysis_path.exists():
+        if pkl_files:
+            analysis_file = st.selectbox(
+                "Select Dataset File",
+                options=pkl_files,
+                index=0,
+                key="analysis_file"
+            )
+            analysis_path = output_dir / analysis_file
+        else:
+            st.warning(f"No .pkl files found in {output_dir}")
+            analysis_path = None
+        
+        if pkl_files and st.button("Load Dataset"):
+            if analysis_path and analysis_path.exists():
                 analysis_data = load_pickle_file(analysis_path)
                 if analysis_data:
                     st.session_state.analysis_data = analysis_data
@@ -409,7 +442,7 @@ with tab3:
                             st.warning(f"Unknown state vector length: {len(sample_state)}")
                     st.session_state.data_type = data_type
             else:
-                st.error(f"File not found: {analysis_file}")
+                st.error(f"File not found: {analysis_path}")
     else:
         memory_options = []
         if st.session_state.step1_output is not None:
