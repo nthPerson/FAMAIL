@@ -287,13 +287,16 @@ def render_training_progress(history: Dict):
         "train_loss": history["train_loss"],
         "val_loss": history["val_loss"],
         "val_accuracy": history.get("val_accuracy", []),
+        "val_positive_accuracy": history.get("val_positive_accuracy", []),
+        "val_negative_accuracy": history.get("val_negative_accuracy", []),
+        "val_identical_score": history.get("val_identical_score", []),
         "val_f1": history.get("val_f1", []),
         "val_auc": history.get("val_auc", []),
         "learning_rate": history.get("learning_rates", [])
     })
     
     if ALTAIR_AVAILABLE:
-        tab1, tab2, tab3 = st.tabs(["📉 Loss", "📊 Metrics", "📈 Learning Rate"])
+        tab1, tab2, tab3, tab4 = st.tabs(["📉 Loss", "📊 Metrics", "🎯 Split Accuracy", "📈 Learning Rate"])
         
         with tab1:
             # Loss curves
@@ -345,6 +348,62 @@ def render_training_progress(history: Dict):
                     st.metric("Final AUC", f"{df['val_auc'].iloc[-1]:.4f}")
         
         with tab3:
+            # Split accuracy charts - CRITICAL for discriminator monitoring
+            st.markdown("**Split Accuracy:** Shows how well the model performs on positive (same-agent) vs negative (different-agent) pairs separately.")
+            st.caption("⚠️ If these diverge significantly, the model may be biased toward one class!")
+            
+            split_cols = ["val_positive_accuracy", "val_negative_accuracy", "val_identical_score"]
+            has_split_data = all(col in df.columns and df[col].notna().any() for col in split_cols[:2])
+            
+            if has_split_data:
+                # Rename for cleaner display
+                split_df = df[["epoch"] + split_cols].copy()
+                split_df.columns = ["epoch", "Positive Acc (Same Agent)", "Negative Acc (Diff Agent)", "Identical Score"]
+                
+                split_df_melted = split_df.melt(
+                    id_vars=["epoch"],
+                    var_name="metric",
+                    value_name="value"
+                )
+                
+                split_chart = alt.Chart(split_df_melted).mark_line(point=True).encode(
+                    x=alt.X("epoch:Q", title="Epoch"),
+                    y=alt.Y("value:Q", title="Accuracy", scale=alt.Scale(domain=[0, 1])),
+                    color=alt.Color("metric:N", scale=alt.Scale(
+                        domain=["Positive Acc (Same Agent)", "Negative Acc (Diff Agent)", "Identical Score"],
+                        range=["#2ca02c", "#d62728", "#9467bd"]
+                    ))
+                ).properties(height=300, title="Split Accuracy Over Training")
+                
+                st.altair_chart(split_chart, use_container_width=True)
+                
+                # Final values with assessment
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    pos_acc = df['val_positive_accuracy'].iloc[-1] if len(df) > 0 else 0
+                    st.metric("➕ Positive Accuracy", f"{pos_acc:.4f}", 
+                              help="Correct predictions on same-agent pairs")
+                with col2:
+                    neg_acc = df['val_negative_accuracy'].iloc[-1] if len(df) > 0 else 0
+                    st.metric("➖ Negative Accuracy", f"{neg_acc:.4f}",
+                              help="Correct predictions on different-agent pairs")
+                with col3:
+                    id_score = df['val_identical_score'].iloc[-1] if len(df) > 0 else 0
+                    st.metric("🔄 Identical Score", f"{id_score:.4f}",
+                              help="Score when comparing trajectory to itself (should be ~1.0)")
+                
+                # Imbalance warning
+                if len(df) > 0:
+                    imbalance = abs(pos_acc - neg_acc)
+                    if imbalance > 0.3:
+                        st.error(f"⚠️ **Severe Imbalance Detected:** {imbalance:.2f} gap between positive and negative accuracy. "
+                                f"The model may be biased toward predicting {'same-agent' if pos_acc > neg_acc else 'different-agent'}.")
+                    elif imbalance > 0.15:
+                        st.warning(f"⚡ **Moderate Imbalance:** {imbalance:.2f} gap. Monitor this as training continues.")
+            else:
+                st.info("Split accuracy data not available. This may be from an older training run.")
+        
+        with tab4:
             if df["learning_rate"].notna().any():
                 lr_chart = alt.Chart(df).mark_line(point=True, color="#2ca02c").encode(
                     x=alt.X("epoch:Q", title="Epoch"),
@@ -520,7 +579,18 @@ def start_training(dataset_path: Path, params: Dict, experiment_name: str, progr
             
             st.markdown("---")
             
-            # Metrics row
+            # STOP TRAINING button - uses session state to signal stop
+            stop_col1, stop_col2 = st.columns([1, 4])
+            with stop_col1:
+                if st.button("🛑 Stop Training", type="secondary", key="stop_training_btn"):
+                    st.session_state['stop_training_requested'] = True
+                    st.warning("⏳ Stop requested. Training will stop after current epoch...")
+            with stop_col2:
+                stop_status = st.empty()
+            
+            st.markdown("---")
+            
+            # Primary metrics row
             metric_cols = st.columns(5)
             with metric_cols[0]:
                 train_loss_display = st.empty()
@@ -532,6 +602,18 @@ def start_training(dataset_path: Path, params: Dict, experiment_name: str, progr
                 f1_display = st.empty()
             with metric_cols[4]:
                 auc_display = st.empty()
+            
+            # Split accuracy and identical score row (NEW)
+            st.markdown("**Detailed Accuracy Breakdown:**")
+            detail_cols = st.columns(4)
+            with detail_cols[0]:
+                pos_acc_display = st.empty()
+            with detail_cols[1]:
+                neg_acc_display = st.empty()
+            with detail_cols[2]:
+                identical_display = st.empty()
+            with detail_cols[3]:
+                split_balance_display = st.empty()
             
             # Status and best epoch
             status_display = st.empty()
@@ -556,6 +638,9 @@ def start_training(dataset_path: Path, params: Dict, experiment_name: str, progr
             """Callback to update Streamlit progress elements."""
             epoch_times.append(epoch_time)
             
+            # Check for stop request from UI button
+            stop_requested = st.session_state.get('stop_training_requested', False)
+            
             # Calculate timing
             elapsed = time.time() - start_time
             avg_epoch_time = sum(epoch_times) / len(epoch_times)
@@ -576,15 +661,55 @@ def start_training(dataset_path: Path, params: Dict, experiment_name: str, progr
             time_remaining_display.metric("⏳ Remaining", format_time(estimated_remaining) if remaining_epochs > 0 else "Done!")
             eta_display.metric("🏁 ETA", eta.strftime("%H:%M:%S") if remaining_epochs > 0 else "Complete")
             
-            # Update metrics
+            # Update primary metrics
             train_loss_display.metric("Train Loss", f"{train_loss:.4f}")
             val_loss_display.metric("Val Loss", f"{val_metrics['loss']:.4f}")
             accuracy_display.metric("Accuracy", f"{val_metrics.get('accuracy', 0):.4f}")
             f1_display.metric("F1 Score", f"{val_metrics.get('f1', 0):.4f}")
             auc_display.metric("ROC AUC", f"{val_metrics.get('auc', 0):.4f}")
             
+            # Update detailed accuracy breakdown (NEW)
+            pos_acc = val_metrics.get('positive_accuracy', 0)
+            neg_acc = val_metrics.get('negative_accuracy', 0)
+            identical_score = identical_metrics.get('identical_mean', 0)
+            
+            # Color-code based on performance
+            pos_delta = None if epoch == 1 else pos_acc - (trainer.history.val_positive_accuracy[-2] if len(trainer.history.val_positive_accuracy) > 1 else pos_acc)
+            neg_delta = None if epoch == 1 else neg_acc - (trainer.history.val_negative_accuracy[-2] if len(trainer.history.val_negative_accuracy) > 1 else neg_acc)
+            
+            pos_acc_display.metric(
+                "➕ Positive Acc",
+                f"{pos_acc:.4f}",
+                delta=f"{pos_delta:+.4f}" if pos_delta is not None else None,
+                help="Accuracy on same-agent pairs (label=1). Should be high."
+            )
+            neg_acc_display.metric(
+                "➖ Negative Acc",
+                f"{neg_acc:.4f}",
+                delta=f"{neg_delta:+.4f}" if neg_delta is not None else None,
+                help="Accuracy on different-agent pairs (label=0). Critical for discriminator - watch this!"
+            )
+            identical_display.metric(
+                "🔄 Identical Score",
+                f"{identical_score:.4f}",
+                delta="⚠️ LOW" if identical_score < 0.5 else ("✓" if identical_score > 0.9 else None),
+                help="Mean score when comparing trajectory to itself. Should be ~1.0"
+            )
+            
+            # Show split balance warning
+            split_diff = abs(pos_acc - neg_acc)
+            if split_diff > 0.3:
+                split_balance_display.error(f"⚠️ Imbalance: {split_diff:.2f}")
+            elif split_diff > 0.15:
+                split_balance_display.warning(f"⚡ Gap: {split_diff:.2f}")
+            else:
+                split_balance_display.success(f"✓ Balanced: {split_diff:.2f}")
+            
             # Status message
-            if should_stop:
+            if stop_requested:
+                status_display.error(f"🛑 Stop requested by user. Saving checkpoints...")
+                stop_status.info("Checkpoints saved. Training stopped.")
+            elif should_stop:
                 status_display.warning(f"🛑 Early stopping triggered! Best epoch: {trainer.history.best_epoch}")
             elif is_best:
                 status_display.success(f"⭐ New best model! Val Loss: {val_metrics['loss']:.4f}")
@@ -620,13 +745,26 @@ def start_training(dataset_path: Path, params: Dict, experiment_name: str, progr
                 
                 chart_placeholder.altair_chart(chart, use_container_width=True)
             
+            # Return False to stop training if user requested stop
+            if stop_requested:
+                # Clear the stop flag for next training run
+                st.session_state['stop_training_requested'] = False
+                return False  # Signal trainer to stop
+            
             return True  # Continue training
+        
+        # Initialize stop flag
+        st.session_state['stop_training_requested'] = False
         
         # Train with progress callback
         trainer.train(verbose=True, progress_callback=progress_callback)
         
         # Final update
-        progress_bar.progress(1.0, text="✅ Training Complete!")
+        if st.session_state.get('stop_training_requested', False):
+            progress_bar.progress(progress_pct, text="⏹️ Training Stopped by User")
+            st.session_state['stop_training_requested'] = False
+        else:
+            progress_bar.progress(1.0, text="✅ Training Complete!")
         
     else:
         # Train without progress tracking

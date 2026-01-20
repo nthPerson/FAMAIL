@@ -87,6 +87,8 @@ class TrainingHistory:
     train_loss: List[float] = field(default_factory=list)
     val_loss: List[float] = field(default_factory=list)
     val_accuracy: List[float] = field(default_factory=list)
+    val_positive_accuracy: List[float] = field(default_factory=list)  # Accuracy on positive (same-agent) pairs
+    val_negative_accuracy: List[float] = field(default_factory=list)  # Accuracy on negative (diff-agent) pairs
     val_identical_score: List[float] = field(default_factory=list)  # Mean score for identical trajectories
     val_f1: List[float] = field(default_factory=list)
     val_auc: List[float] = field(default_factory=list)
@@ -330,10 +332,27 @@ class Trainer:
             # Confusion matrix
             cm = confusion_matrix(all_labels, all_preds)
             metrics['confusion_matrix'] = cm.tolist()
+            
+            # Per-class (split) accuracy - critical for monitoring discriminator performance
+            # TN=correct negatives, FP=false positives, FN=false negatives, TP=correct positives
+            tn, fp, fn, tp = cm.ravel()
+            metrics['negative_accuracy'] = tn / (tn + fp) if (tn + fp) > 0 else 0.0
+            metrics['positive_accuracy'] = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+            metrics['true_negative'] = int(tn)
+            metrics['false_positive'] = int(fp)
+            metrics['false_negative'] = int(fn)
+            metrics['true_positive'] = int(tp)
         else:
             # Basic accuracy without sklearn
             correct = sum(p == l for p, l in zip(all_preds, all_labels))
             metrics['accuracy'] = correct / len(all_labels)
+            # Manual split accuracy
+            pos_correct = sum(1 for p, l in zip(all_preds, all_labels) if l == 1 and p == l)
+            pos_total = sum(1 for l in all_labels if l == 1)
+            neg_correct = sum(1 for p, l in zip(all_preds, all_labels) if l == 0 and p == l)
+            neg_total = sum(1 for l in all_labels if l == 0)
+            metrics['positive_accuracy'] = pos_correct / pos_total if pos_total > 0 else 0.0
+            metrics['negative_accuracy'] = neg_correct / neg_total if neg_total > 0 else 0.0
             
         return metrics
     
@@ -639,6 +658,8 @@ class Trainer:
             self.history.train_loss.append(train_loss)
             self.history.val_loss.append(val_metrics['loss'])
             self.history.val_accuracy.append(val_metrics.get('accuracy', 0))
+            self.history.val_positive_accuracy.append(val_metrics.get('positive_accuracy', 0))
+            self.history.val_negative_accuracy.append(val_metrics.get('negative_accuracy', 0))
             self.history.val_f1.append(val_metrics.get('f1', 0))
             self.history.val_auc.append(val_metrics.get('auc', 0))
             self.history.val_identical_score.append(identical_metrics.get('identical_mean', 0))
@@ -666,13 +687,19 @@ class Trainer:
                 best_marker = " *" if is_best else ""
                 identical_score = identical_metrics.get('identical_mean', 0)
                 identical_warn = " ⚠️ LOW" if identical_score < 0.5 else ""
+                pos_acc = val_metrics.get('positive_accuracy', 0)
+                neg_acc = val_metrics.get('negative_accuracy', 0)
+                # Warn if split accuracies are very imbalanced (suggests model bias)
+                split_warn = ""
+                if abs(pos_acc - neg_acc) > 0.3:
+                    split_warn = " ⚠️"
                 print(f"Epoch {epoch:3d}/{self.config.epochs} | "
-                      f"Train Loss: {train_loss:.4f} | "
-                      f"Val Loss: {val_metrics['loss']:.4f} | "
-                      f"Acc: {val_metrics.get('accuracy', 0):.4f} | "
-                      f"AUC: {val_metrics.get('auc', 0):.4f} | "
-                      f"Identical: {identical_score:.3f}{identical_warn} | "
-                      f"Time: {epoch_time:.1f}s{best_marker}")
+                      f"Train: {train_loss:.4f} | "
+                      f"Val: {val_metrics['loss']:.4f} | "
+                      f"Acc: {val_metrics.get('accuracy', 0):.3f} "
+                      f"[+:{pos_acc:.3f} -:{neg_acc:.3f}]{split_warn} | "
+                      f"Id: {identical_score:.3f}{identical_warn} | "
+                      f"{epoch_time:.1f}s{best_marker}")
                 
             # Early stopping
             if self.early_stopping(val_metrics['loss']):
