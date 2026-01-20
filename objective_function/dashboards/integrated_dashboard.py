@@ -122,6 +122,178 @@ st.markdown("""
 
 
 # =============================================================================
+# DATASET AND MODEL DISCOVERY
+# =============================================================================
+
+def discover_trajectory_datasets() -> Dict[str, Path]:
+    """
+    Discover available trajectory datasets in the source_data directory.
+    
+    Looks for .pkl files with 'traj' in the name that match the expected structure:
+    {driver_id: [[state0, state1, ...], [state0, state1, ...], ...], ...}
+    
+    Returns:
+        Dict mapping display names to file paths
+    """
+    source_data_dir = PROJECT_ROOT / 'source_data'
+    datasets = {}
+    
+    if not source_data_dir.exists():
+        return datasets
+    
+    # Find all pkl files with 'traj' in the name
+    for pkl_file in source_data_dir.glob('*traj*.pkl'):
+        try:
+            with open(pkl_file, 'rb') as f:
+                data = pickle.load(f)
+            
+            # Check if it matches the expected structure
+            if isinstance(data, dict) and len(data) > 0:
+                first_key = list(data.keys())[0]
+                first_value = data[first_key]
+                
+                # Should be a list of trajectories
+                if isinstance(first_value, list) and len(first_value) > 0:
+                    first_traj = first_value[0]
+                    # Should be a list of states
+                    if isinstance(first_traj, list) and len(first_traj) > 0:
+                        first_state = first_traj[0]
+                        # State should be a list with at least x, y coordinates
+                        if isinstance(first_state, (list, tuple)) and len(first_state) >= 2:
+                            # Valid trajectory dataset!
+                            display_name = pkl_file.stem
+                            datasets[display_name] = pkl_file
+        except Exception:
+            # Skip files that can't be loaded or don't match the structure
+            continue
+    
+    return datasets
+
+
+def discover_discriminator_models() -> Dict[str, Path]:
+    """
+    Discover available discriminator model checkpoints.
+    
+    Looks for directories in discriminator/model/checkpoints/ that contain .pt files.
+    
+    Returns:
+        Dict mapping display names to checkpoint directory paths
+    """
+    checkpoints_dir = PROJECT_ROOT / 'discriminator' / 'model' / 'checkpoints'
+    models = {}
+    
+    if not checkpoints_dir.exists():
+        return models
+    
+    # Find all subdirectories that contain model files
+    for model_dir in checkpoints_dir.iterdir():
+        if model_dir.is_dir():
+            # Check for best.pt or latest.pt
+            best_pt = model_dir / 'best.pt'
+            latest_pt = model_dir / 'latest.pt'
+            
+            if best_pt.exists() or latest_pt.exists():
+                display_name = model_dir.name
+                models[display_name] = model_dir
+    
+    return models
+
+
+@st.cache_data(ttl=60)
+def get_cached_trajectory_datasets() -> Dict[str, str]:
+    """Get available trajectory datasets (cached). Returns dict mapping names to path strings."""
+    datasets = discover_trajectory_datasets()
+    return {name: str(path) for name, path in datasets.items()}
+
+
+@st.cache_data(ttl=60)
+def get_cached_discriminator_models() -> Dict[str, str]:
+    """Get available discriminator models (cached). Returns dict mapping names to path strings."""
+    models = discover_discriminator_models()
+    return {name: str(path) for name, path in models.items()}
+
+
+def get_dataset_info(filepath: str) -> Dict[str, Any]:
+    """
+    Get basic info about a trajectory dataset without loading all data.
+    
+    Args:
+        filepath: Path to the pickle file
+        
+    Returns:
+        Dict with dataset metadata
+    """
+    try:
+        with open(filepath, 'rb') as f:
+            data = pickle.load(f)
+        
+        if isinstance(data, dict):
+            n_drivers = len(data)
+            total_trajs = sum(len(v) for v in data.values() if isinstance(v, list))
+            
+            # Get sample state to determine format
+            first_key = list(data.keys())[0]
+            first_traj = data[first_key][0] if data[first_key] else []
+            first_state = first_traj[0] if first_traj else []
+            state_length = len(first_state) if isinstance(first_state, (list, tuple)) else 0
+            
+            return {
+                'n_drivers': n_drivers,
+                'n_trajectories': total_trajs,
+                'state_length': state_length,
+                'format': '126-element' if state_length == 126 else f'{state_length}-element',
+            }
+    except Exception as e:
+        return {'error': str(e)}
+    
+    return {}
+
+
+def get_model_info(model_dir: str) -> Dict[str, Any]:
+    """
+    Get basic info about a discriminator model checkpoint.
+    
+    Args:
+        model_dir: Path to the checkpoint directory
+        
+    Returns:
+        Dict with model metadata
+    """
+    model_path = Path(model_dir)
+    info = {'path': model_dir}
+    
+    # Check for config.json
+    config_path = model_path / 'config.json'
+    if config_path.exists():
+        try:
+            import json
+            with open(config_path, 'r') as f:
+                config = json.load(f)
+            info['config'] = config
+            info['architecture'] = config.get('model', {}).get('architecture', 'unknown')
+        except Exception:
+            pass
+    
+    # Check for results.json
+    results_path = model_path / 'results.json'
+    if results_path.exists():
+        try:
+            import json
+            with open(results_path, 'r') as f:
+                results = json.load(f)
+            info['results'] = results
+            info['test_accuracy'] = results.get('test_accuracy', None)
+        except Exception:
+            pass
+    
+    # Check which checkpoint files exist
+    info['has_best'] = (model_path / 'best.pt').exists()
+    info['has_latest'] = (model_path / 'latest.pt').exists()
+    
+    return info
+
+
+# =============================================================================
 # SIDEBAR
 # =============================================================================
 
@@ -1041,7 +1213,7 @@ def render_attribution_tab(config: Dict[str, Any]):
     
     else:  # Load from file
         data_paths = list(PROJECT_ROOT.glob("**/*.pkl"))
-        all_trajs_paths = [p for p in data_paths if 'all_trajs' in p.name.lower()]
+        all_trajs_paths = [p for p in data_paths if 'trajs' in p.name.lower()]
         
         if all_trajs_paths:
             selected_path = st.selectbox("Select data file", all_trajs_paths)
@@ -1294,30 +1466,43 @@ def render_attribution_tab(config: Dict[str, Any]):
 def _load_real_data_for_testing(
     config: Dict[str, Any],
     n_samples: int = 100,
+    dataset_path: Optional[str] = None,
 ) -> Optional[Dict[str, Any]]:
     """
-    Load real trajectory data from all_trajs.pkl for integration testing.
+    Load real trajectory data from a trajectory dataset file for integration testing.
+    
+    Args:
+        config: Dashboard configuration
+        n_samples: Number of trajectories to sample (None = all)
+        dataset_path: Optional explicit path to dataset. If None, searches default locations.
     
     Returns:
         Dict with 'trajectories', 'pickup_coords', 'dropoff_coords', 'metadata' or None if failed
     """
     import torch
     
-    # Find the all_trajs.pkl file
-    possible_paths = [
-        PROJECT_ROOT / 'data' / 'Processed_Data' / 'all_trajs.pkl',
-        PROJECT_ROOT / 'source_data' / 'all_trajs.pkl',
-        PROJECT_ROOT / 'cGAIL_data_and_processing' / 'Data' / 'trajectory_info' / 'all_trajs.pkl',
-    ]
-    
-    filepath = None
-    for path in possible_paths:
-        if path.exists():
-            filepath = path
-            break
-    
-    if filepath is None:
-        return None
+    # Use explicit path if provided, otherwise search default locations
+    if dataset_path is not None:
+        filepath = Path(dataset_path)
+        if not filepath.exists():
+            st.warning(f"Dataset file not found: {dataset_path}")
+            return None
+    else:
+        # Find the all_trajs.pkl file in default locations
+        possible_paths = [
+            PROJECT_ROOT / 'data' / 'Processed_Data' / 'all_trajs.pkl',
+            PROJECT_ROOT / 'source_data' / 'all_trajs.pkl',
+            PROJECT_ROOT / 'cGAIL_data_and_processing' / 'Data' / 'trajectory_info' / 'all_trajs.pkl',
+        ]
+        
+        filepath = None
+        for path in possible_paths:
+            if path.exists():
+                filepath = path
+                break
+        
+        if filepath is None:
+            return None
     
     try:
         trajectories = load_trajectories_from_all_trajs(filepath, n_samples=n_samples)
@@ -1974,20 +2159,24 @@ def render_integration_tab(config: Dict[str, Any]):
     # =========================================================================
     st.subheader("📊 Data Source Selection")
     
+    # Discover available datasets and models
+    available_datasets = get_cached_trajectory_datasets()
+    available_models = get_cached_discriminator_models()
+    
     col_ds1, col_ds2 = st.columns([2, 1])
     with col_ds1:
         trajectory_source = st.radio(
             "Trajectory Data Source",
-            ["Generated (Synthetic)", "Real Data (all_trajs.pkl)"],
+            ["Generated (Synthetic)", "Real Data (from file)"],
             horizontal=True,
-            help="Generated creates random trajectories. Real loads from all_trajs.pkl."
+            help="Generated creates random trajectories. Real loads from a trajectory dataset file."
         )
     
     with col_ds2:
         # Trajectory count options
         trajectory_count_mode = st.selectbox(
             "Trajectory Count",
-            ["Sample (5,000)", "Sample (10,000)", "Sample (20,000)", "All (~44K, slow)"],
+            ["Sample (5,000)", "Sample (10,000)", "Sample (20,000)", "All (slow)"],
             index=0,
             help="More trajectories = more accurate but slower. 5-10K recommended for quick testing."
         )
@@ -1997,11 +2186,37 @@ def render_integration_tab(config: Dict[str, Any]):
             "Sample (5,000)": 5000,
             "Sample (10,000)": 10000,
             "Sample (20,000)": 20000,
-            "All (~44K, slow)": None,
+            "All (slow)": None,
         }
         n_test_samples = count_map[trajectory_count_mode]
     
-    use_real_trajectories = trajectory_source == "Real Data (all_trajs.pkl)"
+    use_real_trajectories = trajectory_source == "Real Data (from file)"
+    
+    # Trajectory dataset picker (only shown when using real data)
+    selected_dataset_path = None
+    if use_real_trajectories:
+        if available_datasets:
+            dataset_names = sorted(available_datasets.keys())
+            default_idx = dataset_names.index('all_trajs') if 'all_trajs' in dataset_names else 0
+            
+            col_picker1, col_picker2 = st.columns([2, 1])
+            with col_picker1:
+                selected_dataset = st.selectbox(
+                    "📂 Select Trajectory Dataset",
+                    dataset_names,
+                    index=default_idx,
+                    help="Choose a trajectory dataset from source_data/. Different datasets may have different quantization methods."
+                )
+                selected_dataset_path = available_datasets[selected_dataset]
+            
+            with col_picker2:
+                dataset_info = get_dataset_info(selected_dataset_path)
+                if 'error' not in dataset_info:
+                    st.metric("Trajectories", f"{dataset_info.get('n_trajectories', '?'):,}")
+                    st.caption(f"{dataset_info.get('n_drivers', '?')} drivers • {dataset_info.get('format', '?')} states")
+        else:
+            st.warning("⚠️ No trajectory datasets found in source_data/. Looking for *traj*.pkl files.")
+            selected_dataset_path = None
     
     # Memory efficiency options
     col_mem1, col_mem2 = st.columns(2)
@@ -2009,7 +2224,7 @@ def render_integration_tab(config: Dict[str, Any]):
         use_hard_counts = st.checkbox(
             "Use hard cell counts during initialization (faster)",
             value=True,
-            help="Use discrete cell assignment instead of soft during tensor initialization. Much faster for large datasets while maintaining statistical validity."
+            help="Use discrete cell assignment instead of soft. Much faster for large datasets while maintaining statistical validity."
         )
     
     # Supply/Demand data source
@@ -2027,6 +2242,38 @@ def render_integration_tab(config: Dict[str, Any]):
         )
     
     use_real_supply_demand = supply_source == "Real Data (active_taxis + pickup_dropoff_counts)"
+    
+    # =========================================================================
+    # DISCRIMINATOR MODEL SELECTION
+    # =========================================================================
+    selected_model_path = None
+    if available_models:
+        with st.expander("🤖 Discriminator Model Selection (for Fidelity Term)", expanded=False):
+            st.markdown("""
+            Select a pre-trained discriminator model to use for the **Fidelity Term** ($F_{fidelity}$).
+            The discriminator evaluates how realistic the generated trajectories are compared to real ones.
+            """)
+            
+            model_names = sorted(available_models.keys(), reverse=True)  # Most recent first
+            
+            col_model1, col_model2 = st.columns([2, 1])
+            with col_model1:
+                selected_model = st.selectbox(
+                    "📁 Select Discriminator Checkpoint",
+                    model_names,
+                    index=0,
+                    help="Choose a trained discriminator model from discriminator/model/checkpoints/"
+                )
+                selected_model_path = available_models[selected_model]
+            
+            with col_model2:
+                model_info = get_model_info(selected_model_path)
+                if model_info.get('test_accuracy'):
+                    st.metric("Test Accuracy", f"{model_info['test_accuracy']:.1%}")
+                if model_info.get('has_best'):
+                    st.caption("✅ best.pt available")
+                elif model_info.get('has_latest'):
+                    st.caption("📄 latest.pt available")
     
     # =========================================================================
     # REALISTIC TEST CONFIGURATION (EXPANDER)
@@ -2075,9 +2322,9 @@ def render_integration_tab(config: Dict[str, Any]):
     
     # Pre-load trajectory data based on selection
     @st.cache_data
-    def get_test_data(use_real: bool, n_samples: Optional[int], grid_dims: Tuple[int, int], seed: int = 42):
+    def get_test_data(use_real: bool, n_samples: Optional[int], grid_dims: Tuple[int, int], dataset_path: Optional[str] = None, seed: int = 42):
         if use_real:
-            return _load_real_data_for_testing({'grid_dims': grid_dims}, n_samples=n_samples)
+            return _load_real_data_for_testing({'grid_dims': grid_dims}, n_samples=n_samples, dataset_path=dataset_path)
         else:
             # Generate synthetic data - need a concrete number
             actual_n = n_samples if n_samples is not None else 5000
@@ -2133,15 +2380,16 @@ def render_integration_tab(config: Dict[str, Any]):
         """)
         
         # Show data source summary
-        st.info(f"📂 Trajectory source: **{trajectory_source}** | Supply/Demand source: **{supply_source}**")
+        dataset_name = Path(selected_dataset_path).stem if selected_dataset_path else "synthetic"
+        st.info(f"📂 Trajectory source: **{trajectory_source}** ({dataset_name}) | Supply/Demand source: **{supply_source}**")
         
         if st.button("🚀 Run Basic Gradient Test", key="run_basic_grad"):
             with st.spinner("Running comprehensive gradient test..."):
                 # Load data
-                test_data = get_test_data(use_real_trajectories, n_test_samples, config['grid_dims'])
+                test_data = get_test_data(use_real_trajectories, n_test_samples, config['grid_dims'], selected_dataset_path)
                 
                 if test_data is None:
-                    st.error("❌ Could not load test data. Ensure all_trajs.pkl exists.")
+                    st.error("❌ Could not load test data. Check that the selected dataset exists.")
                     return
                 
                 # Run comprehensive test
@@ -2166,7 +2414,9 @@ def render_integration_tab(config: Dict[str, Any]):
             col_src1, col_src2 = st.columns(2)
             with col_src1:
                 if use_real_trajectories and 'data_metadata' in result:
-                    st.info(f"**Trajectories**: Real data - {result['data_metadata'].get('n_trajectories', 'N/A')} trajectories from {result['data_metadata'].get('n_drivers', 'N/A')} drivers")
+                    meta = result['data_metadata']
+                    ds_name = Path(meta.get('filepath', 'unknown')).stem if meta.get('filepath') else 'unknown'
+                    st.info(f"**Trajectories**: `{ds_name}`\n- {meta.get('n_trajectories', 'N/A'):,} trajectories\n- {meta.get('n_drivers', 'N/A')} drivers")
                 else:
                     st.info(f"**Trajectories**: Synthetic - {result['n_trajectories']} randomly generated")
             
@@ -2430,7 +2680,7 @@ def render_integration_tab(config: Dict[str, Any]):
             results = []
             
             # Load data once
-            test_data = get_test_data(use_real_trajectories, n_test_samples, config['grid_dims'])
+            test_data = get_test_data(use_real_trajectories, n_test_samples, config['grid_dims'], selected_dataset_path)
             
             if test_data is None:
                 st.error("❌ Could not load test data.")
@@ -2611,7 +2861,7 @@ def render_integration_tab(config: Dict[str, Any]):
         
         if st.button("🚀 Run Attribution Consistency Test", key="run_attr"):
             # Load data
-            test_data = get_test_data(use_real_trajectories, n_test_samples, config['grid_dims'])
+            test_data = get_test_data(use_real_trajectories, n_test_samples, config['grid_dims'], selected_dataset_path)
             
             if test_data is None:
                 st.error("❌ Could not load test data.")
@@ -2837,7 +3087,7 @@ def render_integration_tab(config: Dict[str, Any]):
                 # Step 1: Load/generate data
                 status.text("Step 1/6: Loading trajectory data...")
                 
-                test_data = get_test_data(use_real_trajectories, n_test_samples, config['grid_dims'])
+                test_data = get_test_data(use_real_trajectories, n_test_samples, config['grid_dims'], selected_dataset_path)
                 
                 if test_data is None:
                     st.error("❌ Could not load test data.")
