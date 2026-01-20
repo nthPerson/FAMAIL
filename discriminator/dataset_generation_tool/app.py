@@ -31,18 +31,31 @@ DEFAULT_DATA_PATH = Path("/home/robert/FAMAIL/discriminator/dataset_generation_t
 def _build_config() -> Tuple[GenerationConfig, Dict, int]:
     with st.sidebar:
         st.header("Configuration")
-        data_path_str = st.text_input("Path to all_trajs.pkl", value=str(DEFAULT_DATA_PATH))
+        data_path_str = st.text_input(
+            "Path to all_trajs.pkl", 
+            value=str(DEFAULT_DATA_PATH),
+            help=(
+                "Path to the pickle file containing trajectory data.\n\n"
+                "**Expected format:** Dict mapping agent_id → List[np.ndarray]\n"
+                "Each array should be shape (timesteps, features) with at least 4 features:\n"
+                "- [0] x_grid: Grid x-coordinate (0-49)\n"
+                "- [1] y_grid: Grid y-coordinate (0-89)\n"
+                "- [2] time_bucket: Time of day (0-287, 5-min intervals)\n"
+                "- [3] day_index: Day of week (1-5, Mon-Fri)"
+            ),
+        )
         per_agent_mode = st.checkbox(
             "Per-agent counts mode",
             value=False,
             help=(
+                "**Per-Agent Mode** ensures comprehensive coverage for discriminator training.\n\n"
                 "When checked:\n"
                 "• Positive pairs = N matching pairs **for each** of the 50 agents\n"
                 "• Negative pairs = N pairs **for each** agent-to-other-agent combination\n\n"
-                "Example with 50 agents:\n"
+                "**Example with 50 agents:**\n"
                 "• 100 positive → 100 × 50 = 5,000 total matching pairs\n"
                 "• 10 negative → 10 × 50 × 49 = 24,500 total non-matching pairs\n\n"
-                "This ensures comprehensive coverage for discriminator training."
+                "**When unchecked:** The counts specify the total number of pairs across all agents."
             ),
         )
         if per_agent_mode:
@@ -51,14 +64,24 @@ def _build_config() -> Tuple[GenerationConfig, Dict, int]:
                 min_value=1,
                 max_value=1000,
                 value=100,
-                help="Pairs per agent. Total = this × num_agents (e.g., 100 × 50 = 5,000).",
+                help=(
+                    "Number of same-agent (positive) pairs to generate **per agent**.\n\n"
+                    "**Formula:** Total positive pairs = this × num_agents\n"
+                    "**Example:** 100 × 50 agents = 5,000 total positive pairs\n\n"
+                    "Higher values improve per-agent representation but increase dataset size."
+                ),
             )
             neg_pairs = st.number_input(
                 "# Negative Pairs per Agent Combination",
                 min_value=1,
                 max_value=100,
                 value=10,
-                help="Pairs per (agent_i, agent_j) combo. Total = this × N × (N-1) (e.g., 10 × 50 × 49 = 24,500).",
+                help=(
+                    "Number of different-agent (negative) pairs to generate **per agent pair**.\n\n"
+                    "**Formula:** Total negative pairs = this × N × (N-1)\n"
+                    "**Example:** 10 × 50 × 49 = 24,500 total negative pairs\n\n"
+                    "This ensures every agent-pair combination is well-represented."
+                ),
             )
         else:
             pos_pairs = st.number_input(
@@ -66,24 +89,54 @@ def _build_config() -> Tuple[GenerationConfig, Dict, int]:
                 min_value=1,
                 max_value=100000,
                 value=500,
-                help="Total matching pairs across all agents.",
+                help=(
+                    "Total number of same-agent (positive) pairs to generate.\n\n"
+                    "**Label = 1:** Pairs where both trajectories come from the same driver.\n"
+                    "The discriminator should output high similarity (~1.0) for these.\n\n"
+                    "**Tip:** Use 'Ensure every agent appears' to guarantee coverage."
+                ),
             )
             neg_pairs = st.number_input(
                 "# Negative Pairs (Total)",
                 min_value=1,
                 max_value=100000,
                 value=500,
-                help="Total non-matching pairs across all agents.",
+                help=(
+                    "Total number of different-agent (negative) pairs to generate.\n\n"
+                    "**Label = 0:** Pairs where trajectories come from different drivers.\n"
+                    "The discriminator should output low similarity (~0.0) for these.\n\n"
+                    "**Recommended:** Use 2-4× more negatives than positives for class balance."
+                ),
             )
-        days = st.slider("Concatenated trajectory length (days)", min_value=1, max_value=5, value=2,
-                         help="Dataset contains Monday-Friday data only (5 days max)")
+        days = st.slider(
+            "Concatenated trajectory length (days)", 
+            min_value=1, 
+            max_value=5, 
+            value=2,
+            help=(
+                "Number of consecutive days to concatenate into each trajectory segment.\n\n"
+                "**Dataset contains Monday-Friday data only** (5 days max).\n\n"
+                "• **1 day:** Single-day patterns (shorter sequences)\n"
+                "• **2-3 days:** Multi-day patterns (recommended for learning habits)\n"
+                "• **5 days:** Full workweek patterns (longest sequences)\n\n"
+                "Longer trajectories capture more behavioral patterns but require more memory."
+            ),
+        )
         feature_start = int(
             st.number_input(
                 "Feature start index (inclusive, >=4)",
                 min_value=4,
                 max_value=126,
                 value=4,
-                help="Optional: start of extra feature slice; indices 0-3 are always included.",
+                help=(
+                    "Start index for additional features beyond the core 4 (x, y, time, day).\n\n"
+                    "**Core features [0-3] are always included:**\n"
+                    "• [0] x_grid — Grid x-coordinate\n"
+                    "• [1] y_grid — Grid y-coordinate\n"
+                    "• [2] time_bucket — Time of day (0-287)\n"
+                    "• [3] day_index — Day of week (1-5)\n\n"
+                    "Set equal to 'Feature end index' to include only core features."
+                ),
             )
         )
         feature_end = int(
@@ -92,23 +145,170 @@ def _build_config() -> Tuple[GenerationConfig, Dict, int]:
                 min_value=feature_start,
                 max_value=126,
                 value=feature_start,
-                help="Leave equal to start to include no additional features beyond 0-3.",
+                help=(
+                    "End index (exclusive) for additional features.\n\n"
+                    "**Feature slice:** Will include indices [feature_start : feature_end]\n"
+                    "**Final features:** Indices 0-3 + selected slice\n\n"
+                    "Leave equal to start to include **only** the core 4 features."
+                ),
             )
         )
         padding = st.selectbox(
             "Padding / truncation strategy",
             options=["pad_to_longer", "truncate_to_shorter", "fixed_length"],
             index=0,
+            help=(
+                "How to handle trajectory pairs with different lengths:\n\n"
+                "• **pad_to_longer:** Pad shorter trajectory with zeros to match longer\n"
+                "  ✓ Preserves all data, uses masks for valid timesteps\n"
+                "  ✗ May waste memory on very long trajectories\n\n"
+                "• **truncate_to_shorter:** Truncate longer trajectory to match shorter\n"
+                "  ✓ Uniform lengths, no padding artifacts\n"
+                "  ✗ Loses data from longer trajectories\n\n"
+                "• **fixed_length:** Pad or truncate to a specific length\n"
+                "  ✓ Consistent memory usage, predictable batch sizes\n"
+                "  ✗ Requires choosing appropriate fixed length"
+            ),
         )
         fixed_length = None
         if padding == "fixed_length":
-            fixed_length = st.number_input("Fixed sequence length", min_value=1, max_value=20000, value=2000)
-        pos_strategy = st.selectbox("Positive pair strategy", options=["random", "sequential"], index=0)
-        neg_strategy = st.selectbox("Negative pair strategy", options=["random", "round_robin"], index=0)
-        distribution = st.selectbox("Agent sampling distribution", options=["proportional", "uniform"], index=0)
+            fixed_length = st.number_input(
+                "Fixed sequence length", 
+                min_value=1, 
+                max_value=20000, 
+                value=2000,
+                help=(
+                    "Target sequence length for all pairs.\n\n"
+                    "• Trajectories **shorter** than this will be zero-padded\n"
+                    "• Trajectories **longer** than this will be truncated\n\n"
+                    "**Tip:** Check 'Length Stats' in metadata to choose appropriate value."
+                ),
+            )
+        pos_strategy = st.selectbox(
+            "Positive pair strategy", 
+            options=["random", "sequential"], 
+            index=0,
+            help=(
+                "Strategy for selecting same-agent trajectory pairs:\n\n"
+                "• **random:** Randomly select two non-overlapping segments\n"
+                "  ✓ Maximum diversity in paired trajectories\n"
+                "  ✓ Good for general pattern learning\n\n"
+                "• **sequential:** Prefer temporally distant segments\n"
+                "  ✓ Tests if model recognizes same driver across time\n"
+                "  ✓ Better for learning persistent driving habits"
+            ),
+        )
         
         st.divider()
-        st.markdown("**Identical Pair Settings** (recommended for better model generalization)")
+        st.markdown("**🎯 Negative Pair Settings**")
+        st.caption("Critical for discriminator performance")
+        
+        neg_strategy = st.selectbox(
+            "Negative pair base strategy", 
+            options=["random", "round_robin", "temporal_hard", "spatial_hard", "mixed_hard"], 
+            index=0,
+            help=(
+                "Base strategy for selecting different-agent trajectory pairs:\n\n"
+                "**Standard Strategies:**\n"
+                "• **random:** Randomly select two trajectories from different agents\n"
+                "  ✓ Fast, simple baseline\n"
+                "  ✗ May create 'easy' negatives (different times/locations)\n\n"
+                "• **round_robin:** Cycle through agent pairs systematically\n"
+                "  ✓ Ensures all agent combinations are covered\n\n"
+                "**Hard Negative Strategies** (recommended for better discrimination):\n"
+                "• **temporal_hard:** Pair trajectories that overlap in time\n"
+                "  ✓ Forces model to learn driver-specific patterns, not time patterns\n\n"
+                "• **spatial_hard:** Pair trajectories visiting similar locations\n"
+                "  ✓ Forces model to learn movement patterns, not location patterns\n\n"
+                "• **mixed_hard:** Require both temporal AND spatial similarity\n"
+                "  ✓ Hardest negatives: different drivers, same place, same time\n"
+                "  ✓ Best for robust discriminator training"
+            ),
+        )
+        
+        # Hard negative ratio control (only show if not using hard strategy directly)
+        hard_negative_ratio = 0.0
+        temporal_overlap_threshold = 0.5
+        spatial_similarity_threshold = 0.3
+        
+        if neg_strategy in ["random", "round_robin"]:
+            hard_negative_ratio = st.slider(
+                "Hard negative ratio",
+                min_value=0.0,
+                max_value=1.0,
+                value=0.5,
+                step=0.1,
+                help=(
+                    "Fraction of negative pairs that should be 'hard negatives'.\n\n"
+                    "**Hard negatives** are pairs from different drivers where the trajectories\n"
+                    "are similar in time and/or space, making them harder to distinguish.\n\n"
+                    "• **0.0:** All negatives are random (baseline)\n"
+                    "• **0.3-0.5:** Mix of easy and hard negatives (recommended)\n"
+                    "• **1.0:** All negatives are hard (may slow generation)\n\n"
+                    "**Why hard negatives matter:**\n"
+                    "Your model showed 8.9% accuracy on different drivers because it learned\n"
+                    "to distinguish by time/location rather than driving patterns. Hard negatives\n"
+                    "force it to learn the actual driver-specific characteristics."
+                ),
+            )
+            if hard_negative_ratio > 0:
+                st.info(f"~{int(neg_pairs * hard_negative_ratio)} hard negatives will be generated")
+        
+        # Advanced hard negative settings
+        with st.expander("⚙️ Hard Negative Thresholds", expanded=False):
+            st.caption("Fine-tune what counts as a 'hard' negative")
+            
+            temporal_overlap_threshold = st.slider(
+                "Temporal overlap threshold",
+                min_value=0.0,
+                max_value=1.0,
+                value=0.5,
+                step=0.1,
+                help=(
+                    "Minimum temporal overlap required for temporal hard negatives.\n\n"
+                    "**Overlap = (intersection of time ranges) / (union of time ranges)**\n\n"
+                    "• **0.0:** Any overlap counts\n"
+                    "• **0.5:** At least 50% time overlap required\n"
+                    "• **1.0:** Complete time overlap (very restrictive)\n\n"
+                    "Lower values = more candidates, less strict matching."
+                ),
+            )
+            
+            spatial_similarity_threshold = st.slider(
+                "Spatial similarity threshold",
+                min_value=0.0,
+                max_value=1.0,
+                value=0.3,
+                step=0.1,
+                help=(
+                    "Minimum spatial similarity (Jaccard index) for spatial hard negatives.\n\n"
+                    "**Jaccard = |cells_A ∩ cells_B| / |cells_A ∪ cells_B|**\n\n"
+                    "• **0.0:** Any shared cells count\n"
+                    "• **0.3:** At least 30% cell overlap (recommended)\n"
+                    "• **0.8:** High overlap required (very restrictive)\n\n"
+                    "Lower values = more candidates, covers nearby routes."
+                ),
+            )
+        
+        distribution = st.selectbox(
+            "Agent sampling distribution", 
+            options=["proportional", "uniform"], 
+            index=0,
+            help=(
+                "How to weight agents during random selection:\n\n"
+                "• **proportional:** Weight by trajectory data volume\n"
+                "  ✓ Agents with more data appear more often\n"
+                "  ✓ Reflects natural data distribution\n"
+                "  ✗ May under-represent agents with less data\n\n"
+                "• **uniform:** Equal probability for all agents\n"
+                "  ✓ Every agent equally represented\n"
+                "  ✗ May over-sample sparse agents"
+            ),
+        )
+        
+        st.divider()
+        st.markdown("**✨ Identical Pair Settings**")
+        st.caption("Recommended for better model generalization")
         identical_ratio = st.slider(
             "Identical pair ratio",
             min_value=0.0,
@@ -117,10 +317,13 @@ def _build_config() -> Tuple[GenerationConfig, Dict, int]:
             step=0.05,
             help=(
                 "Fraction of positive pairs that should be identical (same trajectory vs itself).\n\n"
-                "**Why this matters:** The discriminator should output ~1.0 when comparing a trajectory "
-                "to itself. Without identical pairs in training, the model learns only to distinguish "
-                "different trajectories, not to recognize identical ones.\n\n"
-                "Recommended: 0.10-0.20 (10-20% identical pairs)"
+                "**Why this matters:** The discriminator should output ~1.0 when comparing\n"
+                "a trajectory to itself. Without identical pairs in training, the model\n"
+                "learns only to distinguish different trajectories, not to recognize identical ones.\n\n"
+                "• **0.0:** No identical pairs (not recommended)\n"
+                "• **0.10-0.20:** Good balance (recommended)\n"
+                "• **0.50:** Half of positives are identical\n\n"
+                "Identical pairs help calibrate the model's similarity scores."
             ),
         )
         if identical_ratio > 0:
@@ -128,14 +331,43 @@ def _build_config() -> Tuple[GenerationConfig, Dict, int]:
             st.info(f"~{estimated_identical} identical pairs will be included in training")
         
         st.divider()
-        seed_text = st.text_input("Random seed (leave blank for random)", value="42")
-        ensure_coverage = st.checkbox("Ensure every agent appears", value=True, disabled=per_agent_mode)
-        preview_cap = st.slider("Preview pair cap", min_value=4, max_value=40, value=12)
+        seed_text = st.text_input(
+            "Random seed (leave blank for random)", 
+            value="42",
+            help=(
+                "Seed for reproducible dataset generation.\n\n"
+                "• **Set a value (e.g., 42):** Same configuration = same dataset\n"
+                "• **Leave blank:** Different dataset each time\n\n"
+                "Use a fixed seed for reproducible experiments."
+            ),
+        )
+        ensure_coverage = st.checkbox(
+            "Ensure every agent appears", 
+            value=True, 
+            disabled=per_agent_mode,
+            help=(
+                "Guarantee that every agent appears in at least one positive and one negative pair.\n\n"
+                "**Enabled:** First samples one pair per agent, then fills remaining randomly.\n"
+                "**Disabled:** Purely random sampling (some agents may be missing).\n\n"
+                "⚠️ Automatically enabled in per-agent mode."
+            ),
+        )
+        preview_cap = st.slider(
+            "Preview pair cap", 
+            min_value=4, 
+            max_value=40, 
+            value=12,
+            help=(
+                "Maximum pairs to show in preview mode.\n\n"
+                "Keeps preview fast while showing representative sample.\n"
+                "Full dataset generation is unaffected by this setting."
+            ),
+        )
         
         # Show estimated totals when in per-agent mode
         if per_agent_mode:
             st.divider()
-            st.markdown("**Estimated Totals** (assuming 50 agents):")
+            st.markdown("**📊 Estimated Totals** (assuming 50 agents):")
             est_pos = int(pos_pairs) * 50
             est_neg = int(neg_pairs) * 50 * 49
             st.markdown(f"- Positive pairs: {int(pos_pairs)} × 50 = **{est_pos:,}**")
@@ -158,6 +390,9 @@ def _build_config() -> Tuple[GenerationConfig, Dict, int]:
         ensure_agent_coverage=ensure_coverage if not per_agent_mode else True,  # Always ensure coverage in per-agent mode
         per_agent_counts=per_agent_mode,
         identical_pair_ratio=identical_ratio,
+        hard_negative_ratio=hard_negative_ratio,
+        temporal_overlap_threshold=temporal_overlap_threshold,
+        spatial_similarity_threshold=spatial_similarity_threshold,
     )
     cache_key = {
         "data_path": str(cfg.data_path),
@@ -175,6 +410,9 @@ def _build_config() -> Tuple[GenerationConfig, Dict, int]:
         "ensure_agent_coverage": cfg.ensure_agent_coverage,
         "per_agent_counts": cfg.per_agent_counts,
         "identical_pair_ratio": cfg.identical_pair_ratio,
+        "hard_negative_ratio": cfg.hard_negative_ratio,
+        "temporal_overlap_threshold": cfg.temporal_overlap_threshold,
+        "spatial_similarity_threshold": cfg.spatial_similarity_threshold,
     }
     return cfg, cache_key, int(preview_cap)
 
@@ -315,19 +553,67 @@ def _segment_dataframe(component_lengths: List[int], traj_indices: List[int], ra
 def _render_pair_explorer(dataset: Dict[str, np.ndarray], pair_info: List[Dict[str, Any]], metadata: Dict[str, Any]):
     if not pair_info:
         return
-    st.subheader("Sample Pair Explorer")
-    max_idx = len(pair_info) - 1
-    pair_idx = st.number_input("Pair index", min_value=0, max_value=max_idx, value=0, step=1)
+    st.subheader("🔍 Sample Pair Explorer")
+    
+    # Filter options
+    col1, col2 = st.columns([2, 1])
+    with col1:
+        max_idx = len(pair_info) - 1
+        pair_idx = st.number_input("Pair index", min_value=0, max_value=max_idx, value=0, step=1)
+    with col2:
+        # Quick filter by pair type
+        pair_types = list(set(p.get("pair_type", "unknown") for p in pair_info))
+        filter_type = st.selectbox("Filter by type", ["all"] + sorted(pair_types))
+    
+    # Apply filter and get pair info
+    if filter_type != "all":
+        filtered_indices = [i for i, p in enumerate(pair_info) if p.get("pair_type") == filter_type]
+        if filtered_indices:
+            if pair_idx not in filtered_indices:
+                pair_idx = filtered_indices[0]
+            st.caption(f"Showing {len(filtered_indices)} '{filter_type}' pairs")
+    
     info = pair_info[int(pair_idx)]
-    st.write({
-        "label": info.get("label"),
-        "agent_a": info.get("agent_a"),
-        "agent_b": info.get("agent_b"),
-        "len_raw_a": info.get("len_raw_a"),
-        "len_raw_b": info.get("len_raw_b"),
-        "align_len": info.get("align_len"),
-        "padding_mode": metadata.get("config", {}).get("padding"),
-    })
+    
+    # Enhanced pair information display
+    pair_type = info.get("pair_type", "unknown")
+    label = info.get("label", -1)
+    
+    # Color-coded pair type display
+    type_colors = {
+        "identical": "🔵 Identical (same trajectory vs itself)",
+        "same_agent": "🟢 Same Agent (positive pair)",
+        "different_agent": "🔴 Different Agent (negative pair)"
+    }
+    type_display = type_colors.get(pair_type, pair_type)
+    
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.markdown(f"**Pair Type:** {type_display}")
+        st.markdown(f"**Label:** {'1 (Same Agent)' if label == 1 else '0 (Different Agent)'}")
+    with col2:
+        st.markdown(f"**Agent A:** `{info.get('agent_a')}`")
+        st.markdown(f"**Agent B:** `{info.get('agent_b')}`")
+    with col3:
+        st.markdown(f"**Raw Length A:** {info.get('len_raw_a', 0):,} timesteps")
+        st.markdown(f"**Raw Length B:** {info.get('len_raw_b', 0):,} timesteps")
+    
+    # Time overlap information for negative pairs
+    if pair_type == "different_agent":
+        start_a = info.get("start_time_a", 0)
+        end_a = info.get("end_time_a", 0)
+        start_b = info.get("start_time_b", 0)
+        end_b = info.get("end_time_b", 0)
+        
+        overlap_start = max(start_a, start_b)
+        overlap_end = min(end_a, end_b)
+        
+        if overlap_start < overlap_end:
+            total_span = max(end_a, end_b) - min(start_a, start_b)
+            overlap_ratio = (overlap_end - overlap_start) / total_span if total_span > 0 else 0
+            st.info(f"⏱️ **Temporal Overlap:** {overlap_ratio:.1%} (time range {overlap_start:.0f} - {overlap_end:.0f})")
+        else:
+            st.caption("⏱️ No temporal overlap between these trajectories")
 
     x1 = dataset["x1"][pair_idx]
     x2 = dataset["x2"][pair_idx]
@@ -415,6 +701,9 @@ def _render_dataset_validation(dataset: Dict[str, np.ndarray], metadata: Dict[st
                 st.markdown(f"- **Identical pair ratio**: {identical_ratio:.0%}")
             st.markdown(f"- **Positive strategy**: {cfg.get('positive_strategy', 'N/A')}")
             st.markdown(f"- **Negative strategy**: {cfg.get('negative_strategy', 'N/A')}")
+            hard_ratio = cfg.get('hard_negative_ratio', 0)
+            if hard_ratio > 0:
+                st.markdown(f"- **Hard negative ratio**: {hard_ratio:.0%}")
             st.markdown(f"- **Agent distribution**: {cfg.get('agent_distribution', 'N/A')}")
         with col2:
             st.markdown("**Data Settings**")
@@ -425,6 +714,10 @@ def _render_dataset_validation(dataset: Dict[str, np.ndarray], metadata: Dict[st
                 st.markdown(f"- **Fixed length**: {cfg.get('fixed_length')}")
             st.markdown(f"- **Random seed**: {cfg.get('seed', 'None (random)')}")
             st.markdown(f"- **Ensure coverage**: {cfg.get('ensure_agent_coverage', False)}")
+            # Hard negative thresholds
+            if hard_ratio > 0 or cfg.get('negative_strategy') in ['temporal_hard', 'spatial_hard', 'mixed_hard']:
+                st.markdown(f"- **Temporal overlap threshold**: {cfg.get('temporal_overlap_threshold', 0.5):.0%}")
+                st.markdown(f"- **Spatial similarity threshold**: {cfg.get('spatial_similarity_threshold', 0.3):.0%}")
     
     # === Validation Checks ===
     st.markdown("### ✅ Validation Checks")
@@ -599,6 +892,94 @@ def _render_dataset_validation(dataset: Dict[str, np.ndarray], metadata: Dict[st
         st.metric("Avg Raw Length", f"{combined.get('mean', 0):.0f}")
     with col4:
         st.metric("Dataset Hash", metadata.get("dataset_hash", "N/A")[:8] + "...")
+    
+    # === Hard Negative Breakdown (if available) ===
+    neg_breakdown = counts.get("negative_breakdown")
+    if neg_breakdown:
+        st.markdown("### 🎯 Negative Pair Difficulty Breakdown")
+        st.markdown("""
+        Hard negatives are crucial for training a discriminator that can distinguish 
+        different drivers based on driving patterns rather than just time/location differences.
+        """)
+        
+        total_neg = actual_neg
+        random_count = neg_breakdown.get("random", 0)
+        temporal_hard = neg_breakdown.get("temporal_hard", 0)
+        spatial_hard = neg_breakdown.get("spatial_hard", 0)
+        mixed_hard = neg_breakdown.get("mixed_hard", 0)
+        hard_total = temporal_hard + spatial_hard + mixed_hard
+        
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            pct = random_count / total_neg * 100 if total_neg > 0 else 0
+            st.metric("Random/Easy", f"{random_count:,}", delta=f"{pct:.1f}%", delta_color="off")
+        with col2:
+            pct = temporal_hard / total_neg * 100 if total_neg > 0 else 0
+            st.metric("Temporal Hard", f"{temporal_hard:,}", delta=f"{pct:.1f}%", delta_color="off")
+        with col3:
+            pct = spatial_hard / total_neg * 100 if total_neg > 0 else 0
+            st.metric("Spatial Hard", f"{spatial_hard:,}", delta=f"{pct:.1f}%", delta_color="off")
+        with col4:
+            pct = mixed_hard / total_neg * 100 if total_neg > 0 else 0
+            st.metric("Mixed Hard", f"{mixed_hard:,}", delta=f"{pct:.1f}%", delta_color="off")
+        
+        # Pie chart of negative breakdown
+        neg_breakdown_df = pd.DataFrame({
+            "type": ["Random/Easy", "Temporal Hard", "Spatial Hard", "Mixed Hard"],
+            "count": [random_count, temporal_hard, spatial_hard, mixed_hard],
+            "description": [
+                "Random pairs from different drivers",
+                "Similar time, different drivers",
+                "Similar location, different drivers", 
+                "Same time AND location, different drivers"
+            ]
+        })
+        neg_breakdown_df = neg_breakdown_df[neg_breakdown_df["count"] > 0]
+        
+        if not neg_breakdown_df.empty:
+            pie_chart = (
+                alt.Chart(neg_breakdown_df)
+                .mark_arc(innerRadius=50)
+                .encode(
+                    theta=alt.Theta("count:Q", stack=True),
+                    color=alt.Color(
+                        "type:N",
+                        scale=alt.Scale(
+                            domain=["Random/Easy", "Temporal Hard", "Spatial Hard", "Mixed Hard"],
+                            range=["#aec7e8", "#ff7f0e", "#2ca02c", "#d62728"]
+                        )
+                    ),
+                    tooltip=["type", "count", "description"]
+                )
+                .properties(height=250, title="Negative Pair Composition")
+            )
+            st.altair_chart(pie_chart, use_container_width=True)
+        
+        # Recommendation based on hard negative ratio
+        actual_hard_ratio = counts.get("hard_negative_actual_ratio", 0)
+        if hard_total > 0:
+            if actual_hard_ratio < 0.3:
+                st.warning(f"""
+                ⚠️ **Low hard negative ratio ({actual_hard_ratio:.1%})**
+                
+                Your discriminator may learn to distinguish drivers by time/location rather than 
+                driving patterns. Consider increasing the hard negative ratio to 40-60% for better 
+                discrimination performance on the "Different Drivers" test scenario.
+                """)
+            elif actual_hard_ratio >= 0.3 and actual_hard_ratio < 0.6:
+                st.success(f"""
+                ✅ **Good hard negative ratio ({actual_hard_ratio:.1%})**
+                
+                This mix of easy and hard negatives should help your discriminator learn robust 
+                driver-specific patterns while maintaining stable training.
+                """)
+            else:
+                st.info(f"""
+                ℹ️ **High hard negative ratio ({actual_hard_ratio:.1%})**
+                
+                This dataset emphasizes challenging negatives. If training becomes unstable or 
+                converges too slowly, consider reducing the hard negative ratio slightly.
+                """)
     
     # === Agent Distribution Histograms ===
     st.markdown("### 📊 Agent Representation Distribution")

@@ -44,12 +44,15 @@ class GenerationConfig:
     padding: str = "pad_to_longer"  # pad_to_longer | truncate_to_shorter | fixed_length
     fixed_length: Optional[int] = None
     positive_strategy: str = "random"  # random | sequential
-    negative_strategy: str = "random"  # random | round_robin
+    negative_strategy: str = "random"  # random | round_robin | temporal_hard | spatial_hard | mixed_hard
     agent_distribution: str = "proportional"  # proportional | uniform
     seed: Optional[int] = None
     ensure_agent_coverage: bool = True
     per_agent_counts: bool = False  # if True, positive_pairs/negative_pairs are per-agent counts
     identical_pair_ratio: float = 0.0  # ratio of positive pairs that should be identical (0.0-1.0)
+    hard_negative_ratio: float = 0.0  # ratio of negative pairs that should be hard negatives (0.0-1.0)
+    temporal_overlap_threshold: float = 0.5  # minimum temporal overlap for hard negatives (0.0-1.0)
+    spatial_similarity_threshold: float = 0.3  # max spatial distance for hard negatives (normalized)
 
     def clamped_feature_bounds(self, state_dim: int) -> Tuple[int, int]:
         start = max(4, min(self.feature_start, state_dim))
@@ -293,6 +296,250 @@ def sample_identical_pairs(
     return pairs[:n_pairs]
 
 
+def _compute_temporal_overlap(seg_a: Segment, seg_b: Segment) -> float:
+    """Compute temporal overlap ratio between two segments.
+    
+    Returns a value between 0 and 1, where 1 means complete overlap
+    and 0 means no overlap in time ranges.
+    """
+    overlap_start = max(seg_a.start_time, seg_b.start_time)
+    overlap_end = min(seg_a.end_time, seg_b.end_time)
+    
+    if overlap_start >= overlap_end:
+        return 0.0
+    
+    overlap_duration = overlap_end - overlap_start
+    total_duration = max(seg_a.end_time, seg_b.end_time) - min(seg_a.start_time, seg_b.start_time)
+    
+    if total_duration <= 0:
+        return 0.0
+    
+    return overlap_duration / total_duration
+
+
+def _compute_spatial_similarity(seg_a: Segment, seg_b: Segment) -> float:
+    """Compute spatial similarity between two segments based on grid overlap.
+    
+    Returns a value between 0 and 1, where 1 means high spatial similarity
+    (visiting similar grid cells) and 0 means no spatial overlap.
+    """
+    # Extract x, y coordinates (indices 0 and 1)
+    cells_a = set(zip(seg_a.data[:, 0].astype(int).tolist(), 
+                      seg_a.data[:, 1].astype(int).tolist()))
+    cells_b = set(zip(seg_b.data[:, 0].astype(int).tolist(), 
+                      seg_b.data[:, 1].astype(int).tolist()))
+    
+    if not cells_a or not cells_b:
+        return 0.0
+    
+    intersection = len(cells_a & cells_b)
+    union = len(cells_a | cells_b)
+    
+    if union == 0:
+        return 0.0
+    
+    return intersection / union  # Jaccard similarity
+
+
+def _compute_segment_centroid(seg: Segment) -> Tuple[float, float]:
+    """Compute the spatial centroid of a segment."""
+    x_mean = seg.data[:, 0].mean()
+    y_mean = seg.data[:, 1].mean()
+    return float(x_mean), float(y_mean)
+
+
+def _pick_hard_negative_temporal(
+    segments: Dict[str, List[Segment]],
+    rng: random.Random,
+    distribution: str,
+    overlap_threshold: float = 0.5,
+    anchor_agent: Optional[str] = None,
+) -> Optional[Tuple[Segment, Segment]]:
+    """Pick a negative pair where segments overlap temporally.
+    
+    This creates harder negative examples because the trajectories
+    occurred at similar times, forcing the model to learn driver-specific
+    patterns rather than relying on temporal differences.
+    """
+    agents = list(segments.keys())
+    if len(agents) < 2:
+        return None
+    
+    weights = _agent_weights(segments, distribution)
+    if anchor_agent is None:
+        anchor_agent = rng.choices(agents, weights=weights, k=1)[0]
+    
+    anchor_segs = segments.get(anchor_agent, [])
+    if not anchor_segs:
+        return None
+    
+    seg_a = rng.choice(anchor_segs)
+    
+    # Find segments from other agents that overlap temporally
+    other_agents = [a for a in agents if a != anchor_agent and segments.get(a)]
+    if not other_agents:
+        return None
+    
+    # Collect all candidates with temporal overlap
+    candidates = []
+    for other_agent in other_agents:
+        for seg_b in segments[other_agent]:
+            overlap = _compute_temporal_overlap(seg_a, seg_b)
+            if overlap >= overlap_threshold:
+                candidates.append((seg_b, overlap))
+    
+    if not candidates:
+        # Fallback: find best overlap even if below threshold
+        for other_agent in other_agents:
+            for seg_b in segments[other_agent]:
+                overlap = _compute_temporal_overlap(seg_a, seg_b)
+                if overlap > 0:
+                    candidates.append((seg_b, overlap))
+    
+    if not candidates:
+        return None
+    
+    # Weight by overlap (higher overlap = more likely to be selected)
+    total_overlap = sum(o for _, o in candidates)
+    if total_overlap > 0:
+        weights_cand = [o / total_overlap for _, o in candidates]
+        seg_b = rng.choices([c[0] for c in candidates], weights=weights_cand, k=1)[0]
+    else:
+        seg_b = rng.choice([c[0] for c in candidates])
+    
+    return seg_a, seg_b
+
+
+def _pick_hard_negative_spatial(
+    segments: Dict[str, List[Segment]],
+    rng: random.Random,
+    distribution: str,
+    similarity_threshold: float = 0.3,
+    anchor_agent: Optional[str] = None,
+) -> Optional[Tuple[Segment, Segment]]:
+    """Pick a negative pair where segments have high spatial similarity.
+    
+    This creates harder negative examples because the trajectories
+    visit similar locations, forcing the model to learn driver-specific
+    movement patterns rather than relying on different regions.
+    """
+    agents = list(segments.keys())
+    if len(agents) < 2:
+        return None
+    
+    weights = _agent_weights(segments, distribution)
+    if anchor_agent is None:
+        anchor_agent = rng.choices(agents, weights=weights, k=1)[0]
+    
+    anchor_segs = segments.get(anchor_agent, [])
+    if not anchor_segs:
+        return None
+    
+    seg_a = rng.choice(anchor_segs)
+    centroid_a = _compute_segment_centroid(seg_a)
+    
+    # Find segments from other agents with similar spatial patterns
+    other_agents = [a for a in agents if a != anchor_agent and segments.get(a)]
+    if not other_agents:
+        return None
+    
+    # Collect all candidates with spatial similarity
+    candidates = []
+    for other_agent in other_agents:
+        for seg_b in segments[other_agent]:
+            similarity = _compute_spatial_similarity(seg_a, seg_b)
+            if similarity >= similarity_threshold:
+                candidates.append((seg_b, similarity))
+    
+    if not candidates:
+        # Fallback: find segments with similar centroids
+        for other_agent in other_agents:
+            for seg_b in segments[other_agent]:
+                centroid_b = _compute_segment_centroid(seg_b)
+                # Compute centroid distance (normalized by grid size ~50x90)
+                dist = ((centroid_a[0] - centroid_b[0]) / 50) ** 2 + ((centroid_a[1] - centroid_b[1]) / 90) ** 2
+                dist = dist ** 0.5
+                if dist < 0.3:  # Within 30% of max grid distance
+                    similarity = 1 - dist
+                    candidates.append((seg_b, similarity))
+    
+    if not candidates:
+        return None
+    
+    # Weight by similarity (higher similarity = more likely to be selected)
+    total_sim = sum(s for _, s in candidates)
+    if total_sim > 0:
+        weights_cand = [s / total_sim for _, s in candidates]
+        seg_b = rng.choices([c[0] for c in candidates], weights=weights_cand, k=1)[0]
+    else:
+        seg_b = rng.choice([c[0] for c in candidates])
+    
+    return seg_a, seg_b
+
+
+def _pick_hard_negative_mixed(
+    segments: Dict[str, List[Segment]],
+    rng: random.Random,
+    distribution: str,
+    overlap_threshold: float = 0.3,
+    similarity_threshold: float = 0.2,
+    anchor_agent: Optional[str] = None,
+) -> Optional[Tuple[Segment, Segment]]:
+    """Pick a negative pair with both temporal overlap AND spatial similarity.
+    
+    This creates the hardest negative examples - different drivers
+    operating in the same area at the same time.
+    """
+    agents = list(segments.keys())
+    if len(agents) < 2:
+        return None
+    
+    weights = _agent_weights(segments, distribution)
+    if anchor_agent is None:
+        anchor_agent = rng.choices(agents, weights=weights, k=1)[0]
+    
+    anchor_segs = segments.get(anchor_agent, [])
+    if not anchor_segs:
+        return None
+    
+    seg_a = rng.choice(anchor_segs)
+    
+    # Find segments from other agents with both temporal and spatial similarity
+    other_agents = [a for a in agents if a != anchor_agent and segments.get(a)]
+    if not other_agents:
+        return None
+    
+    candidates = []
+    for other_agent in other_agents:
+        for seg_b in segments[other_agent]:
+            temporal_overlap = _compute_temporal_overlap(seg_a, seg_b)
+            spatial_sim = _compute_spatial_similarity(seg_a, seg_b)
+            
+            # Combined score: both must meet thresholds
+            if temporal_overlap >= overlap_threshold and spatial_sim >= similarity_threshold:
+                combined_score = (temporal_overlap + spatial_sim) / 2
+                candidates.append((seg_b, combined_score))
+    
+    if not candidates:
+        # Fallback: use just temporal or spatial
+        if rng.random() < 0.5:
+            return _pick_hard_negative_temporal(segments, rng, distribution, 
+                                                overlap_threshold, anchor_agent)
+        else:
+            return _pick_hard_negative_spatial(segments, rng, distribution,
+                                               similarity_threshold, anchor_agent)
+    
+    # Weight by combined score
+    total_score = sum(s for _, s in candidates)
+    if total_score > 0:
+        weights_cand = [s / total_score for _, s in candidates]
+        seg_b = rng.choices([c[0] for c in candidates], weights=weights_cand, k=1)[0]
+    else:
+        seg_b = rng.choice([c[0] for c in candidates])
+    
+    return seg_a, seg_b
+
+
 def _pick_negative_pair(
     segments: Dict[str, List[Segment]],
     rng: random.Random,
@@ -329,7 +576,10 @@ def sample_negative_pairs(
     distribution: str,
     ensure_coverage: bool,
     per_agent_counts: bool = False,
-) -> List[Tuple[Segment, Segment]]:
+    hard_negative_ratio: float = 0.0,
+    temporal_overlap_threshold: float = 0.5,
+    spatial_similarity_threshold: float = 0.3,
+) -> Tuple[List[Tuple[Segment, Segment]], Dict[str, int]]:
     """Sample negative (different-agent) pairs.
     
     If per_agent_counts=True, generates n_pairs for EACH ordered agent pair (agent_i, agent_j)
@@ -337,11 +587,67 @@ def sample_negative_pairs(
     Total pairs = n_pairs * num_agents * (num_agents - 1).
     
     Otherwise generates n_pairs total across all agent combinations.
+    
+    Hard negative strategies:
+    - temporal_hard: Pairs trajectories from different drivers at similar times
+    - spatial_hard: Pairs trajectories from different drivers in similar locations  
+    - mixed_hard: Combines temporal and spatial similarity for hardest negatives
+    
+    Args:
+        segments: Dictionary mapping agent_id to list of Segment objects
+        n_pairs: Number of pairs to generate (total or per agent depending on mode)
+        rng: Random number generator
+        strategy: "random", "round_robin", "temporal_hard", "spatial_hard", or "mixed_hard"
+        distribution: "proportional" or "uniform" agent selection
+        ensure_coverage: Whether to ensure all agents appear at least once
+        per_agent_counts: If True, generate n_pairs per agent combination
+        hard_negative_ratio: Fraction of pairs that should be hard negatives (0.0-1.0)
+        temporal_overlap_threshold: Min temporal overlap for hard negatives
+        spatial_similarity_threshold: Min spatial similarity for hard negatives
+    
+    Returns:
+        Tuple of (list of pairs, stats dict with counts by type)
     """
     pairs: List[Tuple[Segment, Segment]] = []
+    stats: Dict[str, int] = {
+        "random": 0,
+        "round_robin": 0,
+        "temporal_hard": 0,
+        "spatial_hard": 0,
+        "mixed_hard": 0,
+    }
     agents = list(segments.keys())
     if len(agents) < 2:
-        return pairs
+        return pairs, stats
+    
+    def _pick_pair_by_strategy(strat: str, anchor_agent: Optional[str] = None) -> Optional[Tuple[Segment, Segment]]:
+        """Pick a negative pair using the specified strategy."""
+        if strat == "temporal_hard":
+            return _pick_hard_negative_temporal(segments, rng, distribution, 
+                                                temporal_overlap_threshold, anchor_agent)
+        elif strat == "spatial_hard":
+            return _pick_hard_negative_spatial(segments, rng, distribution,
+                                               spatial_similarity_threshold, anchor_agent)
+        elif strat == "mixed_hard":
+            return _pick_hard_negative_mixed(segments, rng, distribution,
+                                            temporal_overlap_threshold * 0.6,  # Lower thresholds for combined
+                                            spatial_similarity_threshold * 0.6,
+                                            anchor_agent)
+        else:  # random or round_robin
+            return _pick_negative_pair(segments, rng, distribution, strat, anchor_agent)
+    
+    def _decide_strategy_for_pair(base_strategy: str, hard_ratio: float) -> str:
+        """Decide which strategy to use for a single pair."""
+        if hard_ratio <= 0 or base_strategy in ["temporal_hard", "spatial_hard", "mixed_hard"]:
+            # If already a hard strategy or no hard negatives requested, use base
+            return base_strategy
+        
+        if rng.random() < hard_ratio:
+            # Use a hard negative strategy
+            hard_strategies = ["temporal_hard", "spatial_hard", "mixed_hard"]
+            return rng.choice(hard_strategies)
+        else:
+            return base_strategy
     
     if per_agent_counts:
         # Generate n_pairs for each (anchor, other) agent combination
@@ -359,29 +665,37 @@ def sample_negative_pairs(
                 attempts = 0
                 max_attempts = n_pairs * 20 + 100
                 while combo_pairs < n_pairs and attempts < max_attempts:
-                    seg_a = rng.choice(anchor_segs)
-                    seg_b = rng.choice(other_segs)
-                    pairs.append((seg_a, seg_b))
-                    combo_pairs += 1
+                    strat = _decide_strategy_for_pair(strategy, hard_negative_ratio)
+                    pair = _pick_pair_by_strategy(strat, anchor_agent)
+                    if pair:
+                        pairs.append(pair)
+                        stats[strat if strat in stats else "random"] += 1
+                        combo_pairs += 1
                     attempts += 1
-        return pairs
+        return pairs, stats
     
     # Original behavior: total pairs across all combinations
     if ensure_coverage:
         for agent_id in agents:
             if len(pairs) >= n_pairs:
                 break
-            pair = _pick_negative_pair(segments, rng, distribution, strategy, anchor_agent=agent_id)
+            strat = _decide_strategy_for_pair(strategy, hard_negative_ratio)
+            pair = _pick_pair_by_strategy(strat, anchor_agent=agent_id)
             if pair:
                 pairs.append(pair)
+                stats[strat if strat in stats else "random"] += 1
+    
     attempts = 0
     max_attempts = n_pairs * 10 + 200
     while len(pairs) < n_pairs and attempts < max_attempts:
-        pair = _pick_negative_pair(segments, rng, distribution, strategy)
+        strat = _decide_strategy_for_pair(strategy, hard_negative_ratio)
+        pair = _pick_pair_by_strategy(strat)
         if pair:
             pairs.append(pair)
+            stats[strat if strat in stats else "random"] += 1
         attempts += 1
-    return pairs[:n_pairs]
+    
+    return pairs[:n_pairs], stats
 
 
 def _slice_features(arr: np.ndarray, start: int, end: int) -> np.ndarray:
@@ -461,7 +775,7 @@ def assemble_dataset(
         ensure_coverage=config.ensure_agent_coverage,
         per_agent_counts=config.per_agent_counts and not preview_only,
     )
-    neg_pairs = sample_negative_pairs(
+    neg_pairs, neg_stats = sample_negative_pairs(
         segments,
         n_pairs=config.negative_pairs if not preview_only else min(config.negative_pairs, preview_cap),
         rng=rng,
@@ -469,6 +783,9 @@ def assemble_dataset(
         distribution=config.agent_distribution,
         ensure_coverage=config.ensure_agent_coverage,
         per_agent_counts=config.per_agent_counts and not preview_only,
+        hard_negative_ratio=config.hard_negative_ratio,
+        temporal_overlap_threshold=config.temporal_overlap_threshold,
+        spatial_similarity_threshold=config.spatial_similarity_threshold,
     )
     # Labels: 1 = same agent (positive), 0 = different agents (negative)
     # This aligns with optimization objectives that maximize same-agent probability
@@ -576,6 +893,7 @@ def assemble_dataset(
         pos_pairs=len(pos_pairs),
         neg_pairs=len(neg_pairs),
         identical_pairs=len(identical_pairs),
+        negative_stats=neg_stats,
     )
     return dataset, metadata, pair_info
 
@@ -603,6 +921,7 @@ def _build_metadata(
     pos_pairs: int,
     neg_pairs: int,
     identical_pairs: int = 0,
+    negative_stats: Optional[Dict[str, int]] = None,
 ) -> Dict[str, Any]:
     lens1 = [a for a, _ in lengths_raw]
     lens2 = [b for _, b in lengths_raw]
@@ -613,14 +932,31 @@ def _build_metadata(
     cfg_dict["data_path"] = str(config.data_path)
     hash_payload = json.dumps(cfg_dict, sort_keys=True).encode()
     dataset_hash = hashlib.sha256(hash_payload).hexdigest()[:12]
+    
+    counts = {
+        "total_pairs": total_pairs,
+        "positive_pairs": pos_pairs,
+        "negative_pairs": neg_pairs,
+        "identical_pairs": identical_pairs,
+    }
+    
+    # Add hard negative breakdown if available
+    if negative_stats:
+        counts["negative_breakdown"] = {
+            "random": negative_stats.get("random", 0) + negative_stats.get("round_robin", 0),
+            "temporal_hard": negative_stats.get("temporal_hard", 0),
+            "spatial_hard": negative_stats.get("spatial_hard", 0),
+            "mixed_hard": negative_stats.get("mixed_hard", 0),
+        }
+        hard_total = (negative_stats.get("temporal_hard", 0) + 
+                      negative_stats.get("spatial_hard", 0) + 
+                      negative_stats.get("mixed_hard", 0))
+        counts["hard_negative_count"] = hard_total
+        counts["hard_negative_actual_ratio"] = hard_total / neg_pairs if neg_pairs > 0 else 0.0
+    
     return {
         "config": cfg_dict,
-        "counts": {
-            "total_pairs": total_pairs,
-            "positive_pairs": pos_pairs,
-            "negative_pairs": neg_pairs,
-            "identical_pairs": identical_pairs,
-        },
+        "counts": counts,
         "length_stats": {
             "x1": _length_stats(lens1),
             "x2": _length_stats(lens2),
