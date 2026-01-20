@@ -419,8 +419,32 @@ def _build_config() -> Tuple[GenerationConfig, Dict, int]:
 
 @st.cache_data(show_spinner=False)
 def _generate_cached(config_dict: Dict, preview_only: bool, preview_cap: int):
+    """Cached generation for preview (no progress callback)."""
     cfg = GenerationConfig(**{**config_dict, "data_path": Path(config_dict["data_path"])})
     return assemble_dataset(cfg, preview_only=preview_only, preview_cap=preview_cap)
+
+
+def _generate_with_progress(config_dict: Dict, preview_cap: int, progress_bar, status_text):
+    """Non-cached generation with progress updates for full dataset.
+    
+    This function is NOT cached because:
+    1. Full dataset generation can take a long time
+    2. We need to show real-time progress to the user
+    3. Caching large datasets in memory can cause issues
+    """
+    cfg = GenerationConfig(**{**config_dict, "data_path": Path(config_dict["data_path"])})
+    
+    def progress_callback(current, total, message):
+        pct = current / total if total > 0 else 0
+        progress_bar.progress(pct, text=f"{message} ({current}/{total})")
+        status_text.text(message)
+    
+    return assemble_dataset(
+        cfg, 
+        preview_only=False, 
+        preview_cap=preview_cap,
+        progress_callback=progress_callback
+    )
 
 
 def _render_preview(dataset: Dict[str, np.ndarray], metadata: Dict):
@@ -1257,14 +1281,40 @@ def main():
 
     if full_clicked:
         try:
-            with st.spinner("Generating full dataset..."):
-                dataset, metadata, pair_info = _generate_cached(cache_key, preview_only=False, preview_cap=preview_cap)
+            # Show progress UI
+            st.subheader("⏳ Generating Full Dataset...")
+            
+            # Estimate time based on configuration
+            est_time = ""
+            if cfg.negative_strategy in ["temporal_hard", "spatial_hard", "mixed_hard"] or cfg.hard_negative_ratio > 0:
+                est_time = " (hard negatives may take several minutes)"
+            
+            st.info(f"Generating {total_pos:,} positive and {total_neg:,} negative pairs{est_time}")
+            
+            progress_bar = st.progress(0, text="Initializing...")
+            status_text = st.empty()
+            
+            import time
+            start_time = time.time()
+            
+            dataset, metadata, pair_info = _generate_with_progress(
+                cache_key, preview_cap, progress_bar, status_text
+            )
+            
+            elapsed = time.time() - start_time
+            
             st.session_state["full_dataset"] = dataset
             st.session_state["full_metadata"] = metadata
             st.session_state["full_pair_info"] = pair_info
-            st.success("Dataset ready. Use the download buttons below.")
+            
+            progress_bar.progress(1.0, text="Complete!")
+            status_text.empty()
+            st.success(f"✅ Dataset ready! Generated {len(dataset['label']):,} pairs in {elapsed:.1f}s. Use the download buttons below.")
+            
         except Exception as exc:  # pragma: no cover
+            import traceback
             st.error(f"Full generation failed: {exc}")
+            st.code(traceback.format_exc())
 
     # Persistent preview display
     if "preview_dataset" in st.session_state and "preview_metadata" in st.session_state:

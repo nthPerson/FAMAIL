@@ -296,6 +296,79 @@ def sample_identical_pairs(
     return pairs[:n_pairs]
 
 
+# ============================================================================
+# Hard Negative Sampling with Precomputation for Performance
+# ============================================================================
+
+@dataclass
+class SegmentIndex:
+    """Index structure for efficient hard negative sampling."""
+    segment: Segment
+    agent_id: str
+    idx: int  # Index within agent's segment list
+    cells: frozenset  # Precomputed grid cells for spatial similarity
+    
+    
+class HardNegativeIndex:
+    """Precomputed index for efficient hard negative pair selection.
+    
+    This class precomputes spatial cell sets and builds indices to avoid
+    recomputing expensive similarity metrics for each pair.
+    """
+    
+    def __init__(self, segments: Dict[str, List[Segment]], progress_callback=None):
+        """Build the index from segments.
+        
+        Args:
+            segments: Dictionary mapping agent_id to list of Segment objects
+            progress_callback: Optional callback(current, total, message) for progress
+        """
+        self.segments = segments
+        self.agents = list(segments.keys())
+        self.all_indexed: List[SegmentIndex] = []
+        self.by_agent: Dict[str, List[SegmentIndex]] = {}
+        
+        # Build index with precomputed cells
+        total_segs = sum(len(segs) for segs in segments.values())
+        processed = 0
+        
+        for agent_id, segs in segments.items():
+            self.by_agent[agent_id] = []
+            for idx, seg in enumerate(segs):
+                # Precompute grid cells (expensive operation, do once)
+                cells = frozenset(zip(
+                    seg.data[:, 0].astype(int).tolist(),
+                    seg.data[:, 1].astype(int).tolist()
+                ))
+                indexed = SegmentIndex(
+                    segment=seg,
+                    agent_id=agent_id,
+                    idx=idx,
+                    cells=cells
+                )
+                self.all_indexed.append(indexed)
+                self.by_agent[agent_id].append(indexed)
+                processed += 1
+                
+                if progress_callback and processed % 100 == 0:
+                    progress_callback(processed, total_segs, "Indexing segments")
+        
+        if progress_callback:
+            progress_callback(total_segs, total_segs, "Indexing complete")
+    
+    def get_other_agents(self, agent_id: str) -> List[str]:
+        """Get list of agents excluding the specified one."""
+        return [a for a in self.agents if a != agent_id]
+    
+    def compute_spatial_similarity_fast(self, idx_a: SegmentIndex, idx_b: SegmentIndex) -> float:
+        """Compute spatial similarity using precomputed cell sets."""
+        if not idx_a.cells or not idx_b.cells:
+            return 0.0
+        intersection = len(idx_a.cells & idx_b.cells)
+        union = len(idx_a.cells | idx_b.cells)
+        return intersection / union if union > 0 else 0.0
+
+
 def _compute_temporal_overlap(seg_a: Segment, seg_b: Segment) -> float:
     """Compute temporal overlap ratio between two segments.
     
@@ -322,6 +395,9 @@ def _compute_spatial_similarity(seg_a: Segment, seg_b: Segment) -> float:
     
     Returns a value between 0 and 1, where 1 means high spatial similarity
     (visiting similar grid cells) and 0 means no spatial overlap.
+    
+    NOTE: For bulk operations, use HardNegativeIndex.compute_spatial_similarity_fast()
+    which uses precomputed cell sets.
     """
     # Extract x, y coordinates (indices 0 and 1)
     cells_a = set(zip(seg_a.data[:, 0].astype(int).tolist(), 
@@ -346,6 +422,127 @@ def _compute_segment_centroid(seg: Segment) -> Tuple[float, float]:
     x_mean = seg.data[:, 0].mean()
     y_mean = seg.data[:, 1].mean()
     return float(x_mean), float(y_mean)
+
+
+def _sample_hard_negatives_batch(
+    index: HardNegativeIndex,
+    n_pairs: int,
+    rng: random.Random,
+    distribution: str,
+    strategy: str,
+    temporal_threshold: float,
+    spatial_threshold: float,
+    progress_callback=None,
+) -> Tuple[List[Tuple[Segment, Segment]], Dict[str, int]]:
+    """Sample hard negative pairs efficiently using precomputed index.
+    
+    This is much faster than the per-pair approach because:
+    1. Cell sets are precomputed in the index
+    2. We sample candidates in batches
+    3. We avoid repeated list/dict operations
+    """
+    pairs: List[Tuple[Segment, Segment]] = []
+    stats: Dict[str, int] = {
+        "random": 0,
+        "temporal_hard": 0,
+        "spatial_hard": 0,
+        "mixed_hard": 0,
+    }
+    
+    agents = index.agents
+    if len(agents) < 2:
+        return pairs, stats
+    
+    weights = _agent_weights(index.segments, distribution)
+    
+    # For mixed_hard, precompute candidate pairs with both criteria
+    if strategy == "mixed_hard":
+        # Adjusted thresholds for mixed (need both, so lower each)
+        t_thresh = temporal_threshold * 0.6
+        s_thresh = spatial_threshold * 0.6
+    else:
+        t_thresh = temporal_threshold
+        s_thresh = spatial_threshold
+    
+    attempts = 0
+    max_attempts = n_pairs * 5 + 500  # Reduced attempts since we're more efficient
+    
+    while len(pairs) < n_pairs and attempts < max_attempts:
+        # Select anchor agent and segment
+        anchor_agent = rng.choices(agents, weights=weights, k=1)[0]
+        anchor_indexed_list = index.by_agent.get(anchor_agent, [])
+        if not anchor_indexed_list:
+            attempts += 1
+            continue
+            
+        anchor_idx = rng.choice(anchor_indexed_list)
+        anchor_seg = anchor_idx.segment
+        
+        # Get other agents
+        other_agents = index.get_other_agents(anchor_agent)
+        if not other_agents:
+            attempts += 1
+            continue
+        
+        # Find candidates based on strategy
+        candidates = []
+        
+        if strategy == "temporal_hard":
+            # Find temporally overlapping segments
+            for other_agent in other_agents:
+                for other_idx in index.by_agent.get(other_agent, []):
+                    overlap = _compute_temporal_overlap(anchor_seg, other_idx.segment)
+                    if overlap >= t_thresh:
+                        candidates.append((other_idx.segment, overlap))
+                    elif overlap > 0 and not candidates:
+                        # Fallback: collect any overlapping
+                        candidates.append((other_idx.segment, overlap))
+                        
+        elif strategy == "spatial_hard":
+            # Find spatially similar segments
+            for other_agent in other_agents:
+                for other_idx in index.by_agent.get(other_agent, []):
+                    sim = index.compute_spatial_similarity_fast(anchor_idx, other_idx)
+                    if sim >= s_thresh:
+                        candidates.append((other_idx.segment, sim))
+                        
+        elif strategy == "mixed_hard":
+            # Find segments with both temporal and spatial similarity
+            for other_agent in other_agents:
+                for other_idx in index.by_agent.get(other_agent, []):
+                    overlap = _compute_temporal_overlap(anchor_seg, other_idx.segment)
+                    if overlap >= t_thresh:
+                        sim = index.compute_spatial_similarity_fast(anchor_idx, other_idx)
+                        if sim >= s_thresh:
+                            score = (overlap + sim) / 2
+                            candidates.append((other_idx.segment, score))
+        
+        if candidates:
+            # Weighted selection by score
+            total_score = sum(s for _, s in candidates)
+            if total_score > 0:
+                weights_cand = [s / total_score for _, s in candidates]
+                selected = rng.choices([c[0] for c in candidates], weights=weights_cand, k=1)[0]
+            else:
+                selected = rng.choice([c[0] for c in candidates])
+            pairs.append((anchor_seg, selected))
+            stats[strategy] += 1
+        else:
+            # Fallback to random if no hard candidates found
+            other_agent = rng.choice(other_agents)
+            other_segs = index.by_agent.get(other_agent, [])
+            if other_segs:
+                other_idx = rng.choice(other_segs)
+                pairs.append((anchor_seg, other_idx.segment))
+                stats["random"] += 1
+        
+        attempts += 1
+        
+        # Progress callback
+        if progress_callback and len(pairs) % 500 == 0:
+            progress_callback(len(pairs), n_pairs, f"Sampling {strategy} pairs")
+    
+    return pairs[:n_pairs], stats
 
 
 def _pick_hard_negative_temporal(
@@ -579,6 +776,7 @@ def sample_negative_pairs(
     hard_negative_ratio: float = 0.0,
     temporal_overlap_threshold: float = 0.5,
     spatial_similarity_threshold: float = 0.3,
+    progress_callback=None,
 ) -> Tuple[List[Tuple[Segment, Segment]], Dict[str, int]]:
     """Sample negative (different-agent) pairs.
     
@@ -604,6 +802,7 @@ def sample_negative_pairs(
         hard_negative_ratio: Fraction of pairs that should be hard negatives (0.0-1.0)
         temporal_overlap_threshold: Min temporal overlap for hard negatives
         spatial_similarity_threshold: Min spatial similarity for hard negatives
+        progress_callback: Optional callback(current, total, message) for progress
     
     Returns:
         Tuple of (list of pairs, stats dict with counts by type)
@@ -620,37 +819,102 @@ def sample_negative_pairs(
     if len(agents) < 2:
         return pairs, stats
     
-    def _pick_pair_by_strategy(strat: str, anchor_agent: Optional[str] = None) -> Optional[Tuple[Segment, Segment]]:
-        """Pick a negative pair using the specified strategy."""
-        if strat == "temporal_hard":
-            return _pick_hard_negative_temporal(segments, rng, distribution, 
-                                                temporal_overlap_threshold, anchor_agent)
-        elif strat == "spatial_hard":
-            return _pick_hard_negative_spatial(segments, rng, distribution,
-                                               spatial_similarity_threshold, anchor_agent)
-        elif strat == "mixed_hard":
-            return _pick_hard_negative_mixed(segments, rng, distribution,
-                                            temporal_overlap_threshold * 0.6,  # Lower thresholds for combined
-                                            spatial_similarity_threshold * 0.6,
-                                            anchor_agent)
-        else:  # random or round_robin
+    # Determine if we need the optimized index (for hard negative strategies)
+    needs_hard_index = (
+        strategy in ["temporal_hard", "spatial_hard", "mixed_hard"] or
+        hard_negative_ratio > 0
+    )
+    
+    index: Optional[HardNegativeIndex] = None
+    if needs_hard_index:
+        if progress_callback:
+            progress_callback(0, n_pairs, "Building segment index for hard negatives...")
+        index = HardNegativeIndex(segments, progress_callback=None)  # Quick index build
+    
+    # Use optimized batch sampling for pure hard negative strategies
+    if strategy in ["temporal_hard", "spatial_hard", "mixed_hard"] and not per_agent_counts:
+        return _sample_hard_negatives_batch(
+            index, n_pairs, rng, distribution, strategy,
+            temporal_overlap_threshold, spatial_similarity_threshold,
+            progress_callback
+        )
+    
+    def _pick_pair_by_strategy_fast(strat: str, anchor_agent: Optional[str] = None) -> Optional[Tuple[Segment, Segment]]:
+        """Pick a negative pair using the specified strategy (optimized version)."""
+        if strat in ["temporal_hard", "spatial_hard", "mixed_hard"] and index is not None:
+            # Use optimized single-pair selection with index
+            anchor_indexed_list = index.by_agent.get(anchor_agent, []) if anchor_agent else []
+            if not anchor_indexed_list and anchor_agent:
+                return None
+            
+            if anchor_agent:
+                anchor_idx = rng.choice(anchor_indexed_list)
+            else:
+                weights = _agent_weights(segments, distribution)
+                anchor_agent = rng.choices(agents, weights=weights, k=1)[0]
+                anchor_indexed_list = index.by_agent.get(anchor_agent, [])
+                if not anchor_indexed_list:
+                    return None
+                anchor_idx = rng.choice(anchor_indexed_list)
+            
+            anchor_seg = anchor_idx.segment
+            other_agents = index.get_other_agents(anchor_agent)
+            if not other_agents:
+                return None
+            
+            # Adjusted thresholds for mixed
+            t_thresh = temporal_overlap_threshold * 0.6 if strat == "mixed_hard" else temporal_overlap_threshold
+            s_thresh = spatial_similarity_threshold * 0.6 if strat == "mixed_hard" else spatial_similarity_threshold
+            
+            candidates = []
+            for other_agent in other_agents:
+                for other_idx in index.by_agent.get(other_agent, []):
+                    if strat == "temporal_hard":
+                        overlap = _compute_temporal_overlap(anchor_seg, other_idx.segment)
+                        if overlap >= t_thresh:
+                            candidates.append((other_idx.segment, overlap))
+                    elif strat == "spatial_hard":
+                        sim = index.compute_spatial_similarity_fast(anchor_idx, other_idx)
+                        if sim >= s_thresh:
+                            candidates.append((other_idx.segment, sim))
+                    elif strat == "mixed_hard":
+                        overlap = _compute_temporal_overlap(anchor_seg, other_idx.segment)
+                        if overlap >= t_thresh:
+                            sim = index.compute_spatial_similarity_fast(anchor_idx, other_idx)
+                            if sim >= s_thresh:
+                                candidates.append((other_idx.segment, (overlap + sim) / 2))
+            
+            if candidates:
+                total_score = sum(s for _, s in candidates)
+                if total_score > 0:
+                    weights_cand = [s / total_score for _, s in candidates]
+                    return (anchor_seg, rng.choices([c[0] for c in candidates], weights=weights_cand, k=1)[0])
+                return (anchor_seg, rng.choice([c[0] for c in candidates]))
+            
+            # Fallback to random
+            other_agent = rng.choice(other_agents)
+            other_segs = segments.get(other_agent, [])
+            if other_segs:
+                return (anchor_seg, rng.choice(other_segs))
+            return None
+        else:
+            # Use original functions for random/round_robin
             return _pick_negative_pair(segments, rng, distribution, strat, anchor_agent)
     
     def _decide_strategy_for_pair(base_strategy: str, hard_ratio: float) -> str:
         """Decide which strategy to use for a single pair."""
         if hard_ratio <= 0 or base_strategy in ["temporal_hard", "spatial_hard", "mixed_hard"]:
-            # If already a hard strategy or no hard negatives requested, use base
             return base_strategy
         
         if rng.random() < hard_ratio:
-            # Use a hard negative strategy
             hard_strategies = ["temporal_hard", "spatial_hard", "mixed_hard"]
             return rng.choice(hard_strategies)
-        else:
-            return base_strategy
+        return base_strategy
     
     if per_agent_counts:
         # Generate n_pairs for each (anchor, other) agent combination
+        total_combos = len(agents) * (len(agents) - 1)
+        combo_idx = 0
         for anchor_agent in agents:
             anchor_segs = segments.get(anchor_agent, [])
             if not anchor_segs:
@@ -666,12 +930,15 @@ def sample_negative_pairs(
                 max_attempts = n_pairs * 20 + 100
                 while combo_pairs < n_pairs and attempts < max_attempts:
                     strat = _decide_strategy_for_pair(strategy, hard_negative_ratio)
-                    pair = _pick_pair_by_strategy(strat, anchor_agent)
+                    pair = _pick_pair_by_strategy_fast(strat, anchor_agent)
                     if pair:
                         pairs.append(pair)
                         stats[strat if strat in stats else "random"] += 1
                         combo_pairs += 1
                     attempts += 1
+                combo_idx += 1
+                if progress_callback and combo_idx % 10 == 0:
+                    progress_callback(combo_idx, total_combos, f"Processing agent combinations")
         return pairs, stats
     
     # Original behavior: total pairs across all combinations
@@ -680,7 +947,7 @@ def sample_negative_pairs(
             if len(pairs) >= n_pairs:
                 break
             strat = _decide_strategy_for_pair(strategy, hard_negative_ratio)
-            pair = _pick_pair_by_strategy(strat, anchor_agent=agent_id)
+            pair = _pick_pair_by_strategy_fast(strat, anchor_agent=agent_id)
             if pair:
                 pairs.append(pair)
                 stats[strat if strat in stats else "random"] += 1
@@ -689,11 +956,14 @@ def sample_negative_pairs(
     max_attempts = n_pairs * 10 + 200
     while len(pairs) < n_pairs and attempts < max_attempts:
         strat = _decide_strategy_for_pair(strategy, hard_negative_ratio)
-        pair = _pick_pair_by_strategy(strat)
+        pair = _pick_pair_by_strategy_fast(strat)
         if pair:
             pairs.append(pair)
             stats[strat if strat in stats else "random"] += 1
         attempts += 1
+        
+        if progress_callback and len(pairs) % 500 == 0:
+            progress_callback(len(pairs), n_pairs, "Sampling negative pairs")
     
     return pairs[:n_pairs], stats
 
@@ -743,12 +1013,34 @@ def assemble_dataset(
     config: GenerationConfig,
     preview_only: bool = False,
     preview_cap: int = 12,
+    progress_callback=None,
 ) -> Tuple[Dict[str, np.ndarray], Dict[str, Any], List[Dict[str, Any]]]:
+    """Assemble a complete trajectory pair dataset.
+    
+    Args:
+        config: Generation configuration
+        preview_only: If True, generate a small preview dataset
+        preview_cap: Maximum pairs for preview mode
+        progress_callback: Optional callback(current, total, message) for progress updates
+    
+    Returns:
+        Tuple of (dataset dict, metadata dict, pair_info list)
+    """
+    if progress_callback:
+        progress_callback(0, 100, "Loading trajectory data...")
+    
     rng = random.Random(config.seed)
     expert_trajs = load_dataset(config.data_path)
     state_dim = next(iter(expert_trajs.values()))[0].shape[1]
     feat_start, feat_end = config.clamped_feature_bounds(state_dim)
+    
+    if progress_callback:
+        progress_callback(5, 100, "Building trajectory segments...")
+    
     segments = build_segments(expert_trajs, config.days)
+    
+    if progress_callback:
+        progress_callback(10, 100, "Segments built. Starting pair sampling...")
     
     # Calculate how many identical pairs to include based on ratio
     total_positive = config.positive_pairs if not preview_only else min(config.positive_pairs, preview_cap)
@@ -758,6 +1050,8 @@ def assemble_dataset(
     # Sample identical pairs (same trajectory vs itself)
     identical_pairs: List[Tuple[Segment, Segment]] = []
     if n_identical > 0:
+        if progress_callback:
+            progress_callback(12, 100, f"Sampling {n_identical} identical pairs...")
         identical_pairs = sample_identical_pairs(
             segments,
             n_pairs=n_identical,
@@ -766,6 +1060,8 @@ def assemble_dataset(
         )
     
     # Sample regular positive pairs (same agent, different trajectories)
+    if progress_callback:
+        progress_callback(15, 100, f"Sampling {n_regular_positive} positive pairs...")
     pos_pairs = sample_positive_pairs(
         segments,
         n_pairs=n_regular_positive,
@@ -775,9 +1071,21 @@ def assemble_dataset(
         ensure_coverage=config.ensure_agent_coverage,
         per_agent_counts=config.per_agent_counts and not preview_only,
     )
+    
+    # Sample negative pairs (this is the slow part for hard negatives)
+    n_neg = config.negative_pairs if not preview_only else min(config.negative_pairs, preview_cap)
+    if progress_callback:
+        progress_callback(20, 100, f"Sampling {n_neg} negative pairs (strategy: {config.negative_strategy})...")
+    
+    def neg_progress(current, total, msg):
+        # Map negative sampling progress to 20-70% of total progress
+        pct = 20 + int(50 * current / max(total, 1))
+        if progress_callback:
+            progress_callback(pct, 100, msg)
+    
     neg_pairs, neg_stats = sample_negative_pairs(
         segments,
-        n_pairs=config.negative_pairs if not preview_only else min(config.negative_pairs, preview_cap),
+        n_pairs=n_neg,
         rng=rng,
         strategy=config.negative_strategy,
         distribution=config.agent_distribution,
@@ -786,7 +1094,12 @@ def assemble_dataset(
         hard_negative_ratio=config.hard_negative_ratio,
         temporal_overlap_threshold=config.temporal_overlap_threshold,
         spatial_similarity_threshold=config.spatial_similarity_threshold,
+        progress_callback=neg_progress if not preview_only else None,
     )
+    
+    if progress_callback:
+        progress_callback(70, 100, "Assembling pairs into dataset arrays...")
+    
     # Labels: 1 = same agent (positive), 0 = different agents (negative)
     # This aligns with optimization objectives that maximize same-agent probability
     # Identical pairs get label 1 (same agent) with special flag for tracking
@@ -805,7 +1118,9 @@ def assemble_dataset(
     agent_usage: Dict[str, Dict[str, int]] = {}
     pair_info: List[Dict[str, Any]] = []
     identical_count = 0
-    for seg_a, seg_b, label, pair_type in pairs:
+    
+    total_pairs = len(pairs)
+    for i, (seg_a, seg_b, label, pair_type) in enumerate(pairs):
         seq1 = _slice_features(seg_a.data, feat_start, feat_end).astype(np.float32)
         seq2 = _slice_features(seg_b.data, feat_start, feat_end).astype(np.float32)
         aligned1, aligned2, mask1, mask2, target_len = align_pair(seq1, seq2, config.padding, config.fixed_length)
@@ -845,8 +1160,18 @@ def assemble_dataset(
                 "end_time_b": seg_b.end_time,
             }
         )
+        
+        # Progress update every 1000 pairs
+        if progress_callback and i > 0 and i % 1000 == 0:
+            pct = 70 + int(20 * i / total_pairs)
+            progress_callback(pct, 100, f"Processing pairs: {i}/{total_pairs}")
+    
     if not sequences1:
         raise RuntimeError("No pairs generated. Check data availability and settings.")
+    
+    if progress_callback:
+        progress_callback(90, 100, "Padding sequences to uniform length...")
+    
     max_len = max(seq.shape[0] for seq in sequences1)
     # Ensure uniform length across dataset for saving convenience
     def pad_to_length(arr_list: List[np.ndarray]) -> np.ndarray:
@@ -895,6 +1220,10 @@ def assemble_dataset(
         identical_pairs=len(identical_pairs),
         negative_stats=neg_stats,
     )
+    
+    if progress_callback:
+        progress_callback(100, 100, "Dataset generation complete!")
+    
     return dataset, metadata, pair_info
 
 
