@@ -831,13 +831,65 @@ def sample_negative_pairs(
             progress_callback(0, n_pairs, "Building segment index for hard negatives...")
         index = HardNegativeIndex(segments, progress_callback=None)  # Quick index build
     
-    # Use optimized batch sampling for pure hard negative strategies
+    # For hard negative strategies, use the hard_negative_ratio to mix with random pairs
+    # This is CRITICAL: training with 100% hard negatives causes the model to fail on
+    # easy negatives (random different-driver pairs without temporal/spatial overlap).
+    # We need a mix of:
+    #   - Hard negatives: teach the model subtle driver differences
+    #   - Easy negatives: teach the model that ANY different driver = label 0
     if strategy in ["temporal_hard", "spatial_hard", "mixed_hard"] and not per_agent_counts:
-        return _sample_hard_negatives_batch(
-            index, n_pairs, rng, distribution, strategy,
+        # When user selects hard strategy, use hard_negative_ratio to determine the mix
+        # Default: if hard_negative_ratio=0, use 80% hard, 20% random for robustness
+        actual_hard_ratio = hard_negative_ratio if hard_negative_ratio > 0 else 0.8
+        
+        n_hard = int(n_pairs * actual_hard_ratio)
+        n_random = n_pairs - n_hard
+        
+        # Sample hard negatives
+        hard_pairs, hard_stats = _sample_hard_negatives_batch(
+            index, n_hard, rng, distribution, strategy,
             temporal_overlap_threshold, spatial_similarity_threshold,
             progress_callback
         )
+        
+        # Sample random (easy) negatives to ensure model generalizes
+        random_pairs: List[Tuple[Segment, Segment]] = []
+        weights = _agent_weights(segments, distribution)
+        attempts = 0
+        max_attempts = n_random * 10 + 100
+        
+        while len(random_pairs) < n_random and attempts < max_attempts:
+            anchor_agent = rng.choices(agents, weights=weights, k=1)[0]
+            anchor_segs = segments.get(anchor_agent, [])
+            if not anchor_segs:
+                attempts += 1
+                continue
+            other_agents = [a for a in agents if a != anchor_agent]
+            if not other_agents:
+                attempts += 1
+                continue
+            other_agent = rng.choice(other_agents)
+            other_segs = segments.get(other_agent, [])
+            if not other_segs:
+                attempts += 1
+                continue
+            seg_a = rng.choice(anchor_segs)
+            seg_b = rng.choice(other_segs)
+            random_pairs.append((seg_a, seg_b))
+            attempts += 1
+        
+        # Combine and shuffle
+        all_pairs = hard_pairs + random_pairs
+        rng.shuffle(all_pairs)
+        
+        # Update stats
+        combined_stats = hard_stats.copy()
+        combined_stats["random"] = len(random_pairs)
+        
+        if progress_callback:
+            progress_callback(n_pairs, n_pairs, f"Generated {len(hard_pairs)} hard + {len(random_pairs)} random negatives")
+        
+        return all_pairs, combined_stats
     
     def _pick_pair_by_strategy_fast(strat: str, anchor_agent: Optional[str] = None) -> Optional[Tuple[Segment, Segment]]:
         """Pick a negative pair using the specified strategy (optimized version)."""

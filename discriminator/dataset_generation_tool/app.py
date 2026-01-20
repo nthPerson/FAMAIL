@@ -215,18 +215,20 @@ def _build_config() -> Tuple[GenerationConfig, Dict, int]:
                 "  ✗ May create 'easy' negatives (different times/locations)\n\n"
                 "• **round_robin:** Cycle through agent pairs systematically\n"
                 "  ✓ Ensures all agent combinations are covered\n\n"
-                "**Hard Negative Strategies** (recommended for better discrimination):\n"
+                "**Hard Negative Strategies** (automatically mixed with random):\n"
                 "• **temporal_hard:** Pair trajectories that overlap in time\n"
                 "  ✓ Forces model to learn driver-specific patterns, not time patterns\n\n"
                 "• **spatial_hard:** Pair trajectories visiting similar locations\n"
                 "  ✓ Forces model to learn movement patterns, not location patterns\n\n"
                 "• **mixed_hard:** Require both temporal AND spatial similarity\n"
-                "  ✓ Hardest negatives: different drivers, same place, same time\n"
-                "  ✓ Best for robust discriminator training"
+                "  ✓ Hardest negatives: different drivers, same place, same time\n\n"
+                "⚠️ **Important:** Hard strategies now automatically include ~20% random negatives\n"
+                "to ensure the model learns both hard and easy cases. Use the ratio slider below\n"
+                "to control the mix."
             ),
         )
         
-        # Hard negative ratio control (only show if not using hard strategy directly)
+        # Hard negative ratio control
         hard_negative_ratio = 0.0
         temporal_overlap_threshold = 0.5
         spatial_similarity_threshold = 0.3
@@ -253,6 +255,29 @@ def _build_config() -> Tuple[GenerationConfig, Dict, int]:
             )
             if hard_negative_ratio > 0:
                 st.info(f"~{int(neg_pairs * hard_negative_ratio)} hard negatives will be generated")
+        else:
+            # For hard strategies, show the ratio slider to control the mix
+            hard_negative_ratio = st.slider(
+                "Hard negative ratio",
+                min_value=0.5,
+                max_value=0.95,
+                value=0.8,
+                step=0.05,
+                help=(
+                    "Fraction of negative pairs using the hard strategy (rest are random).\n\n"
+                    "**CRITICAL FOR MODEL PERFORMANCE:**\n"
+                    "Using 100% hard negatives causes the model to fail on 'easy' test cases\n"
+                    "(random different-driver pairs). The model learns subtle differences but\n"
+                    "loses the ability to recognize obviously different trajectories.\n\n"
+                    "**Recommended: 0.7-0.8** (70-80% hard, 20-30% random)\n\n"
+                    "• **0.5:** Half hard, half random (more robust)\n"
+                    "• **0.8:** Mostly hard with some random (balanced)\n"
+                    "• **0.95:** Almost all hard (risk of overfitting to hard cases)"
+                ),
+            )
+            n_hard = int(neg_pairs * hard_negative_ratio)
+            n_random = neg_pairs - n_hard
+            st.info(f"🎯 {n_hard} hard negatives ({neg_strategy}) + {n_random} random negatives")
         
         # Advanced hard negative settings
         with st.expander("⚙️ Hard Negative Thresholds", expanded=False):
