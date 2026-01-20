@@ -179,3 +179,8 @@ NORMALIZATION_CONSTANTS = {
     'traffic_speed': {'baseline': 0.009096451857715626, 'scale': 0.007786749371066213},
     'traffic_wait': {'baseline': 9.214922479890125, 'scale': 20.839610665761285},
 }
+
+# Floating point precision for normalized values
+# This controls the number of decimal places for normalized features to reduce file size
+# while maintaining sufficient accuracy for the cGAIL model
+FLOAT_PRECISION = 4

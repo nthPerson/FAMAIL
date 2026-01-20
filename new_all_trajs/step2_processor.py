@@ -28,6 +28,7 @@ from config import (
     ACTION_CODES,
     FEATURE_INDICES,
     NORMALIZATION_CONSTANTS,
+    FLOAT_PRECISION,
 )
 
 
@@ -222,29 +223,31 @@ def compute_window_features(
             key = (i, j, t, day)
             
             # Volume features (pickup count and traffic volume)
+            # Use float() to convert numpy types to native Python floats for smaller pickle size
             if key in volume:
-                pickup = (volume[key][0] - pc['baseline']) / pc['scale']
-                vol = (volume[key][1] - tv['baseline']) / tv['scale']
+                pickup = float(round((volume[key][0] - pc['baseline']) / pc['scale'], FLOAT_PRECISION))
+                vol = float(round((volume[key][1] - tv['baseline']) / tv['scale'], FLOAT_PRECISION))
                 n_p.append(pickup)
                 n_v.append(vol)
                 volume_found += 1
             else:
                 # Default: (0 - baseline) / scale
-                n_p.append(-pc['baseline'] / pc['scale'])
-                n_v.append(-tv['baseline'] / tv['scale'])
+                n_p.append(float(round(-pc['baseline'] / pc['scale'], FLOAT_PRECISION)))
+                n_v.append(float(round(-tv['baseline'] / tv['scale'], FLOAT_PRECISION)))
                 volume_missing += 1
             
             # Traffic features (speed and wait time)
+            # Use float() to convert numpy types to native Python floats for smaller pickle size
             if key in traffic:
-                speed = (traffic[key][0] - ts['baseline']) / ts['scale']
-                wait = (traffic[key][1] - tw['baseline']) / tw['scale']
+                speed = float(round((traffic[key][0] - ts['baseline']) / ts['scale'], FLOAT_PRECISION))
+                wait = float(round((traffic[key][1] - tw['baseline']) / tw['scale'], FLOAT_PRECISION))
                 t_s.append(speed)
                 t_w.append(wait)
                 traffic_found += 1
             else:
                 # Default: (0 - baseline) / scale
-                t_s.append(-ts['baseline'] / ts['scale'])
-                t_w.append(-tw['baseline'] / tw['scale'])
+                t_s.append(float(round(-ts['baseline'] / ts['scale'], FLOAT_PRECISION)))
+                t_w.append(float(round(-tw['baseline'] / tw['scale'], FLOAT_PRECISION)))
                 traffic_missing += 1
     
     return n_p, n_v, t_s, t_w, traffic_found, traffic_missing, volume_found, volume_missing
