@@ -2000,6 +2000,11 @@ def _run_comprehensive_gradient_test(
             g_function, g_diagnostics = _create_frozen_g_function(supply_demand_result, config)
             results['g_function_diagnostics'] = g_diagnostics
             
+            # Merge frozen status into supply_demand_diagnostics for UI display
+            results['supply_demand_diagnostics']['frozen'] = g_diagnostics.get('frozen', False)
+            if 'n_lookup_points' in g_diagnostics:
+                results['supply_demand_diagnostics']['n_lookup_points'] = g_diagnostics['n_lookup_points']
+            
             # Create supply tensor from real data
             # Sum across all periods to get total supply per cell
             supply_tensor = _create_supply_tensor_from_data(
@@ -2029,7 +2034,12 @@ def _run_comprehensive_gradient_test(
         results['g_function_type'] = 'synthetic_inverse'
     else:
         results['supply_type'] = 'real_active_taxis'
-        results['g_function_type'] = f"real_{config.get('g_estimation_method', 'isotonic')}"
+        g_method = config.get('g_estimation_method', 'isotonic')
+        is_frozen = results.get('supply_demand_diagnostics', {}).get('frozen', False)
+        if is_frozen:
+            results['g_function_type'] = f"real_{g_method}_frozen"
+        else:
+            results['g_function_type'] = f"real_{g_method}"
     
     # =========================================================================
     # CREATE AND RUN MODULE
@@ -2448,7 +2458,12 @@ def render_integration_tab(config: Dict[str, Any]):
                         st.markdown("**g(d) Estimation**")
                         g_diag = diag.get('g_estimation', {})
                         st.write(f"Method: {g_diag.get('method', 'N/A')}")
-                        st.write(f"Frozen: {diag.get('frozen', False)}")
+                        frozen_status = diag.get('frozen', False)
+                        if frozen_status:
+                            n_lookup = diag.get('n_lookup_points', 'N/A')
+                            st.write(f"Frozen: ✅ Yes ({n_lookup} lookup points)")
+                        else:
+                            st.write(f"Frozen: ❌ No")
                         st.write(f"R²: {diag.get('g_r_squared', 0):.4f}")
             
             # Objective Function Values
@@ -2485,6 +2500,21 @@ def render_integration_tab(config: Dict[str, Any]):
                     st.warning("⚠️ **F_causal = 0**: This indicates R² ≤ 0 (the g(d) function doesn't explain variance)")
                 
                 with st.expander("🔍 Causal Term Debug Info (click to expand)"):
+                    # Build g(d) description based on actual function type used
+                    g_type = result.get('g_function_type', 'unknown')
+                    supply_demand_diag = result.get('supply_demand_diagnostics', {})
+                    is_frozen = supply_demand_diag.get('frozen', False)
+                    n_lookup_pts = supply_demand_diag.get('n_lookup_points', 'N/A')
+                    
+                    if 'synthetic' in g_type:
+                        g_description = "Synthetic formula: g(d) = 1.5 + 3.0 / (d + ε)"
+                    elif is_frozen:
+                        g_method = config.get('g_estimation_method', 'isotonic')
+                        g_description = f"🧊 Frozen lookup table ({n_lookup_pts} points) from {g_method} regression on real supply/demand data"
+                    else:
+                        g_method = config.get('g_estimation_method', 'isotonic')
+                        g_description = f"Live {g_method} regression on real supply/demand data (not frozen)"
+                    
                     st.markdown(f"""
                     **Causal Fairness Computation Details:**
                     
@@ -2502,7 +2532,7 @@ def render_integration_tab(config: Dict[str, Any]):
                     **Interpretation:**
                     - If Var(R) ≈ Var(Y), then g(d) explains ~0% of variance → R² ≈ 0
                     - If Var(R) > Var(Y), then g(d) adds noise → R² < 0 (clamped to 0)
-                    - The g(d) function used is: g(d) = 0.8 × d^(-0.2)
+                    - **g(d) function**: {g_description}
                     """)
             
             # Gradient Statistics
