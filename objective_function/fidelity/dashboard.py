@@ -421,7 +421,7 @@ def main():
     # Data paths
     st.sidebar.subheader("📂 Data Source")
     
-    default_traj_path = str(PROJECT_ROOT / "source_data" / "all_trajs.pkl")
+    default_traj_path = str(PROJECT_ROOT / "source_data" / "passenger_seeking_trajs_45-800.pkl")
     trajectory_path = st.sidebar.text_input(
         "Trajectory Data Path",
         value=default_traj_path,

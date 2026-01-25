@@ -549,6 +549,15 @@ def start_training(dataset_path: Path, params: Dict, experiment_name: str, progr
         checkpoint_dir=str(DEFAULT_CHECKPOINT_DIR)
     )
     
+    # Generate experiment name if not provided (None or empty)
+    if not experiment_name:
+        experiment_name = datetime.now().strftime("%Y%m%d_%H%M%S")
+    else:
+        # Clean up the experiment name (strip whitespace, ensure it's valid)
+        experiment_name = experiment_name.strip()
+        if not experiment_name:
+            experiment_name = datetime.now().strftime("%Y%m%d_%H%M%S")
+    
     # Create trainer
     trainer = Trainer(
         model=model,
@@ -566,6 +575,8 @@ def start_training(dataset_path: Path, params: Dict, experiment_name: str, progr
         
         # Create progress elements in the container
         with progress_container:
+            st.info(f"🚀 Starting training with experiment name: **{experiment_name}**")
+            st.caption(f"📁 Checkpoint directory: `{trainer.checkpoint_dir}`")
             progress_bar = st.progress(0, text="Initializing training...")
             col1, col2, col3, col4 = st.columns(4)
             with col1:
@@ -759,9 +770,9 @@ def start_training(dataset_path: Path, params: Dict, experiment_name: str, progr
         # Train with progress callback
         trainer.train(verbose=True, progress_callback=progress_callback)
         
-        # Final update
+        # Final update (progress_pct was from last callback, just use the bar state)
         if st.session_state.get('stop_training_requested', False):
-            progress_bar.progress(progress_pct, text="⏹️ Training Stopped by User")
+            # Don't update bar - let it stay at last position
             st.session_state['stop_training_requested'] = False
         else:
             progress_bar.progress(1.0, text="✅ Training Complete!")
@@ -943,8 +954,25 @@ def main():
         
         # Experiment name and time estimation
         st.subheader("🏷️ Experiment")
-        default_name = datetime.now().strftime("%Y%m%d_%H%M%S")
-        experiment_name = st.text_input("Experiment name", value=default_name)
+        
+        # Initialize session state for experiment name if not exists
+        if 'experiment_name_input' not in st.session_state:
+            st.session_state.experiment_name_input = ""
+        
+        # Use session state with a unique key to persist user input across reruns
+        experiment_name = st.text_input(
+            "Experiment name",
+            key="experiment_name_input",
+            placeholder=f"e.g., my_model_v1 (or leave empty for timestamp)",
+            help="Custom name for this experiment. Leave empty to auto-generate a timestamp."
+        )
+        
+        # If empty, will generate timestamp at training time (handled in start_training)
+        if not experiment_name.strip():
+            experiment_name = None
+            st.caption(f"💡 Will use default: `{datetime.now().strftime('%Y%m%d_%H%M%S')}`")
+        else:
+            st.caption(f"✓ Checkpoint directory: `checkpoints/{experiment_name.strip()}/`")
         
         # Training time estimation
         if dataset_info:
@@ -1002,6 +1030,8 @@ def main():
         with col2:
             # Show CLI command
             with st.expander("🖥️ CLI Command"):
+                # Use experiment_name if provided, otherwise show placeholder
+                exp_name_arg = f'--experiment-name "{experiment_name}"' if experiment_name else ''
                 cmd = f"""python train.py \\
     --data-dir "{dataset_path}" \\
     --lstm_hidden_dims {params['lstm_hidden_dims']} \\
@@ -1013,7 +1043,7 @@ def main():
     --lr {params['learning_rate']} \\
     --early-stopping {params['early_stopping_patience']} \\
     --scheduler {params['scheduler']} \\
-    --experiment-name "{experiment_name}" \\
+    {exp_name_arg} \\
     --output "{DEFAULT_CHECKPOINT_DIR}"
 """
                 st.code(cmd, language="bash")
