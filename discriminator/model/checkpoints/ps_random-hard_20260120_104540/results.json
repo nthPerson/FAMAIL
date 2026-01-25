@@ -1,0 +1,442 @@
+{
+  "experiment": {
+    "name": "20260120_104540",
+    "checkpoint_dir": "/home/robert/FAMAIL/discriminator/model/checkpoints/20260120_104540",
+    "training_started": "2026-01-20T10:45:44.898451",
+    "training_completed": "2026-01-20T12:42:07.292265"
+  },
+  "dataset": {
+    "path": "/home/robert/FAMAIL/discriminator/datasets/ps_10000-20000_random_with_hard_negatives",
+    "name": "ps_10000-20000_random_with_hard_negatives",
+    "metadata": {
+      "config": {
+        "data_path": "/home/robert/FAMAIL/discriminator/dataset_generation_tool/source_data/all_trajs.pkl",
+        "positive_pairs": 10000,
+        "negative_pairs": 20000,
+        "days": 2,
+        "feature_start": 4,
+        "feature_end": 4,
+        "padding": "pad_to_longer",
+        "fixed_length": null,
+        "positive_strategy": "random",
+        "negative_strategy": "random",
+        "agent_distribution": "proportional",
+        "seed": 42,
+        "ensure_agent_coverage": true,
+        "per_agent_counts": false,
+        "identical_pair_ratio": 0.15,
+        "hard_negative_ratio": 0.5,
+        "temporal_overlap_threshold": 0.3,
+        "spatial_similarity_threshold": 0.3
+      },
+      "counts": {
+        "total_pairs": 30000,
+        "positive_pairs": 8500,
+        "negative_pairs": 20000,
+        "identical_pairs": 1500,
+        "negative_breakdown": {
+          "random": 9908,
+          "temporal_hard": 3409,
+          "spatial_hard": 3391,
+          "mixed_hard": 3292
+        },
+        "hard_negative_count": 10092,
+        "hard_negative_actual_ratio": 0.5046
+      },
+      "length_stats": {
+        "x1": {
+          "min": 2.0,
+          "max": 886.0,
+          "mean": 411.9234666666667,
+          "p50": 433.0,
+          "p90": 569.0,
+          "p95": 605.0
+        },
+        "x2": {
+          "min": 2.0,
+          "max": 886.0,
+          "mean": 398.87516666666664,
+          "p50": 423.0,
+          "p90": 567.0,
+          "p95": 605.0
+        },
+        "combined": {
+          "min": 2.0,
+          "max": 886.0,
+          "mean": 405.39931666666666,
+          "p50": 428.0,
+          "p90": 568.0,
+          "p95": 605.0
+        },
+        "padded_length": 886
+      },
+      "agent_usage": {
+        "12": {
+          "pos": 366,
+          "neg": 856,
+          "identical": 37
+        },
+        "31": {
+          "pos": 398,
+          "neg": 1000,
+          "identical": 33
+        },
+        "11": {
+          "pos": 374,
+          "neg": 914,
+          "identical": 30
+        },
+        "13": {
+          "pos": 430,
+          "neg": 1038,
+          "identical": 47
+        },
+        "44": {
+          "pos": 268,
+          "neg": 686,
+          "identical": 27
+        },
+        "45": {
+          "pos": 486,
+          "neg": 1043,
+          "identical": 34
+        },
+        "27": {
+          "pos": 338,
+          "neg": 820,
+          "identical": 37
+        },
+        "30": {
+          "pos": 566,
+          "neg": 1117,
+          "identical": 49
+        },
+        "7": {
+          "pos": 370,
+          "neg": 841,
+          "identical": 29
+        },
+        "34": {
+          "pos": 94,
+          "neg": 424,
+          "identical": 10
+        },
+        "32": {
+          "pos": 480,
+          "neg": 1117,
+          "identical": 45
+        },
+        "28": {
+          "pos": 524,
+          "neg": 1056,
+          "identical": 47
+        },
+        "3": {
+          "pos": 470,
+          "neg": 1002,
+          "identical": 34
+        },
+        "0": {
+          "pos": 344,
+          "neg": 763,
+          "identical": 22
+        },
+        "33": {
+          "pos": 452,
+          "neg": 1001,
+          "identical": 44
+        },
+        "37": {
+          "pos": 554,
+          "neg": 1126,
+          "identical": 51
+        },
+        "40": {
+          "pos": 586,
+          "neg": 1211,
+          "identical": 45
+        },
+        "1": {
+          "pos": 432,
+          "neg": 836,
+          "identical": 34
+        },
+        "38": {
+          "pos": 140,
+          "neg": 453,
+          "identical": 14
+        },
+        "6": {
+          "pos": 546,
+          "neg": 1307,
+          "identical": 54
+        },
+        "14": {
+          "pos": 284,
+          "neg": 850,
+          "identical": 29
+        },
+        "47": {
+          "pos": 388,
+          "neg": 937,
+          "identical": 31
+        },
+        "24": {
+          "pos": 268,
+          "neg": 688,
+          "identical": 30
+        },
+        "10": {
+          "pos": 4,
+          "neg": 240,
+          "identical": 1
+        },
+        "20": {
+          "pos": 464,
+          "neg": 894,
+          "identical": 36
+        },
+        "39": {
+          "pos": 238,
+          "neg": 730,
+          "identical": 23
+        },
+        "9": {
+          "pos": 212,
+          "neg": 648,
+          "identical": 10
+        },
+        "18": {
+          "pos": 290,
+          "neg": 751,
+          "identical": 19
+        },
+        "22": {
+          "pos": 464,
+          "neg": 1003,
+          "identical": 44
+        },
+        "21": {
+          "pos": 698,
+          "neg": 1396,
+          "identical": 58
+        },
+        "36": {
+          "pos": 568,
+          "neg": 1179,
+          "identical": 44
+        },
+        "42": {
+          "pos": 246,
+          "neg": 640,
+          "identical": 22
+        },
+        "35": {
+          "pos": 358,
+          "neg": 826,
+          "identical": 29
+        },
+        "43": {
+          "pos": 510,
+          "neg": 1058,
+          "identical": 42
+        },
+        "16": {
+          "pos": 342,
+          "neg": 779,
+          "identical": 25
+        },
+        "8": {
+          "pos": 346,
+          "neg": 740,
+          "identical": 29
+        },
+        "26": {
+          "pos": 566,
+          "neg": 1271,
+          "identical": 57
+        },
+        "23": {
+          "pos": 224,
+          "neg": 616,
+          "identical": 29
+        },
+        "15": {
+          "pos": 636,
+          "neg": 1036,
+          "identical": 56
+        },
+        "46": {
+          "pos": 254,
+          "neg": 508,
+          "identical": 25
+        },
+        "4": {
+          "pos": 312,
+          "neg": 693,
+          "identical": 25
+        },
+        "25": {
+          "pos": 38,
+          "neg": 275,
+          "identical": 11
+        },
+        "2": {
+          "pos": 372,
+          "neg": 808,
+          "identical": 28
+        },
+        "49": {
+          "pos": 454,
+          "neg": 1017,
+          "identical": 46
+        },
+        "41": {
+          "pos": 32,
+          "neg": 277,
+          "identical": 1
+        },
+        "48": {
+          "pos": 2,
+          "neg": 221,
+          "identical": 1
+        },
+        "29": {
+          "pos": 164,
+          "neg": 542,
+          "identical": 18
+        },
+        "17": {
+          "pos": 16,
+          "neg": 244,
+          "identical": 2
+        },
+        "5": {
+          "pos": 16,
+          "neg": 287,
+          "identical": 5
+        },
+        "19": {
+          "pos": 16,
+          "neg": 235,
+          "identical": 1
+        }
+      },
+      "dataset_hash": "2484a031579b",
+      "split_info": {
+        "val_split": 0.2,
+        "n_train": 24000,
+        "n_val": 6000,
+        "n_train_pos": 8007,
+        "n_train_neg": 15993,
+        "n_val_pos": 1993,
+        "n_val_neg": 4007,
+        "train_file": "train.npz",
+        "val_file": "val.npz"
+      }
+    },
+    "total_pairs": 30000,
+    "positive_pairs": 8500,
+    "negative_pairs": 20000,
+    "source_data_path": "/home/robert/FAMAIL/discriminator/dataset_generation_tool/source_data/all_trajs.pkl",
+    "train_samples": 24000,
+    "train_positive": 8007,
+    "train_negative": 15993,
+    "val_samples": 6000,
+    "val_positive": 1993,
+    "val_negative": 4007,
+    "total_samples": 30000
+  },
+  "model": {
+    "architecture": "SiameseLSTMDiscriminator",
+    "config": {
+      "lstm_hidden_dims": [
+        200,
+        100
+      ],
+      "dropout": 0.2,
+      "bidirectional": false,
+      "classifier_hidden_dims": [
+        64,
+        32,
+        8
+      ]
+    },
+    "total_parameters": 302417,
+    "trainable_parameters": 302417,
+    "layers": {
+      "encoder": {
+        "type": "LSTM",
+        "input_dim": 6,
+        "lstm_hidden_dims": [
+          200,
+          100
+        ],
+        "num_layers": 2,
+        "bidirectional": false,
+        "output_dim": 100
+      },
+      "classifier": [
+        {
+          "type": "Linear",
+          "in_features": 200,
+          "out_features": 64
+        },
+        {
+          "type": "Linear",
+          "in_features": 64,
+          "out_features": 32
+        },
+        {
+          "type": "Linear",
+          "in_features": 32,
+          "out_features": 8
+        },
+        {
+          "type": "Linear",
+          "in_features": 8,
+          "out_features": 1
+        }
+      ]
+    }
+  },
+  "hyperparameters": {
+    "batch_size": 64,
+    "learning_rate": 0.001,
+    "weight_decay": 0.0001,
+    "epochs_configured": 100,
+    "early_stopping_patience": 10,
+    "early_stopping_min_delta": 0.0001,
+    "scheduler": "plateau",
+    "scheduler_patience": 5,
+    "scheduler_factor": 0.5,
+    "seed": 42
+  },
+  "training": {
+    "device": "cuda",
+    "epochs_completed": 61,
+    "early_stopped": true,
+    "total_time_seconds": 6980.116324186325,
+    "avg_epoch_time_seconds": 114.42813646207091,
+    "initial_learning_rate": 0.001,
+    "final_learning_rate": 0.00025
+  },
+  "performance": {
+    "best": {
+      "epoch": 51,
+      "val_loss": 0.21012949991226196,
+      "val_accuracy": 0.9156666666666666,
+      "val_f1": 0.8867502238137869,
+      "val_auc": 0.9517292931048538,
+      "train_loss": 0.22175672288735707
+    },
+    "final": {
+      "epoch": 61,
+      "train_loss": 0.20776439505815505,
+      "val_loss": 0.2193913261493047,
+      "val_accuracy": 0.918,
+      "val_f1": 0.8888888888888888,
+      "val_auc": 0.951820578413266
+    }
+  }
+}
