@@ -1248,7 +1248,7 @@ def main():
     taxi_count_source = st.sidebar.radio(
         "Taxi Count Source",
         options=["constant", "active_taxis_lookup"],
-        index=0,
+        index=1,
         format_func=lambda x: "Constant" if x == "constant" else "Active Taxis Lookup",
         help=(
             "How to determine N^p (number of taxis) in service rate calculation.\n\n"
@@ -1352,7 +1352,7 @@ def main():
     num_days_option = st.sidebar.selectbox(
         "Dataset Time Period",
         options=["july", "august", "september", "all"],
-        index=0,
+        index=3,
         format_func=lambda x: {
             "july": f"July 2016 ({WEEKDAYS_JULY} weekdays)",
             "august": f"August 2016 ({WEEKDAYS_AUGUST} weekdays)",
@@ -1376,7 +1376,8 @@ def main():
     
     # Day filter
     st.sidebar.subheader("Filters")
-    day_options = [1, 2, 3, 4, 5, 6]
+    day_options = [1, 2, 3, 4, 5]  # removed Saturday default
+    # day_options = [1, 2, 3, 4, 5, 6]
     day_labels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
     selected_days = st.sidebar.multiselect(
         "Days to Include",
