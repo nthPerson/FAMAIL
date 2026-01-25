@@ -408,7 +408,7 @@ def compute_service_ratios(
         
         s = supply.get(key, 0)
         
-        if not include_zero_supply and s == 0:
+        if (not include_zero_supply) and (s == 0):
             continue
         
         ratio = s / d
