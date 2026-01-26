@@ -1716,37 +1716,126 @@ def _create_supply_tensor_from_data(
     supply_data: Dict[Tuple, int],
     grid_dims: Tuple[int, int],
     period: Optional[Tuple[int, int]] = None,
+    aggregation: str = 'sum',
 ) -> 'torch.Tensor':
     """
     Convert supply dictionary to grid tensor.
     
     If period is specified, uses only that (time, day) period.
-    Otherwise, sums across all periods.
+    Otherwise, aggregates across all periods using the specified method.
     
     Args:
         supply_data: Dictionary {(x, y, time, day): count}
         grid_dims: Grid dimensions (x, y)
         period: Optional (time, day) tuple to filter
+        aggregation: How to aggregate across periods: 'sum', 'mean', or 'max'
         
     Returns:
         Tensor of shape grid_dims with supply counts
     """
     import torch
     
-    supply_tensor = torch.zeros(grid_dims, dtype=torch.float32)
+    if aggregation == 'mean':
+        # For mean aggregation, we need to track counts and sums separately
+        supply_sum = torch.zeros(grid_dims, dtype=torch.float32)
+        supply_count = torch.zeros(grid_dims, dtype=torch.float32)
+        
+        for key, value in supply_data.items():
+            if len(key) >= 4:
+                x, y, time_val, day_val = key[0], key[1], key[2], key[3]
+                
+                if period is not None:
+                    if (time_val, day_val) != period:
+                        continue
+                
+                if 0 <= x < grid_dims[0] and 0 <= y < grid_dims[1]:
+                    supply_sum[x, y] += value
+                    supply_count[x, y] += 1
+        
+        # Compute mean, avoiding division by zero
+        supply_tensor = torch.where(
+            supply_count > 0,
+            supply_sum / supply_count,
+            torch.zeros_like(supply_sum)
+        )
+        return supply_tensor
     
-    for key, value in supply_data.items():
-        if len(key) >= 4:
-            x, y, time_val, day_val = key[0], key[1], key[2], key[3]
-            
-            if period is not None:
-                if (time_val, day_val) != period:
-                    continue
-            
-            if 0 <= x < grid_dims[0] and 0 <= y < grid_dims[1]:
-                supply_tensor[x, y] += value
+    else:
+        # Sum or max aggregation
+        supply_tensor = torch.zeros(grid_dims, dtype=torch.float32)
+        
+        for key, value in supply_data.items():
+            if len(key) >= 4:
+                x, y, time_val, day_val = key[0], key[1], key[2], key[3]
+                
+                if period is not None:
+                    if (time_val, day_val) != period:
+                        continue
+                
+                if 0 <= x < grid_dims[0] and 0 <= y < grid_dims[1]:
+                    if aggregation == 'max':
+                        supply_tensor[x, y] = max(supply_tensor[x, y].item(), value)
+                    else:  # sum
+                        supply_tensor[x, y] += value
+        
+        return supply_tensor
+
+
+def _create_demand_tensor_from_data(
+    demand_data: Dict[Tuple, float],
+    grid_dims: Tuple[int, int],
+    aggregation: str = 'mean',
+) -> 'torch.Tensor':
+    """
+    Convert demand dictionary to grid tensor with temporal aggregation.
     
-    return supply_tensor
+    This creates demand values that are comparable to the scale used
+    when fitting g(d) - i.e., average demand per cell per time period.
+    
+    Args:
+        demand_data: Dictionary {(x, y, time, day): count} or {(x, y): count}
+        grid_dims: Grid dimensions (x, y)
+        aggregation: How to aggregate: 'sum', 'mean', or 'max'
+        
+    Returns:
+        Tensor of shape grid_dims with demand counts
+    """
+    import torch
+    
+    if aggregation == 'mean':
+        demand_sum = torch.zeros(grid_dims, dtype=torch.float32)
+        demand_count = torch.zeros(grid_dims, dtype=torch.float32)
+        
+        for key, value in demand_data.items():
+            if len(key) >= 2:
+                x, y = key[0], key[1]
+                
+                if 0 <= x < grid_dims[0] and 0 <= y < grid_dims[1]:
+                    demand_sum[x, y] += value
+                    demand_count[x, y] += 1
+        
+        # Compute mean, avoiding division by zero
+        demand_tensor = torch.where(
+            demand_count > 0,
+            demand_sum / demand_count,
+            torch.zeros_like(demand_sum)
+        )
+        return demand_tensor
+    
+    else:
+        demand_tensor = torch.zeros(grid_dims, dtype=torch.float32)
+        
+        for key, value in demand_data.items():
+            if len(key) >= 2:
+                x, y = key[0], key[1]
+                
+                if 0 <= x < grid_dims[0] and 0 <= y < grid_dims[1]:
+                    if aggregation == 'max':
+                        demand_tensor[x, y] = max(demand_tensor[x, y].item(), value)
+                    else:  # sum
+                        demand_tensor[x, y] += value
+        
+        return demand_tensor
 
 
 class FrozenGFunctionLookup:
@@ -1984,6 +2073,10 @@ def _run_comprehensive_gradient_test(
     # SUPPLY AND g(d) CREATION
     # =========================================================================
     
+    # Variables to hold causal fairness data
+    causal_demand_tensor = None  # Real demand data for causal fairness
+    causal_supply_tensor = None  # Real supply data for causal fairness
+    
     if use_real_supply_demand:
         # Load real supply/demand data with full pipeline
         supply_demand_result = _load_supply_demand_data(config)
@@ -2005,14 +2098,41 @@ def _run_comprehensive_gradient_test(
             if 'n_lookup_points' in g_diagnostics:
                 results['supply_demand_diagnostics']['n_lookup_points'] = g_diagnostics['n_lookup_points']
             
-            # Create supply tensor from real data
-            # Sum across all periods to get total supply per cell
-            supply_tensor = _create_supply_tensor_from_data(
+            # =====================================================================
+            # CRITICAL FIX: Use MEAN aggregation (not sum) for supply/demand
+            # 
+            # The g(d) function was fitted on per-period (hourly) service ratios:
+            #   Y = S_hourly / D_hourly
+            # 
+            # To compute meaningful R² values, we must use comparable scales:
+            #   - Supply: Mean hourly active taxis per cell
+            #   - Demand: Mean hourly pickups per cell
+            # 
+            # This ensures Y = S/D is in the same range as the training data.
+            # =====================================================================
+            
+            # Create supply tensor using MEAN across periods (not sum)
+            causal_supply_tensor = _create_supply_tensor_from_data(
                 supply_demand_result['supply'],
                 config['grid_dims'],
-                period=None,  # Sum all periods
+                period=None,
+                aggregation='mean',  # Average hourly supply per cell
             )
-            # No scaling - use actual supply values as-is
+            
+            # Create demand tensor from real pickup_dropoff_counts data
+            # This gives us demand at the same scale as what g(d) was trained on
+            causal_demand_tensor = _create_demand_tensor_from_data(
+                supply_demand_result['demand'],
+                config['grid_dims'],
+                aggregation='mean',  # Average hourly demand per cell
+            )
+            
+            # Record aggregation method in diagnostics
+            results['supply_demand_diagnostics']['supply_aggregation'] = 'mean'
+            results['supply_demand_diagnostics']['demand_aggregation'] = 'mean'
+            
+            # Also keep total supply for reference (spatial fairness uses trajectory counts)
+            supply_tensor = causal_supply_tensor  # Use mean supply for module
     
     if not use_real_supply_demand:
         # Create synthetic supply with known relationship to demand
@@ -2059,8 +2179,16 @@ def _run_comprehensive_gradient_test(
     pickup_test = pickup_coords.clone().detach().requires_grad_(True)
     dropoff_test = dropoff_coords.clone().detach().requires_grad_(True)
     
-    # Forward pass with supply
-    total, terms = module(pickup_test, dropoff_test, supply_tensor=supply_tensor)
+    # Forward pass with supply and demand tensors
+    # - supply_tensor: Mean hourly supply per cell (for causal fairness)
+    # - causal_demand_tensor: Mean hourly demand per cell (for causal fairness)
+    # - Spatial fairness uses soft counts from trajectory coordinates (pickup_test, dropoff_test)
+    total, terms = module(
+        pickup_test,
+        dropoff_test,
+        supply_tensor=supply_tensor,
+        demand_tensor=causal_demand_tensor,  # Real demand data at correct temporal scale
+    )
     
     # Backward pass
     total.backward()
@@ -2081,22 +2209,37 @@ def _run_comprehensive_gradient_test(
         'alpha_causal': config['alpha_causal'],
         'alpha_fidelity': config['alpha_fidelity'],
         
-        # Supply/demand statistics
+        # Supply/demand statistics (for causal fairness)
         'supply_stats': {
             'mean': float(supply_tensor.mean()),
             'std': float(supply_tensor.std()),
             'min': float(supply_tensor.min()),
             'max': float(supply_tensor.max()),
             'nonzero_cells': int((supply_tensor > 0).sum()),
+            'aggregation': 'mean' if use_real_supply_demand else 'synthetic',
         },
-        'demand_stats': {
+        # Trajectory-derived demand counts (for spatial fairness)
+        'trajectory_demand_stats': {
             'mean': float(demand_counts.mean()),
             'std': float(demand_counts.std()),
             'min': float(demand_counts.min()),
             'max': float(demand_counts.max()),
             'nonzero_cells': int((demand_counts > 0).sum()),
+            'source': 'trajectory_soft_counts',
         },
     })
+    
+    # Add causal demand stats if using real data
+    if causal_demand_tensor is not None:
+        results['causal_demand_stats'] = {
+            'mean': float(causal_demand_tensor.mean()),
+            'std': float(causal_demand_tensor.std()),
+            'min': float(causal_demand_tensor.min()),
+            'max': float(causal_demand_tensor.max()),
+            'nonzero_cells': int((causal_demand_tensor > 0).sum()),
+            'source': 'real_pickup_dropoff_counts',
+            'aggregation': 'mean',
+        }
     
     # Add causal debug info if available
     if hasattr(module, '_last_causal_debug'):
@@ -2179,6 +2322,7 @@ def render_integration_tab(config: Dict[str, Any]):
             "Trajectory Data Source",
             ["Generated (Synthetic)", "Real Data (from file)"],
             horizontal=True,
+            index=1,
             help="Generated creates random trajectories. Real loads from a trajectory dataset file."
         )
     
@@ -2244,6 +2388,7 @@ def render_integration_tab(config: Dict[str, Any]):
             "Supply/Demand Data Source",
             ["Synthetic (Generated)", "Real Data (active_taxis + pickup_dropoff_counts)"],
             horizontal=True,
+            index=1,
             help="""
             **Synthetic**: Creates supply with known relationship to demand for testing.
             **Real Data**: Loads actual active_taxis and pickup_dropoff_counts files
@@ -2534,6 +2679,62 @@ def render_integration_tab(config: Dict[str, Any]):
                     - If Var(R) > Var(Y), then g(d) adds noise → R² < 0 (clamped to 0)
                     - **g(d) function**: {g_description}
                     """)
+            
+            # Tensor Statistics (Supply, Trajectory Demand, Causal Demand)
+            with st.expander("📊 Tensor Statistics (Supply/Demand)", expanded=False):
+                st.markdown("""
+                **Note:** After the data compatibility fix, there are two types of demand:
+                - **Trajectory Demand**: Soft cell counts from trajectory pickups (used for F_spatial)
+                - **Causal Demand**: Real pickup counts from active_taxis data (used for F_causal)
+                """)
+                
+                col_t1, col_t2, col_t3 = st.columns(3)
+                
+                with col_t1:
+                    st.markdown("**Supply Tensor**")
+                    if 'supply_stats' in result:
+                        s_stats = result['supply_stats']
+                        st.write(f"Aggregation: {s_stats.get('aggregation', 'N/A')}")
+                        st.write(f"Mean: {s_stats['mean']:.4f}")
+                        st.write(f"Std: {s_stats['std']:.4f}")
+                        st.write(f"Range: [{s_stats['min']:.4f}, {s_stats['max']:.4f}]")
+                        st.write(f"Nonzero cells: {s_stats['nonzero_cells']}")
+                    else:
+                        st.write("N/A")
+                
+                with col_t2:
+                    st.markdown("**Trajectory Demand**")
+                    if 'trajectory_demand_stats' in result:
+                        t_stats = result['trajectory_demand_stats']
+                        st.write(f"Source: {t_stats.get('source', 'N/A')}")
+                        st.write(f"Mean: {t_stats['mean']:.4f}")
+                        st.write(f"Std: {t_stats['std']:.4f}")
+                        st.write(f"Range: [{t_stats['min']:.4f}, {t_stats['max']:.4f}]")
+                        st.write(f"Nonzero cells: {t_stats['nonzero_cells']}")
+                    else:
+                        st.write("N/A")
+                
+                with col_t3:
+                    st.markdown("**Causal Demand**")
+                    if 'causal_demand_stats' in result:
+                        c_stats = result['causal_demand_stats']
+                        st.write(f"Source: {c_stats.get('source', 'N/A')}")
+                        st.write(f"Aggregation: {c_stats.get('aggregation', 'N/A')}")
+                        st.write(f"Mean: {c_stats['mean']:.4f}")
+                        st.write(f"Std: {c_stats['std']:.4f}")
+                        st.write(f"Range: [{c_stats['min']:.4f}, {c_stats['max']:.4f}]")
+                        st.write(f"Nonzero cells: {c_stats['nonzero_cells']}")
+                    else:
+                        st.info("Using trajectory demand (synthetic supply/demand mode)")
+                
+                # Show scale comparison warning if there's a large mismatch
+                if 'supply_stats' in result and 'causal_demand_stats' in result:
+                    s_max = result['supply_stats']['max']
+                    d_max = result['causal_demand_stats']['max']
+                    if d_max > 0:
+                        y_max_estimate = s_max / max(d_max * 0.1, 0.001)  # Rough estimate
+                        if y_max_estimate > 100:
+                            st.warning(f"⚠️ Large scale: Estimated Y=S/D max could be {y_max_estimate:.1f}. If g(d) fitted on smaller data, check diagnostics.")
             
             # Gradient Statistics
             st.markdown("#### 📈 Gradient Statistics")

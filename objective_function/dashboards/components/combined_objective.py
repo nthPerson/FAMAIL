@@ -324,6 +324,7 @@ if TORCH_AVAILABLE:
             pickup_coords: torch.Tensor,
             dropoff_coords: torch.Tensor,
             supply_tensor: Optional[torch.Tensor] = None,
+            demand_tensor: Optional[torch.Tensor] = None,
             trajectory_features: Optional[torch.Tensor] = None,
             reference_features: Optional[torch.Tensor] = None,
         ) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
@@ -334,6 +335,10 @@ if TORCH_AVAILABLE:
                 pickup_coords: Pickup coordinates [n_pickups, 2]
                 dropoff_coords: Dropoff coordinates [n_dropoffs, 2]
                 supply_tensor: Supply per cell [grid_x, grid_y] (for causal term)
+                demand_tensor: Optional demand tensor for causal fairness.
+                    If provided, uses this instead of pickup_soft_counts for causal term.
+                    This allows using real demand data at the correct temporal scale
+                    while still computing spatial fairness from trajectory coordinates.
                 trajectory_features: Trajectory features [batch, seq_len, 4] (for fidelity)
                 reference_features: Reference features for fidelity comparison
                 
@@ -343,16 +348,20 @@ if TORCH_AVAILABLE:
             """
             device = pickup_coords.device
             
-            # Compute soft counts
+            # Compute soft counts from trajectory coordinates
+            # These are used for SPATIAL fairness (what we're optimizing via trajectory modification)
             pickup_soft_counts = self.compute_soft_counts(pickup_coords)
             dropoff_soft_counts = self.compute_soft_counts(dropoff_coords)
             
-            # Compute spatial fairness
+            # Compute spatial fairness using trajectory soft counts
             f_spatial = self.compute_spatial_fairness(pickup_soft_counts, dropoff_soft_counts)
             
             # Compute causal fairness
+            # Use demand_tensor if provided (real demand data at correct temporal scale)
+            # Otherwise fall back to pickup_soft_counts (trajectory-derived demand)
             if supply_tensor is not None:
-                f_causal = self.compute_causal_fairness(pickup_soft_counts, supply_tensor)
+                causal_demand = demand_tensor if demand_tensor is not None else pickup_soft_counts
+                f_causal = self.compute_causal_fairness(causal_demand, supply_tensor)
             else:
                 f_causal = torch.tensor(0.5, device=device)
             
