@@ -254,7 +254,7 @@ Where:
 
 **Decision**: Method B has unacceptable explainability limitations and is **rejected**.
 
-#### Method C: Gradient-Based Attribution — ✅ SELECTED
+#### Method C: Gradient-Based Attribution — ✅ SELECTED (NEEDS UPDATE WITH NEW ATTRIBUTION METHODS)
 
 Use the gradient of the objective function with respect to trajectory parameters:
 
