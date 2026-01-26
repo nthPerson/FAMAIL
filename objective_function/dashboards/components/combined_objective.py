@@ -176,26 +176,76 @@ if TORCH_AVAILABLE:
             self,
             pickup_counts: torch.Tensor,
             dropoff_counts: torch.Tensor,
+            active_taxis_tensor: Optional[torch.Tensor] = None,
         ) -> torch.Tensor:
             """
             Compute differentiable spatial fairness (pairwise Gini).
             
-            F_spatial = 1 - (G_pickup + G_dropoff) / 2
+            If active_taxis_tensor is provided, computes Gini on normalized
+            service rates (DSR_i = O_i / N_i) as per the original formulation:
+            
+                DSR_pickup_i = pickup_i / active_taxis_i
+                DSR_dropoff_i = dropoff_i / active_taxis_i
+            
+            This normalizes by taxi availability to measure true service inequality.
+            
+            F_spatial = 1 - (G_pickup_DSR + G_dropoff_DSR) / 2
             
             Args:
                 pickup_counts: Soft pickup counts [grid_x, grid_y]
                 dropoff_counts: Soft dropoff counts [grid_x, grid_y]
+                active_taxis_tensor: Active taxis per cell [grid_x, grid_y] (optional)
+                    If provided, counts are normalized by active taxis.
+                    If None, raw counts are used (backwards compatible).
                 
             Returns:
                 Spatial fairness score [0, 1]
             """
-            # Flatten counts
-            pickup_flat = pickup_counts.flatten()
-            dropoff_flat = dropoff_counts.flatten()
+            # Normalize by active taxis if provided
+            if active_taxis_tensor is not None:
+                # Compute Departure Service Rate (DSR) = pickups / active_taxis
+                # and Arrival Service Rate (ASR) = dropoffs / active_taxis
+                # Only for cells with active taxis to avoid division by zero
+                active_mask = active_taxis_tensor > self.eps
+                
+                # Normalized pickup rates (DSR)
+                pickup_dsr = torch.zeros_like(pickup_counts)
+                pickup_dsr[active_mask] = pickup_counts[active_mask] / active_taxis_tensor[active_mask]
+                
+                # Normalized dropoff rates (ASR)
+                dropoff_asr = torch.zeros_like(dropoff_counts)
+                dropoff_asr[active_mask] = dropoff_counts[active_mask] / active_taxis_tensor[active_mask]
+                
+                # Flatten normalized rates
+                pickup_flat = pickup_dsr.flatten()
+                dropoff_flat = dropoff_asr.flatten()
+                
+                # Store debug info
+                self._last_spatial_debug = {
+                    'normalization': 'active_taxis',
+                    'n_active_cells': int(active_mask.sum().item()),
+                    'pickup_dsr_range': (pickup_dsr.min().item(), pickup_dsr.max().item()),
+                    'dropoff_asr_range': (dropoff_asr.min().item(), dropoff_asr.max().item()),
+                    'active_taxis_range': (active_taxis_tensor.min().item(), active_taxis_tensor.max().item()),
+                }
+            else:
+                # Flatten raw counts (backwards compatible)
+                pickup_flat = pickup_counts.flatten()
+                dropoff_flat = dropoff_counts.flatten()
+                
+                self._last_spatial_debug = {
+                    'normalization': 'none',
+                    'pickup_range': (pickup_counts.min().item(), pickup_counts.max().item()),
+                    'dropoff_range': (dropoff_counts.min().item(), dropoff_counts.max().item()),
+                }
             
             # Compute pairwise Gini for each
             gini_pickup = self._pairwise_gini(pickup_flat)
             gini_dropoff = self._pairwise_gini(dropoff_flat)
+            
+            # Store Gini values in debug
+            self._last_spatial_debug['gini_pickup'] = gini_pickup.item()
+            self._last_spatial_debug['gini_dropoff'] = gini_dropoff.item()
             
             # Spatial fairness = 1 - average Gini
             f_spatial = 1.0 - 0.5 * (gini_pickup + gini_dropoff)
@@ -325,6 +375,7 @@ if TORCH_AVAILABLE:
             dropoff_coords: torch.Tensor,
             supply_tensor: Optional[torch.Tensor] = None,
             demand_tensor: Optional[torch.Tensor] = None,
+            active_taxis_tensor: Optional[torch.Tensor] = None,
             trajectory_features: Optional[torch.Tensor] = None,
             reference_features: Optional[torch.Tensor] = None,
         ) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
@@ -339,6 +390,10 @@ if TORCH_AVAILABLE:
                     If provided, uses this instead of pickup_soft_counts for causal term.
                     This allows using real demand data at the correct temporal scale
                     while still computing spatial fairness from trajectory coordinates.
+                active_taxis_tensor: Active taxis per cell [grid_x, grid_y] (for spatial term).
+                    If provided, pickup/dropoff counts are normalized by active taxis
+                    to compute proper Departure/Arrival Service Rates (DSR/ASR).
+                    This is the correct formulation: DSR_i = O_i / N_i
                 trajectory_features: Trajectory features [batch, seq_len, 4] (for fidelity)
                 reference_features: Reference features for fidelity comparison
                 
@@ -354,7 +409,12 @@ if TORCH_AVAILABLE:
             dropoff_soft_counts = self.compute_soft_counts(dropoff_coords)
             
             # Compute spatial fairness using trajectory soft counts
-            f_spatial = self.compute_spatial_fairness(pickup_soft_counts, dropoff_soft_counts)
+            # If active_taxis_tensor is provided, counts are normalized to compute DSR/ASR
+            f_spatial = self.compute_spatial_fairness(
+                pickup_soft_counts, 
+                dropoff_soft_counts,
+                active_taxis_tensor=active_taxis_tensor,
+            )
             
             # Compute causal fairness
             # Use demand_tensor if provided (real demand data at correct temporal scale)

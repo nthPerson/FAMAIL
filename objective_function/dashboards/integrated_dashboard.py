@@ -2127,9 +2127,21 @@ def _run_comprehensive_gradient_test(
                 aggregation='mean',  # Average hourly demand per cell
             )
             
+            # Create active_taxis_tensor for spatial fairness normalization
+            # This is the SAME data as supply (active_taxis), but we use mean aggregation
+            # to get average active taxis per cell for normalizing pickup/dropoff counts
+            # DSR_i = pickup_i / active_taxis_i (Departure Service Rate)
+            active_taxis_tensor = _create_supply_tensor_from_data(
+                supply_demand_result['supply'],  # supply IS active_taxis
+                config['grid_dims'],
+                period=None,
+                aggregation='mean',  # Average active taxis per cell
+            )
+            
             # Record aggregation method in diagnostics
             results['supply_demand_diagnostics']['supply_aggregation'] = 'mean'
             results['supply_demand_diagnostics']['demand_aggregation'] = 'mean'
+            results['supply_demand_diagnostics']['spatial_normalization'] = 'active_taxis'
             
             # Also keep total supply for reference (spatial fairness uses trajectory counts)
             supply_tensor = causal_supply_tensor  # Use mean supply for module
@@ -2145,6 +2157,11 @@ def _run_comprehensive_gradient_test(
         noise = torch.randn_like(supply_tensor) * 0.1 * supply_tensor.mean()
         supply_tensor = supply_tensor + noise
         supply_tensor = torch.clamp(supply_tensor, min=0.1)
+        
+        # For synthetic data, also create synthetic active_taxis for normalization
+        # Use the supply tensor as a proxy for active taxis
+        active_taxis_tensor = supply_tensor.clone()
+        causal_demand_tensor = None  # Will use trajectory-derived demand
         
         # Create corresponding g(d) function
         def g_function(d):
@@ -2179,15 +2196,17 @@ def _run_comprehensive_gradient_test(
     pickup_test = pickup_coords.clone().detach().requires_grad_(True)
     dropoff_test = dropoff_coords.clone().detach().requires_grad_(True)
     
-    # Forward pass with supply and demand tensors
+    # Forward pass with supply, demand, and active_taxis tensors
     # - supply_tensor: Mean hourly supply per cell (for causal fairness)
     # - causal_demand_tensor: Mean hourly demand per cell (for causal fairness)
-    # - Spatial fairness uses soft counts from trajectory coordinates (pickup_test, dropoff_test)
+    # - active_taxis_tensor: Mean hourly active taxis per cell (for spatial fairness normalization)
+    # - Spatial fairness computes DSR = soft_counts / active_taxis
     total, terms = module(
         pickup_test,
         dropoff_test,
         supply_tensor=supply_tensor,
         demand_tensor=causal_demand_tensor,  # Real demand data at correct temporal scale
+        active_taxis_tensor=active_taxis_tensor,  # For normalizing pickup/dropoff counts
     )
     
     # Backward pass
@@ -2241,9 +2260,25 @@ def _run_comprehensive_gradient_test(
             'aggregation': 'mean',
         }
     
+    # Add active_taxis stats for spatial normalization
+    if active_taxis_tensor is not None:
+        results['active_taxis_stats'] = {
+            'mean': float(active_taxis_tensor.mean()),
+            'std': float(active_taxis_tensor.std()),
+            'min': float(active_taxis_tensor.min()),
+            'max': float(active_taxis_tensor.max()),
+            'nonzero_cells': int((active_taxis_tensor > 0).sum()),
+            'source': 'real_active_taxis' if use_real_supply_demand else 'synthetic',
+            'aggregation': 'mean',
+        }
+    
     # Add causal debug info if available
     if hasattr(module, '_last_causal_debug'):
         results['causal_debug'] = module._last_causal_debug
+    
+    # Add spatial debug info if available
+    if hasattr(module, '_last_spatial_debug'):
+        results['spatial_debug'] = module._last_spatial_debug
     
     # Check and record pickup gradients
     if pickup_test.grad is None:
@@ -3417,9 +3452,18 @@ def render_integration_tab(config: Dict[str, Any]):
                             config['grid_dims'],
                             aggregation='mean',  # Match supply aggregation
                         )
+                        
+                        # Create active_taxis_tensor for spatial fairness normalization
+                        # DSR_i = pickup_i / active_taxis_i (proper service rate calculation)
+                        active_taxis_tensor = _create_supply_tensor_from_data(
+                            supply_demand_result['supply'],  # supply IS active_taxis
+                            config['grid_dims'],
+                            aggregation='mean',  # Average active taxis per cell
+                        )
                 else:
                     use_real_supply = False
                     causal_demand_tensor = None  # Will use trajectory-derived demand
+                    active_taxis_tensor = None  # Will use raw counts for spatial fairness
                 
                 if not use_real_supply:
                     # Create synthetic supply following: S = factor * D + baseline
@@ -3433,6 +3477,9 @@ def render_integration_tab(config: Dict[str, Any]):
                     noise = torch.randn_like(supply_tensor) * 0.1 * supply_tensor.mean()
                     supply_tensor = supply_tensor + noise
                     supply_tensor = torch.clamp(supply_tensor, min=0.1)
+                    
+                    # For synthetic data, use supply_tensor as active_taxis for normalization
+                    active_taxis_tensor = supply_tensor.clone()
                     
                     # g(d) function matching the supply relationship
                     def g_function(d):
@@ -3463,13 +3510,15 @@ def render_integration_tab(config: Dict[str, Any]):
                 pickup_coords.requires_grad_(True)
                 dropoff_coords.requires_grad_(True)
                 
-                # Pass separate demand_tensor for causal fairness if using real data
-                # This ensures causal term uses demand data at the same temporal scale as g(d)
+                # Pass separate tensors for each fairness term:
+                # - supply_tensor + demand_tensor: for causal fairness (at correct temporal scale)
+                # - active_taxis_tensor: for spatial fairness normalization (DSR = pickups/active_taxis)
                 total, terms = module(
                     pickup_coords, 
                     dropoff_coords, 
                     supply_tensor=supply_tensor,
                     demand_tensor=causal_demand_tensor if use_real_supply else None,
+                    active_taxis_tensor=active_taxis_tensor,  # For normalizing pickup/dropoff counts
                 )
                 
                 step_results['forward'] = {
@@ -3499,9 +3548,24 @@ def render_integration_tab(config: Dict[str, Any]):
                         'aggregation': 'mean',
                     }
                 
+                # Add active_taxis stats for spatial normalization
+                if active_taxis_tensor is not None:
+                    step_results['forward']['active_taxis_stats'] = {
+                        'mean': float(active_taxis_tensor.mean()),
+                        'std': float(active_taxis_tensor.std()),
+                        'min': float(active_taxis_tensor.min()),
+                        'max': float(active_taxis_tensor.max()),
+                        'source': 'real_active_taxis' if use_real_supply else 'synthetic',
+                        'aggregation': 'mean',
+                    }
+                
                 # Add causal debug info
                 if hasattr(module, '_last_causal_debug'):
                     step_results['forward']['causal_debug'] = module._last_causal_debug
+                
+                # Add spatial debug info
+                if hasattr(module, '_last_spatial_debug'):
+                    step_results['forward']['spatial_debug'] = module._last_spatial_debug
                 
                 progress.progress(3/6)
                 
