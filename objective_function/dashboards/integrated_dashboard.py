@@ -3394,6 +3394,7 @@ def render_integration_tab(config: Dict[str, Any]):
                     if supply_demand_result.get('error'):
                         st.warning(f"⚠️ Could not load real supply data: {supply_demand_result.get('diagnostics', {}).get('error', 'Unknown')}. Falling back to synthetic.")
                         use_real_supply = False
+                        causal_demand_tensor = None  # Will use trajectory-derived demand
                     else:
                         use_real_supply = True
                         step_results['supply_demand_diagnostics'] = supply_demand_result['diagnostics']
@@ -3402,14 +3403,23 @@ def render_integration_tab(config: Dict[str, Any]):
                         g_function, g_diag = _create_frozen_g_function(supply_demand_result, config)
                         step_results['g_function_diagnostics'] = g_diag
                         
-                        # Create supply tensor from real data
+                        # Create supply tensor from real data with MEAN aggregation
+                        # (to match the temporal scale at which g(d) was fitted)
                         supply_tensor = _create_supply_tensor_from_data(
                             supply_demand_result['supply'],
                             config['grid_dims'],
+                            aggregation='mean',  # Critical: use mean, not sum
                         )
-                        # No scaling - use actual supply values as-is
+                        
+                        # Create demand tensor from real data for causal fairness
+                        causal_demand_tensor = _create_demand_tensor_from_data(
+                            supply_demand_result['demand'],
+                            config['grid_dims'],
+                            aggregation='mean',  # Match supply aggregation
+                        )
                 else:
                     use_real_supply = False
+                    causal_demand_tensor = None  # Will use trajectory-derived demand
                 
                 if not use_real_supply:
                     # Create synthetic supply following: S = factor * D + baseline
@@ -3453,7 +3463,14 @@ def render_integration_tab(config: Dict[str, Any]):
                 pickup_coords.requires_grad_(True)
                 dropoff_coords.requires_grad_(True)
                 
-                total, terms = module(pickup_coords, dropoff_coords, supply_tensor=supply_tensor)
+                # Pass separate demand_tensor for causal fairness if using real data
+                # This ensures causal term uses demand data at the same temporal scale as g(d)
+                total, terms = module(
+                    pickup_coords, 
+                    dropoff_coords, 
+                    supply_tensor=supply_tensor,
+                    demand_tensor=causal_demand_tensor if use_real_supply else None,
+                )
                 
                 step_results['forward'] = {
                     'status': 'success',
@@ -3461,7 +3478,26 @@ def render_integration_tab(config: Dict[str, Any]):
                     'f_spatial': terms['f_spatial'].item(),
                     'f_causal': terms['f_causal'].item(),
                     'f_fidelity': terms['f_fidelity'].item(),
+                    # Add tensor statistics for diagnostics
+                    'supply_stats': {
+                        'mean': float(supply_tensor.mean()),
+                        'std': float(supply_tensor.std()),
+                        'min': float(supply_tensor.min()),
+                        'max': float(supply_tensor.max()),
+                        'aggregation': 'mean' if use_real_supply else 'synthetic',
+                    },
                 }
+                
+                # Add causal demand stats if using real data
+                if causal_demand_tensor is not None:
+                    step_results['forward']['causal_demand_stats'] = {
+                        'mean': float(causal_demand_tensor.mean()),
+                        'std': float(causal_demand_tensor.std()),
+                        'min': float(causal_demand_tensor.min()),
+                        'max': float(causal_demand_tensor.max()),
+                        'source': 'real_pickup_dropoff_counts',
+                        'aggregation': 'mean',
+                    }
                 
                 # Add causal debug info
                 if hasattr(module, '_last_causal_debug'):
