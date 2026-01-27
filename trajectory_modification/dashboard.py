@@ -244,13 +244,13 @@ def trajectory_selection_section():
                 marker=dict(size=6)
             ))
             
-            # Highlight pickup location (estimated)
-            pickup_idx = int(len(traj.states) * 0.7)
+            # Highlight pickup location (always the last state in trajectory)
+            pickup_idx = len(traj.states) - 1
             fig.add_trace(go.Scatter(
                 x=[x_coords[pickup_idx]],
                 y=[y_coords[pickup_idx]],
                 mode='markers',
-                name='Estimated Pickup',
+                name='Pickup Location',
                 marker=dict(color='red', size=15, symbol='star')
             ))
             
@@ -304,9 +304,61 @@ def run_modification_section(selected_indices: List[int], params: Dict):
         show_iterations = st.checkbox("Show Iteration Details", value=True)
         save_results = st.checkbox("Save Results to File", value=False)
     
+    # Gradient mode configuration
+    st.subheader("🎯 Gradient Configuration")
+    
+    grad_col1, grad_col2 = st.columns(2)
+    
+    with grad_col1:
+        gradient_mode = st.radio(
+            "Gradient Mode",
+            ["soft_cell", "heuristic"],
+            index=0,
+            help="""
+            **soft_cell**: Use soft cell assignment for differentiable gradient flow.
+            Gradients flow from objective through soft counts to pickup location.
+            More accurate but computationally heavier.
+            
+            **heuristic**: Use heuristic gradient based on local DSR differences.
+            Points toward underserved neighboring cells. Faster but less precise.
+            """
+        )
+    
+    with grad_col2:
+        if gradient_mode == "soft_cell":
+            temperature = st.number_input(
+                "Temperature (τ)",
+                min_value=0.01,
+                max_value=5.0,
+                value=1.0,
+                step=0.1,
+                help="Soft assignment temperature. Lower = sharper (more like hard), Higher = softer (more spread)"
+            )
+            
+            use_annealing = st.checkbox(
+                "Temperature Annealing",
+                value=False,
+                help="Gradually reduce temperature from τ_max to τ_min over iterations"
+            )
+            
+            if use_annealing:
+                tau_max = st.number_input("τ_max", 0.1, 5.0, 1.0, 0.1)
+                tau_min = st.number_input("τ_min", 0.01, 1.0, 0.1, 0.01)
+            else:
+                tau_max, tau_min = 1.0, 0.1
+        else:
+            temperature, use_annealing, tau_max, tau_min = 1.0, False, 1.0, 0.1
+    
     if st.button("▶️ Run Modification", type="primary"):
-        _execute_modification(selected_indices, params, use_discriminator, show_iterations, 
-                              checkpoint_path if use_discriminator else None)
+        _execute_modification(
+            selected_indices, params, use_discriminator, show_iterations, 
+            checkpoint_path if use_discriminator else None,
+            gradient_mode=gradient_mode,
+            temperature=temperature,
+            use_annealing=use_annealing,
+            tau_max=tau_max,
+            tau_min=tau_min,
+        )
 
 
 def _execute_modification(
@@ -315,6 +367,11 @@ def _execute_modification(
     use_discriminator: bool,
     show_iterations: bool,
     checkpoint_path: Optional[str] = None,
+    gradient_mode: str = 'soft_cell',
+    temperature: float = 1.0,
+    use_annealing: bool = False,
+    tau_max: float = 1.0,
+    tau_min: float = 0.1,
 ):
     """Execute the ST-iFGSM modification algorithm."""
     from trajectory_modification import (
@@ -327,6 +384,9 @@ def _execute_modification(
     
     device = 'cuda' if TORCH_AVAILABLE and torch.cuda.is_available() else 'cpu'
     st.write(f"Running on device: **{device}**")
+    st.write(f"Gradient mode: **{gradient_mode}**")
+    if gradient_mode == 'soft_cell':
+        st.write(f"Temperature: **{temperature}** {'(with annealing)' if use_annealing else ''}")
     
     # Initialize components
     discriminator = None
@@ -368,14 +428,20 @@ def _execute_modification(
         st.error(f"❌ Failed to initialize objective function: {e}")
         return
     
-    # Create modifier
+    # Create modifier with gradient configuration
     modifier = TrajectoryModifier(
         objective_fn=objective,
         alpha=params['alpha'],
         epsilon=params['epsilon'],
         max_iterations=params['max_iterations'],
         convergence_threshold=params['convergence_threshold'],
+        gradient_mode=gradient_mode,
+        temperature=temperature,
+        temperature_annealing=use_annealing,
+        tau_max=tau_max,
+        tau_min=tau_min,
     )
+    st.success(f"✅ Modifier initialized with {gradient_mode} gradients")
     
     # Set global state (now with both pickup and dropoff)
     modifier.set_global_state(
@@ -412,10 +478,10 @@ def _execute_modification(
             history = modifier.modify_single(traj)
             histories.append(history)
             
-            # Update metrics
+            # Update metrics (pickup is always the last state)
             if history.iterations:
-                orig_state = traj.states[int(len(traj.states) * 0.7)]
-                mod_state = history.modified.states[int(len(history.modified.states) * 0.7)]
+                orig_state = traj.states[-1]  # Pickup is last state
+                mod_state = history.modified.states[-1]  # Modified pickup is also last state
                 metrics.update_pickup(
                     old_cell=(int(orig_state.x_grid), int(orig_state.y_grid)),
                     new_cell=(int(mod_state.x_grid), int(mod_state.y_grid)),

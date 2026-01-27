@@ -58,6 +58,12 @@ class TrajectoryModifier:
        c. Apply perturbation: δ = clip(α · sign[∇L], -ε, ε)
        d. Update pickup: τ' = project(τ' + δ)
     3. Terminate when converged or max_iterations reached
+    
+    Gradient Modes:
+    - 'soft_cell': Use soft cell assignment for differentiable gradient flow.
+                  Gradients flow from objective through soft counts to pickup location.
+    - 'heuristic': Use heuristic gradient pointing toward underserved areas.
+                   Based on local DSR differences in neighboring cells.
     """
     
     def __init__(
@@ -68,6 +74,12 @@ class TrajectoryModifier:
         epsilon: float = 3.0,     # Max perturbation per dimension
         max_iterations: int = 50,
         convergence_threshold: float = 1e-4,
+        gradient_mode: str = 'soft_cell',  # 'soft_cell' or 'heuristic'
+        temperature: float = 1.0,
+        temperature_annealing: bool = False,
+        tau_max: float = 1.0,
+        tau_min: float = 0.1,
+        neighborhood_size: int = 5,
     ):
         self.objective_fn = objective_fn
         self.grid_dims = grid_dims
@@ -76,11 +88,43 @@ class TrajectoryModifier:
         self.max_iterations = max_iterations
         self.convergence_threshold = convergence_threshold
         
+        # Gradient mode configuration
+        if gradient_mode not in ('soft_cell', 'heuristic'):
+            raise ValueError(f"gradient_mode must be 'soft_cell' or 'heuristic', got '{gradient_mode}'")
+        self.gradient_mode = gradient_mode
+        
+        # Soft cell assignment configuration
+        self.temperature = temperature
+        self.temperature_annealing = temperature_annealing
+        self.tau_max = tau_max
+        self.tau_min = tau_min
+        self.neighborhood_size = neighborhood_size
+        
+        # Initialize soft cell assignment module if using soft_cell mode
+        self.soft_assign = None
+        if gradient_mode == 'soft_cell':
+            try:
+                from objective_function.soft_cell_assignment import SoftCellAssignment
+                self.soft_assign = SoftCellAssignment(
+                    grid_dims=grid_dims,
+                    neighborhood_size=neighborhood_size,
+                    initial_temperature=temperature,
+                )
+            except ImportError:
+                raise ImportError(
+                    "SoftCellAssignment required for gradient_mode='soft_cell'. "
+                    "Install objective_function.soft_cell_assignment or use gradient_mode='heuristic'."
+                )
+        
         # State accumulators (updated during modification)
         self.pickup_counts = None
         self.dropoff_counts = None
         self.supply_counts = None
         self.active_taxis = None
+        
+        # Base counts (original counts without current trajectory's contribution)
+        self._base_pickup_counts = None
+        self._base_dropoff_counts = None
     
     def set_global_state(
         self,
@@ -102,14 +146,25 @@ class TrajectoryModifier:
         self.pickup_counts = pickup_counts.clone()
         self.dropoff_counts = dropoff_counts.clone()
         self.active_taxis = active_taxis.clone()
-        # Supply defaults to dropoff counts if not provided separately
+        # Supply defaults to dropoff counts if not provided separately 
         self.supply_counts = supply_counts.clone() if supply_counts is not None else self.dropoff_counts.clone()
+        
+        # Store base counts for soft cell computation (without current trajectory)
+        # These are used to compute soft counts during optimization
+        self._base_pickup_counts = pickup_counts.clone()
+        self._base_dropoff_counts = dropoff_counts.clone() 
     
     def _get_pickup_index(self, trajectory: Trajectory) -> int:
-        """Find the index of pickup state (transition from seeking to occupied)."""
-        # Heuristic: pickup is typically around 60-80% into trajectory
-        # In practice, this should be detected from occupancy changes
-        return int(len(trajectory.states) * 0.7)
+        """
+        Get the index of the pickup state in the trajectory.
+        
+        The pickup location is always the final state in the trajectory,
+        as trajectories represent the path from passenger-seeking to pickup.
+        
+        Returns:
+            Index of the last state (pickup location)
+        """
+        return len(trajectory.states) - 1
     
     def _update_counts(
         self,
@@ -136,6 +191,61 @@ class TrajectoryModifier:
         clipped[1] = np.clip(clipped[1], 0, self.grid_dims[1] - 1)
         return clipped
     
+    def _get_annealed_temperature(self, iteration: int) -> float:
+        """Compute annealed temperature for current iteration."""
+        if not self.temperature_annealing:
+            return self.temperature
+        if self.max_iterations <= 1:
+            return self.tau_min
+        progress = iteration / (self.max_iterations - 1)
+        return self.tau_max * (self.tau_min / self.tau_max) ** progress
+    
+    def _compute_soft_pickup_counts(
+        self,
+        pickup_location: torch.Tensor,
+        original_cell: torch.Tensor,
+    ) -> torch.Tensor:
+        """
+        Compute differentiable pickup counts using soft cell assignment.
+        
+        The soft counts enable gradient flow from the objective back to
+        the pickup location, which is essential for gradient-based optimization.
+        
+        Args:
+            pickup_location: Current pickup location [2] (x, y) - requires_grad=True
+            original_cell: Original cell index [2] (x, y)
+            
+        Returns:
+            Soft pickup counts [grid_x, grid_y] with gradient connection to pickup_location
+        """
+        device = pickup_location.device
+        k = self.soft_assign.k
+        
+        # Get soft assignment probabilities [1, ns, ns]
+        loc = pickup_location.unsqueeze(0)  # [1, 2]
+        cell = original_cell.unsqueeze(0).float()  # [1, 2]
+        probs = self.soft_assign(loc, cell)  # [1, ns, ns]
+        
+        # Start with base counts (without this trajectory's original contribution)
+        # We need to subtract the original hard assignment
+        soft_counts = self._base_pickup_counts.clone()
+        ox, oy = int(original_cell[0].item()), int(original_cell[1].item())
+        if 0 <= ox < self.grid_dims[0] and 0 <= oy < self.grid_dims[1]:
+            soft_counts[ox, oy] = soft_counts[ox, oy] - 1.0
+        
+        # Add soft assignment to counts
+        # This is where gradients flow: probs depends on pickup_location
+        cx, cy = int(original_cell[0].item()), int(original_cell[1].item())
+        for di in range(-k, k + 1):
+            for dj in range(-k, k + 1):
+                ni, nj = cx + di, cy + dj
+                if 0 <= ni < self.grid_dims[0] and 0 <= nj < self.grid_dims[1]:
+                    # Add probability mass to this cell
+                    # The gradient will flow: soft_counts -> probs -> pickup_location
+                    soft_counts[ni, nj] = soft_counts[ni, nj] + probs[0, di + k, dj + k]
+        
+        return soft_counts
+
     def modify_single(
         self,
         trajectory: Trajectory,
@@ -146,6 +256,12 @@ class TrajectoryModifier:
         
         This is the core ST-iFGSM loop:
         δ = clip(α · sign[∇L], -ε, ε)
+        
+        When gradient_mode='soft_cell', gradients flow through soft cell assignment:
+            pickup_location -> soft_probs -> soft_counts -> objective -> gradient
+        
+        When gradient_mode='heuristic', gradients are estimated from local DSR:
+            pickup_location -> heuristic (neighbor DSR comparison) -> gradient
         
         Args:
             trajectory: Original trajectory to modify
@@ -159,11 +275,15 @@ class TrajectoryModifier:
         
         device = self.pickup_counts.device if self.pickup_counts is not None else 'cpu'
         
-        # Get pickup location index
+        # Move soft_assign to device if using soft cell mode
+        if self.gradient_mode == 'soft_cell' and self.soft_assign is not None:
+            self.soft_assign = self.soft_assign.to(device)
+        
+        # Get pickup location index (always the last state in trajectory)
         pickup_idx = self._get_pickup_index(trajectory)
         pickup_state = trajectory.states[pickup_idx]
         
-        # Initialize modified trajectory
+        # Initialize modified trajectory: \tau' = \tau
         modified = trajectory.clone()
         
         # Track cumulative perturbation
@@ -171,12 +291,18 @@ class TrajectoryModifier:
         
         # Original pickup location for fidelity computation
         original_pickup = np.array([pickup_state.x_grid, pickup_state.y_grid], dtype=np.float32)
+        original_cell = torch.tensor([int(pickup_state.x_grid), int(pickup_state.y_grid)], device=device)
         current_pickup = original_pickup.copy()
         
         iterations: List[ModificationResult] = []
         prev_objective = float('-inf')
         
         for t in range(self.max_iterations):
+            # Update temperature if annealing is enabled
+            if self.gradient_mode == 'soft_cell' and self.temperature_annealing:
+                current_temp = self._get_annealed_temperature(t)
+                self.soft_assign.set_temperature(current_temp)
+            
             # Current pickup as differentiable tensor
             pickup_tensor = torch.tensor(
                 current_pickup, 
@@ -190,27 +316,44 @@ class TrajectoryModifier:
             tau_features = trajectory.to_tensor().unsqueeze(0).to(device)
             tau_prime_features = modified.to_tensor().unsqueeze(0).to(device)
             
-            # Compute objective using the updated signature
-            # The objective now requires: pickup_counts, dropoff_counts, supply, active_taxis
-            total, terms = self.objective_fn(
-                pickup_counts=self.pickup_counts,
-                dropoff_counts=self.dropoff_counts,
-                supply=self.supply_counts,
-                active_taxis=self.active_taxis,
-                tau_features=tau_features,
-                tau_prime_features=tau_prime_features,
-            )
-            
-            # Compute gradient w.r.t. pickup location
-            # This requires pickup_tensor to influence the counts
-            total.backward(retain_graph=True)
-            
-            # Get gradient (use sign for stability)
-            if pickup_tensor.grad is not None:
-                grad = pickup_tensor.grad.detach().cpu().numpy()
-                grad_norm = np.linalg.norm(grad)
-            else:
-                # No gradient flow - use heuristic gradient toward underserved areas
+            # Compute counts based on gradient mode
+            if self.gradient_mode == 'soft_cell':
+                # Use soft cell assignment for differentiable counts
+                soft_pickup_counts = self._compute_soft_pickup_counts(pickup_tensor, original_cell)
+                
+                # Compute objective with soft counts (gradients flow through)
+                total, terms = self.objective_fn(
+                    pickup_counts=soft_pickup_counts,
+                    dropoff_counts=self.dropoff_counts,
+                    supply=self.supply_counts,
+                    active_taxis=self.active_taxis,
+                    tau_features=tau_features,
+                    tau_prime_features=tau_prime_features,
+                )
+                
+                # Backward pass - gradients should flow to pickup_tensor
+                total.backward(retain_graph=True)
+                
+                if pickup_tensor.grad is not None:
+                    grad = pickup_tensor.grad.detach().cpu().numpy()
+                    grad_norm = np.linalg.norm(grad)
+                else:
+                    # Fallback to heuristic if soft cell didn't produce gradients
+                    grad = self._compute_heuristic_gradient(current_pickup)
+                    grad_norm = np.linalg.norm(grad)
+                    
+            else:  # gradient_mode == 'heuristic'
+                # Use pre-aggregated counts (no gradient flow)
+                total, terms = self.objective_fn(
+                    pickup_counts=self.pickup_counts,
+                    dropoff_counts=self.dropoff_counts,
+                    supply=self.supply_counts,
+                    active_taxis=self.active_taxis,
+                    tau_features=tau_features,
+                    tau_prime_features=tau_prime_features,
+                )
+                
+                # Use heuristic gradient
                 grad = self._compute_heuristic_gradient(current_pickup)
                 grad_norm = np.linalg.norm(grad)
             
@@ -231,14 +374,14 @@ class TrajectoryModifier:
             new_pickup = self._clip_to_grid(original_pickup + cumulative_delta)
             new_cell = (int(new_pickup[0]), int(new_pickup[1]))
             
-            # Update global counts if cell changed
+            # Update global counts if cell changed (for heuristic mode tracking)
             if old_cell != new_cell:
                 self._update_counts(old_cell, new_cell)
             
             current_pickup = new_pickup
             
-            # Update modified trajectory
-            modified.apply_perturbation(pickup_idx, cumulative_delta)
+            # Update modified trajectory (apply_perturbation always modifies the last state)
+            modified = modified.apply_perturbation(cumulative_delta)
             
             # Record iteration
             result = ModificationResult(
