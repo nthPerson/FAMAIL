@@ -72,8 +72,8 @@ def load_data_section():
     # Check for required files
     data_files = {
         'trajectories': workspace_root / 'source_data' / 'passenger_seeking_trajs_45-800.pkl',
-        'all_trajs': workspace_root / 'source_data' / 'all_trajs.pkl',
-        'traffic': workspace_root / 'source_data' / 'latest_traffic.pkl',
+        'pickup_dropoff': workspace_root / 'source_data' / 'pickup_dropoff_counts.pkl',
+        'active_taxis': workspace_root / 'source_data' / 'active_taxis_5x5_hourly.pkl',
         'discriminator': workspace_root / 'discriminator' / 'model' / 'checkpoints',
     }
     
@@ -85,23 +85,43 @@ def load_data_section():
     
     # Load button
     max_trajs = st.sidebar.number_input("Max Trajectories", 10, 1000, 100, step=10)
-    
+
+    # with st.spinner("Loading data..."):
+    #     try:
+    #         from trajectory_modification import DataBundle
+    #         bundle = DataBundle.load_default(max_trajectories=max_trajs)
+    #         # bundle = DataBundle.load_default(max_trajectories=max_trajs, workspace_root=workspace_root)
+    #         st.session_state.trajectories = bundle.trajectories
+    #         st.session_state.pickup_counts = bundle.pickup_counts
+    #         st.session_state.supply_counts = bundle.supply_counts
+    #         st.session_state.active_taxis = bundle.active_taxis
+    #         st.session_state.g_function = bundle.g_function
+    #         st.session_state.data_loaded = True
+    #         st.sidebar.success(f"Loaded {len(bundle.trajectories)} trajectories")
+    #     except FileNotFoundError as e:
+    #         st.sidebar.error(f"File not found: {e}")
+    #     except Exception as e:
+    #         st.sidebar.error(f"Error loading data: {e.with_traceback()}")    
     if st.sidebar.button("Load Data", type="primary"):
         with st.spinner("Loading data..."):
             try:
                 from trajectory_modification import DataBundle
                 bundle = DataBundle.load_default(max_trajectories=max_trajs)
                 st.session_state.trajectories = bundle.trajectories
-                st.session_state.pickup_counts = bundle.pickup_counts
-                st.session_state.supply_counts = bundle.supply_counts
-                st.session_state.active_taxis = bundle.active_taxis
+                st.session_state.pickup_dropoff_data = bundle.pickup_dropoff_data
+                st.session_state.pickup_grid = bundle.pickup_grid
+                st.session_state.dropoff_grid = bundle.dropoff_grid
+                st.session_state.active_taxis_data = bundle.active_taxis_data
+                st.session_state.active_taxis_grid = bundle.active_taxis_grid
                 st.session_state.g_function = bundle.g_function
                 st.session_state.data_loaded = True
                 st.sidebar.success(f"Loaded {len(bundle.trajectories)} trajectories")
             except FileNotFoundError as e:
                 st.sidebar.error(f"File not found: {e}")
             except Exception as e:
-                st.sidebar.error(f"Error loading data: {e.with_traceback()}")
+                import traceback
+                st.sidebar.error(f"Error loading data: {e}")
+                st.sidebar.code(traceback.format_exc())
     
     return st.session_state.data_loaded
 
@@ -164,6 +184,11 @@ def trajectory_selection_section():
         return None
     
     trajectories = st.session_state.trajectories
+    
+    # Guard against empty trajectory list
+    if not trajectories:
+        st.warning("No trajectories loaded. Please check your data files.")
+        return None
     
     col1, col2 = st.columns([1, 2])
     
@@ -271,7 +296,8 @@ def run_modification_section(selected_indices: List[int], params: Dict):
         if use_discriminator:
             checkpoint_path = st.text_input(
                 "Checkpoint Path",
-                "discriminator/model/checkpoints/best_model.pt"
+                "discriminator/model/checkpoints/pass-seek_5000-20000_(84ident_72same_44diff)/best.pt"  # this is the model with the best performance
+                # "discriminator/model/checkpoints/best_model.pt"
             )
     
     with col2:
@@ -279,14 +305,16 @@ def run_modification_section(selected_indices: List[int], params: Dict):
         save_results = st.checkbox("Save Results to File", value=False)
     
     if st.button("▶️ Run Modification", type="primary"):
-        _execute_modification(selected_indices, params, use_discriminator, show_iterations)
+        _execute_modification(selected_indices, params, use_discriminator, show_iterations, 
+                              checkpoint_path if use_discriminator else None)
 
 
 def _execute_modification(
     selected_indices: List[int], 
     params: Dict, 
     use_discriminator: bool,
-    show_iterations: bool
+    show_iterations: bool,
+    checkpoint_path: Optional[str] = None,
 ):
     """Execute the ST-iFGSM modification algorithm."""
     from trajectory_modification import (
@@ -294,6 +322,7 @@ def _execute_modification(
         FAMAILObjective, 
         GlobalMetrics,
         DiscriminatorAdapter,
+        MissingComponentError,
     )
     
     device = 'cuda' if TORCH_AVAILABLE and torch.cuda.is_available() else 'cpu'
@@ -303,24 +332,41 @@ def _execute_modification(
     discriminator = None
     if use_discriminator:
         try:
-            adapter = DiscriminatorAdapter()
-            checkpoint_dir = Path(__file__).parent.parent / 'discriminator' / 'model' / 'checkpoints'
-            if adapter.load_checkpoint(checkpoint_dir):
-                discriminator = adapter.model
-                st.success("✅ Discriminator loaded")
+            # Use the checkpoint path provided by the user
+            workspace_root = Path(__file__).parent.parent
+            if checkpoint_path:
+                full_checkpoint_path = workspace_root / checkpoint_path
             else:
-                st.warning("⚠️ Could not load discriminator, using default fidelity")
+                # Default fallback path
+                full_checkpoint_path = workspace_root / 'discriminator' / 'model' / 'checkpoints' / 'pass-seek_5000-20000_(84ident_72same_44diff)' / 'best.pt'
+            
+            st.info(f"Loading discriminator from: `{full_checkpoint_path}`")
+            
+            if full_checkpoint_path.exists():
+                adapter = DiscriminatorAdapter(checkpoint_path=full_checkpoint_path, device=device)
+                discriminator = adapter.model
+                st.success("✅ Discriminator loaded successfully")
+            else:
+                st.error(f"❌ Discriminator checkpoint not found: {full_checkpoint_path}")
+                st.warning("Fidelity term will raise an error. Please provide a valid checkpoint path.")
         except Exception as e:
-            st.warning(f"⚠️ Discriminator error: {e}")
+            st.error(f"❌ Error loading discriminator: {e}")
+            import traceback
+            st.code(traceback.format_exc())
     
     # Create objective function
-    objective = FAMAILObjective(
-        alpha_spatial=params['alpha_spatial'],
-        alpha_causal=params['alpha_causal'],
-        alpha_fidelity=params['alpha_fidelity'],
-        g_function=st.session_state.g_function,
-        discriminator=discriminator,
-    )
+    try:
+        objective = FAMAILObjective(
+            alpha_spatial=params['alpha_spatial'],
+            alpha_causal=params['alpha_causal'],
+            alpha_fidelity=params['alpha_fidelity'],
+            g_function=st.session_state.g_function,
+            discriminator=discriminator,
+        )
+        st.success("✅ Objective function initialized")
+    except ImportError as e:
+        st.error(f"❌ Failed to initialize objective function: {e}")
+        return
     
     # Create modifier
     modifier = TrajectoryModifier(
@@ -331,11 +377,11 @@ def _execute_modification(
         convergence_threshold=params['convergence_threshold'],
     )
     
-    # Set global state
+    # Set global state (now with both pickup and dropoff)
     modifier.set_global_state(
-        pickup_counts=torch.tensor(st.session_state.pickup_counts, device=device, dtype=torch.float32),
-        supply_counts=torch.tensor(st.session_state.supply_counts, device=device, dtype=torch.float32),
-        active_taxis=torch.tensor(st.session_state.active_taxis, device=device, dtype=torch.float32),
+        pickup_counts=torch.tensor(st.session_state.pickup_grid, device=device, dtype=torch.float32),
+        dropoff_counts=torch.tensor(st.session_state.dropoff_grid, device=device, dtype=torch.float32),
+        active_taxis=torch.tensor(st.session_state.active_taxis_grid, device=device, dtype=torch.float32),
     )
     
     # Initialize metrics tracker
@@ -344,9 +390,9 @@ def _execute_modification(
         alpha_weights=(params['alpha_spatial'], params['alpha_causal'], params['alpha_fidelity'])
     )
     metrics.initialize_from_data(
-        st.session_state.pickup_counts,
-        st.session_state.supply_counts,
-        st.session_state.active_taxis,
+        st.session_state.pickup_grid,
+        st.session_state.dropoff_grid,
+        st.session_state.active_taxis_grid,
     )
     
     # Record initial metrics
@@ -522,7 +568,7 @@ def heatmap_section():
     with col1:
         st.subheader("Before Modification")
         fig = px.imshow(
-            st.session_state.pickup_counts.T,
+            st.session_state.pickup_grid.T,
             labels={'x': 'Grid X', 'y': 'Grid Y', 'color': 'Pickups'},
             title="Original Pickup Distribution",
             aspect='auto',
@@ -534,11 +580,11 @@ def heatmap_section():
         st.subheader("After Modification")
         
         # Get modified counts if available
-        if hasattr(st.session_state, 'modified_pickup_counts'):
-            modified_counts = st.session_state.modified_pickup_counts
+        if hasattr(st.session_state, 'modified_pickup_grid'):
+            modified_counts = st.session_state.modified_pickup_grid
         else:
             # Use original if no modifications yet
-            modified_counts = st.session_state.pickup_counts
+            modified_counts = st.session_state.pickup_grid
         
         fig = px.imshow(
             modified_counts.T,

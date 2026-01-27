@@ -78,19 +78,32 @@ class TrajectoryModifier:
         
         # State accumulators (updated during modification)
         self.pickup_counts = None
+        self.dropoff_counts = None
         self.supply_counts = None
         self.active_taxis = None
     
     def set_global_state(
         self,
         pickup_counts: torch.Tensor,
-        supply_counts: torch.Tensor,
-        active_taxis: Optional[torch.Tensor] = None,
+        dropoff_counts: torch.Tensor,
+        active_taxis: torch.Tensor,
+        supply_counts: Optional[torch.Tensor] = None,
     ):
-        """Set the global pickup/supply counts for fairness computation."""
+        """
+        Set the global counts for fairness computation.
+        
+        Args:
+            pickup_counts: Pickup counts per cell [grid_x, grid_y]
+            dropoff_counts: Dropoff counts per cell [grid_x, grid_y]
+            active_taxis: Active taxis per cell [grid_x, grid_y]
+            supply_counts: Optional separate supply tensor for causal fairness.
+                          If not provided, dropoff_counts is used as supply.
+        """
         self.pickup_counts = pickup_counts.clone()
-        self.supply_counts = supply_counts.clone()
-        self.active_taxis = active_taxis.clone() if active_taxis is not None else None
+        self.dropoff_counts = dropoff_counts.clone()
+        self.active_taxis = active_taxis.clone()
+        # Supply defaults to dropoff counts if not provided separately
+        self.supply_counts = supply_counts.clone() if supply_counts is not None else self.dropoff_counts.clone()
     
     def _get_pickup_index(self, trajectory: Trajectory) -> int:
         """Find the index of pickup state (transition from seeking to occupied)."""
@@ -172,17 +185,20 @@ class TrajectoryModifier:
                 requires_grad=True
             )
             
-            # Build fidelity tensors if discriminator available
-            tau_features = trajectory.to_discriminator_format(device)
-            tau_prime_features = modified.to_discriminator_format(device)
+            # Build fidelity tensors for discriminator
+            # to_tensor() returns [seq_len, 4], we add batch dimension [1, seq_len, 4]
+            tau_features = trajectory.to_tensor().unsqueeze(0).to(device)
+            tau_prime_features = modified.to_tensor().unsqueeze(0).to(device)
             
-            # Compute objective
+            # Compute objective using the updated signature
+            # The objective now requires: pickup_counts, dropoff_counts, supply, active_taxis
             total, terms = self.objective_fn(
                 pickup_counts=self.pickup_counts,
+                dropoff_counts=self.dropoff_counts,
                 supply=self.supply_counts,
+                active_taxis=self.active_taxis,
                 tau_features=tau_features,
                 tau_prime_features=tau_prime_features,
-                active_taxis=self.active_taxis,
             )
             
             # Compute gradient w.r.t. pickup location

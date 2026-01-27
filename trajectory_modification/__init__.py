@@ -16,12 +16,18 @@ Components:
 from .trajectory import Trajectory, TrajectoryState
 from .modifier import TrajectoryModifier, ModificationResult, ModificationHistory
 from .discriminator_adapter import DiscriminatorAdapter
-from .objective import FAMAILObjective
+from .objective import (
+    FAMAILObjective,
+    MissingDataError,
+    MissingComponentError,
+    InsufficientDataError,
+)
 from .metrics import GlobalMetrics, FairnessSnapshot
 from .data_loader import (
     DataBundle,
     TrajectoryLoader,
-    SupplyDemandLoader,
+    PickupDropoffLoader,
+    ActiveTaxisLoader,
     GFunctionLoader,
 )
 
@@ -37,12 +43,16 @@ __all__ = [
     'DiscriminatorAdapter',
     # Objective function
     'FAMAILObjective',
+    'MissingDataError',
+    'MissingComponentError',
+    'InsufficientDataError',
     # Metrics
     'GlobalMetrics',
     'FairnessSnapshot',
     # Data loading
     'DataBundle',
     'TrajectoryLoader',
-    'SupplyDemandLoader',
+    'PickupDropoffLoader',
+    'ActiveTaxisLoader',
     'GFunctionLoader',
 ]

@@ -1,7 +1,12 @@
 """
 Data loading utilities for FAMAIL trajectory modification.
 
-Loads trajectories, supply/demand data, and g(d) function from various sources.
+Loads trajectories, pickup/dropoff counts, active taxis, and g(d) function.
+
+Required Datasets:
+- passenger_seeking_trajs_45-800.pkl: Trajectory data (Dict[driver_id, List[trajectory]])
+- pickup_dropoff_counts.pkl: Pickup/dropoff counts per (x, y, time, day) state
+- active_taxis_5x5_*.pkl: Active taxi counts per neighborhood
 """
 
 from __future__ import annotations
@@ -23,12 +28,15 @@ from .trajectory import Trajectory, TrajectoryState
 
 # Default paths relative to FAMAIL workspace
 DEFAULT_PATHS = {
-    'all_trajs': 'source_data/all_trajs.pkl',
     'passenger_seeking': 'source_data/passenger_seeking_trajs_45-800.pkl',
-    'latest_traffic': 'source_data/latest_traffic.pkl',
-    'latest_volume_pickups': 'source_data/latest_volume_pickups.pkl',
+    'pickup_dropoff_counts': 'source_data/pickup_dropoff_counts.pkl',
+    'active_taxis_hourly': 'source_data/active_taxis_5x5_hourly.pkl',
+    'active_taxis_time_bucket': 'source_data/active_taxis_5x5_time_bucket.pkl',
     'g_function_params': 'objective_function/causal_fairness/g_function_params.json',
 }
+
+# Grid dimensions for Shenzhen
+GRID_DIMS = (48, 90)
 
 
 def find_workspace_root() -> Path:
@@ -56,83 +64,82 @@ class TrajectoryLoader:
     def __init__(self, workspace_root: Optional[Path] = None):
         self.workspace_root = workspace_root or find_workspace_root()
     
-    def load_all_trajs(self, max_trajectories: Optional[int] = None) -> List[Trajectory]:
-        """
-        Load trajectories from all_trajs.pkl.
-        
-        Expected format: List of trajectory dicts with 'traj' key containing state arrays.
-        """
-        path = self.workspace_root / DEFAULT_PATHS['all_trajs']
-        if not path.exists():
-            raise FileNotFoundError(f"Trajectory file not found: {path}")
-        
-        data = load_pickle(path)
-        trajectories = []
-        
-        for i, item in enumerate(data):
-            if max_trajectories and i >= max_trajectories:
-                break
-            
-            try:
-                traj = self._parse_trajectory(item, driver_id=i)
-                if traj:
-                    trajectories.append(traj)
-            except Exception as e:
-                continue  # Skip malformed entries
-        
-        return trajectories
-    
     def load_passenger_seeking(
         self, 
         max_trajectories: Optional[int] = None,
+        max_drivers: Optional[int] = None,
     ) -> List[Trajectory]:
-        """Load passenger-seeking trajectories."""
+        """
+        Load passenger-seeking trajectories.
+        
+        The file contains a dict keyed by driver_id, where each value is
+        a list of trajectories, and each trajectory is a list of states.
+        Each state is [x_grid, y_grid, time_bucket, day_index].
+        
+        Args:
+            max_trajectories: Maximum total trajectories to load
+            max_drivers: Maximum number of drivers to load from
+            
+        Returns:
+            List of Trajectory objects
+        """
         path = self.workspace_root / DEFAULT_PATHS['passenger_seeking']
         if not path.exists():
             raise FileNotFoundError(f"Trajectory file not found: {path}")
         
         data = load_pickle(path)
         trajectories = []
+        total_count = 0
+        traj_id = 0
         
-        for i, item in enumerate(data):
-            if max_trajectories and i >= max_trajectories:
-                break
+        # Data is dict[driver_id, list[trajectory]]
+        driver_keys = list(data.keys())
+        if max_drivers:
+            driver_keys = driver_keys[:max_drivers]
+        
+        for driver_id in driver_keys:
+            driver_trajs = data[driver_id]
             
-            try:
-                traj = self._parse_trajectory(item, driver_id=i)
-                if traj:
-                    trajectories.append(traj)
-            except Exception:
-                continue
+            for traj_data in driver_trajs:
+                if max_trajectories and total_count >= max_trajectories:
+                    return trajectories
+                
+                try:
+                    traj = self._parse_trajectory(
+                        traj_data, 
+                        driver_id=driver_id,
+                        trajectory_id=traj_id,
+                    )
+                    if traj:
+                        trajectories.append(traj)
+                        total_count += 1
+                        traj_id += 1
+                except Exception:
+                    continue
         
         return trajectories
     
     def _parse_trajectory(
-        self, 
-        item: Any, 
+        self,
+        traj_data: List[List[int]], 
         driver_id: int = 0,
+        trajectory_id: Optional[int] = None,
     ) -> Optional[Trajectory]:
-        """Parse a single trajectory from various formats."""
-        # Handle dict format
-        if isinstance(item, dict):
-            if 'traj' in item:
-                states_data = item['traj']
-                driver_id = item.get('driver_id', driver_id)
-            else:
-                return None
-        # Handle array format
-        elif isinstance(item, (list, np.ndarray)):
-            states_data = item
-        else:
+        """
+        Parse a single trajectory from list format.
+        
+        Expected format: List of states where each state is
+        [x_grid, y_grid, time_bucket, day_index]
+        """
+        if not isinstance(traj_data, list) or len(traj_data) < 2:
             return None
         
-        # Parse states
         states = []
-        for state_data in states_data:
+        for state_data in traj_data:
             if len(state_data) >= 4:
                 state = TrajectoryState(
-                    x_grid=float(state_data[0]),
-                    y_grid=float(state_data[1]),
+                    x_grid=int(state_data[0]),
+                    y_grid=int(state_data[1]),
                     time_bucket=int(state_data[2]),
                     day_index=int(state_data[3]),
                 )
@@ -141,76 +148,173 @@ class TrajectoryLoader:
         if len(states) < 2:
             return None
         
-        return Trajectory(states=states, driver_id=driver_id)
+        return Trajectory(
+            trajectory_id=trajectory_id,
+            driver_id=driver_id,
+            states=states,
+        )
 
 
-class SupplyDemandLoader:
-    """Loads supply/demand grid data."""
+class PickupDropoffLoader:
+    """Loads pickup/dropoff count data."""
     
     def __init__(self, workspace_root: Optional[Path] = None):
         self.workspace_root = workspace_root or find_workspace_root()
     
-    def load_latest_traffic(self) -> Dict[str, np.ndarray]:
+    def load(self) -> Dict[Tuple[int, int, int, int], Tuple[int, int]]:
         """
-        Load latest_traffic.pkl containing supply/demand per cell.
+        Load pickup_dropoff_counts.pkl.
         
-        Returns dict with 'pickups', 'supply', 'active_taxis' arrays.
+        Returns:
+            Dictionary mapping (x, y, time_bucket, day) -> (pickup_count, dropoff_count)
         """
-        path = self.workspace_root / DEFAULT_PATHS['latest_traffic']
+        path = self.workspace_root / DEFAULT_PATHS['pickup_dropoff_counts']
         if not path.exists():
-            raise FileNotFoundError(f"Traffic data not found: {path}")
+            raise FileNotFoundError(f"Pickup/dropoff counts not found: {path}")
         
-        data = load_pickle(path)
-        return self._extract_counts(data)
+        return load_pickle(path)
     
-    def load_latest_volume_pickups(self) -> Dict[str, np.ndarray]:
-        """Load pickup volume data."""
-        path = self.workspace_root / DEFAULT_PATHS['latest_volume_pickups']
-        if not path.exists():
-            raise FileNotFoundError(f"Pickup data not found: {path}")
+    def extract_pickup_counts(
+        self,
+        data: Optional[Dict] = None,
+    ) -> Dict[Tuple[int, int, int, int], int]:
+        """Extract just pickup counts from the data."""
+        if data is None:
+            data = self.load()
         
-        data = load_pickle(path)
-        return self._extract_counts(data)
+        pickups = {}
+        for key, counts in data.items():
+            if isinstance(counts, (list, tuple)) and len(counts) >= 1:
+                pickups[key] = int(counts[0])
+            elif isinstance(counts, (int, float)):
+                pickups[key] = int(counts)
+        return pickups
     
-    def _extract_counts(self, data: Any) -> Dict[str, np.ndarray]:
-        """Extract count arrays from various data formats."""
-        result = {}
+    def extract_dropoff_counts(
+        self,
+        data: Optional[Dict] = None,
+    ) -> Dict[Tuple[int, int, int, int], int]:
+        """Extract just dropoff counts from the data."""
+        if data is None:
+            data = self.load()
         
-        if isinstance(data, dict):
-            # Handle DataFrame-like dict
-            if 'pickup' in data or 'pickups' in data:
-                result['pickups'] = np.array(data.get('pickup', data.get('pickups', [])))
-            if 'supply' in data:
-                result['supply'] = np.array(data['supply'])
-            if 'active_taxis' in data:
-                result['active_taxis'] = np.array(data['active_taxis'])
-        elif hasattr(data, 'values'):
-            # Handle pandas DataFrame
-            result['pickups'] = data.values
-        elif isinstance(data, np.ndarray):
-            result['pickups'] = data
-        
-        return result
+        dropoffs = {}
+        for key, counts in data.items():
+            if isinstance(counts, (list, tuple)) and len(counts) >= 2:
+                dropoffs[key] = int(counts[1])
+        return dropoffs
     
     def aggregate_to_grid(
-        self, 
-        data: np.ndarray, 
-        grid_dims: Tuple[int, int] = (48, 90),
+        self,
+        data: Optional[Dict] = None,
+        aggregation: str = 'sum',
+    ) -> np.ndarray:
+        """
+        Aggregate pickup counts to a 2D grid (sum across all time periods).
+        
+        Args:
+            data: Pickup/dropoff data (loads if None)
+            aggregation: 'sum' or 'mean'
+            
+        Returns:
+            2D numpy array of shape (48, 90)
+        """
+        if data is None:
+            data = self.load()
+        
+        grid = np.zeros(GRID_DIMS, dtype=np.float32)
+        counts_per_cell = np.zeros(GRID_DIMS, dtype=np.float32)
+        
+        for key, counts in data.items():
+            x, y = key[0], key[1]
+            if 0 <= x < GRID_DIMS[0] and 0 <= y < GRID_DIMS[1]:
+                pickup = counts[0] if isinstance(counts, (list, tuple)) else counts
+                grid[x, y] += pickup
+                counts_per_cell[x, y] += 1
+        
+        if aggregation == 'mean':
+            mask = counts_per_cell > 0
+            grid[mask] = grid[mask] / counts_per_cell[mask]
+        
+        return grid
+
+
+class ActiveTaxisLoader:
+    """Loads active taxi count data."""
+    
+    def __init__(self, workspace_root: Optional[Path] = None):
+        self.workspace_root = workspace_root or find_workspace_root()
+    
+    def load(self, period_type: str = 'hourly') -> Dict[Tuple, int]:
+        """
+        Load active taxis data for specified period type.
+        
+        Args:
+            period_type: 'hourly', 'time_bucket', 'daily', or 'all'
+            
+        Returns:
+            Dictionary mapping state keys to active taxi counts
+        """
+        if period_type == 'hourly':
+            path = self.workspace_root / DEFAULT_PATHS['active_taxis_hourly']
+        elif period_type == 'time_bucket':
+            path = self.workspace_root / DEFAULT_PATHS['active_taxis_time_bucket']
+        else:
+            # Try hourly as default
+            path = self.workspace_root / DEFAULT_PATHS['active_taxis_hourly']
+        
+        if not path.exists():
+            raise FileNotFoundError(f"Active taxis data not found: {path}")
+        
+        loaded = load_pickle(path)
+        
+        # Handle bundle format (with 'data', 'stats', 'config' keys)
+        if isinstance(loaded, dict) and 'data' in loaded:
+            return loaded['data']
+        
+        return loaded
+    
+    def aggregate_to_grid(
+        self,
+        data: Optional[Dict] = None,
         aggregation: str = 'mean',
     ) -> np.ndarray:
-        """Aggregate multi-period data to single grid."""
-        if data.ndim == 2:
-            return data
-        elif data.ndim == 3:
-            # Assume shape is [time, grid_x, grid_y]
-            if aggregation == 'mean':
-                return data.mean(axis=0)
-            elif aggregation == 'sum':
-                return data.sum(axis=0)
-            else:
-                return data.mean(axis=0)
-        else:
-            return data.reshape(grid_dims)
+        """
+        Aggregate active taxi counts to a 2D grid.
+        
+        Args:
+            data: Active taxis data (loads if None)
+            aggregation: 'sum', 'mean', or 'max'
+            
+        Returns:
+            2D numpy array of shape (48, 90)
+        """
+        if data is None:
+            data = self.load()
+        
+        grid = np.zeros(GRID_DIMS, dtype=np.float32)
+        counts_per_cell = np.zeros(GRID_DIMS, dtype=np.float32)
+        
+        for key, count in data.items():
+            # Handle different key formats
+            x, y = key[0], key[1]
+            if 0 < x <= GRID_DIMS[0] and 0 < y <= GRID_DIMS[1]:
+                # active_taxis uses 1-indexed coords
+                grid[x-1, y-1] += count
+                counts_per_cell[x-1, y-1] += 1
+        
+        if aggregation == 'mean':
+            mask = counts_per_cell > 0
+            grid[mask] = grid[mask] / counts_per_cell[mask]
+        elif aggregation == 'max':
+            # For max, we need different logic
+            grid = np.zeros(GRID_DIMS, dtype=np.float32)
+            for key, count in data.items():
+                x, y = key[0], key[1]
+                if 0 < x <= GRID_DIMS[0] and 0 < y <= GRID_DIMS[1]:
+                    grid[x-1, y-1] = max(grid[x-1, y-1], count)
+        
+        return grid
 
 
 class GFunctionLoader:
@@ -228,12 +332,12 @@ class GFunctionLoader:
         with open(path) as f:
             return json.load(f)
     
-    def build_g_function(self) -> Optional[Callable]:
+    def build_g_function(self) -> Callable:
         """Build g(d) function from saved parameters."""
         params = self.load_params()
         if params is None:
             # Return default log-linear function
-            return lambda d: 0.5 * np.log(d + 1)
+            return lambda d: 0.5 * np.log(np.asarray(d) + 1)
         
         # Build function based on type
         func_type = params.get('type', 'log_linear')
@@ -241,63 +345,80 @@ class GFunctionLoader:
         if func_type == 'log_linear':
             a = params.get('a', 0.5)
             b = params.get('b', 0.0)
-            return lambda d: a * np.log(d + 1) + b
+            return lambda d: a * np.log(np.asarray(d) + 1) + b
         elif func_type == 'polynomial':
             coeffs = params.get('coefficients', [0.5])
-            return lambda d: np.polyval(coeffs, d)
+            return lambda d: np.polyval(coeffs, np.asarray(d))
         elif func_type == 'power':
             k = params.get('k', 0.5)
             alpha = params.get('alpha', 0.5)
-            return lambda d: k * np.power(d + 1, alpha)
+            return lambda d: k * np.power(np.asarray(d) + 1, alpha)
         else:
-            return lambda d: 0.5 * np.log(d + 1)
+            return lambda d: 0.5 * np.log(np.asarray(d) + 1)
 
 
+@dataclass
 class DataBundle:
     """Bundle of all data needed for trajectory modification."""
     
-    def __init__(
-        self,
-        trajectories: List[Trajectory],
-        pickup_counts: np.ndarray,
-        supply_counts: np.ndarray,
-        active_taxis: np.ndarray,
-        g_function: Optional[Callable] = None,
-        grid_dims: Tuple[int, int] = (48, 90),
-    ):
-        self.trajectories = trajectories
-        self.pickup_counts = pickup_counts
-        self.supply_counts = supply_counts
-        self.active_taxis = active_taxis
-        self.g_function = g_function
-        self.grid_dims = grid_dims
+    trajectories: List[Trajectory]
+    pickup_dropoff_data: Dict[Tuple, Tuple[int, int]]  # Raw pickup/dropoff counts
+    pickup_grid: np.ndarray  # Aggregated pickups (48, 90)
+    dropoff_grid: np.ndarray  # Aggregated dropoffs (48, 90)
+    active_taxis_data: Dict[Tuple, int]  # Raw active taxis counts
+    active_taxis_grid: np.ndarray  # Aggregated active taxis (48, 90)
+    g_function: Callable
+    grid_dims: Tuple[int, int] = GRID_DIMS
     
     @classmethod
     def load_default(
         cls,
         max_trajectories: int = 100,
+        max_drivers: Optional[int] = None,
         workspace_root: Optional[Path] = None,
+        active_taxis_period: str = 'hourly',
     ) -> 'DataBundle':
-        """Load default data bundle from workspace."""
+        """
+        Load default data bundle from workspace.
+        
+        Args:
+            max_trajectories: Maximum trajectories to load
+            max_drivers: Maximum drivers to load from
+            workspace_root: Override workspace root path
+            active_taxis_period: Period type for active taxis ('hourly' or 'time_bucket')
+            
+        Returns:
+            DataBundle with all loaded data
+        """
         root = workspace_root or find_workspace_root()
         
         # Load trajectories
         traj_loader = TrajectoryLoader(root)
-        try:
-            trajectories = traj_loader.load_passenger_seeking(max_trajectories)
-        except FileNotFoundError:
-            trajectories = traj_loader.load_all_trajs(max_trajectories)
+        trajectories = traj_loader.load_passenger_seeking(
+            max_trajectories=max_trajectories,
+            max_drivers=max_drivers,
+        )
         
-        # Load supply/demand
-        sd_loader = SupplyDemandLoader(root)
-        try:
-            counts = sd_loader.load_latest_traffic()
-        except FileNotFoundError:
-            counts = {'pickups': np.zeros((48, 90)), 'supply': np.zeros((48, 90))}
+        # Load pickup/dropoff counts
+        pd_loader = PickupDropoffLoader(root)
+        pickup_dropoff_data = pd_loader.load()
+        pickup_grid = pd_loader.aggregate_to_grid(pickup_dropoff_data, aggregation='sum')
         
-        pickup_counts = counts.get('pickups', np.zeros((48, 90)))
-        supply_counts = counts.get('supply', pickup_counts.copy())
-        active_taxis = counts.get('active_taxis', np.ones_like(pickup_counts))
+        # Extract and aggregate dropoffs
+        dropoff_grid = np.zeros(GRID_DIMS, dtype=np.float32)
+        for key, counts in pickup_dropoff_data.items():
+            x, y = key[0], key[1]
+            if 0 <= x < GRID_DIMS[0] and 0 <= y < GRID_DIMS[1]:
+                if isinstance(counts, (list, tuple)) and len(counts) >= 2:
+                    dropoff_grid[x, y] += counts[1]
+        
+        # Load active taxis
+        at_loader = ActiveTaxisLoader(root)
+        active_taxis_data = at_loader.load(period_type=active_taxis_period)
+        active_taxis_grid = at_loader.aggregate_to_grid(active_taxis_data, aggregation='mean')
+        
+        # Ensure no zero values in active_taxis_grid (for DSR calculation)
+        active_taxis_grid = np.maximum(active_taxis_grid, 0.1)
         
         # Load g function
         g_loader = GFunctionLoader(root)
@@ -305,9 +426,11 @@ class DataBundle:
         
         return cls(
             trajectories=trajectories,
-            pickup_counts=pickup_counts,
-            supply_counts=supply_counts,
-            active_taxis=active_taxis,
+            pickup_dropoff_data=pickup_dropoff_data,
+            pickup_grid=pickup_grid,
+            dropoff_grid=dropoff_grid,
+            active_taxis_data=active_taxis_data,
+            active_taxis_grid=active_taxis_grid,
             g_function=g_function,
         )
     
@@ -317,7 +440,43 @@ class DataBundle:
             raise RuntimeError("PyTorch not available")
         
         return {
-            'pickup_counts': torch.tensor(self.pickup_counts, device=device, dtype=torch.float32),
-            'supply_counts': torch.tensor(self.supply_counts, device=device, dtype=torch.float32),
-            'active_taxis': torch.tensor(self.active_taxis, device=device, dtype=torch.float32),
+            'pickup_grid': torch.tensor(self.pickup_grid, device=device, dtype=torch.float32),
+            'dropoff_grid': torch.tensor(self.dropoff_grid, device=device, dtype=torch.float32),
+            'active_taxis_grid': torch.tensor(self.active_taxis_grid, device=device, dtype=torch.float32),
         }
+    
+    def get_state_counts(
+        self,
+        x: int,
+        y: int,
+        time_bucket: int,
+        day: int,
+    ) -> Tuple[int, int, int]:
+        """
+        Get pickup, dropoff, and active taxi counts for a specific state.
+        
+        Args:
+            x, y: Grid coordinates
+            time_bucket: Time bucket (1-288)
+            day: Day of week (1-6)
+            
+        Returns:
+            Tuple of (pickup_count, dropoff_count, active_taxis)
+        """
+        key = (x, y, time_bucket, day)
+        
+        # Pickup/dropoff
+        counts = self.pickup_dropoff_data.get(key, (0, 0))
+        pickup = counts[0] if isinstance(counts, (list, tuple)) else counts
+        dropoff = counts[1] if isinstance(counts, (list, tuple)) and len(counts) > 1 else 0
+        
+        # Active taxis - try hourly first (convert time_bucket to hour)
+        hour = (time_bucket - 1) // 12  # Convert 1-288 to 0-23
+        hourly_key = (x, y, hour, day)
+        active = self.active_taxis_data.get(hourly_key, 0)
+        
+        # If not found, try time_bucket key
+        if active == 0:
+            active = self.active_taxis_data.get(key, 0)
+        
+        return (pickup, dropoff, active)
