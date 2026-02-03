@@ -279,20 +279,33 @@ def render_training_progress(history: Dict):
         st.info("No training history available yet.")
         return
     
-    epochs = list(range(1, len(history["train_loss"]) + 1))
+    n_epochs = len(history["train_loss"])
+    epochs = list(range(1, n_epochs + 1))
     
-    # Create dataframe for plotting
+    # Helper function to pad/truncate arrays to match epoch count
+    def normalize_array(arr, target_len):
+        """Ensure array has exactly target_len elements, padding with None if needed."""
+        if arr is None:
+            return [None] * target_len
+        arr = list(arr)
+        if len(arr) < target_len:
+            return arr + [None] * (target_len - len(arr))
+        elif len(arr) > target_len:
+            return arr[:target_len]
+        return arr
+    
+    # Create dataframe for plotting with normalized arrays
     df = pd.DataFrame({
         "epoch": epochs,
-        "train_loss": history["train_loss"],
-        "val_loss": history["val_loss"],
-        "val_accuracy": history.get("val_accuracy", []),
-        "val_positive_accuracy": history.get("val_positive_accuracy", []),
-        "val_negative_accuracy": history.get("val_negative_accuracy", []),
-        "val_identical_score": history.get("val_identical_score", []),
-        "val_f1": history.get("val_f1", []),
-        "val_auc": history.get("val_auc", []),
-        "learning_rate": history.get("learning_rates", [])
+        "train_loss": normalize_array(history.get("train_loss"), n_epochs),
+        "val_loss": normalize_array(history.get("val_loss"), n_epochs),
+        "val_accuracy": normalize_array(history.get("val_accuracy"), n_epochs),
+        "val_positive_accuracy": normalize_array(history.get("val_positive_accuracy"), n_epochs),
+        "val_negative_accuracy": normalize_array(history.get("val_negative_accuracy"), n_epochs),
+        "val_identical_score": normalize_array(history.get("val_identical_score"), n_epochs),
+        "val_f1": normalize_array(history.get("val_f1"), n_epochs),
+        "val_auc": normalize_array(history.get("val_auc"), n_epochs),
+        "learning_rate": normalize_array(history.get("learning_rates"), n_epochs)
     })
     
     if ALTAIR_AVAILABLE:
@@ -350,56 +363,104 @@ def render_training_progress(history: Dict):
         with tab3:
             # Split accuracy charts - CRITICAL for discriminator monitoring
             st.markdown("**Split Accuracy:** Shows how well the model performs on positive (same-agent) vs negative (different-agent) pairs separately.")
-            st.caption("⚠️ If these diverge significantly, the model may be biased toward one class!")
+            # st.caption("⚠️ If these diverge significantly, the model may be biased toward one class!")
             
-            split_cols = ["val_positive_accuracy", "val_negative_accuracy", "val_identical_score"]
-            has_split_data = all(col in df.columns and df[col].notna().any() for col in split_cols[:2])
+            # Check which split metrics are available
+            has_pos_acc = "val_positive_accuracy" in df.columns and df["val_positive_accuracy"].notna().any()
+            has_neg_acc = "val_negative_accuracy" in df.columns and df["val_negative_accuracy"].notna().any()
+            has_identical = "val_identical_score" in df.columns and df["val_identical_score"].notna().any()
             
-            if has_split_data:
-                # Rename for cleaner display
-                split_df = df[["epoch"] + split_cols].copy()
-                split_df.columns = ["epoch", "Positive Acc (Same Agent)", "Negative Acc (Diff Agent)", "Identical Score"]
+            # Build list of available metrics dynamically
+            available_cols = []
+            col_names = []
+            color_domain = []
+            color_range = []
+            
+            if has_pos_acc:
+                available_cols.append("val_positive_accuracy")
+                col_names.append("Positive Acc (Same Agent)")
+                color_domain.append("Positive Acc (Same Agent)")
+                color_range.append("#2ca02c")
+            if has_neg_acc:
+                available_cols.append("val_negative_accuracy")
+                col_names.append("Negative Acc (Diff Agent)")
+                color_domain.append("Negative Acc (Diff Agent)")
+                color_range.append("#d62728")
+            if has_identical:
+                available_cols.append("val_identical_score")
+                col_names.append("Identical Score")
+                color_domain.append("Identical Score")
+                color_range.append("#9467bd")
+            
+            if available_cols:
+                # Build the split dataframe with available columns
+                split_df = df[["epoch"] + available_cols].copy()
+                split_df.columns = ["epoch"] + col_names
                 
                 split_df_melted = split_df.melt(
                     id_vars=["epoch"],
                     var_name="metric",
                     value_name="value"
                 )
+                # Remove NaN values for cleaner plotting
+                split_df_melted = split_df_melted.dropna(subset=["value"])
                 
                 split_chart = alt.Chart(split_df_melted).mark_line(point=True).encode(
                     x=alt.X("epoch:Q", title="Epoch"),
                     y=alt.Y("value:Q", title="Accuracy", scale=alt.Scale(domain=[0, 1])),
                     color=alt.Color("metric:N", scale=alt.Scale(
-                        domain=["Positive Acc (Same Agent)", "Negative Acc (Diff Agent)", "Identical Score"],
-                        range=["#2ca02c", "#d62728", "#9467bd"]
+                        domain=color_domain,
+                        range=color_range
                     ))
                 ).properties(height=300, title="Split Accuracy Over Training")
                 
                 st.altair_chart(split_chart, use_container_width=True)
                 
-                # Final values with assessment
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    pos_acc = df['val_positive_accuracy'].iloc[-1] if len(df) > 0 else 0
-                    st.metric("➕ Positive Accuracy", f"{pos_acc:.4f}", 
-                              help="Correct predictions on same-agent pairs")
-                with col2:
-                    neg_acc = df['val_negative_accuracy'].iloc[-1] if len(df) > 0 else 0
-                    st.metric("➖ Negative Accuracy", f"{neg_acc:.4f}",
-                              help="Correct predictions on different-agent pairs")
-                with col3:
-                    id_score = df['val_identical_score'].iloc[-1] if len(df) > 0 else 0
-                    st.metric("🔄 Identical Score", f"{id_score:.4f}",
-                              help="Score when comparing trajectory to itself (should be ~1.0)")
+                # Show available metrics
+                metric_cols = st.columns(3)
+                with metric_cols[0]:
+                    if has_pos_acc:
+                        pos_acc = df['val_positive_accuracy'].dropna().iloc[-1] if df['val_positive_accuracy'].notna().any() else None
+                        if pos_acc is not None:
+                            st.metric("➕ Positive Accuracy", f"{pos_acc:.4f}", 
+                                      help="Correct predictions on same-agent pairs")
+                    else:
+                        st.metric("➕ Positive Accuracy", "N/A", 
+                                  help="Not recorded in this training run")
+                with metric_cols[1]:
+                    if has_neg_acc:
+                        neg_acc = df['val_negative_accuracy'].dropna().iloc[-1] if df['val_negative_accuracy'].notna().any() else None
+                        if neg_acc is not None:
+                            st.metric("➖ Negative Accuracy", f"{neg_acc:.4f}",
+                                      help="Correct predictions on different-agent pairs")
+                    else:
+                        st.metric("➖ Negative Accuracy", "N/A",
+                                  help="Not recorded in this training run")
+                with metric_cols[2]:
+                    if has_identical:
+                        id_score = df['val_identical_score'].dropna().iloc[-1] if df['val_identical_score'].notna().any() else None
+                        if id_score is not None:
+                            st.metric("🔄 Identical Score", f"{id_score:.4f}",
+                                      help="Score when comparing trajectory to itself (should be ~1.0)")
+                    else:
+                        st.metric("🔄 Identical Score", "N/A",
+                                  help="Not recorded in this training run")
                 
-                # Imbalance warning
-                if len(df) > 0:
+                # Imbalance warning (only if both pos and neg accuracy available)
+                if has_pos_acc and has_neg_acc and len(df) > 0:
+                    pos_acc = df['val_positive_accuracy'].dropna().iloc[-1]
+                    neg_acc = df['val_negative_accuracy'].dropna().iloc[-1]
                     imbalance = abs(pos_acc - neg_acc)
                     if imbalance > 0.3:
                         st.error(f"⚠️ **Severe Imbalance Detected:** {imbalance:.2f} gap between positive and negative accuracy. "
                                 f"The model may be biased toward predicting {'same-agent' if pos_acc > neg_acc else 'different-agent'}.")
                     elif imbalance > 0.15:
                         st.warning(f"⚡ **Moderate Imbalance:** {imbalance:.2f} gap. Monitor this as training continues.")
+                
+                # Note about missing metrics
+                if not (has_pos_acc and has_neg_acc):
+                    st.info("ℹ️ Positive/Negative accuracy breakdown not available for this training run. "
+                           "Showing available metrics only.")
             else:
                 st.info("Split accuracy data not available. This may be from an older training run.")
         
