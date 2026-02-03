@@ -1115,7 +1115,12 @@ def display_results_section():
     col2.metric("Avg Iterations", f"{avg_iterations:.1f}")
     col3.metric("Mean Fidelity", f"{final_snapshot.mean_fidelity:.4f}")
     
-    # Iteration details section with fragment to prevent full reruns
+    # NEW: Before/After Fairness Visualization (with trajectory selection built-in)
+    st.divider()
+    _display_before_after_fairness_viz(histories)
+    
+    # Iteration details section (now uses the same trajectory selected in the viz)
+    st.divider()
     _display_iteration_details_fragment(histories)
     
     # Perturbation visualization
@@ -1132,15 +1137,21 @@ def _display_iteration_details_fragment(histories):
     
     Using @st.fragment prevents full app reruns when the user cycles
     through trajectories with the number input widget.
+    
+    Note: This section now syncs with the trajectory selector in the 
+    Before/After visualization above.
     """
     st.subheader("📈 Iteration Details")
     
-    # Ensure selected index is valid
+    # Sync with visualization trajectory selector if available
     max_idx = len(histories) - 1
-    current_idx = st.session_state.get('selected_traj_idx', 0)
+    
+    # Use viz_selected_traj_idx if set, otherwise use selected_traj_idx
+    viz_idx = st.session_state.get('viz_selected_traj_idx')
+    current_idx = viz_idx if viz_idx is not None else st.session_state.get('selected_traj_idx', 0)
+    
     if current_idx > max_idx:
         current_idx = 0
-        st.session_state.selected_traj_idx = 0
     
     # Trajectory selector with info display
     col_select, col_info = st.columns([1, 2])
@@ -1152,10 +1163,12 @@ def _display_iteration_details_fragment(histories):
             max_value=max_idx,
             value=current_idx,
             step=1,
-            key="traj_selector",
-            help="Use +/- to cycle through modified trajectories",
-            on_change=_on_traj_selection_change,
+            key="traj_selector_details",
+            help="Use +/- to cycle through modified trajectories (synced with visualization above)",
         )
+        # Sync back to viz selector
+        st.session_state.viz_selected_traj_idx = selected_traj
+        st.session_state.selected_traj_idx = selected_traj
     
     history = histories[selected_traj]
     
@@ -1225,11 +1238,6 @@ def _display_iteration_details_fragment(histories):
         st.warning("No iterations recorded for this trajectory.")
 
 
-def _on_traj_selection_change():
-    """Callback to update session state when trajectory selection changes."""
-    st.session_state.selected_traj_idx = st.session_state.traj_selector
-
-
 def _display_perturbation_histogram(histories):
     """Display histogram of perturbation magnitudes."""
     if histories and PLOTLY_AVAILABLE:
@@ -1247,6 +1255,468 @@ def _display_perturbation_histogram(histories):
             title="Distribution of Final Perturbations"
         )
         st.plotly_chart(fig, use_container_width=True)
+
+
+# ============================================================================
+# Before/After Fairness Visualization
+# ============================================================================
+
+def _transform_coords_for_viz(x, y):
+    """
+    Transform coordinates from data grid to display grid.
+    Original data: (x, y) in 48x90 grid (x: 0-47, y: 0-89)
+    Display: 90 wide × 48 tall (swap x and y for horizontal layout)
+    """
+    return y, x
+
+
+def _compute_cell_fairness_scores(
+    pickup_counts: np.ndarray,
+    dropoff_counts: np.ndarray,
+    supply_counts: np.ndarray,
+    g_function,
+    fairness_type: str = 'spatial',
+) -> np.ndarray:
+    """
+    Compute cell-level fairness scores.
+    
+    Args:
+        pickup_counts: [48, 90] pickup counts
+        dropoff_counts: [48, 90] dropoff counts  
+        supply_counts: [48, 90] active taxis / supply
+        g_function: Expected service ratio function
+        fairness_type: 'spatial' for LIS, 'causal' for DCD
+        
+    Returns:
+        [48, 90] array of fairness scores (lower is better/more fair)
+    """
+    if fairness_type == 'spatial':
+        # LIS = |c_i - μ| / μ
+        return compute_cell_lis_scores(pickup_counts)
+    else:
+        # DCD = |Y_i - g(D_i)|
+        return compute_cell_dcd_scores(pickup_counts, supply_counts, g_function)
+
+
+def _apply_trajectory_modification_to_grid(
+    base_pickup_grid: np.ndarray,
+    histories,
+    selected_indices: List[int] = None,
+) -> np.ndarray:
+    """
+    Apply trajectory modifications to create a modified pickup grid.
+    
+    Args:
+        base_pickup_grid: Original [48, 90] pickup counts
+        histories: List of ModificationHistory objects
+        selected_indices: If provided, only apply modifications for these history indices
+        
+    Returns:
+        Modified [48, 90] pickup counts
+    """
+    modified_grid = base_pickup_grid.copy().astype(float)
+    
+    indices_to_use = selected_indices if selected_indices is not None else range(len(histories))
+    
+    for idx in indices_to_use:
+        if idx >= len(histories):
+            continue
+            
+        history = histories[idx]
+        if not history.iterations:
+            continue
+            
+        # Get original and modified pickup locations (last state)
+        orig_pickup = history.original.states[-1]
+        mod_pickup = history.modified.states[-1]
+        
+        orig_x, orig_y = int(orig_pickup.x_grid), int(orig_pickup.y_grid)
+        mod_x, mod_y = int(mod_pickup.x_grid), int(mod_pickup.y_grid)
+        
+        # Bounds check
+        if 0 <= orig_x < 48 and 0 <= orig_y < 90:
+            modified_grid[orig_x, orig_y] = max(0, modified_grid[orig_x, orig_y] - 1)
+        if 0 <= mod_x < 48 and 0 <= mod_y < 90:
+            modified_grid[mod_x, mod_y] += 1
+    
+    return modified_grid
+
+
+@st.fragment
+def _display_before_after_fairness_viz(histories):
+    """
+    Display side-by-side before/after visualization with fairness-colored grids.
+    
+    Uses @st.fragment to prevent full reruns when user interacts with controls.
+    """
+    st.subheader("🔄 Before/After Modification Comparison")
+    
+    if not histories:
+        st.info("No modification results to visualize.")
+        return
+    
+    if not PLOTLY_AVAILABLE:
+        st.warning("Plotly not available for visualization.")
+        return
+    
+    # Get required data from session state
+    pickup_grid = st.session_state.get('pickup_grid')
+    dropoff_grid = st.session_state.get('dropoff_grid')
+    active_taxis_grid = st.session_state.get('active_taxis_grid')
+    g_function = st.session_state.get('g_function')
+    trajectories = st.session_state.get('trajectories', [])
+    
+    if pickup_grid is None or active_taxis_grid is None:
+        st.warning("Required grid data not loaded.")
+        return
+    
+    # Control panel
+    ctrl_col1, ctrl_col2, ctrl_col3 = st.columns([1, 1, 1])
+    
+    with ctrl_col1:
+        fairness_type = st.radio(
+            "Fairness Metric",
+            ["Spatial (LIS)", "Causal (DCD)"],
+            horizontal=True,
+            help="Spatial: Local Inequality Score |c_i - μ| / μ\nCausal: Demand-Conditional Deviation |Y_i - g(D_i)|"
+        )
+        fairness_key = 'spatial' if 'Spatial' in fairness_type else 'causal'
+    
+    with ctrl_col2:
+        view_mode = st.radio(
+            "Trajectory View",
+            ["Individual", "All Trajectories"],
+            horizontal=True,
+            help="Individual: Cycle through trajectories one by one\nAll: Show all modified trajectories at once"
+        )
+    
+    with ctrl_col3:
+        if view_mode == "Individual":
+            max_idx = len(histories) - 1
+            current_idx = st.session_state.get('viz_selected_traj_idx', 0)
+            if current_idx > max_idx:
+                current_idx = 0
+            
+            selected_viz_traj = st.number_input(
+                "Select Trajectory",
+                min_value=0,
+                max_value=max_idx,
+                value=current_idx,
+                step=1,
+                key="viz_traj_selector",
+                help="Use +/- to cycle through modified trajectories",
+            )
+            st.session_state.viz_selected_traj_idx = selected_viz_traj
+            traj_indices_to_show = [selected_viz_traj]
+            
+            # Show trajectory info
+            history = histories[selected_viz_traj]
+            driver_id = getattr(history.original, 'driver_id', 'N/A')
+            st.caption(f"Driver: {driver_id} | Traj {selected_viz_traj + 1}/{len(histories)}")
+        else:
+            traj_indices_to_show = list(range(len(histories)))
+            st.caption(f"Showing all {len(histories)} trajectories")
+    
+    # Compute fairness scores for BEFORE state
+    before_fairness = _compute_cell_fairness_scores(
+        pickup_grid, dropoff_grid, active_taxis_grid, g_function, fairness_key
+    )
+    
+    # Compute modified pickup grid for selected trajectories
+    modified_pickup_grid = _apply_trajectory_modification_to_grid(
+        pickup_grid, histories, traj_indices_to_show
+    )
+    
+    # Compute fairness scores for AFTER state
+    after_fairness = _compute_cell_fairness_scores(
+        modified_pickup_grid, dropoff_grid, active_taxis_grid, g_function, fairness_key
+    )
+    
+    # Determine common color scale range for both grids
+    vmin = min(before_fairness.min(), after_fairness.min())
+    vmax = max(before_fairness.max(), after_fairness.max())
+    
+    # Grid dimensions
+    orig_grid_x, orig_grid_y = 48, 90
+    display_width, display_height = orig_grid_y, orig_grid_x  # 90 x 48 after transform
+    
+    # Create side-by-side plots
+    before_col, after_col = st.columns(2)
+    
+    # Color palette for trajectories
+    colors = px.colors.qualitative.Plotly
+    
+    # === BEFORE VISUALIZATION ===
+    with before_col:
+        st.markdown("**BEFORE Modification**")
+        
+        fig_before = go.Figure()
+        
+        # Add fairness heatmap
+        # Note: go.Heatmap displays z[i,j] at position (x=j, y=i)
+        # Our fairness array is (48, 90), so z[y_idx, x_idx] where x goes 0-89, y goes 0-47
+        # This matches our display: 90 wide (x-axis) × 48 tall (y-axis)
+        fig_before.add_trace(go.Heatmap(
+            z=before_fairness,  # No transpose needed - (48, 90) displays as 90 wide × 48 tall
+            colorscale='RdYlGn_r',  # Red=high unfairness, Green=low unfairness
+            zmin=vmin,
+            zmax=vmax,
+            showscale=True,
+            colorbar=dict(
+                title=dict(text=fairness_key.upper(), side='right'),
+                orientation='h',
+                yanchor='bottom',
+                y=-0.2,
+                xanchor='center',
+                x=0.5,
+                len=0.8,
+                thickness=15,
+            ),
+            hovertemplate=f"{fairness_key.upper()}: %{{z:.4f}}<br>Cell: (%{{x}}, %{{y}})<extra></extra>",
+        ))
+        
+        # Draw ORIGINAL trajectories
+        for i, hist_idx in enumerate(traj_indices_to_show):
+            history = histories[hist_idx]
+            traj = history.original
+            color = colors[i % len(colors)]
+            
+            # Transform coordinates for display
+            transformed_coords = [_transform_coords_for_viz(s.x_grid, s.y_grid) for s in traj.states]
+            x_coords = [c[0] for c in transformed_coords]
+            y_coords = [c[1] for c in transformed_coords]
+            
+            driver_id = getattr(traj, 'driver_id', 'N/A')
+            label = f"Traj {hist_idx} (D:{driver_id})"
+            
+            # Draw trajectory path
+            fig_before.add_trace(go.Scatter(
+                x=x_coords, y=y_coords,
+                mode='lines+markers',
+                name=label,
+                line=dict(color=color, width=2),
+                marker=dict(size=5, color=color),
+                legendgroup=f"traj_{hist_idx}",
+                showlegend=True,
+                hovertemplate=f"{label}<br>State %{{customdata}}<extra></extra>",
+                customdata=list(range(len(x_coords))),
+            ))
+            
+            # Mark dropoff (first state) with circle
+            fig_before.add_trace(go.Scatter(
+                x=[x_coords[0]], y=[y_coords[0]],
+                mode='markers',
+                marker=dict(color=color, size=12, symbol='circle', line=dict(color='white', width=2)),
+                legendgroup=f"traj_{hist_idx}",
+                showlegend=False,
+                hovertemplate=f"Dropoff<br>{label}<extra></extra>",
+            ))
+            
+            # Mark pickup (last state) with star
+            fig_before.add_trace(go.Scatter(
+                x=[x_coords[-1]], y=[y_coords[-1]],
+                mode='markers',
+                marker=dict(color=color, size=14, symbol='star', line=dict(color='white', width=1)),
+                legendgroup=f"traj_{hist_idx}",
+                showlegend=False,
+                hovertemplate=f"Pickup (Original)<br>{label}<extra></extra>",
+            ))
+        
+        # Configure layout
+        fig_before.update_layout(
+            title=f"Original | {fairness_type} | ⭐=Pickup ●=Dropoff",
+            xaxis=dict(
+                range=[-0.5, display_width - 0.5],
+                constrain="domain",
+                showgrid=True,
+                gridwidth=1,
+                gridcolor='rgba(200, 200, 200, 0.3)',
+            ),
+            yaxis=dict(
+                range=[-0.5, display_height - 0.5],
+                scaleanchor="x",
+                scaleratio=1,
+                showgrid=True,
+                gridwidth=1,
+                gridcolor='rgba(200, 200, 200, 0.3)',
+            ),
+            height=550,
+            margin=dict(l=40, r=40, t=60, b=100),  # Extra bottom margin for colorbar
+            legend=dict(
+                orientation='h',
+                yanchor='top',
+                y=1.12,
+                xanchor='left',
+                x=0,
+                bgcolor='rgba(255,255,255,0.8)',
+                font=dict(size=9),
+            ),
+        )
+        
+        st.plotly_chart(fig_before, use_container_width=True)
+        
+        # Show stats
+        active_cells = (before_fairness > 0).sum()
+        avg_fairness = before_fairness[before_fairness > 0].mean() if active_cells > 0 else 0
+        st.caption(f"Avg {fairness_key.upper()}: {avg_fairness:.4f} | Active cells: {active_cells}")
+    
+    # === AFTER VISUALIZATION ===
+    with after_col:
+        st.markdown("**AFTER Modification**")
+        
+        fig_after = go.Figure()
+        
+        # Add fairness heatmap
+        # Note: go.Heatmap displays z[i,j] at position (x=j, y=i)
+        # Our fairness array is (48, 90), so z[y_idx, x_idx] where x goes 0-89, y goes 0-47
+        # This matches our display: 90 wide (x-axis) × 48 tall (y-axis)
+        fig_after.add_trace(go.Heatmap(
+            z=after_fairness,  # No transpose needed - (48, 90) displays as 90 wide × 48 tall
+            colorscale='RdYlGn_r',  # Red=high unfairness, Green=low unfairness
+            zmin=vmin,
+            zmax=vmax,
+            showscale=True,
+            colorbar=dict(
+                title=dict(text=fairness_key.upper(), side='right'),
+                orientation='h',
+                yanchor='bottom',
+                y=-0.2,
+                xanchor='center',
+                x=0.5,
+                len=0.8,
+                thickness=15,
+            ),
+            hovertemplate=f"{fairness_key.upper()}: %{{z:.4f}}<br>Cell: (%{{x}}, %{{y}})<extra></extra>",
+        ))
+        
+        # Draw MODIFIED trajectories
+        for i, hist_idx in enumerate(traj_indices_to_show):
+            history = histories[hist_idx]
+            traj = history.modified
+            color = colors[i % len(colors)]
+            
+            # Transform coordinates for display
+            transformed_coords = [_transform_coords_for_viz(s.x_grid, s.y_grid) for s in traj.states]
+            x_coords = [c[0] for c in transformed_coords]
+            y_coords = [c[1] for c in transformed_coords]
+            
+            driver_id = getattr(history.original, 'driver_id', 'N/A')
+            label = f"Traj {hist_idx} (D:{driver_id})"
+            
+            # Draw trajectory path
+            fig_after.add_trace(go.Scatter(
+                x=x_coords, y=y_coords,
+                mode='lines+markers',
+                name=label,
+                line=dict(color=color, width=2),
+                marker=dict(size=5, color=color),
+                legendgroup=f"traj_{hist_idx}",
+                showlegend=True,
+                hovertemplate=f"{label}<br>State %{{customdata}}<extra></extra>",
+                customdata=list(range(len(x_coords))),
+            ))
+            
+            # Mark dropoff (first state) with circle
+            fig_after.add_trace(go.Scatter(
+                x=[x_coords[0]], y=[y_coords[0]],
+                mode='markers',
+                marker=dict(color=color, size=12, symbol='circle', line=dict(color='white', width=2)),
+                legendgroup=f"traj_{hist_idx}",
+                showlegend=False,
+                hovertemplate=f"Dropoff<br>{label}<extra></extra>",
+            ))
+            
+            # Mark pickup (last state) with star - this is the MODIFIED location
+            fig_after.add_trace(go.Scatter(
+                x=[x_coords[-1]], y=[y_coords[-1]],
+                mode='markers',
+                marker=dict(color=color, size=14, symbol='star', line=dict(color='white', width=1)),
+                legendgroup=f"traj_{hist_idx}",
+                showlegend=False,
+                hovertemplate=f"Pickup (Modified)<br>{label}<extra></extra>",
+            ))
+            
+            # Draw arrow from original pickup to modified pickup to highlight the change
+            orig_pickup = history.original.states[-1]
+            mod_pickup = history.modified.states[-1]
+            orig_x, orig_y = _transform_coords_for_viz(orig_pickup.x_grid, orig_pickup.y_grid)
+            mod_x, mod_y = _transform_coords_for_viz(mod_pickup.x_grid, mod_pickup.y_grid)
+            
+            # Only draw if there's a meaningful change
+            if abs(orig_x - mod_x) > 0.1 or abs(orig_y - mod_y) > 0.1:
+                fig_after.add_annotation(
+                    x=mod_x, y=mod_y,
+                    ax=orig_x, ay=orig_y,
+                    xref="x", yref="y",
+                    axref="x", ayref="y",
+                    showarrow=True,
+                    arrowhead=3,
+                    arrowsize=1.5,
+                    arrowwidth=2,
+                    arrowcolor='rgba(255, 0, 0, 0.8)',
+                )
+        
+        # Configure layout
+        fig_after.update_layout(
+            title=f"Modified | {fairness_type} | ⭐=Pickup ●=Dropoff",
+            xaxis=dict(
+                range=[-0.5, display_width - 0.5],
+                constrain="domain",
+                showgrid=True,
+                gridwidth=1,
+                gridcolor='rgba(200, 200, 200, 0.3)',
+            ),
+            yaxis=dict(
+                range=[-0.5, display_height - 0.5],
+                scaleanchor="x",
+                scaleratio=1,
+                showgrid=True,
+                gridwidth=1,
+                gridcolor='rgba(200, 200, 200, 0.3)',
+            ),
+            height=550,
+            margin=dict(l=40, r=40, t=60, b=100),  # Extra bottom margin for colorbar
+            legend=dict(
+                orientation='h',
+                yanchor='top',
+                y=1.12,
+                xanchor='left',
+                x=0,
+                bgcolor='rgba(255,255,255,0.8)',
+                font=dict(size=9),
+            ),
+        )
+        
+        st.plotly_chart(fig_after, use_container_width=True)
+        
+        # Show stats
+        active_cells_after = (after_fairness > 0).sum()
+        avg_fairness_after = after_fairness[after_fairness > 0].mean() if active_cells_after > 0 else 0
+        delta = avg_fairness_after - avg_fairness
+        delta_str = f"({'↓' if delta < 0 else '↑'}{abs(delta):.4f})" if delta != 0 else ""
+        st.caption(f"Avg {fairness_key.upper()}: {avg_fairness_after:.4f} {delta_str} | Active cells: {active_cells_after}")
+    
+    # Summary of modification impact
+    if traj_indices_to_show:
+        with st.expander("📊 Modification Details", expanded=False):
+            for hist_idx in traj_indices_to_show[:10]:  # Limit to first 10
+                history = histories[hist_idx]
+                orig_pickup = history.original.states[-1]
+                mod_pickup = history.modified.states[-1]
+                
+                orig_cell = (int(orig_pickup.x_grid), int(orig_pickup.y_grid))
+                mod_cell = (int(mod_pickup.x_grid), int(mod_pickup.y_grid))
+                
+                # Get fairness scores at original and modified cells
+                orig_fairness_score = before_fairness[orig_cell[0], orig_cell[1]]
+                mod_fairness_score = after_fairness[mod_cell[0], mod_cell[1]]
+                
+                driver_id = getattr(history.original, 'driver_id', 'N/A')
+                st.markdown(
+                    f"**Traj {hist_idx}** (Driver {driver_id}): "
+                    f"({orig_cell[0]}, {orig_cell[1]}) → ({mod_cell[0]}, {mod_cell[1]}) | "
+                    f"{fairness_key.upper()}: {orig_fairness_score:.4f} → {mod_fairness_score:.4f}"
+                )
 
 
 def _display_debug_info():
