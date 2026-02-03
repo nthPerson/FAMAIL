@@ -38,11 +38,19 @@ st.set_page_config(
     layout="wide",
 )
 
-st.title("🚕 FAMAIL Trajectory Modification Testing Tool")
+st.title("🚕 FAMAIL Trajectory Modification Testing")
 st.markdown("""
 This dashboard tests the **Fairness-Aware Trajectory Editing Algorithm** (Modified ST-iFGSM).
 
-**Algorithm**: `δ = clip(α · sign[∇L], -ε, ε)` where `L = α₁F_spatial + α₂F_causal + α₃F_fidelity`
+**Algorithm Steps:**
+1. **For each trajectory** chosen for modification:
+2. **While** the discriminator still recognizes the modified trajectory as "same agent" **and** max iterations not exceeded:
+   - Calculate the perturbation: `δ = clip(α · sign[∇L], -ε, ε)` where `L = α₁F_spatial + α₂F_causal + α₃F_fidelity`
+   - Apply the perturbation to the pickup location of the trajectory
+   - Interpolate trajectory points between the unmodified path and the new pickup location
+3. **Return** the modified trajectory
+4. **Recalculate** global fairness metrics with the new pickup distribution
+5. **Repeat** from step 2 with the next trajectory to be modified
 """)
 
 # ============================================================================
@@ -106,7 +114,12 @@ def load_data_section():
         with st.spinner("Loading data..."):
             try:
                 from trajectory_modification import DataBundle
-                bundle = DataBundle.load_default(max_trajectories=max_trajs)
+                # Load with isotonic g(d) estimation and mean aggregation (RECOMMENDED)
+                bundle = DataBundle.load_default(
+                    max_trajectories=max_trajs,
+                    estimate_g_from_data=True,  # Fit g(d) using isotonic regression
+                    aggregation='mean',  # Use mean aggregation for causal fairness scale
+                )
                 st.session_state.trajectories = bundle.trajectories
                 st.session_state.pickup_dropoff_data = bundle.pickup_dropoff_data
                 st.session_state.pickup_grid = bundle.pickup_grid
@@ -114,8 +127,26 @@ def load_data_section():
                 st.session_state.active_taxis_data = bundle.active_taxis_data
                 st.session_state.active_taxis_grid = bundle.active_taxis_grid
                 st.session_state.g_function = bundle.g_function
+                
+                # NEW: Store causal fairness tensors (mean-aggregated for proper Y = S/D scale)
+                st.session_state.causal_demand_grid = bundle.causal_demand_grid
+                st.session_state.causal_supply_grid = bundle.causal_supply_grid
+                st.session_state.g_function_diagnostics = bundle.g_function_diagnostics
+                
                 st.session_state.data_loaded = True
                 st.sidebar.success(f"Loaded {len(bundle.trajectories)} trajectories")
+                
+                # Show g(d) fitting diagnostics
+                if bundle.g_function_diagnostics:
+                    diag = bundle.g_function_diagnostics
+                    st.sidebar.info(f"g(d) fitted using {diag.get('method', 'unknown')} method")
+                    if 'r_squared' in diag:
+                        st.sidebar.write(f"g(d) R²: {diag['r_squared']:.4f}")
+                    if 'demand_range' in diag:
+                        st.sidebar.write(f"Demand range: {diag['demand_range']}")
+                    if 'ratio_range' in diag:
+                        st.sidebar.write(f"Y=S/D range: {diag['ratio_range']}")
+                        
             except FileNotFoundError as e:
                 st.sidebar.error(f"File not found: {e}")
             except Exception as e:
@@ -146,7 +177,7 @@ def algorithm_params_section() -> Dict:
         max_iter = st.number_input("Max iterations", 10, 200, 50,
                                    help="Maximum ST-iFGSM iterations")
         conv_thresh = st.number_input("Convergence", 1e-6, 1e-2, 1e-4, format="%.1e",
-                                      help="Convergence threshold")
+                                      help="Convergence threshold: if the change in the objective function value between consecutive iterations is smaller than the threshold, the algorithm considers it 'converged' and stops.")
     
     st.sidebar.subheader("Objective Weights")
     w1 = st.sidebar.slider("α₁ (Spatial)", 0.0, 1.0, 0.33, 0.01)
@@ -289,7 +320,7 @@ def run_modification_section(selected_indices: List[int], params: Dict):
     with col1:
         use_discriminator = st.checkbox(
             "Use Discriminator for Fidelity",
-            value=False,
+            value=True,
             help="Load trained discriminator for F_fidelity computation"
         )
         
@@ -443,12 +474,27 @@ def _execute_modification(
     )
     st.success(f"✅ Modifier initialized with {gradient_mode} gradients")
     
-    # Set global state (now with both pickup and dropoff)
+    # Set global state with separate causal tensors for proper F_causal scaling
+    # Spatial fairness uses sum-aggregated pickup/dropoff (total counts)
+    # Causal fairness uses mean-aggregated demand/supply (per-period averages)
+    causal_demand_grid = st.session_state.get('causal_demand_grid')
+    causal_supply_grid = st.session_state.get('causal_supply_grid')
+    
     modifier.set_global_state(
         pickup_counts=torch.tensor(st.session_state.pickup_grid, device=device, dtype=torch.float32),
         dropoff_counts=torch.tensor(st.session_state.dropoff_grid, device=device, dtype=torch.float32),
         active_taxis=torch.tensor(st.session_state.active_taxis_grid, device=device, dtype=torch.float32),
+        causal_demand=torch.tensor(causal_demand_grid, device=device, dtype=torch.float32) if causal_demand_grid is not None else None,
+        causal_supply=torch.tensor(causal_supply_grid, device=device, dtype=torch.float32) if causal_supply_grid is not None else None,
     )
+    
+    # Display causal fairness scale info
+    if causal_demand_grid is not None and causal_supply_grid is not None:
+        st.info(f"📊 Causal fairness using mean-aggregated tensors:\n"
+                f"- Demand range: [{causal_demand_grid.min():.2f}, {causal_demand_grid.max():.2f}]\n"
+                f"- Supply range: [{causal_supply_grid.min():.2f}, {causal_supply_grid.max():.2f}]")
+    else:
+        st.warning("⚠️ Causal demand/supply grids not available. F_causal may have scale issues.")
     
     # Initialize metrics tracker
     metrics = GlobalMetrics(
@@ -506,6 +552,13 @@ def _execute_modification(
         'num_modified': len(histories),
     })
     
+    # Store objective debug info for display
+    st.session_state.last_objective_debug = {
+        'spatial': objective._last_spatial_debug,
+        'causal': objective._last_causal_debug,
+        'general': objective.last_debug,
+    }
+    
     # Display results
     _display_modification_results(histories, initial_snapshot, final_snapshot, show_iterations)
 
@@ -518,6 +571,11 @@ def _display_modification_results(
 ):
     """Display modification results."""
     st.header("📊 Results")
+    
+    # Guard against empty histories
+    if not histories:
+        st.warning("No trajectories were successfully modified.")
+        return
     
     # Summary metrics
     col1, col2, col3, col4 = st.columns(4)
@@ -567,33 +625,70 @@ def _display_modification_results(
     col2.metric("Avg Iterations", f"{avg_iterations:.1f}")
     col3.metric("Mean Fidelity", f"{final_snapshot.mean_fidelity:.4f}")
     
-    # Iteration details
-    if show_iterations and histories and PLOTLY_AVAILABLE:
-        st.subheader("Objective Function Over Iterations")
+    # Iteration details - always show if checkbox is checked
+    if show_iterations:
+        st.subheader("📈 Iteration Details")
         
-        # Plot first trajectory's iterations
-        history = histories[0]
+        # Select which trajectory to view
+        traj_options = [f"Trajectory {i}: {h.total_iterations} iterations" for i, h in enumerate(histories)]
+        selected_traj = st.selectbox("Select Trajectory", range(len(histories)), format_func=lambda x: traj_options[x])
         
-        iterations = list(range(1, len(history.iterations) + 1))
-        objectives = [r.objective_value for r in history.iterations]
-        spatials = [r.f_spatial for r in history.iterations]
-        causals = [r.f_causal for r in history.iterations]
-        fidelities = [r.f_fidelity for r in history.iterations]
+        history = histories[selected_traj]
         
-        fig = go.Figure()
-        fig.add_trace(go.Scatter(x=iterations, y=objectives, name='L (Combined)', line=dict(width=3)))
-        fig.add_trace(go.Scatter(x=iterations, y=spatials, name='F_spatial', line=dict(dash='dash')))
-        fig.add_trace(go.Scatter(x=iterations, y=causals, name='F_causal', line=dict(dash='dash')))
-        fig.add_trace(go.Scatter(x=iterations, y=fidelities, name='F_fidelity', line=dict(dash='dash')))
+        # Show trajectory summary
+        st.markdown(f"""
+        **Trajectory Summary:**
+        - Original pickup: ({history.original.states[-1].x_grid:.2f}, {history.original.states[-1].y_grid:.2f})
+        - Modified pickup: ({history.modified.states[-1].x_grid:.2f}, {history.modified.states[-1].y_grid:.2f})
+        - Total iterations: {history.total_iterations}
+        - Converged: {history.converged}
+        - Final objective: {history.final_objective:.4f}
+        """)
         
-        fig.update_layout(
-            title="Objective Function Evolution (First Trajectory)",
-            xaxis_title="Iteration",
-            yaxis_title="Value",
-            legend=dict(yanchor="top", y=0.99, xanchor="left", x=0.01),
-        )
-        
-        st.plotly_chart(fig, use_container_width=True)
+        if history.iterations:
+            # Show iteration data as a table
+            import pandas as pd
+            iter_data = {
+                'Iteration': list(range(1, len(history.iterations) + 1)),
+                'Objective L': [r.objective_value for r in history.iterations],
+                'F_spatial': [r.f_spatial for r in history.iterations],
+                'F_causal': [r.f_causal for r in history.iterations],
+                'F_fidelity': [r.f_fidelity for r in history.iterations],
+                'Grad Norm': [r.gradient_norm for r in history.iterations],
+                'δx': [r.perturbation[0] for r in history.iterations],
+                'δy': [r.perturbation[1] for r in history.iterations],
+            }
+            df = pd.DataFrame(iter_data)
+            st.dataframe(df, use_container_width=True)
+            
+            # Plot if we have plotly and more than 1 iteration
+            if PLOTLY_AVAILABLE and len(history.iterations) > 1:
+                st.markdown("**Objective Evolution:**")
+                
+                iterations = list(range(1, len(history.iterations) + 1))
+                objectives = [r.objective_value for r in history.iterations]
+                spatials = [r.f_spatial for r in history.iterations]
+                causals = [r.f_causal for r in history.iterations]
+                fidelities = [r.f_fidelity for r in history.iterations]
+                
+                fig = go.Figure()
+                fig.add_trace(go.Scatter(x=iterations, y=objectives, name='L (Combined)', line=dict(width=3)))
+                fig.add_trace(go.Scatter(x=iterations, y=spatials, name='F_spatial', line=dict(dash='dash')))
+                fig.add_trace(go.Scatter(x=iterations, y=causals, name='F_causal', line=dict(dash='dash')))
+                fig.add_trace(go.Scatter(x=iterations, y=fidelities, name='F_fidelity', line=dict(dash='dash')))
+                
+                fig.update_layout(
+                    title=f"Objective Function Evolution (Trajectory {selected_traj})",
+                    xaxis_title="Iteration",
+                    yaxis_title="Value",
+                    legend=dict(yanchor="top", y=0.99, xanchor="left", x=0.01),
+                )
+                
+                st.plotly_chart(fig, use_container_width=True)
+            elif len(history.iterations) == 1:
+                st.info("Only 1 iteration - trajectory converged immediately.")
+        else:
+            st.warning("No iterations recorded for this trajectory.")
     
     # Perturbation visualization
     if histories and PLOTLY_AVAILABLE:
@@ -611,6 +706,67 @@ def _display_modification_results(
             title="Distribution of Final Perturbations"
         )
         st.plotly_chart(fig, use_container_width=True)
+    
+    # Debug info expander
+    with st.expander("🔍 Debug Info (Objective Function Details)"):
+        if 'last_objective_debug' in st.session_state:
+            debug_info = st.session_state.last_objective_debug
+            
+            st.markdown("### Spatial Fairness Debug")
+            if debug_info.get('spatial'):
+                spatial_debug = debug_info['spatial']
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.metric("Gini DSR", f"{spatial_debug.get('gini_dsr', 'N/A'):.4f}" if isinstance(spatial_debug.get('gini_dsr'), (int, float)) else "N/A")
+                    st.metric("Active Cells", spatial_debug.get('n_active_cells', 'N/A'))
+                with col2:
+                    st.metric("Gini ASR", f"{spatial_debug.get('gini_asr', 'N/A'):.4f}" if isinstance(spatial_debug.get('gini_asr'), (int, float)) else "N/A")
+                    if 'dsr_range' in spatial_debug:
+                        st.write(f"DSR range: {spatial_debug['dsr_range']}")
+                    if 'asr_range' in spatial_debug:
+                        st.write(f"ASR range: {spatial_debug['asr_range']}")
+            else:
+                st.write("No spatial debug info available")
+            
+            st.markdown("### Causal Fairness Debug")
+            if debug_info.get('causal'):
+                causal_debug = debug_info['causal']
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.metric("Active Cells", causal_debug.get('n_active_cells', 'N/A'))
+                    r_sq = causal_debug.get('r_squared_raw', 'N/A')
+                    st.metric("R² (raw)", f"{r_sq:.4f}" if isinstance(r_sq, (int, float)) else "N/A")
+                    st.metric("Var(Y)", f"{causal_debug.get('var_Y', 'N/A'):.4f}" if isinstance(causal_debug.get('var_Y'), (int, float)) else "N/A")
+                with col2:
+                    st.metric("Var(R)", f"{causal_debug.get('var_R', 'N/A'):.4f}" if isinstance(causal_debug.get('var_R'), (int, float)) else "N/A")
+                    if 'demand_range' in causal_debug:
+                        st.write(f"Demand range: {causal_debug['demand_range']}")
+                    if 'Y_range' in causal_debug:
+                        st.write(f"Y (S/D) range: {causal_debug['Y_range']}")
+                    if 'g_d_range' in causal_debug:
+                        st.write(f"g(D) range: {causal_debug['g_d_range']}")
+                
+                # Explanation if R² is negative
+                if isinstance(r_sq, (int, float)) and r_sq < 0:
+                    st.warning(f"""
+                    **⚠️ F_causal = 0 because R² is negative ({r_sq:.4f})**
+                    
+                    This means `Var(residuals) > Var(Y)`, indicating a scale mismatch between:
+                    - The actual Y = Supply/Demand values
+                    - The g(D) function predictions
+                    
+                    **Possible causes:**
+                    1. The g(D) function was fitted on different data scales (e.g., hourly vs. total)
+                    2. The supply/demand definition doesn't match what g(D) expects
+                    3. Missing or incorrect g_function_params.json file
+                    """)
+            else:
+                st.write("No causal debug info available")
+            
+            st.markdown("### General Debug")
+            st.json(debug_info.get('general', {}))
+        else:
+            st.info("Run a modification first to see debug info.")
 
 
 # ============================================================================

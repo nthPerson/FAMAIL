@@ -122,6 +122,10 @@ class TrajectoryModifier:
         self.supply_counts = None
         self.active_taxis = None
         
+        # Separate causal fairness tensors (with mean aggregation for proper Y = S/D scaling)
+        self.causal_demand = None
+        self.causal_supply = None
+        
         # Base counts (original counts without current trajectory's contribution)
         self._base_pickup_counts = None
         self._base_dropoff_counts = None
@@ -132,22 +136,37 @@ class TrajectoryModifier:
         dropoff_counts: torch.Tensor,
         active_taxis: torch.Tensor,
         supply_counts: Optional[torch.Tensor] = None,
+        causal_demand: Optional[torch.Tensor] = None,
+        causal_supply: Optional[torch.Tensor] = None,
     ):
         """
         Set the global counts for fairness computation.
         
+        IMPORTANT: For causal fairness to work correctly, causal_demand and causal_supply
+        should be aggregated using 'mean' (not 'sum'), so that Y = S/D is at the same
+        scale as the g(d) function was fitted on.
+        
         Args:
-            pickup_counts: Pickup counts per cell [grid_x, grid_y]
-            dropoff_counts: Dropoff counts per cell [grid_x, grid_y]
-            active_taxis: Active taxis per cell [grid_x, grid_y]
-            supply_counts: Optional separate supply tensor for causal fairness.
-                          If not provided, dropoff_counts is used as supply.
+            pickup_counts: Pickup counts per cell [grid_x, grid_y] - for spatial fairness
+            dropoff_counts: Dropoff counts per cell [grid_x, grid_y] - for spatial fairness
+            active_taxis: Active taxis per cell [grid_x, grid_y] - for DSR/ASR normalization
+            supply_counts: DEPRECATED - use causal_supply instead
+            causal_demand: Mean demand per cell for causal fairness [grid_x, grid_y]
+                          If not provided, uses pickup_counts (may cause scale mismatch)
+            causal_supply: Mean supply per cell for causal fairness [grid_x, grid_y]
+                          If not provided, uses active_taxis
         """
         self.pickup_counts = pickup_counts.clone()
         self.dropoff_counts = dropoff_counts.clone()
         self.active_taxis = active_taxis.clone()
-        # Supply defaults to dropoff counts if not provided separately 
+        
+        # Legacy support: supply_counts for backward compatibility
         self.supply_counts = supply_counts.clone() if supply_counts is not None else self.dropoff_counts.clone()
+        
+        # Causal fairness tensors (with proper scaling)
+        # These should be aggregated with 'mean' to match g(d) fitting scale
+        self.causal_demand = causal_demand.clone() if causal_demand is not None else pickup_counts.clone()
+        self.causal_supply = causal_supply.clone() if causal_supply is not None else active_taxis.clone()
         
         # Store base counts for soft cell computation (without current trajectory)
         # These are used to compute soft counts during optimization
@@ -322,13 +341,16 @@ class TrajectoryModifier:
                 soft_pickup_counts = self._compute_soft_pickup_counts(pickup_tensor, original_cell)
                 
                 # Compute objective with soft counts (gradients flow through)
+                # Note: For causal fairness, we use the properly scaled causal_demand/supply
+                # which have mean aggregation to match g(d) fitting scale
                 total, terms = self.objective_fn(
                     pickup_counts=soft_pickup_counts,
                     dropoff_counts=self.dropoff_counts,
-                    supply=self.supply_counts,
+                    supply=self.causal_supply,  # Mean-aggregated supply for F_causal
                     active_taxis=self.active_taxis,
                     tau_features=tau_features,
                     tau_prime_features=tau_prime_features,
+                    causal_demand=self.causal_demand,  # Mean-aggregated demand for F_causal
                 )
                 
                 # Backward pass - gradients should flow to pickup_tensor
@@ -344,13 +366,15 @@ class TrajectoryModifier:
                     
             else:  # gradient_mode == 'heuristic'
                 # Use pre-aggregated counts (no gradient flow)
+                # Note: For causal fairness, we use the properly scaled causal_demand/supply
                 total, terms = self.objective_fn(
                     pickup_counts=self.pickup_counts,
                     dropoff_counts=self.dropoff_counts,
-                    supply=self.supply_counts,
+                    supply=self.causal_supply,  # Mean-aggregated supply for F_causal
                     active_taxis=self.active_taxis,
                     tau_features=tau_features,
                     tau_prime_features=tau_prime_features,
+                    causal_demand=self.causal_demand,  # Mean-aggregated demand for F_causal
                 )
                 
                 # Use heuristic gradient

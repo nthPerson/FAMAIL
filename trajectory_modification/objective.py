@@ -350,17 +350,21 @@ class FAMAILObjective(nn.Module):
             )
         
         # Filter cells with sufficient demand
-        # Threshold of 0.1 filters out cells with negligible demand to avoid
-        # numerical instability when computing Y = S/D
-        DEMAND_THRESHOLD = 0.1
-        mask = demand > DEMAND_THRESHOLD
+        # CRITICAL: This threshold MUST match the min_demand used when fitting g(d)
+        # (default min_demand=1.0 in GFunctionLoader.estimate_from_data)
+        #
+        # If threshold is too low (e.g., 0.1), we include cells with tiny demand
+        # where Y = S/D becomes artificially high, inflating Var(Y) and 
+        # making R² artificially low. Using 1.0 matches g(d) training data.
+        DEMAND_THRESHOLD = 1.0
+        mask = demand >= DEMAND_THRESHOLD
         n_active = mask.sum().item()
         
         # Require at least 2 cells to compute meaningful variance
         MIN_CELLS_FOR_VARIANCE = 2
         if n_active < MIN_CELLS_FOR_VARIANCE:
             raise InsufficientDataError(
-                f"Only {n_active} cells have demand > {DEMAND_THRESHOLD}. "
+                f"Only {n_active} cells have demand >= {DEMAND_THRESHOLD}. "
                 f"Causal fairness requires at least {MIN_CELLS_FOR_VARIANCE} active cells. "
                 "Check that demand tensor contains realistic values."
             )
@@ -460,19 +464,27 @@ class FAMAILObjective(nn.Module):
         active_taxis: torch.Tensor,
         tau_features: Optional[torch.Tensor] = None,
         tau_prime_features: Optional[torch.Tensor] = None,
+        causal_demand: Optional[torch.Tensor] = None,
     ) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
         """
         Compute combined objective L = α₁·F_spatial + α₂·F_causal + α₃·F_fidelity.
         
         All three terms are required for proper objective computation.
         
+        IMPORTANT: For causal fairness to work correctly, supply and causal_demand should
+        be aggregated using 'mean' (not 'sum'), so that Y = S/D is at the same scale
+        as the g(d) function was fitted on.
+        
         Args:
-            pickup_counts: Pickup counts per cell [grid_x, grid_y]
-            dropoff_counts: Dropoff counts per cell [grid_x, grid_y]
-            supply: Supply (taxi availability) per cell [grid_x, grid_y]
+            pickup_counts: Pickup counts per cell [grid_x, grid_y] - for spatial fairness
+            dropoff_counts: Dropoff counts per cell [grid_x, grid_y] - for spatial fairness
+            supply: Supply (taxi availability) per cell [grid_x, grid_y] - for causal fairness
+                   Should be mean-aggregated for proper F_causal computation.
             active_taxis: Active taxis for DSR/ASR normalization [grid_x, grid_y]
             tau_features: Original trajectory features [batch, seq_len, 4]
             tau_prime_features: Modified trajectory features [batch, seq_len, 4]
+            causal_demand: Mean demand per cell for causal fairness [grid_x, grid_y].
+                          If not provided, uses pickup_counts (may cause scale mismatch).
             
         Returns:
             total: Combined objective value (higher = better)
@@ -488,15 +500,21 @@ class FAMAILObjective(nn.Module):
         f_spatial = self.compute_spatial_fairness(pickup_counts, dropoff_counts, active_taxis)
         
         # Causal fairness (requires demand and supply)
-        f_causal = self.compute_causal_fairness(pickup_counts, supply)
+        # Use causal_demand if provided, otherwise fall back to pickup_counts
+        demand_for_causal = causal_demand if causal_demand is not None else pickup_counts
+        f_causal = self.compute_causal_fairness(demand_for_causal, supply)
         
-        # Fidelity (requires trajectory features)
-        if tau_features is None or tau_prime_features is None:
-            raise MissingDataError(
-                "Trajectory features (tau_features and tau_prime_features) are required "
-                "for fidelity computation. Provide trajectory tensors [batch, seq_len, 4]."
-            )
-        f_fidelity = self.compute_fidelity(tau_features, tau_prime_features)
+        # Fidelity (requires trajectory features and discriminator)
+        # Skip if alpha_fidelity is 0 to allow running without discriminator
+        if self.alpha_fidelity > 0:
+            if tau_features is None or tau_prime_features is None:
+                raise MissingDataError(
+                    "Trajectory features (tau_features and tau_prime_features) are required "
+                    "for fidelity computation. Provide trajectory tensors [batch, seq_len, 4]."
+                )
+            f_fidelity = self.compute_fidelity(tau_features, tau_prime_features)
+        else:
+            f_fidelity = torch.tensor(0.0, device=device)
         
         # Combined objective
         total = (

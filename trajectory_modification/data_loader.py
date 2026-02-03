@@ -226,7 +226,9 @@ class PickupDropoffLoader:
         counts_per_cell = np.zeros(GRID_DIMS, dtype=np.float32)
         
         for key, counts in data.items():
-            x, y = key[0], key[1]
+            # Data uses 1-indexed coordinates [1, 48] x [1, 90]
+            # Convert to 0-indexed for grid array
+            x, y = key[0] - 1, key[1] - 1
             if 0 <= x < GRID_DIMS[0] and 0 <= y < GRID_DIMS[1]:
                 pickup = counts[0] if isinstance(counts, (list, tuple)) else counts
                 grid[x, y] += pickup
@@ -318,7 +320,7 @@ class ActiveTaxisLoader:
 
 
 class GFunctionLoader:
-    """Loads g(d) function parameters."""
+    """Loads or estimates g(d) function."""
     
     def __init__(self, workspace_root: Optional[Path] = None):
         self.workspace_root = workspace_root or find_workspace_root()
@@ -333,7 +335,7 @@ class GFunctionLoader:
             return json.load(f)
     
     def build_g_function(self) -> Callable:
-        """Build g(d) function from saved parameters."""
+        """Build g(d) function from saved parameters (DEPRECATED - use estimate_from_data)."""
         params = self.load_params()
         if params is None:
             # Return default log-linear function
@@ -355,6 +357,297 @@ class GFunctionLoader:
             return lambda d: k * np.power(np.asarray(d) + 1, alpha)
         else:
             return lambda d: 0.5 * np.log(np.asarray(d) + 1)
+    
+    @staticmethod
+    def estimate_from_data(
+        pickup_dropoff_data: Dict[Tuple, Tuple[int, int]],
+        active_taxis_data: Dict[Tuple, int],
+        aggregation: str = 'mean',
+        method: str = 'isotonic',
+        min_demand: int = 1,
+    ) -> Tuple[Callable, Dict[str, Any]]:
+        """
+        Estimate g(d) function from actual supply/demand data using isotonic regression.
+        
+        This is the RECOMMENDED approach: fit g(d) on the same temporal granularity
+        as the data will be used during optimization.
+        
+        Args:
+            pickup_dropoff_data: Raw pickup/dropoff counts {(x,y,time,day): [pickup, dropoff]}
+            active_taxis_data: Active taxis counts {(x,y,time,day): count}
+            aggregation: How to aggregate across time: 'mean', 'sum', or 'max'
+            method: Estimation method: 'isotonic' (recommended), 'linear', 'polynomial'
+            min_demand: Minimum demand to include cell in fitting (avoids division issues)
+            
+        Returns:
+            Tuple of (g_function, diagnostics_dict)
+        """
+        # Import the well-tested utility functions from causal_fairness module
+        try:
+            from objective_function.causal_fairness.utils import (
+                extract_demand_from_counts,
+                aggregate_to_period,
+                compute_service_ratios,
+                extract_demand_ratio_arrays,
+            )
+        except ImportError:
+            # Fall back to simple matching if utils not available
+            return GFunctionLoader._estimate_from_data_simple(
+                pickup_dropoff_data, active_taxis_data, aggregation, method, min_demand
+            )
+        
+        # Extract demand from pickup counts
+        demand = extract_demand_from_counts(pickup_dropoff_data)
+        
+        # Aggregate demand to hourly (same granularity as active_taxis)
+        # This converts time_bucket (1-288) to hour (0-23)
+        demand = aggregate_to_period(demand, 'hourly')
+        
+        # Compute service ratios Y = S/D
+        ratios = compute_service_ratios(
+            demand,
+            active_taxis_data,
+            min_demand=min_demand,
+            include_zero_supply=False,
+        )
+        
+        # Extract aligned arrays
+        demands_arr, ratios_arr, common_keys = extract_demand_ratio_arrays(demand, ratios)
+        
+        if len(demands_arr) < 10:
+            # Not enough data - return default function
+            def default_g(d):
+                return np.ones_like(np.atleast_1d(d), dtype=float)
+            return default_g, {
+                'method': 'default',
+                'error': f'Insufficient matched data points: {len(demands_arr)}',
+                'n_demand_entries': len(demand),
+                'n_ratio_entries': len(ratios),
+            }
+        
+        # Aggregate to per-cell level using specified method
+        cell_demands = {}
+        cell_ratios = {}
+        
+        for key in common_keys:
+            cell = (key[0], key[1])
+            d = demand[key]
+            r = ratios[key]
+            
+            if cell not in cell_demands:
+                cell_demands[cell] = []
+                cell_ratios[cell] = []
+            
+            cell_demands[cell].append(d)
+            cell_ratios[cell].append(r)
+        
+        # Apply aggregation
+        final_demands = []
+        final_ratios = []
+        
+        for cell in cell_demands:
+            d_values = cell_demands[cell]
+            r_values = cell_ratios[cell]
+            
+            if aggregation == 'mean':
+                agg_demand = np.mean(d_values)
+                agg_ratio = np.mean(r_values)
+            elif aggregation == 'sum':
+                agg_demand = np.sum(d_values)
+                agg_ratio = np.sum(r_values)
+            elif aggregation == 'max':
+                agg_demand = np.max(d_values)
+                agg_ratio = np.max(r_values)
+            else:
+                agg_demand = np.mean(d_values)
+                agg_ratio = np.mean(r_values)
+            
+            final_demands.append(agg_demand)
+            final_ratios.append(agg_ratio)
+        
+        final_demands = np.array(final_demands, dtype=float)
+        final_ratios = np.array(final_ratios, dtype=float)
+        
+        # Estimate g(d) using isotonic regression
+        if method == 'isotonic':
+            try:
+                from sklearn.isotonic import IsotonicRegression
+                model = IsotonicRegression(increasing=False, out_of_bounds='clip')
+                model.fit(final_demands, final_ratios)
+                
+                def g_function(d):
+                    return model.predict(np.atleast_1d(d))
+                
+                # Compute R² for diagnostics
+                predictions = g_function(final_demands)
+                residuals = final_ratios - predictions
+                var_residuals = np.var(residuals)
+                var_total = np.var(final_ratios)
+                r_squared = 1 - var_residuals / (var_total + 1e-10)
+                
+                diagnostics = {
+                    'method': 'isotonic',
+                    'increasing': False,
+                    'n_points': len(final_demands),
+                    'demand_range': (float(final_demands.min()), float(final_demands.max())),
+                    'ratio_range': (float(final_ratios.min()), float(final_ratios.max())),
+                    'aggregation': aggregation,
+                    'r_squared': float(r_squared),
+                }
+                
+                return g_function, diagnostics
+                
+            except ImportError:
+                pass
+        
+        # Fallback: simple mean ratio
+        mean_ratio = np.mean(final_ratios)
+        def fallback_g(d):
+            return np.full_like(np.atleast_1d(d), mean_ratio, dtype=float)
+        
+        return fallback_g, {
+            'method': 'constant',
+            'mean_ratio': float(mean_ratio),
+            'n_points': len(final_demands),
+        }
+    
+    @staticmethod
+    def _estimate_from_data_simple(
+        pickup_dropoff_data: Dict[Tuple, Tuple[int, int]],
+        active_taxis_data: Dict[Tuple, int],
+        aggregation: str = 'mean',
+        method: str = 'isotonic',
+        min_demand: int = 1,
+    ) -> Tuple[Callable, Dict[str, Any]]:
+        """
+        Fallback estimation when causal_fairness utils not available.
+        
+        Uses simple key matching with time_bucket to hour conversion.
+        """
+        # Extract demand and compute service ratios
+        demand_per_key = {}
+        supply_per_key = {}
+        
+        for key, counts in pickup_dropoff_data.items():
+            if len(key) >= 4:
+                pickup = counts[0] if isinstance(counts, (list, tuple)) else counts
+                if pickup >= min_demand:
+                    demand_per_key[key] = pickup
+        
+        # Match with active taxis (convert time_bucket to hour)
+        for key, demand in demand_per_key.items():
+            x, y, time_val, day_val = key[0], key[1], key[2], key[3]
+            
+            # Convert time_bucket (1-288) to hour (0-23)
+            hour = (time_val - 1) // 12
+            hourly_key = (x, y, hour, day_val)
+            supply = active_taxis_data.get(hourly_key, 0)
+            
+            if supply > 0:
+                supply_per_key[key] = supply
+        
+        # Compute Y = S/D (service ratio)
+        common_keys = set(demand_per_key.keys()) & set(supply_per_key.keys())
+        
+        if len(common_keys) < 10:
+            # Not enough data - return default function
+            def default_g(d):
+                return np.ones_like(np.atleast_1d(d), dtype=float)
+            return default_g, {
+                'method': 'default',
+                'error': f'Insufficient matched data points: {len(common_keys)}',
+                'n_demand_entries': len(demand_per_key),
+                'n_supply_entries': len(supply_per_key),
+            }
+        
+        # Aggregate to per-cell level using specified method
+        cell_demands = {}
+        cell_ratios = {}
+        cell_counts = {}
+        
+        for key in common_keys:
+            cell = (key[0], key[1])
+            demand = demand_per_key[key]
+            supply = supply_per_key[key]
+            ratio = supply / demand
+            
+            if cell not in cell_demands:
+                cell_demands[cell] = []
+                cell_ratios[cell] = []
+            
+            cell_demands[cell].append(demand)
+            cell_ratios[cell].append(ratio)
+        
+        # Apply aggregation
+        demands_arr = []
+        ratios_arr = []
+        
+        for cell in cell_demands:
+            d_values = cell_demands[cell]
+            r_values = cell_ratios[cell]
+            
+            if aggregation == 'mean':
+                agg_demand = np.mean(d_values)
+                agg_ratio = np.mean(r_values)
+            elif aggregation == 'sum':
+                agg_demand = np.sum(d_values)
+                agg_ratio = np.sum(r_values)  # May not be meaningful
+            elif aggregation == 'max':
+                agg_demand = np.max(d_values)
+                agg_ratio = np.max(r_values)
+            else:
+                agg_demand = np.mean(d_values)
+                agg_ratio = np.mean(r_values)
+            
+            demands_arr.append(agg_demand)
+            ratios_arr.append(agg_ratio)
+        
+        demands_arr = np.array(demands_arr, dtype=float)
+        ratios_arr = np.array(ratios_arr, dtype=float)
+        
+        # Estimate g(d) using specified method
+        if method == 'isotonic':
+            try:
+                from sklearn.isotonic import IsotonicRegression
+                model = IsotonicRegression(increasing=False, out_of_bounds='clip')
+                model.fit(demands_arr, ratios_arr)
+                
+                def g_function(d):
+                    return model.predict(np.atleast_1d(d))
+                
+                diagnostics = {
+                    'method': 'isotonic',
+                    'increasing': False,
+                    'n_points': len(demands_arr),
+                    'demand_range': (float(demands_arr.min()), float(demands_arr.max())),
+                    'ratio_range': (float(ratios_arr.min()), float(ratios_arr.max())),
+                    'aggregation': aggregation,
+                }
+                
+                # Compute R² for diagnostics
+                predictions = g_function(demands_arr)
+                residuals = ratios_arr - predictions
+                var_residuals = np.var(residuals)
+                var_total = np.var(ratios_arr)
+                r_squared = 1 - var_residuals / (var_total + 1e-10)
+                diagnostics['r_squared'] = float(r_squared)
+                
+                return g_function, diagnostics
+                
+            except ImportError:
+                # Fall back to simple mean if sklearn not available
+                pass
+        
+        # Fallback: simple mean ratio
+        mean_ratio = np.mean(ratios_arr)
+        def fallback_g(d):
+            return np.full_like(np.atleast_1d(d), mean_ratio, dtype=float)
+        
+        return fallback_g, {
+            'method': 'constant',
+            'mean_ratio': float(mean_ratio),
+            'n_points': len(demands_arr),
+        }
 
 
 @dataclass
@@ -363,12 +656,17 @@ class DataBundle:
     
     trajectories: List[Trajectory]
     pickup_dropoff_data: Dict[Tuple, Tuple[int, int]]  # Raw pickup/dropoff counts
-    pickup_grid: np.ndarray  # Aggregated pickups (48, 90)
-    dropoff_grid: np.ndarray  # Aggregated dropoffs (48, 90)
+    pickup_grid: np.ndarray  # Aggregated pickups (48, 90) - for spatial fairness
+    dropoff_grid: np.ndarray  # Aggregated dropoffs (48, 90) - for spatial fairness
     active_taxis_data: Dict[Tuple, int]  # Raw active taxis counts
-    active_taxis_grid: np.ndarray  # Aggregated active taxis (48, 90)
+    active_taxis_grid: np.ndarray  # Aggregated active taxis (48, 90) - for DSR/ASR
     g_function: Callable
     grid_dims: Tuple[int, int] = GRID_DIMS
+    
+    # NEW: Separate tensors for causal fairness with proper temporal aggregation
+    causal_demand_grid: Optional[np.ndarray] = None  # Mean demand per cell (for F_causal)
+    causal_supply_grid: Optional[np.ndarray] = None  # Mean supply per cell (for F_causal)
+    g_function_diagnostics: Optional[Dict[str, Any]] = None  # g(d) fitting info
     
     @classmethod
     def load_default(
@@ -377,15 +675,25 @@ class DataBundle:
         max_drivers: Optional[int] = None,
         workspace_root: Optional[Path] = None,
         active_taxis_period: str = 'hourly',
+        estimate_g_from_data: bool = True,
+        aggregation: str = 'mean',
     ) -> 'DataBundle':
         """
         Load default data bundle from workspace.
+        
+        IMPORTANT: When estimate_g_from_data=True (default), g(d) is fitted using
+        isotonic regression on the actual supply/demand data. This ensures the
+        g(d) output scale matches the Y = S/D values in the data.
         
         Args:
             max_trajectories: Maximum trajectories to load
             max_drivers: Maximum drivers to load from
             workspace_root: Override workspace root path
             active_taxis_period: Period type for active taxis ('hourly' or 'time_bucket')
+            estimate_g_from_data: If True, fit g(d) using isotonic regression on actual data.
+                                  If False, use the old hardcoded g(d) function (NOT recommended).
+            aggregation: Temporal aggregation method for causal fairness: 'mean' (recommended),
+                        'sum', or 'max'. Must match the scale expected by g(d).
             
         Returns:
             DataBundle with all loaded data
@@ -402,12 +710,15 @@ class DataBundle:
         # Load pickup/dropoff counts
         pd_loader = PickupDropoffLoader(root)
         pickup_dropoff_data = pd_loader.load()
+        
+        # Spatial fairness uses SUM aggregation (total pickups/dropoffs per cell)
         pickup_grid = pd_loader.aggregate_to_grid(pickup_dropoff_data, aggregation='sum')
         
-        # Extract and aggregate dropoffs
+        # Extract and aggregate dropoffs (also sum for spatial fairness)
         dropoff_grid = np.zeros(GRID_DIMS, dtype=np.float32)
         for key, counts in pickup_dropoff_data.items():
-            x, y = key[0], key[1]
+            # Data uses 1-indexed coordinates, convert to 0-indexed
+            x, y = key[0] - 1, key[1] - 1
             if 0 <= x < GRID_DIMS[0] and 0 <= y < GRID_DIMS[1]:
                 if isinstance(counts, (list, tuple)) and len(counts) >= 2:
                     dropoff_grid[x, y] += counts[1]
@@ -420,9 +731,90 @@ class DataBundle:
         # Ensure no zero values in active_taxis_grid (for DSR calculation)
         active_taxis_grid = np.maximum(active_taxis_grid, 0.1)
         
-        # Load g function
-        g_loader = GFunctionLoader(root)
-        g_function = g_loader.build_g_function()
+        # =====================================================================
+        # G(D) FUNCTION + CAUSAL FAIRNESS TENSORS
+        # =====================================================================
+        # CRITICAL: g(d) is fitted on hourly data. For F_causal to be meaningful,
+        # the causal demand/supply grids must use the SAME hourly-aggregated data
+        # so that Y = S/D is in the same scale range as g(d) was trained on.
+        
+        g_diagnostics = None
+        causal_demand_grid = None
+        causal_supply_grid = None
+        
+        if estimate_g_from_data:
+            # Import the utilities for proper data processing
+            try:
+                from objective_function.causal_fairness.utils import (
+                    extract_demand_from_counts,
+                    aggregate_to_period,
+                    compute_service_ratios,
+                )
+                
+                # Step 1: Extract demand from pickup counts
+                hourly_demand = extract_demand_from_counts(pickup_dropoff_data)
+                
+                # Step 2: Aggregate to hourly (same granularity as active_taxis)
+                hourly_demand = aggregate_to_period(hourly_demand, 'hourly')
+                
+                # Step 3: Fit g(d) using isotonic regression on hourly data
+                g_function, g_diagnostics = GFunctionLoader.estimate_from_data(
+                    pickup_dropoff_data=pickup_dropoff_data,
+                    active_taxis_data=active_taxis_data,
+                    aggregation=aggregation,
+                    method='isotonic',
+                )
+                
+                # Step 4: Create causal grids from the SAME hourly data
+                # Aggregate hourly demand to per-cell mean
+                causal_demand_grid = np.zeros(GRID_DIMS, dtype=np.float32)
+                demand_counts_grid = np.zeros(GRID_DIMS, dtype=np.float32)
+                
+                for key, d in hourly_demand.items():
+                    # hourly keys: (x, y, hour, day) - 1-indexed coords
+                    x, y = key[0] - 1, key[1] - 1
+                    if 0 <= x < GRID_DIMS[0] and 0 <= y < GRID_DIMS[1]:
+                        causal_demand_grid[x, y] += d
+                        demand_counts_grid[x, y] += 1
+                
+                # Apply mean aggregation
+                mask = demand_counts_grid > 0
+                causal_demand_grid[mask] = causal_demand_grid[mask] / demand_counts_grid[mask]
+                
+                # Create causal supply grid from hourly active_taxis data (same approach)
+                causal_supply_grid = np.zeros(GRID_DIMS, dtype=np.float32)
+                supply_counts_grid = np.zeros(GRID_DIMS, dtype=np.float32)
+                
+                for key, s in active_taxis_data.items():
+                    # active_taxis keys: (x, y, hour, day) - 1-indexed coords
+                    x, y = key[0] - 1, key[1] - 1
+                    if 0 <= x < GRID_DIMS[0] and 0 <= y < GRID_DIMS[1]:
+                        causal_supply_grid[x, y] += s
+                        supply_counts_grid[x, y] += 1
+                
+                mask = supply_counts_grid > 0
+                causal_supply_grid[mask] = causal_supply_grid[mask] / supply_counts_grid[mask]
+                causal_supply_grid = np.maximum(causal_supply_grid, 0.1)  # Avoid division by zero
+                
+            except ImportError:
+                # Fallback: use simple approach
+                g_function, g_diagnostics = GFunctionLoader.estimate_from_data(
+                    pickup_dropoff_data=pickup_dropoff_data,
+                    active_taxis_data=active_taxis_data,
+                    aggregation=aggregation,
+                    method='isotonic',
+                )
+                causal_demand_grid = pd_loader.aggregate_to_grid(pickup_dropoff_data, aggregation='mean')
+                causal_supply_grid = at_loader.aggregate_to_grid(active_taxis_data, aggregation='mean')
+                causal_supply_grid = np.maximum(causal_supply_grid, 0.1)
+        else:
+            # DEPRECATED: Use hardcoded g(d) function (may cause scale mismatch)
+            g_loader = GFunctionLoader(root)
+            g_function = g_loader.build_g_function()
+            g_diagnostics = {'method': 'hardcoded', 'warning': 'May cause scale mismatch with F_causal'}
+            causal_demand_grid = pd_loader.aggregate_to_grid(pickup_dropoff_data, aggregation='mean')
+            causal_supply_grid = at_loader.aggregate_to_grid(active_taxis_data, aggregation='mean')
+            causal_supply_grid = np.maximum(causal_supply_grid, 0.1)
         
         return cls(
             trajectories=trajectories,
@@ -432,6 +824,9 @@ class DataBundle:
             active_taxis_data=active_taxis_data,
             active_taxis_grid=active_taxis_grid,
             g_function=g_function,
+            causal_demand_grid=causal_demand_grid,
+            causal_supply_grid=causal_supply_grid,
+            g_function_diagnostics=g_diagnostics,
         )
     
     def to_tensors(self, device: str = 'cpu') -> Dict[str, 'torch.Tensor']:
