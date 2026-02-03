@@ -1392,7 +1392,8 @@ def main():
     
     where:
     - $Y = S/D$ = Service ratio (supply / demand)
-    - $D$ = Demand (pickup counts)
+    - $D$ = Demand (pickup counts from `pickup_dropoff_counts.pkl`)
+    - $S$ = Supply (number of available taxis from `active_taxis_5x5_*.pkl`)
     - $g(d) = E[Y|D=d]$ = Expected service ratio given demand
     """)
     
@@ -1582,14 +1583,33 @@ def main():
         st.metric(
             "Causal Fairness (F_causal)",
             f"{breakdown['value']:.4f}",
-            help="R² - coefficient of determination"
+            help=(
+                "Average R² (coefficient of determination) computed across all time periods. "
+                "Measures how much of the variation in service ratios (Supply/Demand) is "
+                "explained by demand alone. "
+                "Formula: F_causal = mean(R²_p) where R²_p = 1 - Var(residuals)/Var(Y) for each period p. "
+                "Values range from 0 to 1: "
+                "• 1.0 = Perfect fairness (service allocation is entirely explained by demand) "
+                "• 0.7+ = High fairness (strong demand-service alignment) "
+                "• 0.4-0.7 = Moderate fairness (some unexplained variation suggests contextual bias) "
+                "• <0.4 = Low fairness (service is weakly related to demand, indicating potential discrimination)"
+            )
         )
     
     with col2:
         st.metric(
             "Overall R²",
             f"{breakdown['components'].get('overall_r2', 0):.4f}",
-            help="R² computed on all data pooled"
+            help=(
+                "R² computed on all data pooled together (ignoring time period boundaries). "
+                "Unlike F_causal which averages R² across periods, this metric computes a single R² "
+                "using all cell observations simultaneously. "
+                "Formula: R² = 1 - Var(Y - g(D))/Var(Y), where Y=service ratios, g(D)=expected ratio given demand. "
+                "Useful for comparison: "
+                "• If Overall R² ≈ F_causal: Consistent fairness across time periods "
+                "• If Overall R² > F_causal: Some periods have lower fairness (temporal bias) "
+                "• If Overall R² < F_causal: The pooled model fits worse (period-specific patterns exist)"
+            )
         )
     
     with col3:
