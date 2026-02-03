@@ -97,25 +97,33 @@ class TrajectoryLoader:
         if max_drivers:
             driver_keys = driver_keys[:max_drivers]
         
+        # First pass: collect all valid trajectories with their driver IDs
+        all_trajs = []
         for driver_id in driver_keys:
             driver_trajs = data[driver_id]
-            
             for traj_data in driver_trajs:
-                if max_trajectories and total_count >= max_trajectories:
-                    return trajectories
-                
-                try:
-                    traj = self._parse_trajectory(
-                        traj_data, 
-                        driver_id=driver_id,
-                        trajectory_id=traj_id,
-                    )
-                    if traj:
-                        trajectories.append(traj)
-                        total_count += 1
-                        traj_id += 1
-                except Exception:
-                    continue
+                all_trajs.append((driver_id, traj_data))
+        
+        # If max_trajectories is set and less than total, sample randomly
+        # This ensures we get trajectories from different drivers
+        if max_trajectories and len(all_trajs) > max_trajectories:
+            import random
+            random.seed(42)  # Reproducible sampling
+            all_trajs = random.sample(all_trajs, max_trajectories)
+        
+        # Parse the selected trajectories
+        for driver_id, traj_data in all_trajs:
+            try:
+                traj = self._parse_trajectory(
+                    traj_data, 
+                    driver_id=driver_id,
+                    trajectory_id=traj_id,
+                )
+                if traj:
+                    trajectories.append(traj)
+                    traj_id += 1
+            except Exception:
+                continue
         
         return trajectories
     
