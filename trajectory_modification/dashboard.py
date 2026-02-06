@@ -182,7 +182,7 @@ def algorithm_params_section() -> Dict:
     with col2:
         max_iter = st.number_input("Max iterations", 10, 200, 50,
                                    help="Maximum ST-iFGSM iterations")
-        conv_thresh = st.number_input("Convergence", 1e-6, 1e-2, 1e-4, format="%.1e",
+        conv_thresh = st.number_input("Convergence", 1e-8, 1e-2, 1e-6, format="%.1e",
                                       help="Convergence threshold: if the change in the objective function value between consecutive iterations is smaller than the threshold, the algorithm considers it 'converged' and stops.")
     
     st.sidebar.subheader("Objective Weights")
@@ -852,7 +852,7 @@ def run_modification_section(selected_indices: List[int], params: Dict):
             
             use_annealing = st.checkbox(
                 "Temperature Annealing",
-                value=False,
+                value=True,
                 help="Gradually reduce temperature from τ_max to τ_min over iterations"
             )
             
@@ -1462,6 +1462,8 @@ def _display_before_after_fairness_viz(histories):
             zmin=vmin,
             zmax=vmax,
             showscale=True,
+            xgap=1,  # Add cell borders
+            ygap=1,  # Add cell borders
             colorbar=dict(
                 title=dict(text=fairness_key.upper(), side='right'),
                 orientation='h',
@@ -1486,6 +1488,9 @@ def _display_before_after_fairness_viz(histories):
             x_coords = [c[0] for c in transformed_coords]
             y_coords = [c[1] for c in transformed_coords]
             
+            # Store original coordinates for hover display
+            orig_coords = [(s.x_grid, s.y_grid) for s in traj.states]
+            
             driver_id = getattr(traj, 'driver_id', 'N/A')
             label = f"Traj {hist_idx} (D:{driver_id})"
             
@@ -1498,8 +1503,8 @@ def _display_before_after_fairness_viz(histories):
                 marker=dict(size=5, color=color),
                 legendgroup=f"traj_{hist_idx}",
                 showlegend=True,
-                hovertemplate=f"{label}<br>State %{{customdata}}<extra></extra>",
-                customdata=list(range(len(x_coords))),
+                hovertemplate=f"{label}<br>State %{{customdata[0]}}<br>Coords: (%{{customdata[1]:.1f}}, %{{customdata[2]:.1f}})<extra></extra>",
+                customdata=[[i, orig_coords[i][0], orig_coords[i][1]] for i in range(len(x_coords))],
             ))
             
             # Mark dropoff (first state) with circle
@@ -1576,6 +1581,8 @@ def _display_before_after_fairness_viz(histories):
             zmin=vmin,
             zmax=vmax,
             showscale=True,
+            xgap=1,  # Add cell borders
+            ygap=1,  # Add cell borders
             colorbar=dict(
                 title=dict(text=fairness_key.upper(), side='right'),
                 orientation='h',
@@ -1600,6 +1607,9 @@ def _display_before_after_fairness_viz(histories):
             x_coords = [c[0] for c in transformed_coords]
             y_coords = [c[1] for c in transformed_coords]
             
+            # Store original coordinates for hover display
+            orig_coords = [(s.x_grid, s.y_grid) for s in traj.states]
+            
             driver_id = getattr(history.original, 'driver_id', 'N/A')
             label = f"Traj {hist_idx} (D:{driver_id})"
             
@@ -1612,8 +1622,8 @@ def _display_before_after_fairness_viz(histories):
                 marker=dict(size=5, color=color),
                 legendgroup=f"traj_{hist_idx}",
                 showlegend=True,
-                hovertemplate=f"{label}<br>State %{{customdata}}<extra></extra>",
-                customdata=list(range(len(x_coords))),
+                hovertemplate=f"{label}<br>State %{{customdata[0]}}<br>Coords: (%{{customdata[1]:.1f}}, %{{customdata[2]:.1f}})<extra></extra>",
+                customdata=[[i, orig_coords[i][0], orig_coords[i][1]] for i in range(len(x_coords))],
             ))
             
             # Mark dropoff (first state) with circle
@@ -1627,13 +1637,14 @@ def _display_before_after_fairness_viz(histories):
             ))
             
             # Mark pickup (last state) with star - this is the MODIFIED location
+            mod_pickup_coords = orig_coords[-1]  # Get the modified pickup coordinates
             fig_after.add_trace(go.Scatter(
                 x=[x_coords[-1]], y=[y_coords[-1]],
                 mode='markers',
                 marker=dict(color=color, size=14, symbol='star', line=dict(color='white', width=1)),
                 legendgroup=f"traj_{hist_idx}",
                 showlegend=False,
-                hovertemplate=f"Pickup (Modified)<br>{label}<extra></extra>",
+                hovertemplate=f"Pickup (Modified)<br>{label}<br>Coords: ({mod_pickup_coords[0]:.1f}, {mod_pickup_coords[1]:.1f})<extra></extra>",
             ))
             
             # Draw arrow from original pickup to modified pickup to highlight the change
