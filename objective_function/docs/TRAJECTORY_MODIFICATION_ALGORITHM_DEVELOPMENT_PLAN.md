@@ -125,18 +125,18 @@ The FAMAIL trajectory modification algorithm follows six iterative steps:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│                    TRAJECTORY MODIFICATION LOOP                      │
+│                    TRAJECTORY MODIFICATION LOOP                     │
 ├─────────────────────────────────────────────────────────────────────┤
 │  STEP 1: Rank trajectories by fairness impact                       │
-│      ↓                                                               │
+│      ↓                                                              │
 │  STEP 2: Identify worst-offending trajectories (demand hierarchy)   │
-│      ↓                                                               │
-│  STEP 3: Modify selected trajectories (reallocate pickups/dropoffs) │
-│      ↓                                                               │
+│      ↓                                                              │
+│  STEP 3: Modify selected trajectories (reallocate pickups)          │
+│      ↓                                                              │
 │  STEP 4: Validate fidelity via discriminator                        │
-│      ↓                                                               │
+│      ↓                                                              │
 │  STEP 5: Recompute fairness metrics (update Nᵖ)                     │
-│      ↓                                                               │
+│      ↓                                                              │
 │  STEP 6: Check convergence → LOOP or EXIT                           │
 └─────────────────────────────────────────────────────────────────────┘
 ```
