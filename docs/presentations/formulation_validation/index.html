@@ -1,0 +1,889 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FAMAIL: Formulation Validation</title>
+
+<!-- KaTeX for math rendering -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"
+  onload="renderMathInElement(document.body, {
+    delimiters: [
+      {left: '$$', right: '$$', display: true},
+      {left: '$', right: '$', display: false}
+    ],
+    throwOnError: false
+  });"></script>
+
+<style>
+  /* ── Color Palette ── */
+  :root {
+    --primary:   #A6192E;
+    --secondary: #CDCDC8;
+    --tertiary:  #008080;
+    --charcoal:  #2D2828;
+    --white:     #FFFFFF;
+    --black:     #000000;
+  }
+
+  /* ── Reset & Base ── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    height: 100%; width: 100%;
+    font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+    background: var(--charcoal);
+    color: var(--charcoal);
+    overflow: hidden;
+  }
+
+  /* ── Slide Container ── */
+  .deck {
+    position: relative;
+    width: 100vw; height: 100vh;
+  }
+
+  .slide {
+    position: absolute; inset: 0;
+    display: none;
+    flex-direction: column;
+    background: var(--white);
+    padding: 28px 72px 80px;
+    overflow-y: auto;
+  }
+  .slide.active { display: flex; }
+
+  /* ── Header bar ── */
+  .slide-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    margin-bottom: 32px;
+    border-bottom: 3px solid var(--primary);
+    padding-bottom: 12px;
+  }
+  .slide-header img.icon {
+    height: 120px; width: 180px;
+    
+    margin-left: auto;
+  }
+  .slide-header h1 {
+    font-size: 1.65rem;
+    font-weight: 700;
+    color: var(--primary);
+    line-height: 1.2;
+  }
+
+  /* ── Content typography ── */
+  .slide h2 {
+    font-size: 1.25rem;
+    color: var(--primary);
+    margin: 20px 0 10px;
+    font-weight: 600;
+  }
+  .slide h3 {
+    font-size: 1.05rem;
+    color: var(--tertiary);
+    margin: 16px 0 8px;
+    font-weight: 600;
+  }
+  .slide p, .slide li {
+    font-size: 0.95rem;
+    line-height: 1.65;
+    color: var(--charcoal);
+  }
+  .slide ul {
+    margin-left: 24px;
+    margin-bottom: 10px;
+  }
+  .slide li { margin-bottom: 6px; }
+
+  .slide .math-block {
+    margin: 18px 0;
+    text-align: center;
+    font-size: 1.1rem;
+  }
+
+  .slide .code-ref {
+    font-family: 'Consolas', 'Fira Code', monospace;
+    font-size: 0.82rem;
+    color: var(--tertiary);
+    background: #f0f5f5;
+    padding: 2px 7px;
+    border-radius: 3px;
+    white-space: nowrap;
+  }
+
+  .slide .impl-note {
+    margin-top: 12px;
+    padding: 10px 16px;
+    background: #f8f4f4;
+    border-left: 4px solid var(--primary);
+    font-size: 0.85rem;
+    color: #555;
+  }
+
+  .slide .impl-note strong { color: var(--primary); }
+
+  /* ── Full-image slide ── */
+  .slide.image-slide {
+    padding: 0;
+    justify-content: center;
+    align-items: center;
+    background: var(--charcoal);
+  }
+  .slide.image-slide img.overview-card {
+    max-width: 92vw;
+    max-height: 90vh;
+    object-fit: contain;
+    border-radius: 4px;
+  }
+
+  /* ── Title slide ── */
+  .slide.title-slide {
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    gap: 18px;
+    background: var(--white);
+  }
+  .slide.title-slide img.icon {
+    height: 400px; width: 550px;    
+    margin-bottom: 8px;
+  }
+  .slide.title-slide h1 {
+    font-size: 2.6rem;
+    color: var(--primary);
+    font-weight: 800;
+    letter-spacing: -0.5px;
+  }
+  .slide.title-slide .subtitle {
+    font-size: 1.15rem;
+    color: var(--charcoal);
+    font-weight: 400;
+  }
+  .slide.title-slide .affiliation {
+    font-size: 0.92rem;
+    color: #888;
+    margin-top: 6px;
+  }
+
+  /* ── Two-column layout ── */
+  .two-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 36px;
+    flex: 1;
+  }
+  .two-col > div { min-width: 0; }
+
+  /* ── Gradient flow diagram ── */
+  .flow-diagram {
+    font-family: 'Consolas', 'Fira Code', monospace;
+    font-size: 0.82rem;
+    background: #fafafa;
+    border: 1px solid var(--secondary);
+    border-radius: 6px;
+    padding: 20px 28px;
+    line-height: 1.8;
+    color: var(--charcoal);
+    white-space: pre;
+    margin: 14px 0;
+  }
+  .flow-diagram .highlight { color: var(--primary); font-weight: 700; }
+  .flow-diagram .teal { color: var(--tertiary); font-weight: 600; }
+
+  /* ── Algorithm steps ── */
+  .algo-steps {
+    counter-reset: step;
+    list-style: none;
+    margin-left: 0;
+  }
+  .algo-steps li {
+    counter-increment: step;
+    padding-left: 32px;
+    position: relative;
+    margin-bottom: 10px;
+  }
+  .algo-steps li::before {
+    content: counter(step);
+    position: absolute; left: 0; top: 1px;
+    width: 22px; height: 22px;
+    background: var(--primary);
+    color: var(--white);
+    font-size: 0.75rem;
+    font-weight: 700;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  /* ── Discussion points ── */
+  .discussion-point {
+    padding: 10px 16px;
+    margin: 8px 0;
+    background: #f0f5f5;
+    border-left: 4px solid var(--tertiary);
+    font-size: 0.92rem;
+  }
+
+  /* ── Navigation ── */
+  .nav {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    height: 56px;
+    background: var(--charcoal);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 28px;
+    z-index: 100;
+  }
+  .nav button {
+    background: none;
+    border: 2px solid var(--secondary);
+    color: var(--secondary);
+    font-size: 0.88rem;
+    font-weight: 600;
+    padding: 7px 22px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .nav button:hover {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: var(--white);
+  }
+  .nav button:disabled {
+    opacity: 0.25;
+    cursor: default;
+  }
+  .nav button:disabled:hover {
+    background: none;
+    border-color: var(--secondary);
+    color: var(--secondary);
+  }
+  .nav .counter {
+    color: var(--secondary);
+    font-size: 0.85rem;
+    font-weight: 500;
+    letter-spacing: 0.5px;
+  }
+
+  /* ── Table ── */
+  .slide table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 12px 0;
+    font-size: 0.88rem;
+  }
+  .slide th {
+    background: var(--primary);
+    color: var(--white);
+    padding: 8px 12px;
+    text-align: left;
+    font-weight: 600;
+  }
+  .slide td {
+    padding: 7px 12px;
+    border-bottom: 1px solid #e8e8e8;
+  }
+  .slide tr:nth-child(even) td { background: #fafafa; }
+
+  /* ── Responsive ── */
+  @media (max-width: 900px) {
+    .slide { padding: 36px 28px 70px; }
+    .two-col { grid-template-columns: 1fr; gap: 20px; }
+    .slide.title-slide h1 { font-size: 1.8rem; }
+  }
+</style>
+</head>
+<body>
+
+<div class="deck" id="deck">
+
+<!-- ════════════════════════════════════════════════════════════════════
+     SLIDE 1 — Title
+     ════════════════════════════════════════════════════════════════════ -->
+<section class="slide title-slide active" data-slide="0">
+    <h1>FAMAIL Project: Algorithm Overview</h1>
+    <div class="subtitle">Fairness-Aware Multi-Agent Imitation Learning</div>
+    <div class="affiliation">San Diego State University · Computer Science</div>
+    <div class="affiliation">Dr. Xin Zhang · Robert Ashe</div>
+    <img src="../assets/FAMAIL_icon.png" alt="FAMAIL" class="icon">
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════════
+     SLIDE 2 — Overview Card
+     ════════════════════════════════════════════════════════════════════ -->
+<section class="slide image-slide" data-slide="1">
+  <img src="../assets/FAMAIL_overview_card.png" alt="FAMAIL Project Overview" class="overview-card">
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════════
+     SLIDE 3 — Problem Statement
+     ════════════════════════════════════════════════════════════════════ -->
+<section class="slide" data-slide="2">
+  <div class="slide-header">
+    <h1>Problem Statement</h1>
+    <img src="../assets/FAMAIL_icon.png" alt="" class="icon">
+  </div>
+
+  <div class="two-col" style="grid-template-columns: 1fr 1fr; align-items: start;">
+    <div>
+      <h2>Setting</h2>
+      <ul>
+        <li>$48 \times 90$ spatial grid over Shenzhen, China ($|\mathcal{G}| = 4{,}320$ cells)</li>
+        <li>50 expert taxi drivers, July 2016 GPS trajectories</li>
+        <li>Each trajectory: passenger-seeking path ending at a pickup location</li>
+      </ul>
+
+      <h2>Observed Inequality</h2>
+      <ul>
+        <li><strong>Spatial</strong>: Taxi pickups are concentrated in a few cells; many cells are underserved</li>
+        <li><strong>Causal</strong>: Cells with equal demand receive unequal service — supply is not demand-proportional</li>
+      </ul>
+
+      <h2>Goal</h2>
+      <ul>
+        <li>Modify <strong>pickup locations only</strong> to reduce both spatial and causal inequality</li>
+        <li>Preserve driver behavioral fidelity (modified trajectories must be plausible)</li>
+        <li>Bounded modifications: pickups move at most $\epsilon$ grid cells from original position (in practice, $\epsilon = 2$)</li>
+      </ul>
+    </div>
+
+    <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding-top: 16px;">
+      <img src="../assets/spatial_fairness_grid.png" alt="Spatial fairness grid visualization"
+           style="width: 100%; max-width: 520px; border-radius: 6px; border: 1px solid var(--secondary);">
+      <p style="margin-top: 10px; font-size: 0.82rem; color: #888; text-align: center; font-style: italic;">Spatial Fairness heatmap overlay on 48 × 90 grid</p>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════════
+     SLIDE 4 — Combined Objective Function
+     ════════════════════════════════════════════════════════════════════ -->
+<section class="slide" data-slide="3">
+  <div class="slide-header">
+    <h1>Combined Objective Function</h1>
+    <img src="../assets/FAMAIL_icon.png" alt="" class="icon">
+  </div>
+
+  <div class="math-block">
+    $$\mathcal{L}(\tau') = \alpha_1 \cdot F_{\text{spatial}} + \alpha_2 \cdot F_{\text{causal}} + \alpha_3 \cdot F_{\text{fidelity}}$$
+  </div>
+
+  <ul>
+    <li>Weights: $\alpha_1 + \alpha_2 + \alpha_3 = 1$, each $\alpha_i \geq 0$. Default: $(0.33,\; 0.33,\; 0.34)$</li>
+    <li>Each term $\in [0, 1]$, so $\mathcal{L} \in [0, 1]$</li>
+    <li>Objective is <strong>maximized</strong>: higher $\mathcal{L}$ means fairer outcomes with better fidelity</li>
+    <li>Gradient <strong>ascent</strong>: FAMAIL's modified ST-iFGSM algorithm moves in the direction of $\nabla_\mathbf{p} \mathcal{L}$</li>
+  </ul>
+
+  <h2>Term Roles</h2>
+  <table>
+    <tr><th>Term</th><th>Measures</th><th>Ideal Value</th></tr>
+    <tr><td>$F_{\text{spatial}}$</td><td>Equity of service rates across all cells (Gini-based spatial inequality)</td><td>1 (perfect equality)</td></tr>
+    <tr><td>$F_{\text{causal}}$</td><td>Demand-proportionality of service ($R^2$-based causal inequality)</td><td>1 (all variance explained by demand)</td></tr>
+    <tr><td>$F_{\text{fidelity}}$</td><td>Behavioral plausibility (discriminator similarity of modified + unmodified trajectories)</td><td>1 (indistinguishable from original)</td></tr>
+  </table>
+
+  <div class="impl-note">
+    <strong>Implementation:</strong>
+    <span class="code-ref">trajectory_modification/objective.py</span> →
+    <span class="code-ref">FAMAILObjective.forward()</span> at L459
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════════
+     SLIDE 5 — Spatial Fairness
+     ════════════════════════════════════════════════════════════════════ -->
+<section class="slide" data-slide="4">
+  <div class="slide-header">
+    <h1>Spatial Fairness — $F_{\text{spatial}}$</h1>
+    <img src="../assets/FAMAIL_icon.png" alt="" class="icon">
+  </div>
+
+  <div class="two-col">
+    <div>
+      <h2>Definition</h2>
+      <div class="math-block">
+        $$F_{\text{spatial}} = 1 - \tfrac{1}{2}\bigl(G_{\text{DSR}} + G_{\text{ASR}}\bigr)$$
+      </div>
+
+      <h3>Service Rates</h3>
+      <div class="math-block">
+        $$\text{DSR}_c = \frac{N_c^{\text{pickup}}}{A_c}, \qquad \text{ASR}_c = \frac{N_c^{\text{dropoff}}}{A_c}$$
+      </div>
+      <ul>
+        <li>$N_c^{\text{pickup}}$: total pickups in cell $c$ (<strong>sum</strong> across time periods)</li>
+        <li>$A_c$: active taxis in cell $c$ (<strong>mean</strong> across time periods)</li>
+        <li>Only cells with $A_c > \varepsilon$ ($\varepsilon = 10^{-8}$) are included</li>
+      </ul>
+    </div>
+
+    <div>
+      <h2>Pairwise Gini Coefficient</h2>
+      <div class="math-block">
+        $$G(\mathbf{x}) = \frac{\displaystyle\sum_{i=1}^{n} \sum_{j=1}^{n} |x_i - x_j|}{2\, n^2\, \bar{x}}$$
+      </div>
+      <p style="margin-bottom: 12px;">The Gini coefficient compares every pair of cells and measures how different their service rates are from one another. It computes the average absolute difference across all pairs, then normalizes by the overall mean. In effect, a Gini of zero means every cell receives the same level of service, while a value approaching one means service is concentrated in very few cells. This pairwise formulation avoids rank-based sorting, making it fully differentiable and suitable for gradient-based optimization.</p>
+      <ul>
+        <li>$\mathbf{x}$: vector of service rates across $n$ cells</li>
+        <li>$\bar{x} = \frac{1}{n}\sum_i x_i + \varepsilon$ (numerical stability)</li>
+        <li>$G = 0$: perfect equality; $G = 1$: maximum inequality</li>
+      </ul>
+
+      <div class="impl-note">
+        <strong>Implementation:</strong>
+        <span class="code-ref">objective.py</span> →
+        <span class="code-ref">compute_spatial_fairness()</span> L247,
+        <span class="code-ref">_pairwise_gini()</span> L216
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════════
+     SLIDE 6 — Causal Fairness
+     ════════════════════════════════════════════════════════════════════ -->
+<section class="slide" data-slide="5">
+  <div class="slide-header">
+    <h1>Causal Fairness — $F_{\text{causal}}$</h1>
+    <img src="../assets/FAMAIL_icon.png" alt="" class="icon">
+  </div>
+
+  <div class="two-col">
+    <div>
+      <h2>Definition</h2>
+      <div class="math-block">
+        $$F_{\text{causal}} = \max\!\left(0,\; 1 - \frac{\text{Var}(R)}{\text{Var}(Y)}\right)$$
+      </div>
+
+      <p style="font-size: 0.88rem; margin-bottom: 8px;">The service ratio $Y_c$ measures how much taxi supply a cell receives relative to its demand. $F_{\text{causal}}$ asks: after accounting for the natural relationship between demand and supply via $g(d)$, how much unexplained inequality remains? A perfect score means every cell gets the service level its demand warrants.</p>
+
+      <h3>Components</h3>
+      <ul>
+        <li>$Y_c = S_c / D_c$ — observed service ratio at cell $c$</li>
+        <li>$S_c$: mean active taxis; $D_c$: mean pickup count (both from hourly data)</li>
+        <li>$g(D_c)$ — expected fair ratio given demand $D_c$</li>
+        <li>$R_c = Y_c - g(D_c)$ — residual (unexplained inequality)</li>
+      </ul>
+
+      <h3>Interpretation</h3>
+      <ul>
+        <li>$F_{\text{causal}} = 1$: all variance explained by demand</li>
+        <li>$F_{\text{causal}} = 0$: none explained; clamped via $\max(0, \cdot)$</li>
+      </ul>
+    </div>
+
+    <div>
+      <h2>The $g(d)$ Function</h2>
+      <ul>
+        <li>Fitted via <strong>isotonic regression</strong> (monotone decreasing)</li>
+        <li>Non-parametric: captures observed demand–supply relationship without imposing a functional form</li>
+        <li>Demand threshold: only cells with $D \geq 1.0$ are included</li>
+        <li>Uses <strong>mean</strong> aggregation for both $S_c$ and $D_c$</li>
+      </ul>
+
+      <h3>Critical Design Choice</h3>
+      <ul>
+        <li>$g(d)$ is <strong>frozen</strong> during optimization — fitted once on historical data</li>
+        <li>No gradient flows through $g(d)$; prevents circular optimization</li>
+        <li>$Y_c$ changes as pickups are modified, but $g(\cdot)$ remains fixed</li>
+      </ul>
+
+      <div class="impl-note">
+        <strong>Implementation:</strong>
+        <span class="code-ref">objective.py</span> →
+        <span class="code-ref">compute_causal_fairness()</span> L320;
+        <span class="code-ref">data_loader.py</span> →
+        <span class="code-ref">GFunctionLoader.estimate_from_data()</span> L370
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════════
+     SLIDE 7 — Fidelity
+     ════════════════════════════════════════════════════════════════════ -->
+<section class="slide" data-slide="6">
+  <div class="slide-header">
+    <h1>Fidelity — $F_{\text{fidelity}}$</h1>
+    <img src="../assets/FAMAIL_icon.png" alt="" class="icon">
+  </div>
+
+  <div class="math-block">
+    $$F_{\text{fidelity}} = f(\tau,\, \tau')$$
+  </div>
+
+  <div class="two-col">
+    <div>
+      <h2>Discriminator Architecture</h2>
+      <h3>LSTM Encoder</h3>
+      <ul>
+        <li><strong>ST-SiameseNet</strong>: Siamese LSTM with shared weights</li>
+        <li>Two branches process original $\tau$ and modified $\tau'$ independently</li>
+        <li>LSTM hidden dimensions: $200 \to 100$</li>
+      </ul>
+
+      <h3>Classifier (FC Head)</h3>
+      <ul>
+        <li>Embeddings concatenated: $[\mathbf{e}_1, \mathbf{e}_2]$ → input to MLP</li>
+        <li>Final sigmoid activation: $f \in [0, 1]$</li>
+      </ul>
+
+      <h3>Interpretation</h3>
+      <ul>
+        <li>$f \approx 1$: trajectories appear from the same driver</li>
+        <li>$f \approx 0$: trajectories appear from different drivers</li>
+      </ul>
+    </div>
+
+    <div>
+      <h2>Gradient Behavior</h2>
+      <ul>
+        <li>Discriminator <strong>parameters are frozen</strong> during modification (no weight updates)</li>
+        <li>Gradients <strong>flow through</strong> the discriminator to modified trajectory features</li>
+        <li>Acts as a learned regularizer: prevents modifications that deviate too far from plausible behavior</li>
+      </ul>
+
+      <div class="impl-note">
+        <strong>Implementation:</strong>
+        <span class="code-ref">objective.py</span> →
+        <span class="code-ref">compute_fidelity()</span> L413;
+        <span class="code-ref">discriminator_adapter.py</span> →
+        <span class="code-ref">DiscriminatorAdapter</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════════
+     SLIDE 8 — Soft Cell Assignment
+     ════════════════════════════════════════════════════════════════════ -->
+<section class="slide" data-slide="7">
+  <div class="slide-header">
+    <h1>Soft Cell Assignment — Differentiability Bridge</h1>
+    <img src="../assets/FAMAIL_icon.png" alt="" class="icon">
+  </div>
+
+  <h2>The Challenge</h2>
+  <p>The objective $\mathcal{L}$ depends on discrete grid cell counts. Hard assignment (one cell per pickup) is non-differentiable, blocking gradient-based optimization.</p>
+
+  <h2>Solution: Gaussian Softmax</h2>
+  <div class="math-block" style="margin: 8px 0;">
+    $$\sigma_c(\mathbf{p};\, \tau) = \frac{\exp\!\bigl(-\|\mathbf{p} - \mathbf{c}\|^2 \;/\; 2\tau^2\bigr)}{\displaystyle\sum_{c' \in \mathcal{N}} \exp\!\bigl(-\|\mathbf{p} - \mathbf{c}'\|^2 \;/\; 2\tau^2\bigr)}$$
+  </div>
+
+  <div class="two-col">
+    <div>
+      <h3>Parameters</h3>
+      <ul>
+        <li>$\mathbf{p} = (p_x, p_y)$: continuous pickup location</li>
+        <li>$\mathbf{c}$: center of cell $c$</li>
+        <li>$\mathcal{N}$: $(2k{+}1) \times (2k{+}1)$ neighborhood, default $k=2\ (5 \times 5)$</li>
+        <li>$\tau$: temperature controlling sharpness</li>
+      </ul>
+    </div>
+
+    <div>
+      <h3>Temperature Annealing</h3>
+      <div class="math-block">
+        $$\tau_t = \tau_{\max} \cdot \left(\frac{\tau_{\min}}{\tau_{\max}}\right)^{t/T}$$
+      </div>
+      <ul>
+        <li>High $\tau$: soft assignment, smooth gradients</li>
+        <li>Low $\tau$: approaches hard (one-hot) assignment</li>
+        <li>Anneals from exploration to precision during optimization</li>
+      </ul>
+    </div>
+  </div>
+
+  <div style="margin: 12px 0 8px; text-align: center;">
+    <img src="../assets/soft_cell_assignment_temp_scale.png" alt="Soft cell assignment temperature scale visualization"
+         style="width: 80%; border-radius: 4px; border: 1px solid var(--secondary);">
+  </div>
+
+  <div class="impl-note">
+    <strong>Implementation:</strong>
+    <span class="code-ref">objective_function/soft_cell_assignment/module.py</span> →
+    <span class="code-ref">SoftCellAssignment.forward()</span> L90
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════════
+     SLIDE 9 — Attribution: LIS + DCD
+     ════════════════════════════════════════════════════════════════════ -->
+<section class="slide" data-slide="8">
+  <div class="slide-header">
+    <h1>Phase 1 — Attribution: LIS + DCD</h1>
+    <img src="../assets/FAMAIL_icon.png" alt="" class="icon">
+  </div>
+
+  <p>Not all trajectories contribute equally to unfairness. Attribution selects the top-$k$ highest-impact trajectories for modification using combined LIS and DCD.</p>
+
+  <div class="two-col">
+    <div>
+      <h2>Local Inequality Score (LIS)</h2>
+      <p><em>Measures each cell's contribution to spatial inequality.</em></p>
+      <div class="math-block">
+        $$\text{LIS}_c = \frac{|c_{\text{count}} - \mu|}{\mu}$$
+      </div>
+      <div class="math-block">
+        $$\text{LIS}_\tau = \max\!\bigl(\text{LIS}_p^{\text{pickup}},\; \text{LIS}_d^{\text{dropoff}}\bigr)$$
+      </div>
+      <ul>
+        <li>$\mu$: global mean count across all cells</li>
+        <li>Max aggregation: trajectory flagged if either endpoint is in an unequal cell</li>
+      </ul>
+
+      <div class="impl-note">
+        <strong>Impl:</strong>
+        <span class="code-ref">dashboard.py</span> →
+        <span class="code-ref">compute_cell_lis_scores()</span> L215
+      </div>
+    </div>
+
+    <div>
+      <h2>Demand-Conditional Deviation (DCD)</h2>
+      <p><em>Measures each cell's contribution to causal inequality.</em></p>
+      <div class="math-block">
+        $$\text{DCD}_c = |Y_c - g(D_c)|$$
+      </div>
+      <div class="math-block">
+        $$\text{DCD}_\tau = \text{DCD}_{p}$$
+      </div>
+      <ul>
+        <li>Focuses on pickup cell (the location being modified)</li>
+        <li>$g(D_c)$: same frozen isotonic regression from $F_{\text{causal}}$</li>
+      </ul>
+
+      <div class="impl-note">
+        <strong>Impl:</strong>
+        <span class="code-ref">dashboard.py</span> →
+        <span class="code-ref">compute_cell_dcd_scores()</span> L239
+      </div>
+    </div>
+  </div>
+
+  <h2 style="margin-top: 20px;">Combined Selection</h2>
+  <div class="math-block">
+    $$\text{Combined}_\tau = w_{\text{LIS}} \cdot \widetilde{\text{LIS}}_\tau + w_{\text{DCD}} \cdot \widetilde{\text{DCD}}_\tau \quad (\text{tildes} = \text{normalized to } [0,1])$$
+  </div>
+  <ul>
+    <li>Default weights: $w_{\text{LIS}} = w_{\text{DCD}} = 0.5$. Top-$k$ by combined score; optional spatial diversity penalty ensures attribution is spread across entire grid.</li>
+  </ul>
+
+  <div class="impl-note">
+    <strong>Selection:</strong>
+    <span class="code-ref">dashboard.py</span> →
+    <span class="code-ref">compute_trajectory_attribution_scores()</span> L297,
+    <span class="code-ref">select_top_k_by_attribution()</span> L411
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════════
+     SLIDE 10 — ST-iFGSM Algorithm
+     ════════════════════════════════════════════════════════════════════ -->
+<section class="slide" data-slide="9">
+  <div class="slide-header">
+    <h1>Phase 2 — ST-iFGSM Modification</h1>
+    <img src="../assets/FAMAIL_icon.png" alt="" class="icon">
+  </div>
+
+  <p>For each selected trajectory $\tau$, iteratively perturb the pickup location to increase $\mathcal{L}$:</p>
+
+  <ol class="algo-steps">
+    <li>Set pickup $\mathbf{p}$ as a differentiable tensor with <code>requires_grad=True</code></li>
+    <li>Compute soft cell probabilities $\sigma_c(\mathbf{p};\, \tau_t)$ over neighborhood</li>
+    <li>Compute differentiable pickup counts: $\hat{N}_c = N_c^{\text{base}} + \sigma_c$</li>
+    <li>Evaluate $\mathcal{L} = \alpha_1 F_{\text{spatial}} + \alpha_2 F_{\text{causal}} + \alpha_3 F_{\text{fidelity}}$</li>
+    <li>Backpropagate to obtain $\nabla_\mathbf{p} \mathcal{L}$</li>
+    <li>Compute perturbation: $\;\delta = \text{clip}\!\bigl(\alpha \cdot \text{sign}(\nabla_\mathbf{p} \mathcal{L}),\; -\epsilon,\; \epsilon\bigr)$</li>
+    <li>Update: $\;\mathbf{p} \leftarrow \text{clip}(\mathbf{p} + \delta,\; 0,\; \text{grid\_max})$</li>
+  </ol>
+
+  <h2>Parameters</h2>
+  <table>
+    <tr><th>Parameter</th><th>Symbol</th><th>Default</th><th>Role</th></tr>
+    <tr><td>Step size</td><td>$\alpha$</td><td>0.1</td><td>Perturbation magnitude per iteration</td></tr>
+    <tr><td>Max perturbation</td><td>$\epsilon$</td><td>3.0</td><td>Cumulative bound per dimension (grid cells)</td></tr>
+    <tr><td>Max iterations</td><td>$T$</td><td>50</td><td>Per-trajectory iteration limit</td></tr>
+    <tr><td>Convergence</td><td>$\theta$</td><td>$10^{-4}$</td><td>$|\mathcal{L}^{(t)} - \mathcal{L}^{(t-1)}| < \theta$</td></tr>
+    <tr><td>Grid bounds</td><td>—</td><td>$[0, 47] \times [0, 89]$</td><td>Projection after each step</td></tr>
+  </table>
+
+  <p style="margin-top: 12px;">After modifying each trajectory, global pickup counts are updated before the next trajectory is processed.</p>
+
+  <div class="impl-note">
+    <strong>Implementation:</strong>
+    <span class="code-ref">modifier.py</span> →
+    <span class="code-ref">TrajectoryModifier.modify_single()</span> L268,
+    <span class="code-ref">_compute_soft_pickup_counts()</span> L222
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════════
+     SLIDE 11 — Algorithm Pseudocode
+     ════════════════════════════════════════════════════════════════════ -->
+<section class="slide" data-slide="10">
+  <div class="slide-header">
+    <h1>Algorithm Overview — Pseudocode</h1>
+    <img src="../assets/FAMAIL_icon.png" alt="" class="icon">
+  </div>
+
+  <div class="flow-diagram" style="font-size: 0.88rem; line-height: 2.0; padding: 24px 32px;"><span class="highlight">1.</span>  Compute attribution scores (LIS + DCD) for all trajectories
+<span class="highlight">2.</span>  Select the top-<em>k</em> trajectories by combined score
+
+<span class="highlight">3.</span>  <strong>For each</strong> selected trajectory τ:
+
+        <span class="highlight">a.</span>  Initialize: τ′ ← τ,  cumulative perturbation δ_total ← 0
+
+        <span class="highlight">b.</span>  <strong>While</strong> |ΔL| > θ  <strong>and</strong>  iteration &lt; T:
+
+              i.   Compute soft cell probabilities σ_c(p; τ_t)
+             ii.   Evaluate  <span class="teal">L = α₁·F_spatial + α₂·F_causal + α₃·F_fidelity</span>
+            iii.   Backpropagate to get ∇_p L
+             iv.   δ ← clip(α · sign(∇_p L), −ε, ε)
+              v.   p ← clip(p + δ, grid bounds)
+             vi.   Interpolate trajectory points to new pickup location
+
+        <span class="highlight">c.</span>  Update global pickup counts: decrement old cell, increment new cell
+
+<span class="highlight">4.</span>  Evaluate updated global fairness metrics across modified distribution</div>
+
+  <div class="impl-note">
+    <strong>Outer loop:</strong>
+    <span class="code-ref">modifier.py</span> →
+    <span class="code-ref">TrajectoryModifier.modify_single()</span> L268 &nbsp;·&nbsp;
+    <strong>Attribution:</strong>
+    <span class="code-ref">dashboard.py</span> →
+    <span class="code-ref">select_top_k_by_attribution()</span> L411
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════════
+     SLIDE 12 — Gradient Flow
+     ════════════════════════════════════════════════════════════════════ -->
+<section class="slide" data-slide="11">
+  <div class="slide-header">
+    <h1>Gradient Flow — End to End</h1>
+    <img src="../assets/FAMAIL_icon.png" alt="" class="icon">
+  </div>
+
+  <div class="flow-diagram"><span class="highlight">pickup_location</span>  (requires_grad=True)
+      │
+      ▼
+<span class="teal">soft cell probabilities</span>  σ_c(p; τ)          ← SoftCellAssignment
+      │
+      ▼
+<span class="teal">differentiable pickup counts</span>  N̂_c = N_base + σ_c
+      │
+      ├──→  <span class="highlight">F_spatial</span>   (Gini of DSR, ASR)
+      ├──→  <span class="highlight">F_causal</span>    (R² with frozen g(d))    ← g(d): no gradient
+      └──→  <span class="highlight">F_fidelity</span>  (discriminator)          ← params frozen, gradients flow through
+      │
+      ▼
+<span class="teal">L = α₁·F_spatial + α₂·F_causal + α₃·F_fidelity</span>
+      │
+      ▼
+∇_p L  →  δ = clip(α · sign(∇L), −ε, ε)  →  <span class="highlight">p' = clip(p + δ, bounds)</span></div>
+
+  <h2>Key Differentiability Notes</h2>
+  <ul>
+    <li><strong>Soft cell assignment</strong> is the critical bridge — replaces non-differentiable hard assignment</li>
+    <li><strong>$g(d)$</strong> is frozen: treated as a constant function during backpropagation</li>
+    <li><strong>Discriminator</strong> parameters are frozen, but the computation graph is retained for gradient flow</li>
+    <li><strong>Pairwise Gini</strong> uses $|x_i - x_j|$ (differentiable) instead of rank-based sorting (non-differentiable)</li>
+    <li><strong>$\text{sign}(\cdot)$</strong> in FGSM is non-differentiable, but only first-order gradients are needed (no second-order)</li>
+  </ul>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════════
+     SLIDE 13 — Summary & Discussion
+     ════════════════════════════════════════════════════════════════════ -->
+<section class="slide" data-slide="12">
+  <div class="slide-header">
+    <h1>Summary &amp; Discussion Points</h1>
+    <img src="../assets/FAMAIL_icon.png" alt="" class="icon">
+  </div>
+
+  <h2>Formulation Summary</h2>
+  <ul>
+    <li>Three-term convex-combination objective: spatial (Gini), causal ($R^2$), fidelity (Siamese LSTM) — all in $[0, 1]$</li>
+    <li>Two-phase pipeline: heuristic attribution (LIS+DCD) → gradient-based modification (ST-iFGSM)</li>
+    <li>Soft cell assignment bridges discrete cell counts to continuous gradient flow</li>
+    <li>Sequential modification with global count updates captures inter-trajectory dependencies</li>
+  </ul>
+
+  <h2>Questions for Validation (AI suggestions)</h2>
+
+  <div class="discussion-point">
+    <strong>1.</strong> Is the pairwise Gini coefficient $G = \frac{\sum_{i,j}|x_i - x_j|}{2n^2\bar{x}}$ appropriate for measuring spatial service equity? Does the normalization by $\bar{x}$ introduce bias when the mean is close to zero?
+  </div>
+  <div class="discussion-point">
+    <strong>2.</strong> Is $R^2$ with a frozen $g(d)$ a sound measure of causal fairness? As $Y_c$ changes during optimization while $g(\cdot)$ remains fixed, does the residual interpretation remain valid?
+  </div>
+  <div class="discussion-point">
+    <strong>3.</strong> Does exponential temperature annealing $\tau_t = \tau_{\max} \cdot (\tau_{\min}/\tau_{\max})^{t/T}$ guarantee convergence from soft to hard cell assignment? Are there edge cases where gradients vanish before convergence?
+  </div>
+</section>
+
+</div><!-- /deck -->
+
+<!-- ════════════════════════════════════════════════════════════════════
+     Navigation Bar
+     ════════════════════════════════════════════════════════════════════ -->
+<nav class="nav">
+  <button id="btn-prev" onclick="navigate(-1)">◀ Back</button>
+  <span class="counter" id="counter">1 / 12</span>
+  <button id="btn-next" onclick="navigate(1)">Forward ▶</button>
+</nav>
+
+<script>
+  const slides  = document.querySelectorAll('.slide');
+  const total   = slides.length;
+  let   current = 0;
+
+  function show(index) {
+    slides.forEach(s => s.classList.remove('active'));
+    slides[index].classList.add('active');
+    document.getElementById('counter').textContent = `${index + 1} / ${total}`;
+    document.getElementById('btn-prev').disabled = (index === 0);
+    document.getElementById('btn-next').disabled = (index === total - 1);
+
+    // Re-render KaTeX in newly visible slide
+    if (window.renderMathInElement) {
+      renderMathInElement(slides[index], {
+        delimiters: [
+          {left: '$$', right: '$$', display: true},
+          {left: '$',  right: '$',  display: false}
+        ],
+        throwOnError: false
+      });
+    }
+  }
+
+  function navigate(dir) {
+    const next = current + dir;
+    if (next >= 0 && next < total) { current = next; show(current); }
+  }
+
+  // Keyboard navigation
+  document.addEventListener('keydown', e => {
+    if (e.key === 'ArrowRight' || e.key === ' ')      { e.preventDefault(); navigate(1);  }
+    else if (e.key === 'ArrowLeft' || e.key === 'Backspace') { e.preventDefault(); navigate(-1); }
+    else if (e.key === 'Home') { e.preventDefault(); current = 0;         show(current); }
+    else if (e.key === 'End')  { e.preventDefault(); current = total - 1; show(current); }
+  });
+
+  // Initialize
+  show(0);
+</script>
+
+</body>
+</html>
