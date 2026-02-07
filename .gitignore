@@ -13,6 +13,8 @@
 *.tar
 *.tar.gz
 *.7z
+*.csv
+*.json
 
 # Notebooks outputs / caches
 **/__pycache__/
