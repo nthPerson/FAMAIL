@@ -71,12 +71,12 @@ class TrajectoryModifier:
         objective_fn: 'nn.Module',
         grid_dims: Tuple[int, int] = (48, 90),
         alpha: float = 0.1,       # Step size
-        epsilon: float = 3.0,     # Max perturbation per dimension
+        epsilon: float = 2.0,     # Max perturbation per dimension
         max_iterations: int = 50,
-        convergence_threshold: float = 1e-4,
+        convergence_threshold: float = 1e-6,
         gradient_mode: str = 'soft_cell',  # 'soft_cell' or 'heuristic'
         temperature: float = 1.0,
-        temperature_annealing: bool = False,
+        temperature_annealing: bool = True,
         tau_max: float = 1.0,
         tau_min: float = 0.1,
         neighborhood_size: int = 5,
