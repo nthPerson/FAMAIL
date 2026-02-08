@@ -12,7 +12,7 @@ L = α₁·F_spatial + α₂·F_causal + α₃·F_fidelity
 
 Where:
 - **F_spatial** = 1 - Gini(DSR) measures spatial equity of service distribution
-- **F_causal** = max(0, R²) measures causal relationship between demand and supply
+- **F_causal** = max(0, R²) measures demand-alignment (unexplained inequality in service ratios not accounted for by demand; planned revision to condition on demographics)
 - **F_fidelity** = f(τ, τ') measures behavioral similarity to original trajectory
 
 ### Perturbation Formula
