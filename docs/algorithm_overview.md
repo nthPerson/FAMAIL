@@ -43,7 +43,7 @@ FAMAIL simultaneously optimizes three objectives:
 
 1. **Spatial Fairness** ($F_{\text{spatial}}$): Equalize the distribution of taxi service (pickups and dropoffs) across all grid cells, normalized by taxi availability. Low Gini coefficient = high fairness.
 
-2. **Causal Fairness** ($F_{\text{causal}}$): Ensure that the supply of taxi service provided to a cell is well-explained by the demand in that cell. High $R^2$ of the relationship $Y = g(D)$ = high fairness, where $Y$ is the service ratio and $D$ is demand.
+2. **Causal Fairness** ($F_{\text{causal}}$): Ensure that the supply of taxi service provided to a cell is explained by demand and is not driven by sensitive demographic attributes (income, wealth). In the current demand-only baseline, this is measured as $R^2$ of the relationship $Y = g_0(D)$, where $Y$ is the service ratio and $D$ is demand. The planned revision conditions on demographic features as well: $g(D, \mathbf{x})$, measuring whether service disparities persist after accounting for both demand and demographics. **Note**: The current demand-only formulation is a misnomer for "causal fairness" — it measures unexplained inequality (demand-alignment), not the influence of sensitive attributes. The revised formulation addresses this limitation.
 
 3. **Fidelity** ($F_{\text{fidelity}}$): Ensure that modified trajectories remain behaviorally realistic — that a discriminator network cannot easily distinguish an edited trajectory from the original. High discriminator similarity = high fidelity.
 
@@ -196,7 +196,7 @@ $$\text{DCD}_c = |Y_c - g(D_c)|$$
 
 where:
 - $Y_c = S_c / D_c$ is the actual service ratio (supply per demand) at cell $c$
-- $g(D_c)$ is the expected service ratio given demand $D_c$, estimated from historical data using isotonic regression
+- $g(D_c)$ is the expected service ratio given demand $D_c$, estimated from historical data using isotonic regression (current demand-only baseline; planned revision to $g(D_c, \mathbf{x}_c)$ will also condition on district-level demographic features)
 
 For a trajectory $\tau$ with pickup cell $p$:
 
@@ -301,7 +301,9 @@ $F_{\text{spatial}} \in [0, 1]$, where $1$ means perfect equality (no variation 
 
 ### 7.2 Causal Fairness ($F_{\text{causal}}$)
 
-Causal fairness measures whether taxi supply is allocated proportionally to demand. It uses the coefficient of determination $R^2$:
+> **Terminology Note (2026-02-06):** The current $F_{\text{causal}}$ is a **misnomer** — it measures *demand-alignment* (unexplained inequality), not true causal fairness. It does not account for the influence of sensitive demographic attributes on service distribution. The planned revision (see mathematical_foundations.md, Section 11.6) will condition on demographic features to measure demographic-driven disparities. The current implementation is preserved as a demand-only baseline for ablation studies.
+
+Causal fairness (in its current demand-only form) measures whether taxi supply is allocated proportionally to demand. It uses the coefficient of determination $R^2$:
 
 $$F_{\text{causal}} = \max\!\left(0,\ R^2\right) = \max\!\left(0,\ 1 - \frac{\text{Var}(R)}{\text{Var}(Y)}\right)$$
 
@@ -310,7 +312,7 @@ where:
 - $g(D_c)$ is the expected service ratio given demand $D_c$, estimated by isotonic regression
 - $R_c = Y_c - g(D_c)$ is the residual (deviation from expected)
 
-$F_{\text{causal}} \in [0, 1]$, where $1$ means all variance in service ratios is explained by demand (no unexplained inequality).
+$F_{\text{causal}} \in [0, 1]$, where $1$ means all variance in service ratios is explained by demand alone (no unexplained inequality in the current formulation; no demographic-driven inequality in the planned revision).
 
 **Key implementation detail**: The $g(d)$ function is **frozen** during optimization — it is pre-fitted on historical data and does not receive gradients. The demand threshold for including cells in the $R^2$ computation must match the threshold used when fitting $g(d)$ (default: $D \geq 1.0$).
 
@@ -406,7 +408,8 @@ $$x' = \text{clip}(x + \delta_x, 0, 47), \quad y' = \text{clip}(y + \delta_y, 0,
 | **Modification method** | Gradient-based (ST-iFGSM) | Directly optimizes the objective function; adapts perturbation direction to current fairness landscape |
 | **Trajectory scope** | Edit pickups only | Pickup relocation has the most direct impact on spatial service distribution |
 | **Differentiability** | Soft cell assignment | Bridges the discrete cell assignment gap; enables gradient flow to pickup coordinates |
-| **$g(d)$ estimation** | Isotonic regression | Non-parametric, monotone decreasing; fits observed demand-supply relationship without imposing a functional form |
+| **$g(d)$ estimation** | Isotonic regression (demand-only baseline) | Non-parametric, monotone decreasing; fits observed demand-supply relationship without imposing a functional form. Planned revision to $g(d, \mathbf{x})$ with demographic features will require multivariate methods (see mathematical_foundations.md, Section 11.6) |
+| **$F_{\text{causal}}$ naming** | Currently a misnomer | Measures unexplained inequality (demand-alignment), not true causal fairness. Current form preserved as baseline for ablation; planned revision with demographic conditioning will address this limitation |
 | **$g(d)$ during optimization** | Frozen | Prevents circular optimization where g(d) adapts to modified data |
 | **Leave-one-out attribution** | Rejected | Computationally infeasible: ~97 days per iteration for 44,000 trajectories |
 | **Spatial mismatch attribution** | Rejected | Not directly tied to the fairness terms in the objective function; poor explainability |

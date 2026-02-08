@@ -27,7 +27,7 @@ $$\mathcal{L} = \alpha_1 \cdot F_{\text{spatial}} + \alpha_2 \cdot F_{\text{caus
 
 where:
 - $F_{\text{spatial}} = 1 - \frac{1}{2}(G_{\text{DSR}} + G_{\text{ASR}})$ measures equity of service distribution
-- $F_{\text{causal}} = \max(0, R^2)$ measures the causal relationship between demand and supply
+- $F_{\text{causal}} = \max(0, R^2)$ measures demand-alignment (currently: fraction of service ratio variance explained by demand alone; planned revision will condition on demographics to measure demographic-driven disparity)
 - $F_{\text{fidelity}} = f(\tau, \tau')$ measures behavioral similarity to the original trajectory
 
 The algorithm proceeds in two phases:

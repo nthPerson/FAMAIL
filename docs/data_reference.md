@@ -273,14 +273,101 @@ active_taxis_5x5_hourly.pkl ──────────────┤
               │
     Aggregate per cell (mean across time periods)
               │
-    Fit isotonic regression: g(D) ≈ E[Y | D]
+    Fit isotonic regression: g(D) ≈ E[Y | D]  (demand-only baseline)
               │
     Return: g_function, diagnostics
 ```
 
+> **Planned Extension**: The pipeline above produces the demand-only $g_0(D)$ baseline. The planned revision will extend this pipeline to also incorporate district-level demographic features (via grid-to-district mapping), enabling a demographically-conditioned $g(D, \mathbf{x})$ model. See `mathematical_foundations.md`, Section 11.6.
+
 ---
 
-## 8. DataBundle
+## 8. Demographic Data
+
+### 8.1 Overview
+
+District-level demographic data provides the basis for the planned demographically-conditioned causal fairness formulation. The data covers 10 administrative districts in Shenzhen, China, providing economic, population, and housing indicators.
+
+### 8.2 District Demographics File
+
+**Source**: `data/demographic_data/all_demographics_by_district.csv`  
+**Raw source**: `raw_data/demographics_by_district.csv`  
+**Copy in source_data**: `source_data/all_demographics_by_district.csv`
+
+| Column | Type | Description | Example (Futian District) |
+|--------|------|-------------|---------------------------|
+| `DistrictName` | string | District name | Futian |
+| `AreaKm2` | float | District area in km² | 78.66 |
+| `YearEndPermanentPop10k` | float | Year-end permanent population (10k) | 150.17 |
+| `RegisteredPermanentPop10k` | float | Registered permanent population (10k) | 95.35 |
+| `NonRegisteredPermanentPop10k` | float | Non-registered (migrant) population (10k) | 54.82 |
+| `PopDensityPerKm2` | int | Population density per km² | 19,091 |
+| `HouseholdRegisteredPop10k` | float | Household registered population (10k) | 98.97 |
+| `MalePop10k` | float | Male population (10k) | 49.40 |
+| `FemalePop10k` | float | Female population (10k) | 49.57 |
+| `SexRatio100` | float | Sex ratio (males per 100 females) | 99.65 |
+| `EmployeeCompensation100MYuan` | float | Total employee compensation (100M yuan) | 552.17 |
+| `AvgEmployedPersons` | int | Average employed persons | 557,197 |
+| `AvgHousingPricePerSqM` | float | Average housing price per m² (yuan) | 48,902.67 |
+| `GDPin10000Yuan` | int | Gross Domestic Product (10k yuan) | 35,572,870 |
+
+### 8.3 Districts
+
+The 10 Shenzhen districts in the dataset:
+
+| Index | District | Area (km²) | Pop Density (/km²) | GDP (10k yuan) |
+|-------|----------|-----------|-------------------|----------------|
+| 0 | Futian | 78.66 | 19,091 | 35,572,870 |
+| 1 | Luohu | 78.75 | 12,749 | 19,724,939 |
+| 2 | Yantian | 74.91 | 3,024 | 5,375,327 |
+| 3 | Nanshan | 187.47 | 7,235 | 38,452,711 |
+| 4 | Bao'an | 396.61 | 7,607 | 30,038,215 |
+| 5 | Longgang | 388.22 | 5,522 | 31,790,883 |
+| 6 | Longhua | 175.58 | 8,824 | 18,569,841 |
+| 7 | Pingshan | 166.31 | 2,453 | 5,060,882 |
+| 8 | Guangming | 155.44 | 3,608 | 7,265,766 |
+| 9 | Dapeng | 295.32 | 477 | 3,074,578 |
+
+### 8.4 Grid-to-District Mapping
+
+**Source**: `data/visualization/streamlit__LOCAL_BACKUP_20260112_142441/app_data/grid_to_district_ArcGIS_table.csv`  
+**Created by**: `data/geo_data/create_50x90_grid_map_districts.ipynb` (ArcGIS Pro)
+
+This table maps each grid cell to its majority-overlap Shenzhen district:
+
+| Column | Description |
+|--------|------------|
+| `row` | Grid row (1-indexed, maps to y in the GIS grid) |
+| `col` | Grid column (0-indexed, maps to x) |
+| `cell_id` | Unique cell ID |
+| `district` | District name (e.g., "Nanshan District") |
+| `overlap_pct` | Percentage of cell area falling within the district |
+| `district_id` | Integer district identifier |
+
+**Notes**:
+- Some cells fall outside all districts (ocean or non-Shenzhen area) — these have empty district fields.
+- Boundary cells have `overlap_pct < 100`; the majority-overlap district is assigned.
+- The GIS grid uses a 50×90 grid (1-indexed rows 1–50, 0-indexed cols 0–89). The trajectory framework uses a 48×90 grid (0-indexed). Coordinate conversion is required.
+
+### 8.5 Derived Features for g(D, x)
+
+For the demographically-conditioned causal fairness formulation, per-capita derived features are computed:
+
+| Derived Feature | Formula | Purpose |
+|----------------|---------|--------|
+| GDP per capita | `GDPin10000Yuan / YearEndPermanentPop10k` | Direct income proxy |
+| Compensation per capita | `EmployeeCompensation100MYuan / AvgEmployedPersons` | Wage-level proxy |
+| Non-registered pop ratio | `NonRegisteredPermanentPop10k / YearEndPermanentPop10k` | Migrant worker indicator |
+
+### 8.6 Metadata Files
+
+- `data/demographic_data/all_demographics_by_district_metadata.csv` — Column-level metadata (dtypes, unique counts, sample values)
+- `data/demographic_data/all_demographics_by_district_metadata.json` — Same metadata in JSON format
+- `data_dictionary/dictionaries/all_demographics_by_district_data_dictionary.md` — Full data dictionary
+
+---
+
+## 9. DataBundle
 
 The `DataBundle` class consolidates all loaded data into a single object:
 
@@ -293,13 +380,16 @@ class DataBundle:
     dropoff_grid: np.ndarray                  # Sum-aggregated dropoffs (48, 90)
     active_taxis_data: Dict                   # Raw active taxis counts
     active_taxis_grid: np.ndarray             # Mean-aggregated active taxis (48, 90)
-    g_function: Callable                      # Fitted g(d) function
+    g_function: Callable                      # Fitted g(d) function (demand-only baseline)
     causal_demand_grid: Optional[np.ndarray]  # Mean demand per cell (48, 90)
     causal_supply_grid: Optional[np.ndarray]  # Mean supply per cell (48, 90)
     g_function_diagnostics: Optional[Dict]    # g(d) fitting information
+    # Planned additions:
+    # cell_demographics: Optional[np.ndarray] # Demographic features per cell (48, 90, n_features)
+    # district_mapping: Optional[Dict]        # (x, y) → district_name mapping
 ```
 
-### 8.1 Loading With Recommended Settings
+### 9.1 Loading With Recommended Settings
 
 ```python
 from trajectory_modification import DataBundle
@@ -311,7 +401,7 @@ bundle = DataBundle.load_default(
 )
 ```
 
-### 8.2 Converting to Tensors
+### 9.2 Converting to Tensors
 
 ```python
 tensors = bundle.to_tensors(device='cpu')
@@ -322,9 +412,9 @@ The causal fairness grids (`causal_demand_grid`, `causal_supply_grid`) remain as
 
 ---
 
-## 9. Trajectory Representation in Code
+## 10. Trajectory Representation in Code
 
-### 9.1 TrajectoryState
+### 10.1 TrajectoryState
 
 ```python
 @dataclass
@@ -335,7 +425,7 @@ class TrajectoryState:
     day_index: int      # Day of week
 ```
 
-### 9.2 Trajectory
+### 10.2 Trajectory
 
 ```python
 @dataclass
@@ -352,6 +442,6 @@ Key properties:
 - `trajectory.to_tensor()` → `torch.Tensor` of shape `[seq_len, 4]`
 - `trajectory.apply_perturbation(delta)` → new `Trajectory` with modified pickup
 
-### 9.3 Discriminator Input Format
+### 10.3 Discriminator Input Format
 
 The discriminator expects trajectory tensors of shape `[batch, seq_len, 4]` where each row is `[x_grid, y_grid, time_bucket, day_index]`. The `Trajectory.to_tensor()` method produces the `[seq_len, 4]` tensor, and a batch dimension is prepended before passing to the discriminator.

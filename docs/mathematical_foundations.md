@@ -36,7 +36,8 @@
 | $D_c$ | Demand in cell $c$ (mean pickup count across time periods) |
 | $S_c$ | Supply in cell $c$ (mean active taxis across time periods) |
 | $Y_c$ | Service ratio: $Y_c = S_c / D_c$ |
-| $g(d)$ | Expected service ratio given demand $d$, estimated from historical data |
+| $g(d)$ | Expected service ratio given demand $d$, estimated from historical data (current demand-only baseline; see Section 11 for planned revision to $g(d, \mathbf{x})$) |
+| $\mathbf{x}_c$ | Demographic feature vector for cell $c$ (inherited from majority district): GDP per capita, housing price, employee compensation, population density |
 | $\tau$ (temperature) | Soft cell assignment temperature parameter (context distinguishes from trajectory $\tau$) |
 | $\alpha$ | Step size for ST-iFGSM perturbation |
 | $\epsilon$ | Maximum perturbation bound per dimension |
@@ -44,7 +45,7 @@
 | $k$ | Half-width of neighborhood window: neighborhood is $(2k+1) \times (2k+1)$ |
 | $n$ | Number of grid cells (in Gini computation) or number of data points (in variance computation) |
 | $G$ | Gini coefficient |
-| $R^2$ | Coefficient of determination |
+| $R^2$ | Coefficient of determination (currently measures variance explained by demand alone; see Section 4 for planned demographic extension) |
 
 ---
 
@@ -115,9 +116,11 @@ When using soft cell assignment, the pickup counts $N_c^{\text{pickup}}$ are the
 
 ## 4. Causal Fairness Term
 
-### 4.1 Definition
+> **Terminology Note (2026-02-06):** The term "causal fairness" is a **misnomer** in the current implementation. The current $F_{\text{causal}}$ measures *unexplained inequality* — specifically, the fraction of service ratio variance that can be explained by demand alone (demand-alignment). It does not measure true causal fairness because (1) $g(d)$ is estimated from observed (potentially unfair) data and cannot represent a perfectly fair baseline, and (2) the formulation does not account for sensitive attributes (income, demographics) that may drive unfair service distribution. The current implementation is preserved as a **demand-only baseline** for ablation studies. See Section 11 for the planned revision to a demographically-aware formulation: $g(D, \mathbf{x})$.
 
-Causal fairness measures whether the variance in service ratios across cells can be explained by demand, using the coefficient of determination:
+### 4.1 Definition (Current: Demand-Only Baseline)
+
+The current causal fairness term measures whether the variance in service ratios across cells can be explained by demand, using the coefficient of determination:
 
 $$F_{\text{causal}} = \max\!\big(0,\; R^2\big)$$
 
@@ -143,7 +146,7 @@ where $g: \mathbb{R}_{\geq 0} \to \mathbb{R}_{\geq 0}$ is a monotone non-increas
 
 $$R_c = Y_c - g(D_c)$$
 
-The residual captures the component of the service ratio that is *not* explained by demand. In a perfectly causally fair system, all variance would be explained by $g(d)$ and the residuals would be zero.
+The residual captures the component of the service ratio that is *not* explained by demand. In the current formulation, $R_c = 0$ for all cells would mean demand perfectly predicts the service ratio. However, this does not constitute causal fairness: even with zero residuals, the learned $g(d)$ may encode unfair patterns from the historical data, and service differences driven by demographics (e.g., income) would go undetected.
 
 ### 4.3 Variance Computation
 
@@ -175,6 +178,20 @@ $$D_c = \frac{1}{|T_c|} \sum_{t \in T_c} D_{c,t}, \qquad S_c = \frac{1}{|T_c|} \
 where $T_c$ is the set of time periods observed for cell $c$.
 
 This is distinct from spatial fairness, which uses **sum** aggregation to capture total service volume.
+
+### 4.6 Planned Revision: Demographically-Conditioned g(D, x)
+
+The planned revision (see Section 11.6) extends the causal fairness term to include demographic features. In the revised formulation:
+
+1. A demand-only baseline $g_0(D)$ is fitted as before (isotonic regression).
+2. Residuals $R_c = Y_c - g_0(D_c)$ are computed.
+3. The causal fairness metric measures how much the residuals correlate with demographic features $\mathbf{x}_c$:
+
+$$F_{\text{causal}} = 1 - \rho^2(R, \mathbf{x})$$
+
+where $\rho^2(R, \mathbf{x})$ is the coefficient of determination from regressing residuals on demographic features. A score of 1 means residuals are independent of demographics — service deviations from demand-expected levels are not driven by income or other sensitive attributes.
+
+The demographic features $\mathbf{x}_c$ are inherited from the cell's majority district (10 Shenzhen districts) and include GDP per capita, average housing price, employee compensation per capita, and population density.
 
 ---
 
@@ -256,6 +273,10 @@ where $N_c^{\text{base}}$ is the base count (total pickups minus the current tra
 ### 6.5 Boundary Handling
 
 When the neighborhood extends beyond the grid boundary, cells outside the valid range ($0 \leq i < 48$, $0 \leq j < 90$) are excluded from the count update (but remain in the softmax denominator for proper normalization). A validity mask identifies which neighborhood cells fall within the grid.
+
+### 6.6 Alternative Distribution: Poisson (Under Investigation)
+
+The Gaussian softmax formulation in Section 6.2 is the current baseline. However, since pickup counts are non-negative integers (count data), a **Poisson distribution** may be more statistically appropriate for modeling soft cell assignment. The Poisson distribution is a standard model for count data and would naturally handle the discrete, non-negative nature of pickup/dropoff events. This alternative is under investigation and, if adopted, the current Gaussian formulation will be preserved for ablation comparison.
 
 ---
 
@@ -459,17 +480,25 @@ The gradient $\nabla_{\tau'} F_{\text{fidelity}}$ flows through the discriminato
 
 ### 11.1 Purpose
 
-The function $g: \mathbb{R}_{\geq 0} \to \mathbb{R}_{\geq 0}$ models the expected relationship between demand and the service ratio:
+The function $g$ models the expected relationship between demand (and, in the revised formulation, demographics) and the service ratio.
 
-$$g(d) = \mathbb{E}[Y \mid D = d]$$
+**Current (demand-only baseline)**:
 
-It captures the empirical fact that areas with higher demand tend to have lower service ratios (more competition among passengers per available taxi).
+$$g_0(d) = \mathbb{E}[Y \mid D = d]$$
 
-### 11.2 Estimation Method: Isotonic Regression
+**Planned revision (demographically-conditioned)**:
 
-The recommended estimation method is **isotonic regression** with a non-increasing constraint:
+$$g(d, \mathbf{x}) = \mathbb{E}[Y \mid D = d, \mathbf{X} = \mathbf{x}]$$
 
-$$\hat{g} = \arg\min_{g \in \mathcal{M}^-} \sum_{c \in \mathcal{A}} (Y_c - g(D_c))^2$$
+where $\mathbf{x}$ is a vector of demographic features (GDP per capita, housing price, employee compensation per capita, population density) inherited from the cell's majority district.
+
+The demand-only form captures the empirical fact that areas with higher demand tend to have lower service ratios. The demographically-conditioned form additionally captures whether sensitive attributes (income, wealth) influence service allocation beyond what demand explains.
+
+### 11.2 Current Estimation Method: Isotonic Regression (Demand-Only Baseline)
+
+The current estimation method is **isotonic regression** with a non-increasing constraint:
+
+$$\hat{g}_0 = \arg\min_{g \in \mathcal{M}^-} \sum_{c \in \mathcal{A}} (Y_c - g(D_c))^2$$
 
 where $\mathcal{M}^-$ is the set of monotone non-increasing functions and $\mathcal{A}$ is the set of active cells (those with $D_c \geq D_{\min}$).
 
@@ -478,9 +507,11 @@ where $\mathcal{M}^-$ is the set of monotone non-increasing functions and $\math
 - Monotone decreasing: Captures the economic intuition that higher demand areas have lower per-unit service ratios due to supply limitations.
 - `out_of_bounds='clip'`: For demand values outside the training range, the prediction is clipped to the nearest boundary value.
 
+> **Note**: Isotonic regression is inherently univariate and cannot directly accommodate additional covariates. When the formulation is extended to $g(d, \mathbf{x})$, a multivariate method will be needed (see Section 11.6).
+
 ### 11.3 Training Data
 
-$g(d)$ is fitted on hourly-aggregated, per-cell data:
+$g_0(d)$ is fitted on hourly-aggregated, per-cell data:
 
 1. **Demand** ($D_c$): Mean pickup count per cell, aggregated hourly.
 2. **Service ratio** ($Y_c$): Mean supply-to-demand ratio $S_c / D_c$ per cell, where supply is the active taxi count.
@@ -494,15 +525,59 @@ pickup_dropoff_counts.pkl → extract demand → aggregate to hourly → match w
 
 ### 11.4 Frozen During Optimization
 
-$g(d)$ is computed once before the modification loop begins and remains fixed throughout. This prevents circular optimization: if $g(d)$ were updated as trajectories change, the "expected" relationship would shift to match the modifications, undermining the causal fairness criterion.
+$g$ (whether demand-only or demographically-conditioned) is computed once before the modification loop begins and remains fixed throughout. This prevents circular optimization: if $g$ were updated as trajectories change, the "expected" relationship would shift to match the modifications, undermining the fairness criterion.
 
 ### 11.5 Diagnostics
 
-The $g(d)$ fitting process reports:
+The $g_0(d)$ fitting process reports:
 - **$R^2$** of the fit (how well isotonic regression captures the demand-ratio relationship)
 - **Number of data points** used for fitting
 - **Demand and ratio ranges** in the training data
 - **Aggregation method** (mean, sum, or max)
+
+### 11.6 Planned Revision: Demographically-Conditioned g(D, x)
+
+#### 11.6.1 Motivation
+
+The demand-only $g_0(d)$ has a fundamental limitation: it is estimated from observed (potentially unfair) data and cannot distinguish between demand-driven and demographically-driven variation in service ratios. Two areas with the same demand but different income levels receive the same predicted service ratio from $g_0$, even if the observed data shows systematic income-based disparities.
+
+The revised formulation conditions on demographic features to explicitly measure and penalize the influence of sensitive attributes on service distribution.
+
+#### 11.6.2 Recommended Approach: Demographic Disparity Score
+
+The recommended approach (Option B from the reformulation plan):
+
+1. Fit the demand-only baseline $g_0(D)$ via isotonic regression.
+2. Compute residuals: $R_c = Y_c - g_0(D_c)$.
+3. Regress residuals on demographic features: $R_c \approx \boldsymbol{\beta}^T \mathbf{x}_c$.
+4. Measure causal fairness as:
+
+$$F_{\text{causal}} = 1 - \rho^2(R, \mathbf{x})$$
+
+where $\rho^2$ is the $R^2$ of the demographic regression. If residuals are independent of demographics ($\rho^2 = 0$), then $F_{\text{causal}} = 1$ (perfect fairness). If demographics fully explain residuals ($\rho^2 = 1$), then $F_{\text{causal}} = 0$.
+
+#### 11.6.3 Demographic Features
+
+Features are sourced from `data/demographic_data/all_demographics_by_district.csv` (10 Shenzhen districts). Primary features:
+
+| Feature | Derivation | Rationale |
+|---------|------------|----------|
+| GDP per capita | `GDPin10000Yuan / YearEndPermanentPop10k` | Direct income proxy |
+| Average Housing Price | `AvgHousingPricePerSqM` | Wealth indicator |
+| Employee Compensation per capita | `EmployeeCompensation100MYuan / AvgEmployedPersons` | Wage-level proxy |
+| Population Density | `PopDensityPerKm2` | Controls for urban density |
+
+Grid cells are mapped to districts using the ArcGIS-derived grid-to-district table, with each cell assigned to its majority-overlap district.
+
+#### 11.6.4 Data Granularity
+
+Demographic features are available at the district level only (10 districts, ~100–400 cells each). This means demographic features are constant within each district. Despite this limitation, the formulation captures macro-level income gradients across the city, which is the primary signal of demographic-driven unfairness.
+
+More granular data (e.g., TAZ-level) is being investigated to improve resolution.
+
+#### 11.6.5 Differentiability
+
+The revised formulation preserves differentiability. Since $g_0(D)$ and the demographic regression are both frozen during optimization, gradients flow only through $Y_c = S_c / (D_c + \varepsilon)$ → pickup counts → soft cell assignment → pickup location, exactly as in the demand-only baseline.
 
 ---
 
