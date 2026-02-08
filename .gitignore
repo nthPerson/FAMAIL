@@ -34,3 +34,7 @@ venv/
 !**/*.schema.md
 !**/.gitkeep
 data/visualization/streamlit/ai_context_docs/*
+
+# Claude Code dependencies
+.claude
+CLAUDE.md
