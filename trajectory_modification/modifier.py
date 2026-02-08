@@ -361,6 +361,7 @@ class TrajectoryModifier:
                     grad_norm = np.linalg.norm(grad)
                 else:
                     # Fallback to heuristic if soft cell didn't produce gradients
+                    # TODO: instead of automatically falling back to heuristic, throw error if gradient_mode = 'soft_cell'
                     grad = self._compute_heuristic_gradient(current_pickup)
                     grad_norm = np.linalg.norm(grad)
                     

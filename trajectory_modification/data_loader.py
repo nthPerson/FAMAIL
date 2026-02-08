@@ -32,7 +32,7 @@ DEFAULT_PATHS = {
     'pickup_dropoff_counts': 'source_data/pickup_dropoff_counts.pkl',
     'active_taxis_hourly': 'source_data/active_taxis_5x5_hourly.pkl',
     'active_taxis_time_bucket': 'source_data/active_taxis_5x5_time_bucket.pkl',
-    'g_function_params': 'objective_function/causal_fairness/g_function_params.json',
+    'g_function_params': 'objective_function/causal_fairness/g_function_params.json', # TODO: this file does not exist and is not part of the implementation. Remove all references.
 }
 
 # Grid dimensions for Shenzhen
@@ -400,7 +400,7 @@ class GFunctionLoader:
             )
         except ImportError:
             # Fall back to simple matching if utils not available
-            return GFunctionLoader._estimate_from_data_simple(
+            return GFunctionLoader._estimate_from_data_simple( # TODO: do not fall back to simple matching, but throw error instead
                 pickup_dropoff_data, active_taxis_data, aggregation, method, min_demand
             )
         

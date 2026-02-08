@@ -100,22 +100,6 @@ def load_data_section():
     # Load button
     max_trajs = st.sidebar.number_input("Max Trajectories", 10, 1000, 100, step=10)
 
-    # with st.spinner("Loading data..."):
-    #     try:
-    #         from trajectory_modification import DataBundle
-    #         bundle = DataBundle.load_default(max_trajectories=max_trajs)
-    #         # bundle = DataBundle.load_default(max_trajectories=max_trajs, workspace_root=workspace_root)
-    #         st.session_state.trajectories = bundle.trajectories
-    #         st.session_state.pickup_counts = bundle.pickup_counts
-    #         st.session_state.supply_counts = bundle.supply_counts
-    #         st.session_state.active_taxis = bundle.active_taxis
-    #         st.session_state.g_function = bundle.g_function
-    #         st.session_state.data_loaded = True
-    #         st.sidebar.success(f"Loaded {len(bundle.trajectories)} trajectories")
-    #     except FileNotFoundError as e:
-    #         st.sidebar.error(f"File not found: {e}")
-    #     except Exception as e:
-    #         st.sidebar.error(f"Error loading data: {e.with_traceback()}")    
     if st.sidebar.button("Load Data", type="primary"):
         with st.spinner("Loading data..."):
             try:
@@ -884,7 +868,7 @@ def _execute_modification(
     checkpoint_path: Optional[str] = None,
     gradient_mode: str = 'soft_cell',
     temperature: float = 1.0,
-    use_annealing: bool = False,
+    use_annealing: bool = True,
     tau_max: float = 1.0,
     tau_min: float = 0.1,
 ):
