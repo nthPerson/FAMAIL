@@ -1,0 +1,134 @@
+{
+  "_description": "Schema sample for grid_to_district_mapping.pkl. Shows structure and a few representative entries.",
+  "_grid_convention": {
+    "origin": "(0, 0) = south-west corner",
+    "x_grid": "latitude dimension, 0-47, increases northward",
+    "y_grid": "longitude dimension, 0-89, increases eastward",
+    "cell_id": "x_grid * 90 + y_grid",
+    "extent": {
+      "lon_min": 113.75,
+      "lon_max": 114.65,
+      "lat_min": 22.44,
+      "lat_max": 22.87
+    }
+  },
+  "_statistics": {
+    "total_cells": 4320,
+    "mapped_cells": 2605,
+    "unmapped_cells": 1715,
+    "districts_with_cells": 10,
+    "cells_per_district": {
+      "Bao'an": 522,
+      "Dapeng": 544,
+      "Futian": 86,
+      "Guangming": 169,
+      "Longgang": 422,
+      "Longhua": 182,
+      "Luohu": 87,
+      "Nanshan": 307,
+      "Pingshan": 177,
+      "Yantian": 109
+    }
+  },
+  "district_names": [
+    "Bao'an",
+    "Dapeng",
+    "Futian",
+    "Guangming",
+    "Longgang",
+    "Longhua",
+    "Luohu",
+    "Nanshan",
+    "Pingshan",
+    "Yantian"
+  ],
+  "district_to_id": {
+    "Bao'an": 0,
+    "Dapeng": 1,
+    "Futian": 2,
+    "Guangming": 3,
+    "Longgang": 4,
+    "Longhua": 5,
+    "Luohu": 6,
+    "Nanshan": 7,
+    "Pingshan": 8,
+    "Yantian": 9
+  },
+  "cell_to_district (sample)": {
+    "(0, 0)": "Nanshan",
+    "(0, 1)": "Nanshan",
+    "(0, 2)": "Nanshan",
+    "(0, 3)": "Nanshan",
+    "(0, 4)": "Nanshan"
+  },
+  "district_id_grid": {
+    "dtype": "int8",
+    "shape": [
+      48,
+      90
+    ],
+    "unmapped_value": -1,
+    "sample_mapped": {
+      "[0][0]": 7,
+      "[0][1]": 7,
+      "[0][2]": 7,
+      "[0][3]": 7,
+      "[0][4]": 7
+    },
+    "sample_unmapped": {
+      "[0][16]": -1,
+      "[0][17]": -1,
+      "[0][18]": -1
+    }
+  },
+  "valid_mask": {
+    "dtype": "bool",
+    "shape": [
+      48,
+      90
+    ],
+    "true_count": 2605,
+    "description": "True for cells within Shenzhen, False for ocean/outside"
+  },
+  "valid_cells": {
+    "type": "set of (x_grid, y_grid) tuples",
+    "count": 2605,
+    "sample": [
+      [
+        0,
+        0
+      ],
+      [
+        0,
+        1
+      ],
+      [
+        0,
+        2
+      ],
+      [
+        0,
+        3
+      ],
+      [
+        0,
+        4
+      ]
+    ]
+  },
+  "overlap_pct_grid": {
+    "dtype": "float32",
+    "shape": [
+      48,
+      90
+    ],
+    "description": "Percentage of cell area covered by its majority district (0-100)",
+    "sample": {
+      "[0][0]": 65.56,
+      "[0][1]": 100.0,
+      "[0][2]": 100.0,
+      "[0][3]": 100.0,
+      "[0][4]": 100.0
+    }
+  }
+}

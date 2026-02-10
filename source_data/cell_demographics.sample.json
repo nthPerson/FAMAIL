@@ -1,0 +1,147 @@
+{
+  "_description": "Schema sample for cell_demographics.pkl. Cell-level demographic features joined from district-level data.",
+  "_sources": {
+    "grid_mapping": "source_data/grid_to_district_mapping.pkl",
+    "demographics": "source_data/all_demographics_by_district.csv"
+  },
+  "_note": "All cells in the same district have identical demographic values. This is district-level granularity mapped to cell level.",
+  "feature_names": [
+    "AreaKm2",
+    "YearEndPermanentPop10k",
+    "RegisteredPermanentPop10k",
+    "NonRegisteredPermanentPop10k",
+    "PopDensityPerKm2",
+    "HouseholdRegisteredPop10k",
+    "MalePop10k",
+    "FemalePop10k",
+    "SexRatio100",
+    "EmployeeCompensation100MYuan",
+    "AvgEmployedPersons",
+    "AvgHousingPricePerSqM",
+    "GDPin10000Yuan"
+  ],
+  "demographics_grid": {
+    "dtype": "float64",
+    "shape": [
+      48,
+      90,
+      13
+    ],
+    "unmapped_value": "NaN",
+    "sample_mapped": {
+      "[0][0]": {
+        "AreaKm2": 187.47,
+        "YearEndPermanentPop10k": 135.63,
+        "RegisteredPermanentPop10k": 81.02,
+        "NonRegisteredPermanentPop10k": 54.61,
+        "PopDensityPerKm2": 7235.0,
+        "HouseholdRegisteredPop10k": 85.79,
+        "MalePop10k": 45.55,
+        "FemalePop10k": 40.24,
+        "SexRatio100": 113.21,
+        "EmployeeCompensation100MYuan": 462.45,
+        "AvgEmployedPersons": 329039.0,
+        "AvgHousingPricePerSqM": 49847.8333,
+        "GDPin10000Yuan": 38452711.0
+      },
+      "[0][1]": {
+        "AreaKm2": 187.47,
+        "YearEndPermanentPop10k": 135.63,
+        "RegisteredPermanentPop10k": 81.02,
+        "NonRegisteredPermanentPop10k": 54.61,
+        "PopDensityPerKm2": 7235.0,
+        "HouseholdRegisteredPop10k": 85.79,
+        "MalePop10k": 45.55,
+        "FemalePop10k": 40.24,
+        "SexRatio100": 113.21,
+        "EmployeeCompensation100MYuan": 462.45,
+        "AvgEmployedPersons": 329039.0,
+        "AvgHousingPricePerSqM": 49847.8333,
+        "GDPin10000Yuan": 38452711.0
+      },
+      "[0][2]": {
+        "AreaKm2": 187.47,
+        "YearEndPermanentPop10k": 135.63,
+        "RegisteredPermanentPop10k": 81.02,
+        "NonRegisteredPermanentPop10k": 54.61,
+        "PopDensityPerKm2": 7235.0,
+        "HouseholdRegisteredPop10k": 85.79,
+        "MalePop10k": 45.55,
+        "FemalePop10k": 40.24,
+        "SexRatio100": 113.21,
+        "EmployeeCompensation100MYuan": 462.45,
+        "AvgEmployedPersons": 329039.0,
+        "AvgHousingPricePerSqM": 49847.8333,
+        "GDPin10000Yuan": 38452711.0
+      }
+    },
+    "sample_unmapped": {
+      "[0][16]": "all NaN",
+      "[0][17]": "all NaN"
+    }
+  },
+  "cell_to_demographics (sample)": {
+    "(0, 0)": {
+      "AreaKm2": 187.47,
+      "YearEndPermanentPop10k": 135.63,
+      "RegisteredPermanentPop10k": 81.02,
+      "NonRegisteredPermanentPop10k": 54.61
+    },
+    "(0, 1)": {
+      "AreaKm2": 187.47,
+      "YearEndPermanentPop10k": 135.63,
+      "RegisteredPermanentPop10k": 81.02,
+      "NonRegisteredPermanentPop10k": 54.61
+    },
+    "(0, 2)": {
+      "AreaKm2": 187.47,
+      "YearEndPermanentPop10k": 135.63,
+      "RegisteredPermanentPop10k": 81.02,
+      "NonRegisteredPermanentPop10k": 54.61
+    }
+  },
+  "district_demographics": {
+    "Bao'an": {
+      "AreaKm2": 396.61,
+      "YearEndPermanentPop10k": 301.71,
+      "RegisteredPermanentPop10k": 47.75,
+      "NonRegisteredPermanentPop10k": 253.96
+    },
+    "Dapeng": {
+      "AreaKm2": 295.32,
+      "YearEndPermanentPop10k": 14.09,
+      "RegisteredPermanentPop10k": 3.93,
+      "NonRegisteredPermanentPop10k": 10.16
+    },
+    "Futian": {
+      "AreaKm2": 78.66,
+      "YearEndPermanentPop10k": 150.17,
+      "RegisteredPermanentPop10k": 95.35,
+      "NonRegisteredPermanentPop10k": 54.82
+    }
+  },
+  "district_names": [
+    "Bao'an",
+    "Dapeng",
+    "Futian",
+    "Guangming",
+    "Longgang",
+    "Longhua",
+    "Luohu",
+    "Nanshan",
+    "Pingshan",
+    "Yantian"
+  ],
+  "district_to_id": {
+    "Bao'an": 0,
+    "Dapeng": 1,
+    "Futian": 2,
+    "Guangming": 3,
+    "Longgang": 4,
+    "Longhua": 5,
+    "Luohu": 6,
+    "Nanshan": 7,
+    "Pingshan": 8,
+    "Yantian": 9
+  }
+}
