@@ -12,6 +12,7 @@ This module contains:
 
 from typing import Dict, Tuple, List, Optional, Any, Callable, Literal
 import numpy as np
+import pandas as pd
 import pickle
 from pathlib import Path
 from collections import defaultdict
@@ -1804,3 +1805,563 @@ def aggregate_to_grid(
             aggregated[(x, y)] = np.min(values)
     
     return create_grid_heatmap_data(aggregated, grid_dims)
+
+
+# =============================================================================
+# DEMOGRAPHIC FAIRNESS METRICS (Phase 2)
+# =============================================================================
+
+def prepare_demographic_analysis_data(
+    demands: np.ndarray,
+    ratios: np.ndarray,
+    expected: np.ndarray,
+    keys: List[Tuple],
+    demo_grid: np.ndarray,
+    feature_names: List[str],
+    district_id_grid: np.ndarray,
+    valid_mask: np.ndarray,
+    district_names: List[str],
+    data_is_one_indexed: bool = True,
+) -> pd.DataFrame:
+    """
+    Build unified DataFrame joining demand/supply/residual data with demographics per cell.
+
+    Handles 1→0 index conversion for raw pickup data keys. Filters out unmapped
+    cells (district_id == -1 or NaN demographics).
+
+    Args:
+        demands: Array of demand values (from breakdown['components']['demands'])
+        ratios: Array of service ratios (from breakdown['components']['ratios'])
+        expected: Array of expected ratios (from breakdown['components']['expected'])
+        keys: List of (x, y, time, day) tuples from breakdown['components']['keys']
+        demo_grid: Demographics grid of shape (48, 90, n_features), 0-indexed
+        feature_names: List of demographic feature names
+        district_id_grid: Grid of district IDs, shape (48, 90), -1 for unmapped
+        valid_mask: Boolean mask, shape (48, 90), True for valid cells
+        district_names: List of district names indexed by district ID
+        data_is_one_indexed: If True, subtract 1 from x,y in keys to align with 0-indexed grids
+
+    Returns:
+        DataFrame with columns: x, y, demand, ratio, expected, residual,
+        district_id, district_name, and one column per demographic feature.
+    """
+    records = []
+    residuals = np.array(ratios) - np.array(expected)
+
+    for i, key in enumerate(keys):
+        x, y = int(key[0]), int(key[1])
+
+        # Convert 1-indexed raw data keys to 0-indexed grid coordinates
+        if data_is_one_indexed:
+            x_grid = x - 1
+            y_grid = y - 1
+        else:
+            x_grid = x
+            y_grid = y
+
+        # Bounds check
+        if x_grid < 0 or x_grid >= demo_grid.shape[0]:
+            continue
+        if y_grid < 0 or y_grid >= demo_grid.shape[1]:
+            continue
+
+        # Skip unmapped cells
+        if not valid_mask[x_grid, y_grid]:
+            continue
+
+        dist_id = int(district_id_grid[x_grid, y_grid])
+        if dist_id < 0:
+            continue
+
+        # Skip cells with NaN demographics
+        demo_vals = demo_grid[x_grid, y_grid, :]
+        if np.any(np.isnan(demo_vals)):
+            continue
+
+        dist_name = district_names[dist_id] if dist_id < len(district_names) else f"District {dist_id}"
+
+        record = {
+            'x': x_grid,
+            'y': y_grid,
+            'demand': demands[i],
+            'ratio': ratios[i],
+            'expected': expected[i],
+            'residual': residuals[i],
+            'district_id': dist_id,
+            'district_name': dist_name,
+        }
+        for fi, fname in enumerate(feature_names):
+            record[fname] = demo_vals[fi]
+
+        records.append(record)
+
+    return pd.DataFrame(records)
+
+
+def compute_option_a1_demographic_attribution(
+    demands: np.ndarray,
+    ratios: np.ndarray,
+    demographic_features: np.ndarray,
+    feature_names: List[str],
+) -> Dict[str, Any]:
+    """
+    Option A1: Demographic Attribution via conditional regression g(D, x).
+
+    Trains a model g(D, x) = E[Y | D, x] using polynomial demand features
+    plus standardized demographics. Then measures how much of the model's
+    predictions depend on demographics by comparing g(D, x) vs g(D, x̄):
+
+        F_causal = 1 - Var[g(D,x) - g(D,x̄)] / Var[Y]
+
+    where x̄ is the mean demographic vector. This captures the fraction of
+    predicted variation that is *attributable to demographics* rather than demand.
+
+    Args:
+        demands: Array of demand values, shape (n,)
+        ratios: Array of service ratios Y = S/D, shape (n,)
+        demographic_features: Array of demographic features, shape (n, p)
+        feature_names: List of feature names
+
+    Returns:
+        Dict with f_causal, var_attribution, var_y, g_r2, coefficients,
+        predicted_full, predicted_mean_demo
+    """
+    from sklearn.linear_model import LinearRegression
+    from sklearn.preprocessing import PolynomialFeatures, StandardScaler
+
+    n = len(demands)
+    p = demographic_features.shape[1] if demographic_features.ndim > 1 else 0
+
+    if n < 5 or p == 0:
+        return {
+            'f_causal': 1.0,
+            'var_attribution': 0.0,
+            'var_y': 0.0,
+            'g_r2': 0.0,
+            'coefficients': {},
+            'error': 'Insufficient data',
+        }
+
+    # Build feature matrix: polynomial demand + standardized demographics
+    poly = PolynomialFeatures(degree=2, include_bias=False)
+    X_demand = poly.fit_transform(demands.reshape(-1, 1))
+
+    scaler = StandardScaler()
+    X_demo_scaled = scaler.fit_transform(demographic_features)
+
+    X_full = np.hstack([X_demand, X_demo_scaled])
+
+    # Fit g(D, x)
+    model = LinearRegression()
+    model.fit(X_full, ratios)
+    g_r2 = max(0.0, model.score(X_full, ratios))
+
+    # Predictions with actual demographics: g(D_c, x_c)
+    predicted_full = model.predict(X_full)
+
+    # Predictions with mean demographics: g(D_c, x̄)
+    x_bar_scaled = np.zeros((1, p))  # Mean of standardized features = 0
+    X_mean_demo = np.hstack([X_demand, np.tile(x_bar_scaled, (n, 1))])
+    predicted_mean_demo = model.predict(X_mean_demo)
+
+    # Demographic attribution: how much predictions change due to demographics
+    attribution = predicted_full - predicted_mean_demo
+
+    var_attribution = float(np.var(attribution))
+    var_y = float(np.var(ratios))
+
+    if var_y < 1e-10:
+        f_causal = 1.0
+    else:
+        f_causal = max(0.0, 1.0 - var_attribution / var_y)
+
+    # Extract demographic coefficients from the full model
+    n_demand_features = X_demand.shape[1]
+    demo_coefficients = {}
+    for i, name in enumerate(feature_names):
+        demo_coefficients[name] = float(model.coef_[n_demand_features + i])
+
+    return {
+        'f_causal': f_causal,
+        'var_attribution': var_attribution,
+        'var_y': var_y,
+        'g_r2': g_r2,
+        'intercept': float(model.intercept_),
+        'coefficients': demo_coefficients,
+        'demand_coefficients': model.coef_[:n_demand_features].tolist(),
+        'predicted_full': predicted_full,
+        'predicted_mean_demo': predicted_mean_demo,
+        'attribution': attribution,
+        'n_samples': n,
+    }
+
+
+def compute_option_a2_conditional_r_squared(
+    demands: np.ndarray,
+    ratios: np.ndarray,
+    demographic_features: np.ndarray,
+    feature_names: List[str],
+) -> Dict[str, Any]:
+    """
+    Option A2: Conditional R² using demographically-aware g(D, x).
+
+    Fits g(D, x) = E[Y | D, x] and computes R² of the full model.
+    This is the "simpler alternative" from the reformulation plan:
+
+        R_c = Y_c - g(D_c, x_c)
+        F_causal = R² = 1 - Var(R) / Var(Y)
+
+    Higher R² means the model (which includes demographics) better explains
+    the observed service ratio. Note: this measures model fit quality, which
+    is fundamentally different from measuring whether demographics *should*
+    influence service.
+
+    Args:
+        demands: Array of demand values, shape (n,)
+        ratios: Array of service ratios Y = S/D, shape (n,)
+        demographic_features: Array of demographic features, shape (n, p)
+        feature_names: List of feature names
+
+    Returns:
+        Dict with f_causal (= R²), residuals, model coefficients
+    """
+    from sklearn.linear_model import LinearRegression
+    from sklearn.preprocessing import PolynomialFeatures, StandardScaler
+
+    n = len(demands)
+    p = demographic_features.shape[1] if demographic_features.ndim > 1 else 0
+
+    if n < 5 or p == 0:
+        return {
+            'f_causal': 0.0,
+            'r_squared': 0.0,
+            'residuals': np.array([]),
+            'coefficients': {},
+            'error': 'Insufficient data',
+        }
+
+    # Build feature matrix: polynomial demand + standardized demographics
+    poly = PolynomialFeatures(degree=2, include_bias=False)
+    X_demand = poly.fit_transform(demands.reshape(-1, 1))
+
+    scaler = StandardScaler()
+    X_demo_scaled = scaler.fit_transform(demographic_features)
+
+    X_full = np.hstack([X_demand, X_demo_scaled])
+
+    # Fit g(D, x)
+    model = LinearRegression()
+    model.fit(X_full, ratios)
+
+    r_squared = max(0.0, model.score(X_full, ratios))
+
+    predicted = model.predict(X_full)
+    residuals = ratios - predicted
+
+    # Also compute demand-only R² for comparison
+    model_demand_only = LinearRegression()
+    model_demand_only.fit(X_demand, ratios)
+    r2_demand_only = max(0.0, model_demand_only.score(X_demand, ratios))
+
+    # Extract coefficients
+    n_demand_features = X_demand.shape[1]
+    demo_coefficients = {}
+    for i, name in enumerate(feature_names):
+        demo_coefficients[name] = float(model.coef_[n_demand_features + i])
+
+    return {
+        'f_causal': r_squared,
+        'r_squared': r_squared,
+        'r2_demand_only': r2_demand_only,
+        'r2_improvement': r_squared - r2_demand_only,
+        'residuals': residuals,
+        'predicted': predicted,
+        'intercept': float(model.intercept_),
+        'coefficients': demo_coefficients,
+        'demand_coefficients': model.coef_[:n_demand_features].tolist(),
+        'var_residual': float(np.var(residuals)),
+        'var_y': float(np.var(ratios)),
+        'n_samples': n,
+    }
+
+
+def compute_option_b_demographic_disparity(
+    residuals: np.ndarray,
+    demographic_features: np.ndarray,
+    feature_names: List[str],
+) -> Dict[str, Any]:
+    """
+    Option B: Regress residuals on demographics. F_causal = 1 - R².
+
+    After removing the effect of demand via g₀(D), if residuals still correlate
+    with demographics, that indicates demographic-driven unfairness.
+
+    Args:
+        residuals: Array of residuals R = Y - g₀(D), shape (n_cells,)
+        demographic_features: Array of demographic features, shape (n_cells, n_features)
+        feature_names: List of feature names
+
+    Returns:
+        Dict with f_causal, r_squared, coefficients, feature_importances
+    """
+    from sklearn.linear_model import LinearRegression
+    from sklearn.preprocessing import StandardScaler
+
+    if len(residuals) < 5 or demographic_features.shape[1] == 0:
+        return {
+            'f_causal': 1.0,
+            'r_squared': 0.0,
+            'coefficients': {},
+            'feature_importances': {},
+            'error': 'Insufficient data',
+        }
+
+    scaler = StandardScaler()
+    X_scaled = scaler.fit_transform(demographic_features)
+
+    model = LinearRegression()
+    model.fit(X_scaled, residuals)
+
+    r_squared = model.score(X_scaled, residuals)
+    r_squared = max(0.0, r_squared)  # Clamp negative R²
+
+    # Coefficients on standardized features = feature importances
+    coefficients = {}
+    feature_importances = {}
+    for i, name in enumerate(feature_names):
+        coefficients[name] = float(model.coef_[i])
+        feature_importances[name] = float(abs(model.coef_[i]))
+
+    # Predicted residuals from demographics
+    predicted_residuals = model.predict(X_scaled)
+
+    return {
+        'f_causal': 1.0 - r_squared,
+        'r_squared': r_squared,
+        'intercept': float(model.intercept_),
+        'coefficients': coefficients,
+        'feature_importances': feature_importances,
+        'predicted_residuals': predicted_residuals,
+        'n_samples': len(residuals),
+    }
+
+
+def compute_option_c_partial_r_squared(
+    demands: np.ndarray,
+    ratios: np.ndarray,
+    demographic_features: np.ndarray,
+    feature_names: List[str],
+) -> Dict[str, Any]:
+    """
+    Option C: Compare Y~D (poly degree 2) vs Y~D+x models. F_causal = 1 - ΔR².
+
+    Measures the incremental explanatory power demographics have beyond demand.
+
+    Args:
+        demands: Array of demand values, shape (n_cells,)
+        ratios: Array of service ratios, shape (n_cells,)
+        demographic_features: Array of demographic features, shape (n_cells, n_features)
+        feature_names: List of feature names
+
+    Returns:
+        Dict with f_causal, r2_reduced, r2_full, delta_r2, coefficients
+    """
+    from sklearn.linear_model import LinearRegression
+    from sklearn.preprocessing import PolynomialFeatures, StandardScaler
+
+    if len(demands) < 5 or demographic_features.shape[1] == 0:
+        return {
+            'f_causal': 1.0,
+            'r2_reduced': 0.0,
+            'r2_full': 0.0,
+            'delta_r2': 0.0,
+            'error': 'Insufficient data',
+        }
+
+    # Reduced model: Y ~ D (polynomial degree 2)
+    poly = PolynomialFeatures(degree=2, include_bias=False)
+    X_demand = poly.fit_transform(demands.reshape(-1, 1))
+
+    model_reduced = LinearRegression()
+    model_reduced.fit(X_demand, ratios)
+    r2_reduced = max(0.0, model_reduced.score(X_demand, ratios))
+
+    # Full model: Y ~ D + x (polynomial demand + standardized demographics)
+    scaler = StandardScaler()
+    X_demo_scaled = scaler.fit_transform(demographic_features)
+    X_full = np.hstack([X_demand, X_demo_scaled])
+
+    model_full = LinearRegression()
+    model_full.fit(X_full, ratios)
+    r2_full = max(0.0, model_full.score(X_full, ratios))
+
+    delta_r2 = max(0.0, r2_full - r2_reduced)
+
+    # Extract demographic coefficients from full model
+    n_demand_features = X_demand.shape[1]
+    demo_coefficients = {}
+    for i, name in enumerate(feature_names):
+        demo_coefficients[name] = float(model_full.coef_[n_demand_features + i])
+
+    return {
+        'f_causal': 1.0 - delta_r2,
+        'r2_reduced': r2_reduced,
+        'r2_full': r2_full,
+        'delta_r2': delta_r2,
+        'demand_coefficients': model_reduced.coef_.tolist(),
+        'demo_coefficients': demo_coefficients,
+        'n_samples': len(demands),
+    }
+
+
+def compute_option_d_group_fairness(
+    demands: np.ndarray,
+    ratios: np.ndarray,
+    income_values: np.ndarray,
+    n_demand_bins: int = 10,
+    n_income_groups: int = 3,
+) -> Dict[str, Any]:
+    """
+    Option D: Demand-stratified comparison across income groups.
+
+    Bins cells by demand level, splits into income groups, and measures
+    the disparity in mean service ratio between groups within each bin.
+
+    F_causal = 1 - mean(disparity across bins)
+
+    Args:
+        demands: Array of demand values, shape (n_cells,)
+        ratios: Array of service ratios, shape (n_cells,)
+        income_values: Array of income proxy values, shape (n_cells,)
+        n_demand_bins: Number of demand bins
+        n_income_groups: Number of income groups (quantile-based)
+
+    Returns:
+        Dict with f_causal, per_bin_data, group_labels
+    """
+    if len(demands) < 10:
+        return {
+            'f_causal': 1.0,
+            'per_bin_data': [],
+            'error': 'Insufficient data',
+        }
+
+    # Create income groups using quantiles
+    try:
+        income_group_edges = np.percentile(
+            income_values, np.linspace(0, 100, n_income_groups + 1)
+        )
+        income_group_edges = np.unique(income_group_edges)
+        actual_n_groups = len(income_group_edges) - 1
+    except Exception:
+        return {
+            'f_causal': 1.0,
+            'per_bin_data': [],
+            'error': 'Could not create income groups',
+        }
+
+    if actual_n_groups < 2:
+        return {
+            'f_causal': 1.0,
+            'per_bin_data': [],
+            'error': 'Insufficient income variation for grouping',
+        }
+
+    income_groups = np.digitize(income_values, income_group_edges[1:-1])  # 0-indexed groups
+
+    # Create demand bins using quantiles
+    try:
+        demand_bin_edges = np.percentile(
+            demands, np.linspace(0, 100, n_demand_bins + 1)
+        )
+        demand_bin_edges = np.unique(demand_bin_edges)
+    except Exception:
+        demand_bin_edges = np.linspace(demands.min(), demands.max(), n_demand_bins + 1)
+
+    demand_bins = np.digitize(demands, demand_bin_edges[1:-1])  # 0-indexed bins
+
+    # Compute per-bin disparity
+    per_bin_data = []
+    disparities = []
+
+    for b in range(len(demand_bin_edges) - 1):
+        bin_mask = demand_bins == b
+        if bin_mask.sum() < 2:
+            continue
+
+        bin_center = (demand_bin_edges[b] + demand_bin_edges[min(b + 1, len(demand_bin_edges) - 1)]) / 2
+
+        group_means = {}
+        for g in range(actual_n_groups):
+            group_mask = bin_mask & (income_groups == g)
+            if group_mask.sum() > 0:
+                group_means[g] = float(np.mean(ratios[group_mask]))
+
+        if len(group_means) >= 2:
+            disparity = max(group_means.values()) - min(group_means.values())
+        else:
+            disparity = 0.0
+
+        disparities.append(disparity)
+        per_bin_data.append({
+            'bin_index': b,
+            'demand_center': float(bin_center),
+            'demand_range': [float(demand_bin_edges[b]), float(demand_bin_edges[min(b + 1, len(demand_bin_edges) - 1)])],
+            'n_cells': int(bin_mask.sum()),
+            'group_means': {f"Group {g}": m for g, m in group_means.items()},
+            'disparity': float(disparity),
+        })
+
+    # Create group labels
+    group_labels = []
+    for g in range(actual_n_groups):
+        low = income_group_edges[g]
+        high = income_group_edges[min(g + 1, len(income_group_edges) - 1)]
+        group_labels.append(f"Group {g} ({low:.0f}-{high:.0f})")
+
+    mean_disparity = float(np.mean(disparities)) if disparities else 0.0
+
+    # Normalize disparity by the range of Y to keep F_causal in [0, 1]
+    y_range = float(np.ptp(ratios)) if len(ratios) > 1 else 1.0
+    y_range = max(y_range, 1e-8)
+    normalized_disparity = mean_disparity / y_range
+
+    return {
+        'f_causal': max(0.0, 1.0 - normalized_disparity),
+        'mean_disparity': mean_disparity,
+        'normalized_disparity': normalized_disparity,
+        'per_bin_data': per_bin_data,
+        'group_labels': group_labels,
+        'n_demand_bins': len(demand_bin_edges) - 1,
+        'n_income_groups': actual_n_groups,
+        'n_samples': len(demands),
+    }
+
+
+def compute_residual_demographic_correlation(
+    df: pd.DataFrame,
+    feature_names: List[str],
+) -> pd.DataFrame:
+    """
+    Compute correlation matrix between residuals and demographic features.
+
+    Args:
+        df: DataFrame from prepare_demographic_analysis_data with 'residual'
+            column and demographic feature columns
+        feature_names: List of demographic feature names to correlate
+
+    Returns:
+        DataFrame correlation matrix (features × ['residual'])
+    """
+    cols = [f for f in feature_names if f in df.columns]
+    if not cols or 'residual' not in df.columns:
+        return pd.DataFrame()
+
+    corr_data = {}
+    for fname in cols:
+        if df[fname].std() > 1e-10 and df['residual'].std() > 1e-10:
+            corr_data[fname] = float(df['residual'].corr(df[fname]))
+        else:
+            corr_data[fname] = 0.0
+
+    return pd.DataFrame({'Correlation with Residual': corr_data})

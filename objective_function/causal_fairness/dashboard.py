@@ -65,6 +65,13 @@ from utils import (
     compute_trajectory_causal_attribution,
     create_grid_heatmap_data,
     aggregate_to_grid,
+    prepare_demographic_analysis_data,
+    compute_option_a1_demographic_attribution,
+    compute_option_a2_conditional_r_squared,
+    compute_option_b_demographic_disparity,
+    compute_option_c_partial_r_squared,
+    compute_option_d_group_fairness,
+    compute_residual_demographic_correlation,
 )
 
 
@@ -1372,6 +1379,911 @@ pickup_locs.data -= learning_rate * pickup_locs.grad
 
 
 # =============================================================================
+# DEMOGRAPHIC EXPLORATION TAB (Phase 2)
+# =============================================================================
+
+def render_demographic_exploration_tab(
+    breakdown: Dict,
+    demo_data: Dict,
+    district_data: Dict,
+    income_proxy_feature: str,
+    selected_demo_features: List[str],
+    demographics_available: bool,
+    g_func,
+    estimation_method: str,
+):
+    """Render the Demographic Exploration tab."""
+    st.subheader("🏘️ Demographic Exploration")
+
+    if not demographics_available:
+        st.info(
+            "Demographic data is not available. Place `cell_demographics.pkl` and "
+            "`grid_to_district_mapping.pkl` in `source_data/` to enable this tab."
+        )
+        return
+
+    st.markdown("""
+    This tab explores whether demographic factors (income, population density)
+    correlate with service ratio patterns *after* accounting for demand via g(d).
+    If residuals R = Y - g(D) correlate with demographics, that suggests
+    demographic-driven unfairness beyond what demand explains.
+    """)
+
+    # Extract data
+    demands = np.array(breakdown['components']['demands'])
+    ratios = np.array(breakdown['components']['ratios'])
+    expected = np.array(breakdown['components']['expected'])
+    residuals = np.array(breakdown['components']['residuals'])
+    keys = breakdown['components'].get('keys', [])
+
+    demo_grid = demo_data['demographics_grid']
+    feature_names = demo_data['feature_names']
+    district_id_grid = district_data['district_id_grid']
+    valid_mask = district_data['valid_mask']
+    district_names = district_data['district_names']
+
+    if len(keys) == 0 or len(demands) == 0:
+        st.warning("No cell-level keys available. Recompute with updated term.py.")
+        return
+
+    # Build unified DataFrame
+    df = prepare_demographic_analysis_data(
+        demands=demands,
+        ratios=ratios,
+        expected=expected,
+        keys=keys,
+        demo_grid=demo_grid,
+        feature_names=feature_names,
+        district_id_grid=district_id_grid,
+        valid_mask=valid_mask,
+        district_names=district_names,
+        data_is_one_indexed=True,
+    )
+
+    if len(df) == 0:
+        st.warning("No cells could be matched between demand data and demographics.")
+        return
+
+    st.success(f"Matched **{len(df):,}** cell-period observations with demographics "
+               f"across **{df['district_name'].nunique()}** districts")
+
+    st.divider()
+
+    # --- 1. Scatter: Y vs D colored by district ---
+    st.markdown("### Service Ratio vs Demand by District")
+
+    # Use 10 categorical colors
+    district_colors = px.colors.qualitative.D3
+
+    fig_district = go.Figure()
+
+    # g(d) overlay
+    if g_func is not None and len(demands) > 0:
+        d_plot = np.linspace(df['demand'].min(), df['demand'].max(), 100)
+        g_vals = g_func(d_plot)
+        fig_district.add_trace(go.Scatter(
+            x=d_plot, y=g_vals,
+            mode='lines',
+            name=f'g(d) ({estimation_method})',
+            line=dict(color='black', width=3, dash='dash'),
+        ))
+
+    for i, dist_name in enumerate(sorted(df['district_name'].unique())):
+        mask = df['district_name'] == dist_name
+        color = district_colors[i % len(district_colors)]
+        fig_district.add_trace(go.Scatter(
+            x=df.loc[mask, 'demand'],
+            y=df.loc[mask, 'ratio'],
+            mode='markers',
+            name=dist_name,
+            marker=dict(size=4, color=color, opacity=0.5),
+            hovertemplate=f'{dist_name}<br>D=%{{x:.0f}}<br>Y=%{{y:.3f}}<extra></extra>',
+        ))
+
+    fig_district.update_layout(
+        title="Y vs D Colored by District",
+        xaxis_title="Demand (D)",
+        yaxis_title="Service Ratio (Y)",
+        height=500,
+        showlegend=True,
+    )
+    st.plotly_chart(fig_district, use_container_width=True)
+
+    # --- 2. Scatter: Y vs D colored by income ---
+    st.markdown("### Service Ratio vs Demand by Income Level")
+
+    if income_proxy_feature in df.columns:
+        fig_income = go.Figure()
+
+        if g_func is not None:
+            fig_income.add_trace(go.Scatter(
+                x=d_plot, y=g_vals,
+                mode='lines',
+                name=f'g(d) ({estimation_method})',
+                line=dict(color='black', width=3, dash='dash'),
+            ))
+
+        fig_income.add_trace(go.Scatter(
+            x=df['demand'],
+            y=df['ratio'],
+            mode='markers',
+            marker=dict(
+                size=4,
+                color=df[income_proxy_feature],
+                colorscale='Viridis',
+                colorbar=dict(title=income_proxy_feature),
+                showscale=True,
+                opacity=0.5,
+            ),
+            hovertemplate='D=%{x:.0f}<br>Y=%{y:.3f}<extra></extra>',
+        ))
+
+        fig_income.update_layout(
+            title=f"Y vs D Colored by {income_proxy_feature}",
+            xaxis_title="Demand (D)",
+            yaxis_title="Service Ratio (Y)",
+            height=500,
+        )
+        st.plotly_chart(fig_income, use_container_width=True)
+    else:
+        st.warning(f"Income proxy feature '{income_proxy_feature}' not found in data.")
+
+    st.divider()
+
+    # --- 3 & 4. Heatmaps: District map and income level ---
+    st.markdown("### Spatial Maps")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        # District map — use flipud for correct orientation with px.imshow
+        # Build a discrete colorscale from qualitative colors for 10 districts
+        dist_grid_display = district_id_grid.astype(float).copy()
+        dist_grid_display[dist_grid_display < 0] = np.nan
+
+        n_districts = len(district_names)
+        qual_colors = px.colors.qualitative.D3[:n_districts]
+        # Build continuous colorscale with sharp boundaries for each district ID
+        discrete_colorscale = []
+        for i, color in enumerate(qual_colors):
+            low = i / n_districts
+            high = (i + 1) / n_districts
+            discrete_colorscale.append([low, color])
+            discrete_colorscale.append([high, color])
+
+        fig_dist_map = px.imshow(
+            np.flipud(dist_grid_display),
+            title="District Map",
+            color_continuous_scale=discrete_colorscale,
+            aspect="auto",
+            labels=dict(color="District ID"),
+            zmin=0,
+            zmax=n_districts,
+        )
+        fig_dist_map.update_layout(height=400)
+        st.plotly_chart(fig_dist_map, use_container_width=True)
+
+    with col2:
+        # Income heatmap
+        if income_proxy_feature in feature_names:
+            feat_idx = feature_names.index(income_proxy_feature)
+            income_grid = demo_grid[:, :, feat_idx].copy()
+            # Mask unmapped cells
+            income_grid[~valid_mask] = np.nan
+
+            fig_income_map = px.imshow(
+                np.flipud(income_grid),
+                title=f"{income_proxy_feature} per Cell",
+                color_continuous_scale="Viridis",
+                aspect="auto",
+                labels=dict(color=income_proxy_feature),
+            )
+            fig_income_map.update_layout(height=400)
+            st.plotly_chart(fig_income_map, use_container_width=True)
+        else:
+            st.info(f"Feature '{income_proxy_feature}' not available.")
+
+    st.divider()
+
+    # --- 5 & 6. Bar charts: Mean service ratio and mean residual by district ---
+    st.markdown("### District-Level Summary")
+
+    col1, col2 = st.columns(2)
+
+    dist_stats = df.groupby('district_name').agg(
+        mean_ratio=('ratio', 'mean'),
+        mean_residual=('residual', 'mean'),
+        n_cells=('ratio', 'count'),
+    ).reset_index().sort_values('mean_ratio')
+
+    with col1:
+        fig_ratio_bar = px.bar(
+            dist_stats,
+            x='district_name',
+            y='mean_ratio',
+            title="Mean Service Ratio by District",
+            labels={'district_name': 'District', 'mean_ratio': 'Mean Y'},
+            color='mean_ratio',
+            color_continuous_scale='Blues',
+        )
+        fig_ratio_bar.update_layout(height=400, xaxis_tickangle=-45)
+        st.plotly_chart(fig_ratio_bar, use_container_width=True)
+
+    with col2:
+        # Color by sign: red=under-served (negative), blue=over-served (positive)
+        colors = ['#d62728' if v < 0 else '#1f77b4' for v in dist_stats['mean_residual']]
+        fig_resid_bar = go.Figure(go.Bar(
+            x=dist_stats['district_name'],
+            y=dist_stats['mean_residual'],
+            marker_color=colors,
+        ))
+        fig_resid_bar.update_layout(
+            title="Mean Residual by District",
+            xaxis_title="District",
+            yaxis_title="Mean Residual (Y - g(D))",
+            height=400,
+            xaxis_tickangle=-45,
+        )
+        fig_resid_bar.add_hline(y=0, line_dash="dash", line_color="black")
+        st.plotly_chart(fig_resid_bar, use_container_width=True)
+
+    st.markdown("""
+    **Interpretation:** Negative residuals (red) indicate districts where service is
+    *lower* than expected given demand. Positive (blue) means *higher* than expected.
+    If this pattern correlates with income, it suggests demographic bias.
+    """)
+
+    st.divider()
+
+    # --- 7. Correlation heatmap ---
+    st.markdown("### Residual-Demographic Correlations")
+
+    available_features = [f for f in feature_names if f in df.columns]
+    corr_df = compute_residual_demographic_correlation(df, available_features)
+
+    if len(corr_df) > 0:
+        corr_vals = corr_df['Correlation with Residual'].values.reshape(1, -1)
+        fig_corr = go.Figure(data=go.Heatmap(
+            z=corr_vals,
+            x=corr_df.index.tolist(),
+            y=['Residual'],
+            colorscale='RdBu',
+            zmid=0,
+            text=[[f"{v:.3f}" for v in corr_vals[0]]],
+            texttemplate="%{text}",
+            colorbar=dict(title="r"),
+        ))
+        fig_corr.update_layout(
+            title="Correlation: Residuals vs Demographic Features",
+            height=200,
+            xaxis_tickangle=-45,
+        )
+        st.plotly_chart(fig_corr, use_container_width=True)
+
+        st.markdown("""
+        **Reading this chart:** Positive correlation means areas with higher values
+        of that feature tend to have *higher* service than expected (over-served).
+        Negative means under-served. Strong correlations suggest demographic bias.
+        """)
+    else:
+        st.info("Could not compute correlations.")
+
+    st.divider()
+
+    # --- 8. Box plot: Residual distribution by district ---
+    st.markdown("### Residual Distribution by District")
+
+    fig_box = px.box(
+        df,
+        x='district_name',
+        y='residual',
+        title="Residual Distribution by District",
+        labels={'district_name': 'District', 'residual': 'Residual (Y - g(D))'},
+        color='district_name',
+        color_discrete_sequence=px.colors.qualitative.D3,
+    )
+    fig_box.update_layout(height=450, xaxis_tickangle=-45, showlegend=False)
+    fig_box.add_hline(y=0, line_dash="dash", line_color="black")
+    st.plotly_chart(fig_box, use_container_width=True)
+
+
+# =============================================================================
+# MODEL COMPARISON TAB (Phase 2)
+# =============================================================================
+
+def render_model_comparison_tab(
+    breakdown: Dict,
+    demo_data: Dict,
+    district_data: Dict,
+    income_proxy_feature: str,
+    selected_demo_features: List[str],
+    demographics_available: bool,
+    n_income_groups: int,
+    n_demand_bins: int,
+):
+    """Render the Model Comparison (B/C/D) tab."""
+    st.subheader("📐 Model Comparison (B/C/D)")
+
+    if not demographics_available:
+        st.info(
+            "Demographic data is not available. Place `cell_demographics.pkl` and "
+            "`grid_to_district_mapping.pkl` in `source_data/` to enable this tab."
+        )
+        return
+
+    st.markdown("""
+    This tab computes and compares reformulated fairness metrics from the
+    G Function Reformulation Plan. Each measures demographic bias differently:
+
+    | Option | Approach | Formula |
+    |--------|----------|---------|
+    | **A1** | Demographic attribution via g(D, x) | F = 1 - Var[g(D,x) - g(D,x̄)] / Var[Y] |
+    | **A2** | Conditional R² via g(D, x) | F = R²(Y ~ g(D, x)) |
+    | **B** | Regress residuals on demographics | F = 1 - R²(R ~ x) |
+    | **C** | Partial R² (demand vs demand+demographics) | F = 1 - ΔR² |
+    | **D** | Demand-stratified group comparison | F = 1 - mean(disparity) |
+    """)
+
+    # Prepare data
+    demands = np.array(breakdown['components']['demands'])
+    ratios = np.array(breakdown['components']['ratios'])
+    expected = np.array(breakdown['components']['expected'])
+    residuals = np.array(breakdown['components']['residuals'])
+    keys = breakdown['components'].get('keys', [])
+
+    demo_grid = demo_data['demographics_grid']
+    feature_names = demo_data['feature_names']
+    district_id_grid = district_data['district_id_grid']
+    valid_mask = district_data['valid_mask']
+    district_names = district_data['district_names']
+
+    if len(keys) == 0 or len(demands) == 0:
+        st.warning("No cell-level keys available. Recompute with updated term.py.")
+        return
+
+    df = prepare_demographic_analysis_data(
+        demands=demands,
+        ratios=ratios,
+        expected=expected,
+        keys=keys,
+        demo_grid=demo_grid,
+        feature_names=feature_names,
+        district_id_grid=district_id_grid,
+        valid_mask=valid_mask,
+        district_names=district_names,
+        data_is_one_indexed=True,
+    )
+
+    if len(df) == 0:
+        st.warning("No cells could be matched.")
+        return
+
+    # Filter to selected features
+    avail_features = [f for f in selected_demo_features if f in df.columns]
+    if not avail_features:
+        st.warning("No selected demographic features found in data. Check sidebar selection.")
+        return
+
+    demo_matrix = df[avail_features].values
+    df_residuals = df['residual'].values
+    df_demands = df['demand'].values
+    df_ratios = df['ratio'].values
+
+    st.divider()
+
+    # ---- Compute all options ----
+    with st.spinner("Computing metrics..."):
+        result_a1 = compute_option_a1_demographic_attribution(
+            df_demands, df_ratios, demo_matrix, avail_features
+        )
+        result_a2 = compute_option_a2_conditional_r_squared(
+            df_demands, df_ratios, demo_matrix, avail_features
+        )
+        result_b = compute_option_b_demographic_disparity(
+            df_residuals, demo_matrix, avail_features
+        )
+        result_c = compute_option_c_partial_r_squared(
+            df_demands, df_ratios, demo_matrix, avail_features
+        )
+
+        # Option D needs income proxy
+        if income_proxy_feature in df.columns:
+            income_vals = df[income_proxy_feature].values
+            result_d = compute_option_d_group_fairness(
+                df_demands, df_ratios, income_vals,
+                n_demand_bins=n_demand_bins,
+                n_income_groups=n_income_groups,
+            )
+        else:
+            result_d = {'f_causal': None, 'error': f'{income_proxy_feature} not available'}
+
+    # ---- 1. Summary comparison table ----
+    st.markdown("### Summary Comparison")
+
+    current_f = breakdown['value']
+
+    summary_rows = [
+        {
+            'Metric': 'Current (demand-only R²)',
+            'F_causal': f"{current_f:.4f}",
+            'Key Measure': f"R² = {breakdown['components'].get('overall_r2', 0):.4f}",
+            'Interpretation': 'How well demand explains service variation',
+        },
+        {
+            'Metric': 'Option A1: Demographic Attribution',
+            'F_causal': f"{result_a1['f_causal']:.4f}",
+            'Key Measure': f"Var[g(D,x)-g(D,x̄)]/Var[Y] = {result_a1['var_attribution'] / max(result_a1['var_y'], 1e-10):.4f}",
+            'Interpretation': 'Fraction of predicted variation from demographics',
+        },
+        {
+            'Metric': 'Option A2: Conditional R²',
+            'F_causal': f"{result_a2['f_causal']:.4f}",
+            'Key Measure': f"R²(Y~D+x) = {result_a2['r_squared']:.4f}",
+            'Interpretation': 'How well demand+demographics explain service',
+        },
+        {
+            'Metric': 'Option B: Demographic Disparity',
+            'F_causal': f"{result_b['f_causal']:.4f}",
+            'Key Measure': f"R²(R~x) = {result_b['r_squared']:.4f}",
+            'Interpretation': 'Residual independence from demographics',
+        },
+        {
+            'Metric': 'Option C: Partial R²',
+            'F_causal': f"{result_c['f_causal']:.4f}",
+            'Key Measure': f"ΔR² = {result_c['delta_r2']:.4f}",
+            'Interpretation': 'Incremental explanatory power of demographics',
+        },
+    ]
+    if result_d.get('f_causal') is not None:
+        summary_rows.append({
+            'Metric': 'Option D: Group Fairness',
+            'F_causal': f"{result_d['f_causal']:.4f}",
+            'Key Measure': f"Norm. Disparity = {result_d.get('normalized_disparity', 0):.4f}",
+            'Interpretation': 'Cross-group service gap at same demand',
+        })
+
+    st.dataframe(pd.DataFrame(summary_rows), use_container_width=True, hide_index=True)
+
+    st.divider()
+
+    # ---- 2. Option A1 detail ----
+    st.markdown("### Option A1: Demographic Attribution")
+
+    st.markdown(f"**F_causal = {result_a1['f_causal']:.4f}**")
+
+    st.markdown(r"""
+    Trains a conditional model $g(D, \mathbf{x}) = \hat{\mathbb{E}}[Y \mid D, \mathbf{x}]$
+    using polynomial demand features + demographics, then measures how much
+    predictions *change* when demographics are replaced with the population mean $\bar{\mathbf{x}}$:
+
+    $$F_{\text{causal}} = 1 - \frac{\text{Var}\big[g(D_c, \mathbf{x}_c) - g(D_c, \bar{\mathbf{x}})\big]}{\text{Var}[Y_c]}$$
+
+    **Interpretation:** The numerator captures variance in predictions *attributable to demographics*.
+    If demographics have no influence on g's predictions, this ratio is 0 and F = 1 (perfectly fair).
+    """)
+
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("g(D,x) Model R²", f"{result_a1['g_r2']:.4f}",
+                  help="How well g(D,x) fits the observed data")
+    with col2:
+        attr_ratio = result_a1['var_attribution'] / max(result_a1['var_y'], 1e-10)
+        st.metric("Var[attribution] / Var[Y]", f"{attr_ratio:.4f}",
+                  help="Fraction of Y variance attributable to demographics")
+    with col3:
+        st.metric("F_causal", f"{result_a1['f_causal']:.4f}",
+                  help="1 - attribution ratio")
+
+    if result_a1.get('coefficients'):
+        col1, col2 = st.columns(2)
+
+        with col1:
+            # Demographic coefficients bar chart
+            a1_coef_df = pd.DataFrame({
+                'Feature': list(result_a1['coefficients'].keys()),
+                'Coefficient': list(result_a1['coefficients'].values()),
+            }).sort_values('Coefficient', key=abs, ascending=False)
+
+            fig_a1_coef = px.bar(
+                a1_coef_df,
+                x='Feature',
+                y='Coefficient',
+                title="A1: Demographic Coefficients in g(D, x)",
+                color='Coefficient',
+                color_continuous_scale='RdBu',
+                color_continuous_midpoint=0,
+            )
+            fig_a1_coef.update_layout(height=350, xaxis_tickangle=-45)
+            st.plotly_chart(fig_a1_coef, use_container_width=True)
+
+        with col2:
+            # Attribution scatter: g(D,x) vs g(D,x̄)
+            if result_a1.get('predicted_full') is not None:
+                fig_a1_attr = go.Figure()
+                fig_a1_attr.add_trace(go.Scatter(
+                    x=result_a1['predicted_mean_demo'],
+                    y=result_a1['predicted_full'],
+                    mode='markers',
+                    marker=dict(
+                        size=3,
+                        color=result_a1['attribution'],
+                        colorscale='RdBu',
+                        colorbar=dict(title="Attribution"),
+                        cmid=0,
+                        opacity=0.4,
+                    ),
+                    hovertemplate='g(D,x̄)=%{x:.3f}<br>g(D,x)=%{y:.3f}<extra></extra>',
+                ))
+                # Diagonal
+                all_preds = np.concatenate([result_a1['predicted_full'], result_a1['predicted_mean_demo']])
+                pred_range = [float(np.min(all_preds)), float(np.max(all_preds))]
+                fig_a1_attr.add_trace(go.Scatter(
+                    x=pred_range, y=pred_range,
+                    mode='lines', line=dict(color='black', dash='dash'),
+                    name='No attribution',
+                ))
+                fig_a1_attr.update_layout(
+                    title="g(D, x) vs g(D, x̄)",
+                    xaxis_title="Predicted with mean demographics g(D, x̄)",
+                    yaxis_title="Predicted with actual demographics g(D, x)",
+                    height=350,
+                )
+                st.plotly_chart(fig_a1_attr, use_container_width=True)
+
+    st.caption(
+        "**Note:** Option A1 measures how much the model's predictions *depend on* "
+        "demographics. Points far from the diagonal have large demographic attribution. "
+        "A high F_causal means demographics have little influence on predicted service."
+    )
+
+    st.divider()
+
+    # ---- 3. Option A2 detail ----
+    st.markdown("### Option A2: Conditional R² (Simpler Alternative)")
+
+    st.markdown(f"**F_causal = R²(Y ~ g(D, x)) = {result_a2['f_causal']:.4f}**")
+
+    st.markdown(r"""
+    Fits the same $g(D, \mathbf{x})$ model, but simply uses its R² as the fairness score:
+
+    $$R_c = Y_c - g(D_c, \mathbf{x}_c), \quad F_{\text{causal}} = R^2 = 1 - \frac{\text{Var}(R)}{\text{Var}(Y)}$$
+
+    **Interpretation:** Higher R² means the demographically-aware model explains more
+    variance. However, this measures **model fit quality** — a high score means
+    demand + demographics together predict service well, which could simply reflect
+    that the existing (potentially unfair) allocation pattern is predictable.
+    """)
+
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("R² (Y ~ D only)", f"{result_a2['r2_demand_only']:.4f}",
+                  help="Demand-only model fit")
+    with col2:
+        st.metric("R² (Y ~ D + x)", f"{result_a2['r_squared']:.4f}",
+                  help="Demand + demographics model fit")
+    with col3:
+        st.metric("R² Improvement", f"{result_a2['r2_improvement']:.4f}",
+                  help="How much demographics improve model fit")
+    with col4:
+        st.metric("Var(residual)", f"{result_a2['var_residual']:.4f}",
+                  help="Residual variance after g(D,x)")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        if result_a2.get('predicted') is not None:
+            fig_a2_fit = go.Figure()
+            fig_a2_fit.add_trace(go.Scatter(
+                x=result_a2['predicted'],
+                y=df_ratios,
+                mode='markers',
+                marker=dict(size=3, color='steelblue', opacity=0.3),
+            ))
+            fit_range = [float(min(result_a2['predicted'])), float(max(result_a2['predicted']))]
+            fig_a2_fit.add_trace(go.Scatter(
+                x=fit_range, y=fit_range,
+                mode='lines', line=dict(color='red', dash='dash'),
+                name='Perfect fit',
+            ))
+            fig_a2_fit.update_layout(
+                title="A2: Actual Y vs Predicted g(D, x)",
+                xaxis_title="g(D, x)",
+                yaxis_title="Actual Y",
+                height=350,
+            )
+            st.plotly_chart(fig_a2_fit, use_container_width=True)
+
+    with col2:
+        if result_a2.get('residuals') is not None and len(result_a2['residuals']) > 0:
+            fig_a2_res = go.Figure()
+            fig_a2_res.add_trace(go.Histogram(
+                x=result_a2['residuals'],
+                nbinsx=50,
+                marker_color='mediumpurple',
+                opacity=0.7,
+            ))
+            fig_a2_res.add_vline(x=0, line_color="black", line_width=2)
+            mean_r = float(np.mean(result_a2['residuals']))
+            fig_a2_res.add_vline(x=mean_r, line_dash="dash", line_color="red",
+                                 annotation_text=f"Mean: {mean_r:.4f}")
+            fig_a2_res.update_layout(
+                title="A2: Residual Distribution (Y - g(D, x))",
+                xaxis_title="Residual",
+                yaxis_title="Count",
+                height=350,
+            )
+            st.plotly_chart(fig_a2_res, use_container_width=True)
+
+    if result_a2.get('coefficients'):
+        st.markdown("**Demographic coefficients in g(D, x):**")
+        a2_coef_df = pd.DataFrame({
+            'Feature': list(result_a2['coefficients'].keys()),
+            'Coefficient': list(result_a2['coefficients'].values()),
+        })
+        st.dataframe(a2_coef_df, use_container_width=True, hide_index=True)
+
+    st.caption(
+        "**Caveat:** Unlike A1, this metric does NOT isolate the demographic effect. "
+        "A high R² here may simply reflect that the observed service patterns "
+        "(including any unfairness) are highly predictable from demand + demographics."
+    )
+
+    st.divider()
+
+    # ---- 4. Option B detail ----
+    st.markdown("### Option B: Demographic Disparity Score")
+    st.markdown(f"**F_causal = 1 - R²(R ~ x) = {result_b['f_causal']:.4f}**")
+    st.markdown(
+        "Regresses residuals R = Y - g₀(D) on demographic features. "
+        "If demographics explain residuals (high R²), that's demographic bias."
+    )
+
+    if result_b.get('coefficients'):
+        # Coefficients bar chart
+        coef_df = pd.DataFrame({
+            'Feature': list(result_b['coefficients'].keys()),
+            'Coefficient': list(result_b['coefficients'].values()),
+        }).sort_values('Coefficient', key=abs, ascending=False)
+
+        fig_coef = px.bar(
+            coef_df,
+            x='Feature',
+            y='Coefficient',
+            title="Regression Coefficients (Standardized)",
+            color='Coefficient',
+            color_continuous_scale='RdBu',
+            color_continuous_midpoint=0,
+        )
+        fig_coef.update_layout(height=350, xaxis_tickangle=-45)
+        st.plotly_chart(fig_coef, use_container_width=True)
+
+        # Feature importance
+        imp_df = pd.DataFrame({
+            'Feature': list(result_b['feature_importances'].keys()),
+            'Importance (|coef|)': list(result_b['feature_importances'].values()),
+        }).sort_values('Importance (|coef|)', ascending=False)
+
+        st.markdown("**Feature Importances:**")
+        st.dataframe(imp_df, use_container_width=True, hide_index=True)
+
+    # Option B: Residuals vs predicted scatter
+    if result_b.get('predicted_residuals') is not None:
+        col1, col2 = st.columns(2)
+        with col1:
+            fig_pred = go.Figure()
+            fig_pred.add_trace(go.Scatter(
+                x=result_b['predicted_residuals'],
+                y=df_residuals,
+                mode='markers',
+                marker=dict(size=3, color='steelblue', opacity=0.3),
+            ))
+            fig_pred.add_trace(go.Scatter(
+                x=[min(result_b['predicted_residuals']), max(result_b['predicted_residuals'])],
+                y=[min(result_b['predicted_residuals']), max(result_b['predicted_residuals'])],
+                mode='lines',
+                line=dict(color='red', dash='dash'),
+                name='Perfect fit',
+            ))
+            fig_pred.update_layout(
+                title="Actual vs Predicted Residuals",
+                xaxis_title="Predicted (from demographics)",
+                yaxis_title="Actual residual",
+                height=350,
+            )
+            st.plotly_chart(fig_pred, use_container_width=True)
+
+        with col2:
+            st.markdown("**Interpretation:**")
+            r2_demo = result_b['r_squared']
+            if r2_demo < 0.05:
+                st.success(
+                    f"R²={r2_demo:.4f} — Demographics explain almost none of the residual "
+                    "variation. Service deviations from demand-expected levels are "
+                    "NOT driven by demographics."
+                )
+            elif r2_demo < 0.15:
+                st.warning(
+                    f"R²={r2_demo:.4f} — Weak demographic signal in residuals. "
+                    "Some demographic bias may exist but is modest."
+                )
+            else:
+                st.error(
+                    f"R²={r2_demo:.4f} — Significant demographic bias detected. "
+                    "Residuals meaningfully correlate with demographic features."
+                )
+
+    st.divider()
+
+    # ---- 5. Option C detail ----
+    st.markdown("### Option C: Partial R² (Conditional Independence)")
+    st.markdown(f"**F_causal = 1 - ΔR² = {result_c['f_causal']:.4f}**")
+    st.markdown(
+        "Compares Y~D (demand only) vs Y~D+x (demand + demographics). "
+        "ΔR² measures the *additional* variance explained by demographics."
+    )
+
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("R² (Y ~ D)", f"{result_c['r2_reduced']:.4f}", help="Demand-only model")
+    with col2:
+        st.metric("R² (Y ~ D + x)", f"{result_c['r2_full']:.4f}", help="Demand + demographics model")
+    with col3:
+        st.metric("ΔR²", f"{result_c['delta_r2']:.4f}", help="Incremental R² from demographics")
+
+    # Stacked bar visualization
+    fig_r2_compare = go.Figure()
+    fig_r2_compare.add_trace(go.Bar(
+        x=['R² Breakdown'],
+        y=[result_c['r2_reduced']],
+        name='Explained by Demand',
+        marker_color='steelblue',
+    ))
+    fig_r2_compare.add_trace(go.Bar(
+        x=['R² Breakdown'],
+        y=[result_c['delta_r2']],
+        name='Additional from Demographics (ΔR²)',
+        marker_color='#d62728',
+    ))
+    fig_r2_compare.add_trace(go.Bar(
+        x=['R² Breakdown'],
+        y=[max(0, 1.0 - result_c['r2_full'])],
+        name='Unexplained',
+        marker_color='lightgray',
+    ))
+    fig_r2_compare.update_layout(
+        barmode='stack',
+        title="Variance Decomposition",
+        yaxis_title="Proportion of Variance",
+        height=350,
+    )
+    st.plotly_chart(fig_r2_compare, use_container_width=True)
+
+    if result_c.get('demo_coefficients'):
+        st.markdown("**Demographic coefficients in full model:**")
+        demo_coef_df = pd.DataFrame({
+            'Feature': list(result_c['demo_coefficients'].keys()),
+            'Coefficient': list(result_c['demo_coefficients'].values()),
+        })
+        st.dataframe(demo_coef_df, use_container_width=True, hide_index=True)
+
+    st.divider()
+
+    # ---- 6. Option D detail ----
+    st.markdown("### Option D: Group Fairness (Demand-Stratified)")
+
+    if result_d.get('f_causal') is not None:
+        st.markdown(f"**F_causal = 1 - mean(disparity) = {result_d['f_causal']:.4f}**")
+        st.markdown(
+            f"Bins cells by demand ({result_d.get('n_demand_bins', '?')} bins), splits into "
+            f"{result_d.get('n_income_groups', '?')} income groups, and measures the gap "
+            "in mean service ratio between groups within each bin."
+        )
+
+        per_bin = result_d.get('per_bin_data', [])
+
+        if per_bin:
+            # Grouped bar chart: mean Y by demand bin × income group
+            bar_data = []
+            for bin_info in per_bin:
+                for group_label, mean_y in bin_info['group_means'].items():
+                    bar_data.append({
+                        'Demand Bin': f"{bin_info['demand_center']:.0f}",
+                        'Income Group': group_label,
+                        'Mean Y': mean_y,
+                    })
+
+            if bar_data:
+                bar_df = pd.DataFrame(bar_data)
+                fig_grouped = px.bar(
+                    bar_df,
+                    x='Demand Bin',
+                    y='Mean Y',
+                    color='Income Group',
+                    barmode='group',
+                    title="Mean Service Ratio by Demand Bin × Income Group",
+                    labels={'Mean Y': 'Mean Service Ratio'},
+                )
+                fig_grouped.update_layout(height=400)
+                st.plotly_chart(fig_grouped, use_container_width=True)
+
+            # Per-bin disparity line
+            disp_data = pd.DataFrame([{
+                'Demand Center': b['demand_center'],
+                'Disparity': b['disparity'],
+                'N Cells': b['n_cells'],
+            } for b in per_bin])
+
+            fig_disp = px.line(
+                disp_data,
+                x='Demand Center',
+                y='Disparity',
+                title="Per-Bin Income Group Disparity",
+                markers=True,
+                labels={'Demand Center': 'Demand Bin Center', 'Disparity': 'Max Group Disparity'},
+            )
+            fig_disp.update_layout(height=350)
+            fig_disp.add_hline(
+                y=result_d.get('mean_disparity', 0),
+                line_dash="dot", line_color="red",
+                annotation_text=f"Mean: {result_d.get('mean_disparity', 0):.4f}",
+            )
+            st.plotly_chart(fig_disp, use_container_width=True)
+
+    elif result_d.get('error'):
+        st.warning(f"Option D could not be computed: {result_d['error']}")
+
+    st.divider()
+
+    # ---- 7. Recommendation ----
+    st.markdown("### Recommendation")
+
+    f_a1 = result_a1['f_causal']
+    f_a2 = result_a2['f_causal']
+    f_b = result_b['f_causal']
+    f_c = result_c['f_causal']
+    f_d = result_d.get('f_causal')
+
+    if f_b > 0.95 and f_c > 0.95:
+        st.success(
+            "All metrics indicate **very low demographic bias**. Residuals are "
+            "largely independent of demographic features. The current demand-only "
+            "g(D) model may be sufficient."
+        )
+    elif f_b > 0.85 and f_c > 0.85:
+        st.info(
+            "Metrics suggest **low to moderate demographic bias**. Some signal exists "
+            "but is relatively small. Consider monitoring over time."
+        )
+    else:
+        st.warning(
+            "Metrics suggest **meaningful demographic bias**. Consider adopting "
+            "Option B (Demographic Disparity Score) as the primary causal fairness "
+            "metric to guide trajectory modification toward reducing this bias."
+        )
+
+    # Pre-format values for the table
+    f_d_str = f'{f_d:.4f}' if f_d is not None else 'N/A'
+    f_d_assessment = ('Low bias' if f_d > 0.9 else 'Moderate bias' if f_d > 0.8 else 'High bias') if f_d is not None else 'N/A'
+
+    def _assess(val, high_thresh=0.9, mod_thresh=0.8):
+        if val > high_thresh:
+            return 'Low bias'
+        elif val > mod_thresh:
+            return 'Moderate bias'
+        return 'High bias'
+
+    st.markdown(f"""
+    | Metric | Score | Assessment | Measures |
+    |--------|-------|------------|----------|
+    | Option A1 | {f_a1:.4f} | {_assess(f_a1)} | Demographic influence on predictions |
+    | Option A2 | {f_a2:.4f} | {_assess(f_a2)} | Model fit quality (demand + demographics) |
+    | Option B | {f_b:.4f} | {_assess(f_b)} | Residual independence from demographics |
+    | Option C | {f_c:.4f} | {_assess(f_c, 0.95, 0.9)} | Incremental R² from demographics |
+    | Option D | {f_d_str} | {f_d_assessment} | Cross-group service gap at same demand |
+    """)
+
+
+# =============================================================================
 # MAIN APPLICATION
 # =============================================================================
 
@@ -1510,7 +2422,67 @@ def main():
         help="Cap extreme ratios (0 = disabled)"
     )
     max_ratio = None if max_ratio == 0 else max_ratio
-    
+
+    # Demographic data configuration
+    st.sidebar.subheader("🏘️ Demographic Data")
+
+    default_demo_path = str(PROJECT_ROOT / "source_data" / "cell_demographics.pkl")
+    demo_path = st.sidebar.text_input(
+        "Demographics File",
+        value=default_demo_path,
+        help="Path to cell_demographics.pkl (48×90×13 grid)"
+    )
+
+    default_district_path = str(PROJECT_ROOT / "source_data" / "grid_to_district_mapping.pkl")
+    district_path = st.sidebar.text_input(
+        "District Mapping File",
+        value=default_district_path,
+        help="Path to grid_to_district_mapping.pkl"
+    )
+
+    income_proxy_options = {
+        "GDP": "GDPin10000Yuan",
+        "Housing Price": "AvgHousingPricePerSqM",
+        "Employee Compensation": "EmployeeCompensation100MYuan",
+        "Population Density": "PopDensityPerKm2",
+    }
+    income_proxy_label = st.sidebar.selectbox(
+        "Income Proxy Feature",
+        options=list(income_proxy_options.keys()),
+        index=0,
+        help="Feature used for income grouping in Option D"
+    )
+    income_proxy_feature = income_proxy_options[income_proxy_label]
+
+    all_demo_feature_labels = [
+        "GDPin10000Yuan", "AvgHousingPricePerSqM", "EmployeeCompensation100MYuan",
+        "PopDensityPerKm2", "YearEndPermanentPop10k", "AvgEmployedPersons",
+        "AreaKm2", "RegisteredPermanentPop10k", "NonRegisteredPermanentPop10k",
+        "HouseholdRegisteredPop10k", "MalePop10k", "FemalePop10k", "SexRatio100",
+    ]
+    selected_demo_features = st.sidebar.multiselect(
+        "Demographic Features (Options B/C)",
+        options=all_demo_feature_labels,
+        default=["GDPin10000Yuan", "AvgHousingPricePerSqM", "EmployeeCompensation100MYuan"],
+        help="Features to include in demographic regression"
+    )
+
+    n_income_groups = st.sidebar.slider(
+        "Income Groups (Option D)",
+        min_value=2,
+        max_value=5,
+        value=3,
+        help="Number of income groups for demand-stratified comparison"
+    )
+
+    n_demand_bins_d = st.sidebar.slider(
+        "Demand Bins (Option D)",
+        min_value=3,
+        max_value=20,
+        value=10,
+        help="Number of demand bins for group fairness comparison"
+    )
+
     # ==========================================================================
     # LOAD AND PROCESS DATA
     # ==========================================================================
@@ -1539,6 +2511,27 @@ def main():
     else:
         st.sidebar.info("ℹ️ Using dropoff counts as supply proxy")
     
+    # Load demographic data (optional)
+    demographics_available = False
+    demo_data = None
+    district_data = None
+
+    if Path(demo_path).exists() and Path(district_path).exists():
+        try:
+            demo_data = load_data(demo_path)
+            district_data = load_data(district_path)
+            demographics_available = True
+            st.sidebar.success("✅ Demographics loaded")
+        except Exception as e:
+            st.sidebar.warning(f"⚠️ Could not load demographics: {e}")
+    else:
+        missing = []
+        if not Path(demo_path).exists():
+            missing.append("demographics")
+        if not Path(district_path).exists():
+            missing.append("district mapping")
+        st.sidebar.info(f"ℹ️ Missing: {', '.join(missing)}")
+
     # Build configuration
     config = CausalFairnessConfig(
         period_type=period_type,
@@ -1654,13 +2647,15 @@ def main():
     # TABS
     # ==========================================================================
     
-    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11 = st.tabs([
         "📈 Temporal Analysis",
         "🗺️ Spatial Distribution",
         "📊 Demand-Service Plot",
         "📉 Residual Analysis",
         "🔄 Method Comparison",
         "📉 Statistics",
+        "🏘️ Demographic Exploration",
+        "📐 Model Comparison (B/C/D)",
         "🔬 Gradient Verification",
         "🧪 Method Gradient Tests",
         "🔄 Soft Cell Assignment",
@@ -1968,21 +2963,52 @@ def main():
         st.json(breakdown['diagnostics']['config'])
     
     # --------------------------------------------------------------------------
-    # TAB 7: Gradient Verification
+    # TAB 7: Demographic Exploration
     # --------------------------------------------------------------------------
     with tab7:
-        render_gradient_verification_tab(term)
-    
+        g_func = term.get_g_function()
+        render_demographic_exploration_tab(
+            breakdown=breakdown,
+            demo_data=demo_data,
+            district_data=district_data,
+            income_proxy_feature=income_proxy_feature,
+            selected_demo_features=selected_demo_features,
+            demographics_available=demographics_available,
+            g_func=g_func,
+            estimation_method=estimation_method,
+        )
+
     # --------------------------------------------------------------------------
-    # TAB 8: Estimation Method Gradient Tests
+    # TAB 8: Model Comparison (B/C/D)
     # --------------------------------------------------------------------------
     with tab8:
-        render_method_gradient_tests_tab()
-    
+        render_model_comparison_tab(
+            breakdown=breakdown,
+            demo_data=demo_data,
+            district_data=district_data,
+            income_proxy_feature=income_proxy_feature,
+            selected_demo_features=selected_demo_features,
+            demographics_available=demographics_available,
+            n_income_groups=n_income_groups,
+            n_demand_bins=n_demand_bins_d,
+        )
+
     # --------------------------------------------------------------------------
-    # TAB 9: Soft Cell Assignment
+    # TAB 9: Gradient Verification
     # --------------------------------------------------------------------------
     with tab9:
+        render_gradient_verification_tab(term)
+
+    # --------------------------------------------------------------------------
+    # TAB 10: Estimation Method Gradient Tests
+    # --------------------------------------------------------------------------
+    with tab10:
+        render_method_gradient_tests_tab()
+
+    # --------------------------------------------------------------------------
+    # TAB 11: Soft Cell Assignment
+    # --------------------------------------------------------------------------
+    with tab11:
         render_soft_cell_assignment_tab(term, breakdown)
     
     # ==========================================================================
@@ -1992,9 +3018,9 @@ def main():
     st.divider()
     st.markdown("""
     ---
-    **FAMAIL Causal Fairness Dashboard** | Version 1.1.0 (Soft Cell Assignment)  
-    Based on counterfactual fairness principles and R² coefficient of determination.  
-    *With soft cell assignment and frozen g(d) for gradient-based trajectory optimization.*
+    **FAMAIL Causal Fairness Dashboard** | Version 2.0.0 (Demographic Exploration & Model Comparison)
+    Based on counterfactual fairness principles and R² coefficient of determination.
+    *With demographic bias analysis, Options B/C/D model comparison, soft cell assignment, and frozen g(d) for gradient-based trajectory optimization.*
     """)
 
 

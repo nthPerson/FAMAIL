@@ -290,6 +290,7 @@ class CausalFairnessTerm(ObjectiveFunctionTerm):
                 'per_period_r2': per_period_r2,
                 'g_diagnostics': g_diagnostics,
                 'overall_r2': compute_r_squared(all_ratios, g_func(all_demands)) if len(all_demands) > 0 else 0.0,
+                'keys': [tuple(k) for k in all_keys],
                 'demands': all_demands.tolist() if len(all_demands) > 0 else [],
                 'ratios': all_ratios.tolist() if len(all_ratios) > 0 else [],
                 'expected': g_func(all_demands).tolist() if len(all_demands) > 0 else [],
