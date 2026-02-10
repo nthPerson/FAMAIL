@@ -2365,3 +2365,512 @@ def compute_residual_demographic_correlation(
             corr_data[fname] = 0.0
 
     return pd.DataFrame({'Correlation with Residual': corr_data})
+
+
+# =============================================================================
+# G(D, X) ESTIMATOR EXPLORATION
+# =============================================================================
+
+def enrich_demographic_features(
+    demo_grid: np.ndarray,
+    feature_names: List[str],
+) -> Tuple[np.ndarray, List[str]]:
+    """
+    Pre-compute derived demographic features from the raw (48, 90, 13) grid.
+
+    Adds 7 derived features:
+      - GDPperCapita: GDPin10000Yuan / (YearEndPermanentPop10k * 10000)
+      - CompPerCapita: EmployeeCompensation100MYuan * 1e8 / AvgEmployedPersons
+      - MigrantRatio: NonRegisteredPermanentPop10k / YearEndPermanentPop10k
+      - LogGDP: log1p(GDPin10000Yuan)
+      - LogHousingPrice: log1p(AvgHousingPricePerSqM)
+      - LogCompensation: log1p(EmployeeCompensation100MYuan)
+      - LogPopDensity: log1p(PopDensityPerKm2)
+
+    Args:
+        demo_grid: (48, 90, 13) demographics grid, NaN for unmapped cells
+        feature_names: List of 13 raw feature names
+
+    Returns:
+        (enriched_grid, enriched_feature_names) where enriched_grid is
+        shape (48, 90, 20) and enriched_feature_names has 20 entries.
+    """
+    name_to_idx = {name: i for i, name in enumerate(feature_names)}
+    derived = []
+    derived_names = []
+    eps = 1e-10
+
+    # GDP per capita
+    if 'GDPin10000Yuan' in name_to_idx and 'YearEndPermanentPop10k' in name_to_idx:
+        gdp = demo_grid[:, :, name_to_idx['GDPin10000Yuan']]
+        pop = demo_grid[:, :, name_to_idx['YearEndPermanentPop10k']]
+        gdp_pc = gdp / (pop * 10000 + eps)
+        derived.append(gdp_pc)
+        derived_names.append('GDPperCapita')
+
+    # Compensation per capita
+    if 'EmployeeCompensation100MYuan' in name_to_idx and 'AvgEmployedPersons' in name_to_idx:
+        comp = demo_grid[:, :, name_to_idx['EmployeeCompensation100MYuan']]
+        emp = demo_grid[:, :, name_to_idx['AvgEmployedPersons']]
+        comp_pc = comp * 1e8 / (emp + eps)
+        derived.append(comp_pc)
+        derived_names.append('CompPerCapita')
+
+    # Migrant ratio
+    if 'NonRegisteredPermanentPop10k' in name_to_idx and 'YearEndPermanentPop10k' in name_to_idx:
+        non_reg = demo_grid[:, :, name_to_idx['NonRegisteredPermanentPop10k']]
+        total = demo_grid[:, :, name_to_idx['YearEndPermanentPop10k']]
+        migrant = non_reg / (total + eps)
+        derived.append(migrant)
+        derived_names.append('MigrantRatio')
+
+    # Log transforms
+    log_features = {
+        'GDPin10000Yuan': 'LogGDP',
+        'AvgHousingPricePerSqM': 'LogHousingPrice',
+        'EmployeeCompensation100MYuan': 'LogCompensation',
+        'PopDensityPerKm2': 'LogPopDensity',
+    }
+    for raw_name, log_name in log_features.items():
+        if raw_name in name_to_idx:
+            raw_vals = demo_grid[:, :, name_to_idx[raw_name]]
+            derived.append(np.log1p(np.maximum(raw_vals, 0)))
+            derived_names.append(log_name)
+
+    if not derived:
+        return demo_grid.copy(), list(feature_names)
+
+    derived_stack = np.stack(derived, axis=-1)  # (48, 90, n_derived)
+    enriched_grid = np.concatenate([demo_grid, derived_stack], axis=-1)
+    enriched_names = list(feature_names) + derived_names
+
+    return enriched_grid, enriched_names
+
+
+def build_feature_matrix(
+    demands: np.ndarray,
+    demographic_features: np.ndarray,
+    poly_degree: int = 2,
+    include_interactions: bool = False,
+    poly_transformer=None,
+    scaler=None,
+) -> Tuple[np.ndarray, List[str], Any, Any]:
+    """
+    Build the full feature matrix for g(D, x) models.
+
+    Constructs: [poly(D, degree) | StandardScaler(x) | (optional) D * x_i interactions]
+
+    Args:
+        demands: (n,) demand values
+        demographic_features: (n, p) demographic features (raw, will be standardized)
+        poly_degree: Polynomial degree for demand features
+        include_interactions: Whether to include D * x_i interaction terms
+        poly_transformer: Pre-fitted PolynomialFeatures (for transform-only mode in CV)
+        scaler: Pre-fitted StandardScaler (for transform-only mode in CV)
+
+    Returns:
+        (X, feature_names, poly_transformer, scaler)
+    """
+    from sklearn.preprocessing import PolynomialFeatures, StandardScaler
+
+    # Demand polynomial features
+    if poly_transformer is None:
+        poly_transformer = PolynomialFeatures(degree=poly_degree, include_bias=False)
+        X_demand = poly_transformer.fit_transform(demands.reshape(-1, 1))
+    else:
+        X_demand = poly_transformer.transform(demands.reshape(-1, 1))
+
+    demand_names = [f"D^{i+1}" for i in range(X_demand.shape[1])]
+
+    # Standardize demographics
+    if scaler is None:
+        scaler = StandardScaler()
+        X_demo = scaler.fit_transform(demographic_features)
+    else:
+        X_demo = scaler.transform(demographic_features)
+
+    parts = [X_demand, X_demo]
+    names = demand_names + [f"x_{i}" for i in range(X_demo.shape[1])]
+
+    # Interaction terms: D * x_i (raw demand times each standardized demographic)
+    if include_interactions:
+        D_col = demands.reshape(-1, 1)
+        interactions = D_col * X_demo
+        parts.append(interactions)
+        names += [f"D*x_{i}" for i in range(X_demo.shape[1])]
+
+    X = np.hstack(parts)
+    return X, names, poly_transformer, scaler
+
+
+def fit_g_dx_model(
+    demands: np.ndarray,
+    ratios: np.ndarray,
+    demographic_features: np.ndarray,
+    demo_feature_names: List[str],
+    model_type: str = "ols",
+    poly_degree: int = 2,
+    include_interactions: bool = False,
+    alpha: float = 1.0,
+    l1_ratio: float = 0.5,
+    n_estimators: int = 100,
+    max_depth: int = 5,
+) -> Dict[str, Any]:
+    """
+    Fit a g(D, x) model and return results + diagnostics.
+
+    Supported model_type values:
+      "ols", "ridge", "lasso", "elasticnet",
+      "ols_interactions", "random_forest", "gradient_boosting"
+
+    Args:
+        demands: (n,) demand array
+        ratios: (n,) service ratio array Y = S/D
+        demographic_features: (n, p) raw demographic features
+        demo_feature_names: p feature names
+        model_type: one of the 7 supported types
+        poly_degree: degree of polynomial demand features
+        include_interactions: force interaction terms
+        alpha: regularization strength (ridge/lasso/elasticnet)
+        l1_ratio: L1 ratio for elasticnet (0=ridge, 1=lasso)
+        n_estimators: number of trees (RF/GB)
+        max_depth: max tree depth (RF/GB)
+
+    Returns:
+        Dict with model, predict_fn, r2_train, residuals, feature_names,
+        coefficients (linear) or feature_importances (trees), n_params.
+    """
+    from sklearn.linear_model import LinearRegression, Ridge, Lasso, ElasticNet
+    from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
+
+    use_interactions = include_interactions or model_type == "ols_interactions"
+
+    X, feat_names, poly, scaler = build_feature_matrix(
+        demands, demographic_features,
+        poly_degree=poly_degree,
+        include_interactions=use_interactions,
+    )
+
+    # Select model
+    model_map = {
+        "ols": LinearRegression(),
+        "ridge": Ridge(alpha=alpha),
+        "lasso": Lasso(alpha=alpha, max_iter=10000),
+        "elasticnet": ElasticNet(alpha=alpha, l1_ratio=l1_ratio, max_iter=10000),
+        "ols_interactions": LinearRegression(),
+        "random_forest": RandomForestRegressor(
+            n_estimators=n_estimators, max_depth=max_depth, random_state=42, n_jobs=-1,
+        ),
+        "gradient_boosting": GradientBoostingRegressor(
+            n_estimators=n_estimators, max_depth=max_depth, random_state=42,
+        ),
+    }
+
+    if model_type not in model_map:
+        raise ValueError(f"Unknown model_type: {model_type}")
+
+    model = model_map[model_type]
+    model.fit(X, ratios)
+
+    r2_train = max(0.0, float(model.score(X, ratios)))
+    predicted = model.predict(X)
+    residuals = ratios - predicted
+
+    # Build prediction closure that accepts raw inputs
+    _poly, _scaler, _model = poly, scaler, model
+    _use_interactions = use_interactions
+    _poly_degree = poly_degree
+
+    def predict_fn(new_demands, new_demo_features):
+        X_new, _, _, _ = build_feature_matrix(
+            new_demands, new_demo_features,
+            poly_degree=_poly_degree,
+            include_interactions=_use_interactions,
+            poly_transformer=_poly,
+            scaler=_scaler,
+        )
+        return _model.predict(X_new)
+
+    # Extract coefficients or feature importances
+    coefficients = None
+    feature_importances = None
+    is_linear = model_type in ("ols", "ridge", "lasso", "elasticnet", "ols_interactions")
+
+    if is_linear:
+        coefficients = {name: float(coef) for name, coef in zip(feat_names, model.coef_)}
+    else:
+        feature_importances = {
+            name: float(imp) for name, imp in zip(feat_names, model.feature_importances_)
+        }
+
+    n_params = X.shape[1] + 1  # features + intercept
+
+    return {
+        'model': model,
+        'predict_fn': predict_fn,
+        'r2_train': r2_train,
+        'predicted': predicted,
+        'residuals': residuals,
+        'feature_names': feat_names,
+        'demo_feature_names': list(demo_feature_names),
+        'coefficients': coefficients,
+        'feature_importances': feature_importances,
+        'poly_transformer': poly,
+        'scaler': scaler,
+        'model_type': model_type,
+        'n_params': n_params,
+        'n_samples': len(demands),
+        'include_interactions': use_interactions,
+        'poly_degree': poly_degree,
+    }
+
+
+def lodo_cross_validate(
+    demands: np.ndarray,
+    ratios: np.ndarray,
+    demographic_features: np.ndarray,
+    district_ids: np.ndarray,
+    demo_feature_names: List[str],
+    model_type: str = "ols",
+    poly_degree: int = 2,
+    include_interactions: bool = False,
+    alpha: float = 1.0,
+    l1_ratio: float = 0.5,
+    n_estimators: int = 100,
+    max_depth: int = 5,
+) -> Dict[str, Any]:
+    """
+    Leave-One-District-Out cross-validation for g(D, x) models.
+
+    For each district: train on other districts, predict on held-out,
+    collect out-of-fold predictions. Compute overall LODO R² from all
+    OOF predictions.
+
+    Transformers (PolynomialFeatures, StandardScaler) are re-fitted per fold
+    on training data only to prevent data leakage.
+
+    Args:
+        demands, ratios, demographic_features: aligned data arrays
+        district_ids: (n,) integer district IDs for each observation
+        demo_feature_names: feature names
+        model_type + hyperparams: same as fit_g_dx_model
+
+    Returns:
+        Dict with lodo_r2, per_district_r2, per_district_n,
+        oof_predictions, oof_residuals.
+    """
+    unique_districts = np.unique(district_ids)
+    n = len(demands)
+
+    oof_predictions = np.full(n, np.nan)
+    per_district_r2 = {}
+    per_district_n = {}
+
+    use_interactions = include_interactions or model_type == "ols_interactions"
+
+    for dist_id in unique_districts:
+        test_mask = district_ids == dist_id
+        train_mask = ~test_mask
+
+        if train_mask.sum() < 5 or test_mask.sum() < 1:
+            continue
+
+        # Fit on training data (transformers are re-fitted per fold)
+        result = fit_g_dx_model(
+            demands=demands[train_mask],
+            ratios=ratios[train_mask],
+            demographic_features=demographic_features[train_mask],
+            demo_feature_names=demo_feature_names,
+            model_type=model_type,
+            poly_degree=poly_degree,
+            include_interactions=include_interactions,
+            alpha=alpha,
+            l1_ratio=l1_ratio,
+            n_estimators=n_estimators,
+            max_depth=max_depth,
+        )
+
+        # Predict on held-out district
+        preds = result['predict_fn'](
+            demands[test_mask],
+            demographic_features[test_mask],
+        )
+        oof_predictions[test_mask] = preds
+
+        # Per-district R²
+        y_test = ratios[test_mask]
+        var_y = np.var(y_test)
+        if var_y > 1e-10:
+            r2 = max(0.0, 1.0 - np.var(y_test - preds) / var_y)
+        else:
+            r2 = 0.0
+
+        per_district_r2[int(dist_id)] = float(r2)
+        per_district_n[int(dist_id)] = int(test_mask.sum())
+
+    # Overall LODO R²
+    valid = ~np.isnan(oof_predictions)
+    if valid.sum() > 0:
+        var_y_all = np.var(ratios[valid])
+        if var_y_all > 1e-10:
+            lodo_r2 = max(0.0, 1.0 - np.var(ratios[valid] - oof_predictions[valid]) / var_y_all)
+        else:
+            lodo_r2 = 0.0
+    else:
+        lodo_r2 = 0.0
+
+    oof_residuals = np.where(valid, ratios - oof_predictions, np.nan)
+
+    return {
+        'lodo_r2': float(lodo_r2),
+        'per_district_r2': per_district_r2,
+        'per_district_n': per_district_n,
+        'oof_predictions': oof_predictions,
+        'oof_residuals': oof_residuals,
+        'n_folds': len(per_district_r2),
+        'n_valid': int(valid.sum()),
+    }
+
+
+def compute_model_diagnostics(
+    demands: np.ndarray,
+    ratios: np.ndarray,
+    demographic_features: np.ndarray,
+    demo_feature_names: List[str],
+    poly_degree: int = 2,
+    include_interactions: bool = False,
+) -> Dict[str, Any]:
+    """
+    Compute academic-grade diagnostics using statsmodels OLS.
+
+    Provides coefficient p-values, VIF for multicollinearity, AIC/BIC,
+    Breusch-Pagan heteroscedasticity test, and Durbin-Watson autocorrelation.
+
+    Args:
+        demands, ratios, demographic_features: data arrays
+        demo_feature_names: feature names
+        poly_degree: polynomial degree for demand features
+        include_interactions: include D * x interactions
+
+    Returns:
+        Dict with coefficients_table, vif, aic, bic, breusch_pagan_p,
+        durbin_watson, condition_number.
+    """
+    import statsmodels.api as sm
+    from statsmodels.stats.outliers_influence import variance_inflation_factor
+    from statsmodels.stats.diagnostic import het_breuschpagan
+    from statsmodels.stats.stattools import durbin_watson as dw_stat
+
+    X, feat_names, _, _ = build_feature_matrix(
+        demands, demographic_features,
+        poly_degree=poly_degree,
+        include_interactions=include_interactions,
+    )
+
+    # Add constant for statsmodels
+    X_const = sm.add_constant(X)
+    const_names = ['const'] + feat_names
+
+    model = sm.OLS(ratios, X_const).fit()
+
+    # Coefficients table
+    coef_data = {
+        'Feature': const_names,
+        'Coefficient': model.params.tolist(),
+        'StdErr': model.bse.tolist(),
+        't_stat': model.tvalues.tolist(),
+        'p_value': model.pvalues.tolist(),
+        'significant_05': [p < 0.05 for p in model.pvalues],
+    }
+    coefficients_table = pd.DataFrame(coef_data)
+
+    # VIF (on X without constant)
+    vif_data = []
+    for i in range(X.shape[1]):
+        try:
+            vif_val = variance_inflation_factor(X, i)
+        except Exception:
+            vif_val = float('inf')
+        vif_data.append({'Feature': feat_names[i], 'VIF': float(vif_val)})
+    vif_df = pd.DataFrame(vif_data)
+
+    # Breusch-Pagan test for heteroscedasticity
+    try:
+        bp_lm, bp_p, bp_f, bp_fp = het_breuschpagan(model.resid, X_const)
+        breusch_pagan_p = float(bp_p)
+    except Exception:
+        breusch_pagan_p = float('nan')
+
+    # Durbin-Watson
+    try:
+        dw = float(dw_stat(model.resid))
+    except Exception:
+        dw = float('nan')
+
+    return {
+        'coefficients_table': coefficients_table,
+        'vif': vif_df,
+        'aic': float(model.aic),
+        'bic': float(model.bic),
+        'r_squared': float(model.rsquared),
+        'r_squared_adj': float(model.rsquared_adj),
+        'breusch_pagan_p': breusch_pagan_p,
+        'durbin_watson': dw,
+        'condition_number': float(model.condition_number),
+        'n_obs': int(model.nobs),
+        'n_params': int(model.df_model + 1),
+    }
+
+
+def compute_permutation_importance(
+    demands: np.ndarray,
+    ratios: np.ndarray,
+    demographic_features: np.ndarray,
+    demo_feature_names: List[str],
+    model_result: Dict[str, Any],
+    n_repeats: int = 10,
+    seed: int = 42,
+) -> pd.DataFrame:
+    """
+    Compute permutation-based feature importance for a fitted g(D,x) model.
+
+    For each feature, shuffles that column and measures R² drop.
+
+    Args:
+        demands, ratios, demographic_features: data arrays
+        demo_feature_names: feature names
+        model_result: output of fit_g_dx_model (needs model, poly_transformer, scaler)
+        n_repeats: number of permutation repeats
+        seed: random seed
+
+    Returns:
+        DataFrame with columns [Feature, Importance_Mean, Importance_Std]
+        sorted by Importance_Mean descending.
+    """
+    from sklearn.inspection import permutation_importance as perm_imp
+
+    X, feat_names, _, _ = build_feature_matrix(
+        demands, demographic_features,
+        poly_degree=model_result['poly_degree'],
+        include_interactions=model_result['include_interactions'],
+        poly_transformer=model_result['poly_transformer'],
+        scaler=model_result['scaler'],
+    )
+
+    result = perm_imp(
+        model_result['model'], X, ratios,
+        n_repeats=n_repeats,
+        random_state=seed,
+        scoring='r2',
+    )
+
+    imp_data = []
+    for i, name in enumerate(feat_names):
+        imp_data.append({
+            'Feature': name,
+            'Importance_Mean': float(result.importances_mean[i]),
+            'Importance_Std': float(result.importances_std[i]),
+        })
+
+    df = pd.DataFrame(imp_data)
+    return df.sort_values('Importance_Mean', ascending=False).reset_index(drop=True)
