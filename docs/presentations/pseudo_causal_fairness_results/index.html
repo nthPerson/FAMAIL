@@ -1,0 +1,1177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FAMAIL: Trajectory Modification Results (Pseudo-Causal Fairness)</title>
+
+<!-- KaTeX for math rendering -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+
+<!-- Plotly for visualizations -->
+<script src="https://cdn.plot.ly/plotly-2.27.0.min.js" charset="utf-8"></script>
+
+<style>
+  /* ── Color Palette (same as formulation_validation) ── */
+  :root {
+    --primary:   #A6192E;
+    --secondary: #CDCDC8;
+    --tertiary:  #008080;
+    --charcoal:  #2D2828;
+    --white:     #FFFFFF;
+    --black:     #000000;
+  }
+
+  /* ── Reset & Base ── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    width: 100%;
+    font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+    background: #f5f5f5;
+    color: var(--charcoal);
+    line-height: 1.6;
+  }
+
+  /* ── Header ── */
+  header {
+    background: var(--white);
+    border-bottom: 4px solid var(--primary);
+    padding: 2rem 3rem;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+
+  header h1 {
+    font-size: 2rem;
+    color: var(--primary);
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+  }
+
+  header .subtitle {
+    font-size: 1.1rem;
+    color: var(--charcoal);
+    font-weight: 400;
+  }
+
+  /* ── Main Container ── */
+  main {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 2rem 3rem 4rem;
+  }
+
+  /* ── Section Styling ── */
+  section {
+    background: var(--white);
+    border-radius: 8px;
+    padding: 2rem 2.5rem;
+    margin-bottom: 2rem;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+  }
+
+  section h2 {
+    font-size: 1.6rem;
+    color: var(--primary);
+    margin-bottom: 1rem;
+    border-bottom: 2px solid var(--primary);
+    padding-bottom: 0.5rem;
+  }
+
+  section h3 {
+    font-size: 1.25rem;
+    color: var(--tertiary);
+    margin: 1.5rem 0 0.75rem;
+    font-weight: 600;
+  }
+
+  section h4 {
+    font-size: 1.05rem;
+    color: var(--charcoal);
+    margin: 1rem 0 0.5rem;
+    font-weight: 600;
+  }
+
+  p {
+    margin-bottom: 0.75rem;
+  }
+
+  ul {
+    margin-left: 2rem;
+    margin-bottom: 1rem;
+  }
+
+  li {
+    margin-bottom: 0.5rem;
+  }
+
+  /* ── Code & Math ── */
+  .code-ref {
+    font-family: 'Consolas', 'Fira Code', monospace;
+    font-size: 0.9rem;
+    color: var(--tertiary);
+    background: #f0f5f5;
+    padding: 2px 7px;
+    border-radius: 3px;
+  }
+
+  .math-block {
+    margin: 1.25rem 0;
+    text-align: center;
+    font-size: 1.15rem;
+  }
+
+  .algorithm-box {
+    font-family: 'Consolas', 'Fira Code', monospace;
+    font-size: 0.9rem;
+    background: #fafafa;
+    border: 1px solid var(--secondary);
+    border-radius: 6px;
+    padding: 1.5rem 2rem;
+    line-height: 1.9;
+    color: var(--charcoal);
+    white-space: pre-wrap;
+    margin: 1.5rem 0;
+  }
+
+  .algorithm-box .highlight { color: var(--primary); font-weight: 700; }
+  .algorithm-box .teal { color: var(--tertiary); font-weight: 600; }
+
+  /* ── Tables ── */
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 1.5rem 0;
+    font-size: 0.92rem;
+  }
+
+  th {
+    background: var(--primary);
+    color: var(--white);
+    padding: 0.75rem 1rem;
+    text-align: left;
+    font-weight: 600;
+  }
+
+  td {
+    padding: 0.65rem 1rem;
+    border-bottom: 1px solid #e8e8e8;
+  }
+
+  tr:nth-child(even) td {
+    background: #fafafa;
+  }
+
+  tr:hover td {
+    background: #f0f5f5;
+  }
+
+  /* ── Metric Cards ── */
+  .metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1.5rem;
+    margin: 1.5rem 0;
+  }
+
+  .metric-card {
+    background: #fafafa;
+    border-left: 4px solid var(--tertiary);
+    padding: 1.25rem;
+    border-radius: 4px;
+  }
+
+  .metric-card .label {
+    font-size: 0.85rem;
+    color: #666;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 0.5rem;
+  }
+
+  .metric-card .value {
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: var(--charcoal);
+  }
+
+  .metric-card .delta {
+    font-size: 1rem;
+    margin-top: 0.25rem;
+  }
+
+  .metric-card .delta.positive { color: #2e7d32; }
+  .metric-card .delta.negative { color: #c62828; }
+
+  /* ── Note/Info Boxes ── */
+  .info-box {
+    padding: 1rem 1.5rem;
+    margin: 1.5rem 0;
+    background: #f0f5f5;
+    border-left: 4px solid var(--tertiary);
+    font-size: 0.92rem;
+  }
+
+  .warning-box {
+    padding: 1rem 1.5rem;
+    margin: 1.5rem 0;
+    background: #fff9c4;
+    border-left: 4px solid #f57c00;
+    font-size: 0.92rem;
+  }
+
+  /* ── Visualization Containers ── */
+  .viz-container {
+    margin: 1.5rem 0;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+    padding: 1rem;
+    background: #fafafa;
+  }
+
+  /* ── Loading Indicator ── */
+  .loading {
+    text-align: center;
+    padding: 3rem;
+    color: #666;
+    font-style: italic;
+  }
+
+  /* ── Two Column Layout ── */
+  .two-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2rem;
+    margin: 1.5rem 0;
+  }
+
+  /* ── Responsive ── */
+  @media (max-width: 900px) {
+    main {
+      padding: 1.5rem 1.5rem 3rem;
+    }
+    section {
+      padding: 1.5rem;
+    }
+    .two-col {
+      grid-template-columns: 1fr;
+      gap: 1rem;
+    }
+  }
+
+  /* ── Collapsible Sections ── */
+  .collapsible {
+    cursor: pointer;
+    user-select: none;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .collapsible::before {
+    content: '▶';
+    font-size: 0.8rem;
+    transition: transform 0.2s;
+  }
+
+  .collapsible.active::before {
+    transform: rotate(90deg);
+  }
+
+  .collapsible-content {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease;
+  }
+
+  .collapsible-content.active {
+    max-height: 10000px;
+  }
+
+  /* ── Fairness Impact Cards ── */
+  .impact-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    margin: 1.5rem 0;
+  }
+
+  .impact-card {
+    background: #fafafa;
+    border: 1px solid #e0e0e0;
+    border-left: 4px solid var(--tertiary);
+    border-radius: 4px;
+    padding: 0.85rem 1.25rem;
+  }
+
+  .impact-card-header {
+    font-weight: 600;
+    color: var(--charcoal);
+    margin-bottom: 0.5rem;
+    font-size: 0.95rem;
+  }
+
+  .impact-card-header .traj-id {
+    color: var(--primary);
+  }
+
+  .impact-card-header .arrow {
+    color: var(--tertiary);
+    margin: 0 0.25rem;
+  }
+
+  .impact-metrics-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.25rem;
+    font-size: 0.88rem;
+    font-family: 'Consolas', 'Fira Code', monospace;
+  }
+
+  .impact-metric {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0.3rem;
+  }
+
+  .impact-metric .metric-name {
+    font-weight: 600;
+    color: #555;
+    text-transform: uppercase;
+    font-size: 0.78rem;
+    letter-spacing: 0.3px;
+  }
+
+  .impact-metric .before-val {
+    color: var(--charcoal);
+  }
+
+  .impact-metric .metric-arrow {
+    color: #999;
+    margin: 0 0.15rem;
+  }
+
+  .impact-metric .after-val {
+    color: var(--charcoal);
+    font-weight: 600;
+  }
+
+  .impact-metric .delta-badge {
+    font-size: 0.78rem;
+    padding: 1px 5px;
+    border-radius: 3px;
+    margin-left: 0.2rem;
+  }
+
+  .impact-metric .delta-badge.positive {
+    background: #e8f5e9;
+    color: #2e7d32;
+  }
+
+  .impact-metric .delta-badge.negative {
+    background: #fce4ec;
+    color: #c62828;
+  }
+
+  .impact-metric .delta-badge.neutral {
+    background: #f5f5f5;
+    color: #666;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Trajectory Modification Results</h1>
+  <div class="subtitle">Progress Report: Pseudo-Causal Fairness Formulation</div>
+</header>
+
+<main>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- INTRODUCTION -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<section>
+  <h2>Introduction</h2>
+  <p>
+    This report presents trajectory modification results using the current implementation
+    of the FAMAIL algorithm with the <strong>pseudo-causal fairness</strong> formulation
+    (referred to as the "baseline" g(D) approach). The results demonstrate the algorithm's
+    ability to improve both spatial and causal fairness while maintaining behavioral fidelity.
+  </p>
+
+  <div class="info-box">
+    <strong>Note on Causal Fairness Reformulation:</strong> We are currently developing an
+    improved causal fairness formulation that incorporates demographic data via a g(D, x)
+    function. Details on the proposed reformulation options are provided at the end of this
+    report.
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- ALGORITHM OVERVIEW -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<section>
+  <h2>Algorithm Overview</h2>
+
+  <h3>Two-Phase Modification Pipeline</h3>
+
+  <h4>Phase 1: Attribution-Based Trajectory Selection</h4>
+  <p>
+    Not all trajectories contribute equally to unfairness. The attribution phase selects
+    the top-k highest-impact trajectories using a combined Local Inequality Score (LIS)
+    and Demand-Conditional Deviation (DCD):
+  </p>
+
+  <div class="math-block">
+    $$\text{LIS}_c = \frac{|c_{\text{count}} - \mu|}{\mu}, \quad
+      \text{DCD}_c = |Y_c - g(D_c)|$$
+  </div>
+
+  <div class="math-block">
+    $$\text{Score}_\tau = w_{\text{LIS}} \cdot \widetilde{\text{LIS}}_\tau +
+                          w_{\text{DCD}} \cdot \widetilde{\text{DCD}}_\tau$$
+  </div>
+
+  <p>
+    where $\widetilde{\text{LIS}}$ and $\widetilde{\text{DCD}}$ are normalized to [0, 1],
+    and $w_{\text{LIS}} = w_{\text{DCD}} = 0.5$ by default.
+  </p>
+
+  <h4>Phase 2: ST-iFGSM Gradient-Based Modification</h4>
+  <p>
+    For each selected trajectory, the algorithm iteratively perturbs the pickup location
+    to maximize the combined objective:
+  </p>
+
+  <div class="math-block">
+    $$\mathcal{L} = \alpha_1 \cdot F_{\text{spatial}} + \alpha_2 \cdot F_{\text{causal}} + \alpha_3 \cdot F_{\text{fidelity}}$$
+  </div>
+
+  <div class="algorithm-box"><span class="highlight">1.</span>  Compute attribution scores (LIS + DCD) for all trajectories
+<span class="highlight">2.</span>  Select the top-<em>k</em> trajectories by combined score
+
+<span class="highlight">3.</span>  <strong>For each</strong> selected trajectory τ:
+
+        <span class="highlight">a.</span>  Initialize: τ′ ← τ,  cumulative perturbation δ_total ← 0
+
+        <span class="highlight">b.</span>  <strong>While</strong> |ΔL| > θ  <strong>and</strong>  iteration &lt; T:
+
+              i.   Compute soft cell probabilities σ_c(p; τ_t)
+             ii.   Evaluate  <span class="teal">L = α₁·F_spatial + α₂·F_causal + α₃·F_fidelity</span>
+            iii.   Backpropagate to get ∇_p L
+             iv.   δ ← clip(α · sign(∇_p L), −ε, ε)
+              v.   p ← clip(p + δ, grid bounds)
+             vi.   Interpolate trajectory points to new pickup location
+
+        <span class="highlight">c.</span>  Update global pickup counts: decrement old cell, increment new cell
+
+<span class="highlight">4.</span>  Evaluate updated global fairness metrics across modified distribution</div>
+
+  <h3>Objective Function Terms</h3>
+
+  <table>
+    <tr>
+      <th>Term</th>
+      <th>Formula</th>
+      <th>Interpretation</th>
+    </tr>
+    <tr>
+      <td>$F_{\text{spatial}}$</td>
+      <td>$1 - \frac{1}{2}(G_{\text{DSR}} + G_{\text{ASR}})$</td>
+      <td>Gini-based spatial equality (1 = perfect equity)</td>
+    </tr>
+    <tr>
+      <td>$F_{\text{causal}}$</td>
+      <td>$\max(0, 1 - \frac{\text{Var}(R)}{\text{Var}(Y)})$ where $R = Y - g(D)$</td>
+      <td>R²-based demand proportionality (1 = all variance explained by demand)</td>
+    </tr>
+    <tr>
+      <td>$F_{\text{fidelity}}$</td>
+      <td>$f_{\text{disc}}(\tau, \tau')$ (ST-SiameseNet)</td>
+      <td>Discriminator similarity score (1 = indistinguishable from original)</td>
+    </tr>
+  </table>
+
+  <div class="info-box">
+    <strong>Key Implementation Detail:</strong> The g(D) function is fitted once on historical
+    data using isotonic regression and remains <strong>frozen during optimization</strong>.
+    This prevents circular optimization and ensures the residual R = Y - g(D) has a stable,
+    interpretable meaning.
+  </div>
+
+  <h3>Soft Cell Assignment</h3>
+  <p>
+    The algorithm uses <strong>Gaussian soft cell assignment</strong> to enable differentiable
+    gradient flow from discrete cell counts to continuous pickup locations:
+  </p>
+
+  <div class="math-block">
+    $$\sigma_c(\mathbf{p};\, \tau) = \frac{\exp\!\bigl(-\|\mathbf{p} - \mathbf{c}\|^2 \;/\; 2\tau^2\bigr)}{\displaystyle\sum_{c' \in \mathcal{N}} \exp\!\bigl(-\|\mathbf{p} - \mathbf{c}'\|^2 \;/\; 2\tau^2\bigr)}$$
+  </div>
+
+  <p>
+    Temperature annealing ($\tau: 1.0 \to 0.1$) transitions from soft (smooth gradients) to
+    hard (precise) assignment over the course of optimization.
+  </p>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- CONFIGURATION -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<section>
+  <h2>Experiment Configuration</h2>
+
+  <table>
+    <tr>
+      <th>Parameter</th>
+      <th>Value</th>
+      <th>Description</th>
+    </tr>
+    <tr>
+      <td>Convergence threshold (θ)</td>
+      <td>1.0e-6</td>
+      <td>Minimum objective change to continue iteration</td>
+    </tr>
+    <tr>
+      <td>Epsilon (ε)</td>
+      <td>3.0</td>
+      <td>Maximum perturbation per dimension (grid cells)</td>
+    </tr>
+    <tr>
+      <td>Alpha (α)</td>
+      <td>0.10</td>
+      <td>ST-iFGSM step size</td>
+    </tr>
+    <tr>
+      <td>Max iterations (T)</td>
+      <td>50</td>
+      <td>Maximum iterations per trajectory</td>
+    </tr>
+    <tr>
+      <td>α₁ (Spatial weight)</td>
+      <td>0.33</td>
+      <td rowspan="3">Objective function weights (normalized sum = 1)</td>
+    </tr>
+    <tr>
+      <td>α₂ (Causal weight)</td>
+      <td>0.33</td>
+    </tr>
+    <tr>
+      <td>α₃ (Fidelity weight)</td>
+      <td>0.34</td>
+    </tr>
+    <tr>
+      <td>Selection mode</td>
+      <td>Top-k by Fairness Impact</td>
+      <td>Attribution-based selection using LIS + DCD</td>
+    </tr>
+    <tr>
+      <td>k (trajectories selected)</td>
+      <td>10</td>
+      <td>Number of high-impact trajectories to modify</td>
+    </tr>
+    <tr>
+      <td>Discriminator checkpoint</td>
+      <td>pass-seek_5000-20000_(84ident_72same_44diff)/best.pt</td>
+      <td>Best-performing discriminator model</td>
+    </tr>
+    <tr>
+      <td>Gradient mode</td>
+      <td>soft_cell</td>
+      <td>Differentiable soft cell assignment with annealing</td>
+    </tr>
+    <tr>
+      <td>Temperature annealing</td>
+      <td>Enabled (τ: 1.0 → 0.1)</td>
+      <td>Gradual transition from soft to hard assignment</td>
+    </tr>
+  </table>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- OVERALL RESULTS -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<section>
+  <h2>Overall Modification Results</h2>
+
+  <div id="loading-metrics" class="loading">Loading results...</div>
+  <div id="metrics-container" style="display: none;">
+    <div class="metrics-grid" id="metrics-grid"></div>
+
+    <h3>Convergence Statistics</h3>
+    <div id="convergence-stats"></div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- TRAJECTORY VISUALIZATIONS (Before/After Maps) -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<section>
+  <h2>Trajectory Visualizations</h2>
+  <p>
+    The following visualizations show the selected trajectories overlaid on the 48&times;90 study
+    area grid. Each figure contains two panels: the <strong>left panel</strong> shows the trajectories
+    at their <strong>original (pre-modification)</strong> pickup locations, while the <strong>right
+    panel</strong> shows the trajectories after the ST-iFGSM algorithm has perturbed their pickup
+    locations. The background heatmap in each panel shows the corresponding fairness metric
+    value per cell, with the color scale shown below the panels.
+  </p>
+
+  <h3>Spatial Fairness (Gini-based DSR)</h3>
+  <p>
+    The heatmap below encodes the <strong>spatial fairness</strong> landscape: cells with higher
+    values (warmer colors) exhibit greater demand&ndash;service imbalance. The modification
+    algorithm shifts pickup locations away from over-served cells toward under-served areas,
+    aiming to equalize the Demand-Service Ratio across the grid.
+  </p>
+
+  <figure style="margin: 1.5rem 0; text-align: center;">
+    <div style="display: flex; justify-content: center; gap: 0; align-items: flex-start; margin-bottom: 0.5rem;">
+      <div style="flex: 1; text-align: center; font-weight: 600; color: var(--primary); font-size: 0.95rem; padding: 0.4rem 0; background: #fafafa; border: 1px solid #e0e0e0; border-right: none; border-radius: 4px 0 0 0;">
+        Before Modification
+      </div>
+      <div style="flex: 1; text-align: center; font-weight: 600; color: var(--tertiary); font-size: 0.95rem; padding: 0.4rem 0; background: #fafafa; border: 1px solid #e0e0e0; border-radius: 0 4px 0 0;">
+        After Modification
+      </div>
+    </div>
+    <img src="../assets/spatial_mod_result_L-before_R-after.png"
+         alt="Spatial fairness: before (left) and after (right) trajectory modification on the 48x90 grid"
+         style="width: 100%; max-width: 1400px; border: 1px solid #e0e0e0; border-radius: 0 0 4px 4px;">
+    <figcaption style="margin-top: 0.75rem; font-size: 0.88rem; color: #666; max-width: 1100px; margin-left: auto; margin-right: auto;">
+      <strong>Figure 1.</strong> Trajectories on the spatial fairness heatmap.
+      Stars mark pickup locations; circles mark dropoff locations.
+      Left: original pickup positions. Right: modified pickup positions after ST-iFGSM optimization.
+      The color gradient (bottom) indicates the spatial fairness cell value (higher = greater imbalance).
+    </figcaption>
+  </figure>
+
+  <h3>Causal Fairness (Demand-Conditional)</h3>
+  <p>
+    This visualization uses the same layout but overlays trajectories on the <strong>causal fairness</strong>
+    heatmap, which reflects the residual $R = Y - g(D)$ per cell. Cells with higher residuals
+    (warmer colors) have service levels that deviate more from what demand alone would predict.
+    The algorithm attempts to reduce these residuals by redistributing pickups toward
+    demand-proportional patterns.
+  </p>
+
+  <figure style="margin: 1.5rem 0; text-align: center;">
+    <div style="display: flex; justify-content: center; gap: 0; align-items: flex-start; margin-bottom: 0.5rem;">
+      <div style="flex: 1; text-align: center; font-weight: 600; color: var(--primary); font-size: 0.95rem; padding: 0.4rem 0; background: #fafafa; border: 1px solid #e0e0e0; border-right: none; border-radius: 4px 0 0 0;">
+        Before Modification
+      </div>
+      <div style="flex: 1; text-align: center; font-weight: 600; color: var(--tertiary); font-size: 0.95rem; padding: 0.4rem 0; background: #fafafa; border: 1px solid #e0e0e0; border-radius: 0 4px 0 0;">
+        After Modification
+      </div>
+    </div>
+    <img src="../assets/causal_mod_result_L-before_R-after.png"
+         alt="Causal fairness: before (left) and after (right) trajectory modification on the 48x90 grid"
+         style="width: 100%; max-width: 1400px; border: 1px solid #e0e0e0; border-radius: 0 0 4px 4px;">
+    <figcaption style="margin-top: 0.75rem; font-size: 0.88rem; color: #666; max-width: 1100px; margin-left: auto; margin-right: auto;">
+      <strong>Figure 2.</strong> Trajectories on the causal fairness heatmap.
+      Same trajectory set as Figure 1, now shown against the demand-conditional residual landscape.
+      Left: original positions. Right: modified positions.
+      The color gradient indicates $|R_c| = |Y_c - g(D_c)|$ (higher = greater deviation from demand-expected service).
+    </figcaption>
+  </figure>
+
+  <div class="info-box">
+    <strong>Reading the visualizations:</strong> The red arrows in the "After" panels indicate the
+    direction and magnitude of pickup location shifts. Larger arrows represent greater perturbations.
+    The algorithm is bounded by $\varepsilon = 3.0$ grid cells per dimension, ensuring modifications
+    remain spatially plausible.
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- MODIFICATION DETAILS -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<section>
+  <h2>Modification Details</h2>
+  <p>
+    For each modified trajectory, the cards below show how the objective function terms changed
+    during optimization. The <strong>before</strong> values are from the initial evaluation
+    (iteration 1) and the <strong>after</strong> values are from the final converged state.
+  </p>
+
+  <h3>Per-Trajectory Fairness Impact</h3>
+  <div id="loading-modifications" class="loading">Loading modification details...</div>
+  <div id="modifications-container" style="display: none;">
+    <div id="fairness-impact-cards" class="impact-cards"></div>
+
+    <h3>Detailed Attribution & Convergence</h3>
+    <p>
+      The table below shows each trajectory's attribution scores (which determined selection
+      priority) and convergence details.
+    </p>
+    <table id="modifications-table">
+      <thead>
+        <tr>
+          <th>Traj ID</th>
+          <th>Driver</th>
+          <th>Original Pickup (x, y)</th>
+          <th>Modified Pickup (x, y)</th>
+          <th>Δ Distance</th>
+          <th>LIS Score</th>
+          <th>DCD Score</th>
+          <th>Combined Score</th>
+          <th>Iterations</th>
+          <th>Converged</th>
+        </tr>
+      </thead>
+      <tbody id="modifications-tbody"></tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- ITERATION DETAILS -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<section>
+  <h2>Iteration Details</h2>
+  <p>
+    The following sections show the iteration-by-iteration progress for each modified
+    trajectory. All objective values are shown with <strong>full precision</strong> to
+    clearly illustrate convergence behavior.
+  </p>
+
+  <div id="loading-iterations" class="loading">Loading iteration details...</div>
+  <div id="iterations-container" style="display: none;"></div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- VISUALIZATIONS -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<section>
+  <h2>Visualizations</h2>
+
+  <h3>Objective Evolution by Trajectory</h3>
+  <div class="viz-container">
+    <div id="viz-objective-evolution"></div>
+  </div>
+
+  <h3>Perturbation Magnitude Distribution</h3>
+  <div class="viz-container">
+    <div id="viz-perturbation-dist"></div>
+  </div>
+
+  <h3>Convergence Rate Distribution</h3>
+  <div class="viz-container">
+    <div id="viz-convergence-dist"></div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- CAUSAL FAIRNESS REFORMULATION -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<section>
+  <h2>Causal Fairness Reformulation</h2>
+
+  <h3>Why Reformulate?</h3>
+  <p>
+    The current "pseudo-causal" fairness formulation uses $F_{\text{causal}} = 1 - \frac{\text{Var}(R)}{\text{Var}(Y)}$
+    where $R = Y - g(D)$ and $g(D)$ is fitted using <strong>demand only</strong>. While this
+    measures whether service is proportional to demand, it does <strong>not account for
+    demographic factors</strong> that may influence both demand and service patterns.
+  </p>
+
+  <p>
+    A true causal fairness measure should answer: <em>"After accounting for demand, is there
+    remaining bias associated with demographic characteristics?"</em> To address this, we
+    are developing a reformulated $F_{\text{causal}}$ that incorporates demographic data
+    via a conditional expectation function $g(D, \mathbf{x})$.
+  </p>
+
+  <h3>Proposed Reformulation Options</h3>
+
+  <div class="two-col">
+    <div>
+      <h4>Option A1: Demographic Attribution</h4>
+      <p>
+        Trains a conditional model $g(D, \mathbf{x}) = \hat{\mathbb{E}}[Y \mid D, \mathbf{x}]$
+        and measures how much predictions <em>change</em> when demographics are replaced with
+        the population mean $\bar{\mathbf{x}}$:
+      </p>
+
+      <div class="math-block">
+        $$F_{\text{causal}} = 1 - \frac{\text{Var}\big[g(D_c, \mathbf{x}_c) - g(D_c, \bar{\mathbf{x}})\big]}{\text{Var}[Y_c]}$$
+      </div>
+
+      <p>
+        <strong>Interpretation:</strong> The numerator captures variance in predictions
+        <em>attributable to demographics</em>. If demographics have no influence on g's
+        predictions, this ratio is 0 and F = 1 (perfectly fair).
+      </p>
+
+      <p>
+        <strong>Pros:</strong> Directly measures demographic influence; intuitive interpretation.
+      </p>
+      <p>
+        <strong>Cons:</strong> Requires choosing a reference demographic profile $\bar{\mathbf{x}}$;
+        may be sensitive to model architecture.
+      </p>
+    </div>
+
+    <div>
+      <h4>Option B: Demographic Disparity</h4>
+      <p>
+        Fits the baseline $g_0(D)$ (demand-only), computes residuals $R = Y - g_0(D)$,
+        then regresses residuals on demographics:
+      </p>
+
+      <div class="math-block">
+        $$R_c \sim \beta_0 + \beta_1 x_{c,1} + \cdots + \beta_p x_{c,p}$$
+      </div>
+
+      <div class="math-block">
+        $$F_{\text{causal}} = 1 - R^2_{\text{residual}}$$
+      </div>
+
+      <p>
+        <strong>Interpretation:</strong> If demographics explain residual variance (high R²),
+        that indicates demographic bias. A high F score means residuals are <em>independent</em>
+        of demographics.
+      </p>
+
+      <p>
+        <strong>Pros:</strong> Simple; directly tests residual independence; no need for
+        reference profile.
+      </p>
+      <p>
+        <strong>Cons:</strong> Two-stage estimation may lose efficiency; R² can be unstable
+        with high-dimensional demographics.
+      </p>
+    </div>
+  </div>
+
+  <h3>Current Status</h3>
+  <p>
+    We are currently developing and tuning the $g(D, \mathbf{x})$ estimator using the
+    <span class="code-ref">demographic_explorer.py</span> dashboard. Key considerations include:
+  </p>
+
+  <ul>
+    <li><strong>Model architecture:</strong> Polynomial features for D, Ridge/Lasso/ElasticNet regression</li>
+    <li><strong>Feature engineering:</strong> Demographic interactions, spatial aggregations</li>
+    <li><strong>Cross-validation:</strong> Leave-One-District-Out (LODO) to assess generalization</li>
+    <li><strong>Multicollinearity:</strong> VIF analysis to handle correlated demographic features</li>
+  </ul>
+
+  <div class="warning-box">
+    <strong>⚠ Decision Pending:</strong> The choice between Option A and Option B (or a hybrid)
+    depends on the final $g(D, \mathbf{x})$ model performance and interpretability. This will
+    be finalized after completing the demographic estimator tuning phase.
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- FOOTER -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<section style="text-align: center; font-size: 0.9rem; color: #888; border-top: 2px solid var(--secondary); padding-top: 1.5rem;">
+  <p><strong>FAMAIL Project</strong> | Fairness-Aware Multi-Agent Imitation Learning</p>
+  <p>San Diego State University · Computer Science</p>
+</section>
+
+</main>
+
+<script>
+// Helper function to render math
+function renderMath() {
+  if (window.renderMathInElement) {
+    renderMathInElement(document.body, {
+      delimiters: [
+        {left: '$$', right: '$$', display: true},
+        {left: '$', right: '$', display: false}
+      ],
+      throwOnError: false
+    });
+  }
+}
+
+// Load and display results
+fetch('results.json')
+  .then(response => response.json())
+  .then(data => {
+    displayMetrics(data);
+    displayFairnessImpact(data);
+    displayModificationDetails(data);
+    displayIterationDetails(data);
+    createVisualizations(data);
+
+    // Re-render math after dynamic content is loaded
+    // Use setTimeout to ensure DOM updates are complete
+    setTimeout(renderMath, 100);
+  })
+  .catch(error => {
+    console.error('Error loading results:', error);
+    document.getElementById('loading-metrics').innerHTML =
+      `<p style="color: #c62828;">❌ Error loading results. Please run <code>python generate_results.py</code> first.</p>`;
+  });
+
+function displayMetrics(data) {
+  const container = document.getElementById('metrics-grid');
+  const initial = data.initial_metrics;
+  const final = data.final_metrics;
+
+  const metrics = [
+    {label: 'Gini Coefficient', key: 'gini_coefficient', inverse: true},
+    {label: 'F_spatial', key: 'f_spatial', inverse: false},
+    {label: 'F_causal', key: 'f_causal', inverse: false},
+    {label: 'F_fidelity', key: 'f_fidelity', inverse: false},
+    {label: 'Combined L', key: 'combined_objective', inverse: false},
+  ];
+
+  container.innerHTML = metrics.map(m => {
+    const delta = final[m.key] - initial[m.key];
+    const deltaClass = (m.inverse ? delta < 0 : delta > 0) ? 'positive' : 'negative';
+    const deltaSign = delta >= 0 ? '+' : '';
+
+    return `
+      <div class="metric-card">
+        <div class="label">${m.label}</div>
+        <div class="value">${final[m.key].toFixed(6)}</div>
+        <div class="delta ${deltaClass}">${deltaSign}${delta.toFixed(6)}</div>
+      </div>
+    `;
+  }).join('');
+
+  // Convergence stats
+  const modifications = data.modifications;
+  const converged = modifications.filter(m => m.converged).length;
+  const avgIterations = modifications.reduce((sum, m) => sum + m.total_iterations, 0) / modifications.length;
+
+  document.getElementById('convergence-stats').innerHTML = `
+    <p><strong>Converged:</strong> ${converged} / ${modifications.length} trajectories</p>
+    <p><strong>Average Iterations:</strong> ${avgIterations.toFixed(1)}</p>
+  `;
+
+  document.getElementById('loading-metrics').style.display = 'none';
+  document.getElementById('metrics-container').style.display = 'block';
+}
+
+function displayFairnessImpact(data) {
+  const container = document.getElementById('fairness-impact-cards');
+  const modifications = data.modifications;
+
+  container.innerHTML = modifications.map(mod => {
+    if (!mod.iterations || mod.iterations.length === 0) return '';
+
+    const first = mod.iterations[0];
+    const last = mod.iterations[mod.iterations.length - 1];
+
+    // Helper to format a single metric with before → after and delta badge
+    function fmtMetric(name, beforeVal, afterVal, higherIsBetter) {
+      const delta = afterVal - beforeVal;
+      const pct = beforeVal !== 0 ? ((delta / Math.abs(beforeVal)) * 100) : (delta !== 0 ? Infinity : 0);
+      const isGood = higherIsBetter ? delta >= 0 : delta <= 0;
+      const badgeClass = Math.abs(delta) < 1e-10 ? 'neutral' : (isGood ? 'positive' : 'negative');
+      const sign = delta >= 0 ? '+' : '';
+      const pctStr = Math.abs(pct) === Infinity ? '' : ` (${sign}${pct.toFixed(2)}%)`;
+      const deltaStr = `${sign}${delta.toFixed(6)}${pctStr}`;
+
+      return `<span class="impact-metric">
+        <span class="metric-name">${name}:</span>
+        <span class="before-val">${beforeVal.toFixed(4)}</span>
+        <span class="metric-arrow">&rarr;</span>
+        <span class="after-val">${afterVal.toFixed(4)}</span>
+        <span class="delta-badge ${badgeClass}">${deltaStr}</span>
+      </span>`;
+    }
+
+    return `<div class="impact-card">
+      <div class="impact-card-header">
+        <span class="traj-id">Traj ${mod.trajectory_id}</span>
+        (Driver ${mod.driver_id}):
+        (${mod.original_pickup.x.toFixed(0)},&thinsp;${mod.original_pickup.y.toFixed(0)})
+        <span class="arrow">&rarr;</span>
+        (${mod.modified_pickup.x.toFixed(0)},&thinsp;${mod.modified_pickup.y.toFixed(0)})
+        &mdash; ${mod.total_iterations} iterations, ${mod.converged ? 'converged' : 'not converged'}
+      </div>
+      <div class="impact-metrics-row">
+        ${fmtMetric('Spatial', first.f_spatial, last.f_spatial, true)}
+        ${fmtMetric('Causal', first.f_causal, last.f_causal, true)}
+        ${fmtMetric('Fidelity', first.f_fidelity, last.f_fidelity, true)}
+        ${fmtMetric('Combined L', first.objective_value, last.objective_value, true)}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function displayModificationDetails(data) {
+  const tbody = document.getElementById('modifications-tbody');
+  const modifications = data.modifications;
+  const attributionMap = {};
+
+  data.attribution_scores.forEach(a => {
+    attributionMap[a.index] = a;
+  });
+
+  tbody.innerHTML = modifications.map(mod => {
+    const attr = attributionMap[mod.trajectory_index] || {};
+    const dx = mod.modified_pickup.x - mod.original_pickup.x;
+    const dy = mod.modified_pickup.y - mod.original_pickup.y;
+    const distance = Math.sqrt(dx*dx + dy*dy);
+
+    return `
+      <tr>
+        <td>${mod.trajectory_id}</td>
+        <td>${mod.driver_id}</td>
+        <td>(${mod.original_pickup.x.toFixed(2)}, ${mod.original_pickup.y.toFixed(2)})</td>
+        <td>(${mod.modified_pickup.x.toFixed(2)}, ${mod.modified_pickup.y.toFixed(2)})</td>
+        <td>${distance.toFixed(2)}</td>
+        <td>${(attr.lis_score || 0).toFixed(4)}</td>
+        <td>${(attr.dcd_score || 0).toFixed(4)}</td>
+        <td>${(attr.combined_score || 0).toFixed(4)}</td>
+        <td>${mod.total_iterations}</td>
+        <td>${mod.converged ? '✓' : '✗'}</td>
+      </tr>
+    `;
+  }).join('');
+
+  document.getElementById('loading-modifications').style.display = 'none';
+  document.getElementById('modifications-container').style.display = 'block';
+}
+
+function displayIterationDetails(data) {
+  const container = document.getElementById('iterations-container');
+  const modifications = data.modifications;
+
+  container.innerHTML = modifications.map((mod, idx) => {
+    const tableRows = mod.iterations.map(iter => `
+      <tr>
+        <td>${iter.iteration}</td>
+        <td>${iter.objective_value.toFixed(10)}</td>
+        <td>${iter.f_spatial.toFixed(10)}</td>
+        <td>${iter.f_causal.toFixed(10)}</td>
+        <td>${iter.f_fidelity.toFixed(10)}</td>
+        <td>${iter.gradient_norm.toFixed(6)}</td>
+        <td>${iter.perturbation_x.toFixed(4)}</td>
+        <td>${iter.perturbation_y.toFixed(4)}</td>
+      </tr>
+    `).join('');
+
+    return `
+      <div style="margin-bottom: 2rem;">
+        <h3 class="collapsible" onclick="toggleCollapsible(this)">
+          Trajectory ${mod.trajectory_id} (Driver ${mod.driver_id}) — ${mod.total_iterations} iterations
+        </h3>
+        <div class="collapsible-content">
+          <p>
+            <strong>Original Pickup:</strong> (${mod.original_pickup.x.toFixed(2)}, ${mod.original_pickup.y.toFixed(2)}) →
+            <strong>Modified Pickup:</strong> (${mod.modified_pickup.x.toFixed(2)}, ${mod.modified_pickup.y.toFixed(2)})
+          </p>
+          <p>
+            <strong>Final Objective:</strong> ${mod.final_objective.toFixed(10)} |
+            <strong>Converged:</strong> ${mod.converged ? 'Yes' : 'No'}
+          </p>
+          <table>
+            <thead>
+              <tr>
+                <th>Iteration</th>
+                <th>Objective L</th>
+                <th>F_spatial</th>
+                <th>F_causal</th>
+                <th>F_fidelity</th>
+                <th>Grad Norm</th>
+                <th>δx</th>
+                <th>δy</th>
+              </tr>
+            </thead>
+            <tbody>${tableRows}</tbody>
+          </table>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  document.getElementById('loading-iterations').style.display = 'none';
+  document.getElementById('iterations-container').style.display = 'block';
+}
+
+function toggleCollapsible(element) {
+  element.classList.toggle('active');
+  const content = element.nextElementSibling;
+  content.classList.toggle('active');
+}
+
+function createVisualizations(data) {
+  // Objective evolution by trajectory
+  const traces = data.modifications.map((mod, idx) => {
+    return {
+      x: mod.iterations.map(i => i.iteration),
+      y: mod.iterations.map(i => i.objective_value),
+      mode: 'lines+markers',
+      name: `Traj ${mod.trajectory_id}`,
+      line: {width: 2},
+      marker: {size: 4},
+    };
+  });
+
+  Plotly.newPlot('viz-objective-evolution', traces, {
+    title: 'Objective Evolution by Trajectory',
+    xaxis: {title: 'Iteration'},
+    yaxis: {title: 'Objective L'},
+    height: 500,
+  });
+
+  // Perturbation magnitude distribution
+  const perturbMags = data.modifications.map(mod => {
+    if (mod.iterations.length === 0) return 0;
+    const last = mod.iterations[mod.iterations.length - 1];
+    const dx = last.perturbation_x;
+    const dy = last.perturbation_y;
+    return Math.sqrt(dx*dx + dy*dy);
+  });
+
+  Plotly.newPlot('viz-perturbation-dist', [{
+    x: perturbMags,
+    type: 'histogram',
+    nbinsx: 20,
+    marker: {color: '#008080'},
+  }], {
+    title: 'Final Perturbation Magnitude Distribution',
+    xaxis: {title: 'Perturbation Magnitude (grid cells)'},
+    yaxis: {title: 'Count'},
+    height: 400,
+  });
+
+  // Convergence rate distribution
+  const iterations = data.modifications.map(m => m.total_iterations);
+
+  Plotly.newPlot('viz-convergence-dist', [{
+    x: iterations,
+    type: 'histogram',
+    nbinsx: 10,
+    marker: {color: '#A6192E'},
+  }], {
+    title: 'Convergence Rate Distribution',
+    xaxis: {title: 'Iterations to Convergence'},
+    yaxis: {title: 'Count'},
+    height: 400,
+  });
+}
+</script>
+
+<!-- KaTeX scripts loaded at end for proper sequencing -->
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+<script>
+// Render static math content on page load
+document.addEventListener('DOMContentLoaded', function() {
+  if (window.renderMathInElement) {
+    renderMathInElement(document.body, {
+      delimiters: [
+        {left: '$$', right: '$$', display: true},
+        {left: '$', right: '$', display: false}
+      ],
+      throwOnError: false
+    });
+  }
+});
+</script>
+
+</body>
+</html>

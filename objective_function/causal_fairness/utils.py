@@ -2454,6 +2454,7 @@ def build_feature_matrix(
     include_interactions: bool = False,
     poly_transformer=None,
     scaler=None,
+    demo_feature_names: Optional[List[str]] = None,
 ) -> Tuple[np.ndarray, List[str], Any, Any]:
     """
     Build the full feature matrix for g(D, x) models.
@@ -2467,6 +2468,8 @@ def build_feature_matrix(
         include_interactions: Whether to include D * x_i interaction terms
         poly_transformer: Pre-fitted PolynomialFeatures (for transform-only mode in CV)
         scaler: Pre-fitted StandardScaler (for transform-only mode in CV)
+        demo_feature_names: Readable names for demographic features (e.g., "GDPperCapita").
+            If provided, used instead of generic "x_0", "x_1", etc.
 
     Returns:
         (X, feature_names, poly_transformer, scaler)
@@ -2480,7 +2483,12 @@ def build_feature_matrix(
     else:
         X_demand = poly_transformer.transform(demands.reshape(-1, 1))
 
-    demand_names = [f"D^{i+1}" for i in range(X_demand.shape[1])]
+    # Readable demand feature names
+    _sup = {2: '\u00B2', 3: '\u00B3', 4: '\u2074', 5: '\u2075'}
+    if X_demand.shape[1] == 1:
+        demand_names = ["Demand"]
+    else:
+        demand_names = ["Demand"] + [f"Demand{_sup.get(i+1, f'^{i+1}')}" for i in range(1, X_demand.shape[1])]
 
     # Standardize demographics
     if scaler is None:
@@ -2489,15 +2497,21 @@ def build_feature_matrix(
     else:
         X_demo = scaler.transform(demographic_features)
 
+    # Use readable demographic names if provided, else fall back to x_0, x_1, ...
+    if demo_feature_names is not None and len(demo_feature_names) == X_demo.shape[1]:
+        demo_names = list(demo_feature_names)
+    else:
+        demo_names = [f"x_{i}" for i in range(X_demo.shape[1])]
+
     parts = [X_demand, X_demo]
-    names = demand_names + [f"x_{i}" for i in range(X_demo.shape[1])]
+    names = demand_names + demo_names
 
     # Interaction terms: D * x_i (raw demand times each standardized demographic)
     if include_interactions:
         D_col = demands.reshape(-1, 1)
         interactions = D_col * X_demo
         parts.append(interactions)
-        names += [f"D*x_{i}" for i in range(X_demo.shape[1])]
+        names += [f"Demand \u00d7 {n}" for n in demo_names]
 
     X = np.hstack(parts)
     return X, names, poly_transformer, scaler
@@ -2549,6 +2563,7 @@ def fit_g_dx_model(
         demands, demographic_features,
         poly_degree=poly_degree,
         include_interactions=use_interactions,
+        demo_feature_names=demo_feature_names,
     )
 
     # Select model
@@ -2765,6 +2780,7 @@ def compute_model_diagnostics(
         demands, demographic_features,
         poly_degree=poly_degree,
         include_interactions=include_interactions,
+        demo_feature_names=demo_feature_names,
     )
 
     # Add constant for statsmodels
@@ -2855,6 +2871,7 @@ def compute_permutation_importance(
         include_interactions=model_result['include_interactions'],
         poly_transformer=model_result['poly_transformer'],
         scaler=model_result['scaler'],
+        demo_feature_names=demo_feature_names,
     )
 
     result = perm_imp(

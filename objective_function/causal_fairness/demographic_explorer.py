@@ -103,6 +103,122 @@ def build_district_colorscale(n_districts: int):
     return colorscale
 
 
+def _style_threshold(val, thresholds, colors):
+    """Apply background color based on threshold ranges.
+
+    Args:
+        val: Value to evaluate
+        thresholds: List of (lower, upper) bounds (checked in order)
+        colors: List of CSS background-color strings matching thresholds
+    Returns:
+        CSS string for cell styling
+    """
+    try:
+        v = float(val)
+    except (ValueError, TypeError):
+        return ''
+    for (lo, hi), color in zip(thresholds, colors):
+        if lo <= v < hi:
+            return f'background-color: {color}'
+    return f'background-color: {colors[-1]}' if colors else ''
+
+
+# Reusable color constants for table styling
+_GREEN = '#c8e6c9'
+_YELLOW = '#fff9c4'
+_RED = '#ffcdd2'
+_BLUE_LIGHT = '#bbdefb'
+
+
+@st.cache_data(show_spinner="Computing causal fairness baseline...")
+def cached_compute_baseline(
+    demand_path: str,
+    supply_path: str,
+    demo_path: str,
+    district_path: str,
+    period_type: str,
+    num_days: int,
+    days_filter_tuple,
+    estimation_method: str,
+    n_bins: int,
+    gd_poly_degree: int,
+    min_demand: int,
+    include_zero_supply: bool,
+    max_ratio_val: float,
+):
+    """Cache-friendly computation of baseline g(D) and master DataFrame.
+
+    Returns all serializable data needed by the dashboard.
+    g_func (a closure) must be reconstructed outside the cache.
+    """
+    raw_data = load_data(demand_path)
+
+    supply_data = None
+    if Path(supply_path).exists():
+        try:
+            supply_data = load_active_taxis_data(supply_path)
+        except Exception:
+            pass
+
+    demo_data = load_data(demo_path)
+    district_data = load_data(district_path)
+
+    # Enrich demographics
+    enriched_grid, enriched_names = enrich_demographic_features(
+        demo_data['demographics_grid'], list(demo_data['feature_names']),
+    )
+    raw_feature_names = list(demo_data['feature_names'])
+
+    # Build config and compute
+    max_ratio = max_ratio_val if max_ratio_val > 0 else None
+    days_filter = list(days_filter_tuple) if days_filter_tuple else None
+    config = CausalFairnessConfig(
+        period_type=period_type,
+        estimation_method=estimation_method,
+        n_bins=n_bins,
+        poly_degree=gd_poly_degree,
+        min_demand=min_demand,
+        max_ratio=max_ratio,
+        include_zero_supply=include_zero_supply,
+        num_days=num_days,
+        days_filter=days_filter,
+        active_taxis_data_path=supply_path if Path(supply_path).exists() else None,
+    )
+
+    term = CausalFairnessTerm(config)
+    auxiliary_data = {'pickup_dropoff_counts': raw_data}
+    if supply_data is not None:
+        auxiliary_data['active_taxis'] = supply_data
+
+    breakdown = term.compute_with_breakdown({}, auxiliary_data)
+
+    components = breakdown['components']
+    demands = np.array(components['demands'])
+    ratios = np.array(components['ratios'])
+    expected = np.array(components['expected'])
+    keys = components['keys']
+
+    df = prepare_demographic_analysis_data(
+        demands=demands, ratios=ratios, expected=expected, keys=keys,
+        demo_grid=enriched_grid, feature_names=enriched_names,
+        district_id_grid=district_data['district_id_grid'],
+        valid_mask=district_data['valid_mask'],
+        district_names=district_data['district_names'],
+        data_is_one_indexed=True,
+    )
+
+    # Convert district_data sets to lists for serializability
+    district_data_serializable = {
+        k: (list(v) if isinstance(v, set) else v)
+        for k, v in district_data.items()
+    }
+
+    return (
+        df, breakdown, enriched_grid, enriched_names,
+        raw_feature_names, district_data_serializable,
+    )
+
+
 # =============================================================================
 # TAB 1: SPATIAL MAPS
 # =============================================================================
@@ -398,7 +514,7 @@ def render_model_comparison_tab(
 
 
 def _display_model_results(results: Dict, df: pd.DataFrame):
-    """Display model comparison results."""
+    """Display model comparison results with color coding and auto-identification."""
     # Build summary table
     summary_rows = []
     for label, r in results.items():
@@ -407,38 +523,87 @@ def _display_model_results(results: Dict, df: pd.DataFrame):
         diag = r.get('diagnostics')
         row = {
             'Model': label,
-            'Train R²': f"{mr['r2_train']:.4f}",
-            'LODO R²': f"{lr['lodo_r2']:.4f}",
-            'Overfit Gap': f"{mr['r2_train'] - lr['lodo_r2']:.4f}",
+            'Train R²': mr['r2_train'],
+            'LODO R²': lr['lodo_r2'],
+            'Overfit Gap': mr['r2_train'] - lr['lodo_r2'],
             'N_params': mr['n_params'],
-            'AIC': f"{diag['aic']:.0f}" if diag else '—',
-            'BIC': f"{diag['bic']:.0f}" if diag else '—',
+            'AIC': diag['aic'] if diag else None,
+            'BIC': diag['bic'] if diag else None,
         }
         summary_rows.append(row)
 
     summary_df = pd.DataFrame(summary_rows)
-
-    # Sort by LODO R² descending
-    summary_df['_lodo_sort'] = [float(r['lodo_result']['lodo_r2']) for r in results.values()]
-    summary_df = summary_df.sort_values('_lodo_sort', ascending=False).drop(columns='_lodo_sort')
+    summary_df = summary_df.sort_values('LODO R²', ascending=False)
 
     st.subheader("Comparison Table")
-    st.dataframe(summary_df, use_container_width=True, hide_index=True)
 
-    # Best model banner
-    best_label = max(results, key=lambda k: results[k]['lodo_result']['lodo_r2'])
-    best_lodo = results[best_label]['lodo_result']['lodo_r2']
-    st.success(f"Best LODO R²: **{best_label}** with R² = {best_lodo:.4f}")
+    # Color-coded styling
+    best_label = summary_df.iloc[0]['Model']
 
-    # Overfitting warnings
+    def _color_gap(val):
+        try:
+            v = float(val)
+            if v < 0.05:
+                return f'background-color: {_GREEN}'
+            elif v < 0.10:
+                return f'background-color: {_YELLOW}'
+            return f'background-color: {_RED}'
+        except (ValueError, TypeError):
+            return ''
+
+    def _highlight_best(row):
+        return [f'background-color: {_BLUE_LIGHT}' if row['Model'] == best_label else '' for _ in row]
+
+    styled = summary_df.style.apply(_highlight_best, axis=1)
+    styled = styled.applymap(_color_gap, subset=['Overfit Gap'])
+    styled = styled.format({
+        'Train R²': '{:.4f}', 'LODO R²': '{:.4f}', 'Overfit Gap': '{:.4f}',
+        'AIC': lambda x: f'{x:.0f}' if pd.notna(x) else '—',
+        'BIC': lambda x: f'{x:.0f}' if pd.notna(x) else '—',
+    })
+    st.dataframe(styled, use_container_width=True, hide_index=True)
+
+    with st.expander("ℹ️ How to interpret the comparison table"):
+        st.markdown("""
+        - **LODO R²** is the primary metric — how well the model generalizes to unseen districts.
+        - **Overfit Gap** = Train R² − LODO R². Green (< 0.05) is healthy, red (> 0.10) is concerning.
+        - **AIC/BIC**: Lower = better. BIC penalizes complexity more than AIC.
+        - **N_params**: Keep low relative to 10 districts to avoid overfitting.
+        - The **blue row** highlights the best model by LODO R².
+        """)
+
+    # Best model + auto-recommendation (Phase 5)
+    best_r = results[best_label]
+    best_lodo = best_r['lodo_result']['lodo_r2']
+    best_gap = best_r['model_result']['r2_train'] - best_lodo
+
+    if best_lodo < 0.01:
+        st.warning(
+            f"**No model achieves meaningful LODO R²** (best: {best_label} = {best_lodo:.4f}). "
+            "Demographics may not explain service residuals in this configuration. "
+            "Consider: (1) changing g(D) method, (2) adding more features, "
+            "(3) using 'all' temporal aggregation for more data per district."
+        )
+    elif best_gap > 0.10:
+        st.warning(
+            f"**Recommendation:** {best_label} has the best LODO R² ({best_lodo:.4f}) "
+            f"but shows overfitting (gap = {best_gap:.4f}). Consider using a regularized model "
+            "(Ridge/Lasso) or reducing the number of features."
+        )
+    else:
+        st.success(
+            f"**Recommendation:** Based on LODO R² ({best_lodo:.4f}) and overfit gap "
+            f"({best_gap:.4f}), **{best_label}** is recommended for the causal fairness term."
+        )
+
+    # Individual overfitting / underfitting flags
     for label, r in results.items():
         gap = r['model_result']['r2_train'] - r['lodo_result']['lodo_r2']
-        if gap > 0.1:
-            st.warning(
-                f"**{label}**: Train R² ({r['model_result']['r2_train']:.4f}) >> "
-                f"LODO R² ({r['lodo_result']['lodo_r2']:.4f}). Gap = {gap:.4f}. "
-                f"Possible overfitting."
-            )
+        lodo = r['lodo_result']['lodo_r2']
+        if gap > 0.1 and label != best_label:
+            st.caption(f"⚠️ {label}: overfit gap = {gap:.4f}")
+        if lodo < 0.01 and label != best_label:
+            st.caption(f"ℹ️ {label}: LODO R² = {lodo:.4f} (near zero — minimal predictive power)")
 
     # Per-model expanders
     st.subheader("Model Details")
@@ -449,11 +614,15 @@ def _display_model_results(results: Dict, df: pd.DataFrame):
 
             # Metrics row
             c1, c2, c3, c4 = st.columns(4)
-            c1.metric("Train R²", f"{mr['r2_train']:.4f}")
-            c2.metric("LODO R²", f"{lr['lodo_r2']:.4f}")
-            c3.metric("N_params", mr['n_params'])
+            c1.metric("Train R²", f"{mr['r2_train']:.4f}",
+                      help="R² on training data (all districts). Can overfit.")
+            c2.metric("LODO R²", f"{lr['lodo_r2']:.4f}",
+                      help="Leave-One-District-Out cross-validated R². Primary generalization metric.")
+            c3.metric("N_params", mr['n_params'],
+                      help="Number of model parameters. Keep low relative to 10 districts.")
             if r.get('diagnostics'):
-                c4.metric("AIC", f"{r['diagnostics']['aic']:.0f}")
+                c4.metric("AIC", f"{r['diagnostics']['aic']:.0f}",
+                          help="Akaike Information Criterion. Lower = better fit-complexity trade-off.")
 
             # Coefficient or importance chart
             if mr['coefficients'] is not None:
@@ -566,43 +735,85 @@ def render_diagnostics_tab(df: pd.DataFrame):
             st.warning("No demographic features available for diagnostics.")
             return
 
-    # 1. Coefficients table
+    # 1. Coefficients table (color-coded p-values)
     st.subheader("1. Coefficient Significance")
     coef_display = diag['coefficients_table'].copy()
-    coef_display['p_value'] = coef_display['p_value'].apply(lambda p: f"{p:.4e}")
     coef_display['Sig'] = coef_display['significant_05'].map({True: '*', False: ''})
-    st.dataframe(
-        coef_display[['Feature', 'Coefficient', 'StdErr', 't_stat', 'p_value', 'Sig']],
-        use_container_width=True, hide_index=True,
-    )
+    show_cols = ['Feature', 'Coefficient', 'StdErr', 't_stat', 'p_value', 'Sig']
+    coef_show = coef_display[show_cols].copy()
 
-    # 2. VIF table
+    def _color_pvalue(val):
+        try:
+            p = float(val)
+            if p < 0.05:
+                return f'background-color: {_GREEN}'
+            elif p < 0.10:
+                return f'background-color: {_YELLOW}'
+            return f'background-color: {_RED}'
+        except (ValueError, TypeError):
+            return ''
+
+    styled_coef = coef_show.style.applymap(_color_pvalue, subset=['p_value'])
+    styled_coef = styled_coef.format({
+        'Coefficient': '{:.6f}', 'StdErr': '{:.6f}',
+        't_stat': '{:.3f}', 'p_value': '{:.4e}',
+    })
+    st.dataframe(styled_coef, use_container_width=True, hide_index=True)
+
+    # 2. VIF table (color-coded)
     st.subheader("2. Variance Inflation Factors (VIF)")
     vif_df = diag['vif'].copy()
     vif_df['Status'] = vif_df['VIF'].apply(
         lambda v: 'High collinearity' if v > 10 else ('Moderate' if v > 5 else 'OK')
     )
-    st.dataframe(vif_df, use_container_width=True, hide_index=True)
+
+    def _color_vif(val):
+        try:
+            v = float(val)
+            if v > 10:
+                return f'background-color: {_RED}'
+            elif v > 5:
+                return f'background-color: {_YELLOW}'
+            return f'background-color: {_GREEN}'
+        except (ValueError, TypeError):
+            return ''
+
+    styled_vif = vif_df.style.applymap(_color_vif, subset=['VIF'])
+    styled_vif = styled_vif.format({'VIF': '{:.2f}'})
+    st.dataframe(styled_vif, use_container_width=True, hide_index=True)
+
     high_vif = vif_df[vif_df['VIF'] > 10]
     if len(high_vif) > 0:
         st.warning(f"Features with VIF > 10: {', '.join(high_vif['Feature'].tolist())}. Consider removing.")
 
+    with st.expander("ℹ️ How to interpret VIF"):
+        st.markdown("""
+        - **VIF < 5** (green): No concerning multicollinearity.
+        - **VIF 5-10** (yellow): Moderate. Coefficients may be unstable.
+        - **VIF > 10** (red): High. Feature is nearly a linear combination of others. Remove or combine.
+        - With only 10 districts, even moderate VIF can destabilize estimates.
+        """)
+
     # 3. Information criteria
     st.subheader("3. Model Fit Summary")
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("AIC", f"{diag['aic']:.0f}")
-    c2.metric("BIC", f"{diag['bic']:.0f}")
-    c3.metric("R²", f"{diag['r_squared']:.4f}")
-    c4.metric("Adj R²", f"{diag['r_squared_adj']:.4f}")
+    c1.metric("AIC", f"{diag['aic']:.0f}",
+              help="Akaike Information Criterion. Lower = better fit-complexity trade-off.")
+    c2.metric("BIC", f"{diag['bic']:.0f}",
+              help="Bayesian IC. Penalizes complexity more than AIC. Lower = better.")
+    c3.metric("R²", f"{diag['r_squared']:.4f}",
+              help="Proportion of Y variance explained by the model.")
+    c4.metric("Adj R²", f"{diag['r_squared_adj']:.4f}",
+              help="R² adjusted for number of predictors. Penalizes adding useless features.")
 
     c1, c2, c3 = st.columns(3)
     c1.metric("Condition Number", f"{diag['condition_number']:.0f}",
-              help="Values > 1000 suggest multicollinearity")
+              help="Measures multicollinearity severity. > 1000 = concerning, > 10000 = severe.")
     c2.metric("Durbin-Watson", f"{diag['durbin_watson']:.4f}",
-              help="~2.0 = no autocorrelation; <1.5 or >2.5 = concern")
+              help="Tests for autocorrelation. ~2.0 = none, < 1.5 or > 2.5 = concern.")
     bp_str = f"{diag['breusch_pagan_p']:.4e}"
     c3.metric("Breusch-Pagan p", bp_str,
-              help="p < 0.05 = heteroscedasticity detected")
+              help="Tests for heteroscedasticity (unequal error variance). p < 0.05 = detected.")
 
     # 4. Residual diagnostics
     st.subheader("4. Residual Diagnostics")
@@ -637,6 +848,19 @@ def render_diagnostics_tab(df: pd.DataFrame):
         fig.update_layout(height=350)
         st.plotly_chart(fig, use_container_width=True)
 
+    with st.expander("ℹ️ How to interpret residual diagnostic plots"):
+        st.markdown("""
+        **Q-Q Plot** (left):
+        - Points should follow the red diagonal line if residuals are normally distributed.
+        - S-shape at tails suggests heavy tails or outliers. Curve suggests skewness.
+        - Minor deviations are acceptable with large samples (>1000 observations).
+
+        **Residuals vs Fitted** (right):
+        - **Good**: Random scatter around y=0 with constant spread (homoscedasticity).
+        - **Bad**: Fan/funnel shape = heteroscedasticity (variance depends on fitted value).
+        - **Bad**: Curved pattern = model is missing a non-linear relationship.
+        """)
+
     # 5. Permutation importance
     st.subheader("5. Permutation Feature Importance")
     avail_features = st.session_state.get('model_features', [])
@@ -655,28 +879,217 @@ def render_diagnostics_tab(df: pd.DataFrame):
         fig.update_layout(height=350)
         st.plotly_chart(fig, use_container_width=True)
 
+        with st.expander("ℹ️ How to interpret permutation importance"):
+            st.markdown("""
+            - Shows the **R² drop** when each feature's values are randomly shuffled.
+            - **Higher bar** = feature contributes more to predictive accuracy.
+            - **Negative importance** = shuffling *improves* the model (feature may add noise — consider removing).
+            - Error bars show variability across shuffles (wider = less stable importance).
+            """)
+
 
 # =============================================================================
-# TAB 5: FEATURE ENGINEERING
+# TAB 1: FEATURE ANALYSIS & SELECTION
 # =============================================================================
 
-def render_feature_engineering_tab(
+def _compute_recommended_features(
+    all_features: List[str],
+    corr_matrix: pd.DataFrame,
+    df: pd.DataFrame,
+    raw_feature_names: List[str],
+) -> tuple:
+    """Auto-select a minimal, well-conditioned feature set.
+
+    VIF is recomputed on surviving candidates after correlation-pair removal,
+    because VIF on all 20 features with only 10 district profiles is singular (all inf).
+
+    Returns:
+        (recommended_list, removal_reasons_dict)
+    """
+    from statsmodels.stats.outliers_influence import variance_inflation_factor
+
+    candidates = set(all_features)
+    reasons = {}
+
+    # Always remove AreaKm2 (geographic constant, not demographic)
+    if 'AreaKm2' in candidates:
+        candidates.discard('AreaKm2')
+        reasons['AreaKm2'] = 'Geographic constant (not demographic)'
+
+    # Remove log+raw duplicates (perfect collinearity)
+    log_raw_pairs = [
+        ('AvgHousingPricePerSqM', 'LogHousingPrice'),
+        ('GDPin10000Yuan', 'LogGDP'),
+        ('EmployeeCompensation100MYuan', 'LogCompensation'),
+        ('PopDensityPerKm2', 'LogPopDensity'),
+    ]
+    for raw_name, log_name in log_raw_pairs:
+        if raw_name in candidates and log_name in candidates:
+            # Keep derived (log) over raw for these near-perfect correlations
+            candidates.discard(log_name)
+            reasons[log_name] = f'Near-perfect correlation with {raw_name} (log transform)'
+
+    # Remove one from each remaining high-correlation pair
+    for i in range(len(all_features)):
+        for j in range(i + 1, len(all_features)):
+            f1, f2 = all_features[i], all_features[j]
+            if f1 not in candidates or f2 not in candidates:
+                continue
+            r = abs(corr_matrix.loc[f1, f2]) if f1 in corr_matrix.index and f2 in corr_matrix.index else 0
+            if r > 0.85:
+                # Prefer derived over raw
+                f1_raw = f1 in raw_feature_names
+                f2_raw = f2 in raw_feature_names
+                if f1_raw and not f2_raw:
+                    to_remove = f1
+                elif f2_raw and not f1_raw:
+                    to_remove = f2
+                else:
+                    # Both same type: remove arbitrarily (second in pair)
+                    to_remove = f2
+                kept = f2 if to_remove == f1 else f1
+                candidates.discard(to_remove)
+                reasons[to_remove] = f'Correlated with {kept} (r={r:.2f})'
+
+    # Recompute VIF on surviving candidates only (not the original 20-feature set)
+    surviving = sorted(candidates)
+    if len(surviving) >= 2:
+        X_surv = df[surviving].dropna()
+        if len(X_surv) > 0:
+            X_arr = X_surv.values
+            vif_post = {}
+            for i, fname in enumerate(surviving):
+                try:
+                    vif_post[fname] = float(variance_inflation_factor(X_arr, i))
+                except Exception:
+                    vif_post[fname] = float('inf')
+
+            # Iteratively remove highest-VIF feature until all VIF < 10
+            while True:
+                worst = max(vif_post, key=vif_post.get)
+                if vif_post[worst] <= 10 or len(vif_post) <= 2:
+                    break
+                candidates.discard(worst)
+                reasons[worst] = f'High VIF ({vif_post[worst]:.1f}) after pair removal'
+                # Recompute VIF on remaining
+                remaining = sorted(candidates)
+                if len(remaining) < 2:
+                    break
+                X_rem = df[remaining].dropna().values
+                vif_post = {}
+                for i, fname in enumerate(remaining):
+                    try:
+                        vif_post[fname] = float(variance_inflation_factor(X_rem, i))
+                    except Exception:
+                        vif_post[fname] = float('inf')
+
+    return sorted(candidates), reasons
+
+
+def render_feature_analysis_tab(
     df: pd.DataFrame,
     enriched_names: List[str],
     raw_feature_names: List[str],
     selected_features: List[str],
 ):
-    """Render feature analysis and engineering tab."""
-    st.header("Feature Engineering")
+    """Render feature analysis, selection, and engineering tab."""
+    st.header("Feature Analysis & Selection")
 
     avail_features = [f for f in enriched_names if f in df.columns]
+    sel_avail = [f for f in selected_features if f in df.columns]
 
-    # 1. Feature summary table
-    st.subheader("1. Feature Summary")
+    # =================================================================
+    # 0. Auto-Recommend Features
+    # =================================================================
+    st.subheader("Auto-Recommend Features",
+                 help="Analyzes all features for redundancy and recommends a minimal set.")
+
+    if len(avail_features) >= 2:
+        # Correlation analysis (all features)
+        corr_all = df[avail_features].corr()
+
+        # Identify correlated pairs
+        high_corr_pairs = []
+        for i in range(len(avail_features)):
+            for j in range(i + 1, len(avail_features)):
+                r = abs(corr_all.iloc[i, j])
+                if r > 0.85:
+                    high_corr_pairs.append((avail_features[i], avail_features[j], r))
+
+        # Compute recommendation (VIF is computed internally on surviving candidates)
+        recommended, removal_reasons = _compute_recommended_features(
+            avail_features, corr_all, df, raw_feature_names,
+        )
+
+        # Compute VIF on recommended features (meaningful, unlike all-features VIF)
+        from statsmodels.stats.outliers_influence import variance_inflation_factor
+        rec_vif = {}
+        if len(recommended) >= 2:
+            X_rec = df[recommended].dropna().values
+            for i, fname in enumerate(recommended):
+                try:
+                    rec_vif[fname] = float(variance_inflation_factor(X_rec, i))
+                except Exception:
+                    rec_vif[fname] = float('inf')
+
+        # Display findings
+        col_a, col_b = st.columns(2)
+        with col_a:
+            st.markdown("**Correlated Pairs** (|r| > 0.85)")
+            if high_corr_pairs:
+                for f1, f2, r in high_corr_pairs:
+                    st.markdown(f"- {f1} & {f2}: r={r:.3f}")
+            else:
+                st.success("No highly correlated pairs found.")
+        with col_b:
+            st.markdown("**Recommended Feature VIF**")
+            if rec_vif:
+                high_rec_vif = {k: v for k, v in rec_vif.items() if v > 10}
+                if high_rec_vif:
+                    for fname, vif in sorted(high_rec_vif.items(), key=lambda x: -x[1]):
+                        st.markdown(f"- {fname}: VIF={vif:.1f} ⚠️")
+                else:
+                    st.success(f"All {len(rec_vif)} recommended features have VIF < 10.")
+                    for fname, vif in sorted(rec_vif.items()):
+                        st.markdown(f"- {fname}: VIF={vif:.1f}")
+            elif len(recommended) < 2:
+                st.info("Need at least 2 features to compute VIF.")
+
+        # Recommendation box
+        if removal_reasons:
+            with st.expander("Removal reasons", expanded=False):
+                for fname, reason in sorted(removal_reasons.items()):
+                    st.markdown(f"- **{fname}**: {reason}")
+
+        st.info(f"**Recommended features ({len(recommended)}):** {', '.join(recommended) if recommended else 'None'}")
+
+        if st.button("✅ Apply Recommended Features", type="primary",
+                      help="Updates sidebar checkboxes to match the recommendation."):
+            # Defer update to next rerun (can't modify widget keys after instantiation)
+            st.session_state['_apply_recommended'] = list(recommended)
+            if 'model_results' in st.session_state:
+                del st.session_state['model_results']
+            st.rerun()
+
+        with st.expander("ℹ️ How auto-recommendation works"):
+            st.markdown("""
+            1. **Remove `AreaKm2`** — geographic constant, not a demographic predictor.
+            2. **Correlated pairs** (|r| > 0.85): Remove one from each pair.
+               Prefer derived/per-capita features over raw totals.
+            3. **High VIF** (> 10): Remove features that are linear combinations of others.
+            4. **Target**: 3-5 features for 10 districts (avoids overfitting).
+            """)
+
+    st.divider()
+
+    # =================================================================
+    # 1. Feature Summary
+    # =================================================================
+    st.subheader("Feature Summary")
 
     derived_formulas = {
-        'GDPperCapita': 'GDPin10000Yuan / (Pop * 10000)',
-        'CompPerCapita': 'Compensation * 1e8 / AvgEmployed',
+        'GDPperCapita': 'GDPin10000Yuan / (Pop × 10000)',
+        'CompPerCapita': 'Compensation × 1e8 / AvgEmployed',
         'MigrantRatio': 'NonRegistered / TotalPop',
         'LogGDP': 'log1p(GDPin10000Yuan)',
         'LogHousingPrice': 'log1p(AvgHousingPricePerSqM)',
@@ -691,19 +1104,21 @@ def render_feature_engineering_tab(
         summary_rows.append({
             'Feature': fname,
             'Type': 'Derived' if is_derived else 'Raw',
+            'Selected': '✓' if fname in selected_features else '',
             'Formula': derived_formulas.get(fname, '—'),
             'Mean': f"{vals.mean():.4g}" if len(vals) > 0 else '—',
             'Std': f"{vals.std():.4g}" if len(vals) > 0 else '—',
             'Min': f"{vals.min():.4g}" if len(vals) > 0 else '—',
             'Max': f"{vals.max():.4g}" if len(vals) > 0 else '—',
-            'Unique (district-level)': len(vals.unique()),
+            'Unique': len(vals.unique()),
         })
     st.dataframe(pd.DataFrame(summary_rows), use_container_width=True, hide_index=True)
 
-    # 2. Correlation matrix
-    sel_avail = [f for f in selected_features if f in df.columns]
+    # =================================================================
+    # 2. Correlation Matrix
+    # =================================================================
     if len(sel_avail) >= 2:
-        st.subheader("2. Feature Correlation Matrix")
+        st.subheader("Feature Correlation Matrix")
         corr_matrix = df[sel_avail].corr()
 
         fig = px.imshow(
@@ -723,16 +1138,26 @@ def render_feature_engineering_tab(
                 if c > 0.85:
                     high_corr.append((sel_avail[i], sel_avail[j], corr_matrix.iloc[i, j]))
         if high_corr:
-            st.warning("High correlations detected (|r| > 0.85):")
+            st.warning("High correlations detected (|r| > 0.85) among selected features:")
             for f1, f2, c in high_corr:
                 st.markdown(f"- **{f1}** & **{f2}**: r = {c:.3f}")
 
-    # 3. Feature-residual scatter grid
+        with st.expander("ℹ️ How to interpret the correlation matrix"):
+            st.markdown("""
+            - **Red** = positive correlation, **Blue** = negative correlation.
+            - |r| > 0.85 (flagged): features share redundant information.
+            - Including highly correlated features inflates VIF and destabilizes coefficients.
+            - Prefer keeping one from each correlated pair (derived/per-capita over raw).
+            """)
+
+    # =================================================================
+    # 3. Feature vs Residual Scatter Grid
+    # =================================================================
     if sel_avail and 'residual' in df.columns:
-        st.subheader("3. Feature vs Residual (by District)")
+        st.subheader("Feature vs Residual (by District)")
         n_cols = min(3, len(sel_avail))
         cols = st.columns(n_cols)
-        for i, fname in enumerate(sel_avail[:9]):  # Max 9 features displayed
+        for i, fname in enumerate(sel_avail[:9]):
             with cols[i % n_cols]:
                 fig = px.scatter(
                     df, x=fname, y='residual', color='district_name',
@@ -744,7 +1169,16 @@ def render_feature_engineering_tab(
                 fig.update_layout(height=300, showlegend=False)
                 st.plotly_chart(fig, use_container_width=True)
 
-    # 4. Distribution comparison (raw vs log)
+        with st.expander("ℹ️ How to interpret feature-residual scatters"):
+            st.markdown("""
+            - A **clear trend** (upward/downward slope) suggests the feature explains residual variance.
+            - **No trend** (random scatter) means the feature doesn't predict service beyond demand.
+            - Color by district reveals if the relationship is consistent or district-specific.
+            """)
+
+    # =================================================================
+    # 4. Distribution Comparison (raw vs log)
+    # =================================================================
     log_pairs = [
         ('GDPin10000Yuan', 'LogGDP'),
         ('AvgHousingPricePerSqM', 'LogHousingPrice'),
@@ -753,7 +1187,7 @@ def render_feature_engineering_tab(
     ]
     available_pairs = [(r, l) for r, l in log_pairs if r in df.columns and l in df.columns]
     if available_pairs:
-        st.subheader("4. Raw vs Log-Transformed Distributions")
+        st.subheader("Raw vs Log-Transformed Distributions")
         for raw_name, log_name in available_pairs[:4]:
             col1, col2 = st.columns(2)
             with col1:
@@ -767,7 +1201,162 @@ def render_feature_engineering_tab(
 
 
 # =============================================================================
-# TAB 6: CROSS-VALIDATION DETAIL
+# EXPORT CONFIGURATION
+# =============================================================================
+
+def render_export_config(
+    df: pd.DataFrame,
+    selected_label,
+    *,
+    district_names: List[str],
+    estimation_method: str,
+    n_bins: int,
+    gd_poly_degree: int,
+    model_poly_degree: int,
+    alpha: float,
+    l1_ratio: float,
+    n_estimators: int,
+    max_depth: int,
+    min_demand: int,
+    include_zero_supply: bool,
+    max_ratio_val: float,
+    period_type: str,
+):
+    """Render the export configuration section at the bottom of the CV Detail tab."""
+    import json
+    from datetime import datetime
+
+    st.subheader("6. Export Model Configuration")
+
+    if 'model_results' not in st.session_state or selected_label is None:
+        st.info("Fit models in the Model Training tab first, then select a model above to export its configuration.")
+        return
+
+    results = st.session_state['model_results']
+    if selected_label not in results:
+        st.warning(f"Model '{selected_label}' not found in results.")
+        return
+
+    r = results[selected_label]
+    mr = r['model_result']
+    lr = r['lodo_result']
+    features = st.session_state.get('model_features', [])
+
+    # Parse model type from label (e.g. "Ridge (α=1.00)" → "ridge")
+    model_type = selected_label.split("(")[0].strip().lower().replace(" ", "_")
+
+    # Build per-district R² dict with names
+    per_district_r2 = {}
+    for d_id, r2_val in sorted(lr.get('per_district_r2', {}).items()):
+        d_name = district_names[d_id] if d_id < len(district_names) else f"D{d_id}"
+        per_district_r2[d_name] = round(r2_val, 6)
+
+    # Build coefficients dict (mr['coefficients'] is a dict {name: float})
+    coefficients = {}
+    if mr.get('coefficients') and isinstance(mr['coefficients'], dict):
+        for name, coef in mr['coefficients'].items():
+            coefficients[name] = round(float(coef), 8)
+    elif mr.get('feature_importances') and isinstance(mr['feature_importances'], dict):
+        # Tree models store importances instead of coefficients
+        for name, imp in mr['feature_importances'].items():
+            coefficients[name] = round(float(imp), 8)
+    if mr.get('intercept') is not None:
+        coefficients["(intercept)"] = round(float(mr['intercept']), 8)
+
+    # Assemble config
+    config = {
+        "model_config": {
+            "model_type": model_type,
+            "label": selected_label,
+            "features": features,
+            "poly_degree": model_poly_degree,
+            "include_interactions": mr.get('include_interactions', False),
+            "alpha": alpha,
+            "l1_ratio": l1_ratio,
+            "n_estimators": n_estimators if "forest" in model_type or "gradient" in model_type or "rf" in model_type or "gb" in model_type else None,
+            "max_depth": max_depth if "forest" in model_type or "gradient" in model_type or "rf" in model_type or "gb" in model_type else None,
+        },
+        "baseline_config": {
+            "estimation_method": estimation_method,
+            "n_bins": n_bins,
+            "gd_poly_degree": gd_poly_degree,
+            "period_type": period_type,
+            "min_demand": min_demand,
+            "include_zero_supply": include_zero_supply,
+            "max_ratio": max_ratio_val,
+        },
+        "performance": {
+            "train_r2": round(mr.get('r2_train', 0), 6),
+            "lodo_r2": round(lr.get('lodo_r2', 0), 6),
+            "overfit_gap": round(mr.get('r2_train', 0) - lr.get('lodo_r2', 0), 6),
+            "aic": round(mr.get('aic', 0), 2) if mr.get('aic') else None,
+            "bic": round(mr.get('bic', 0), 2) if mr.get('bic') else None,
+            "per_district_r2": per_district_r2,
+        },
+        "data_summary": {
+            "n_districts": len(district_names),
+            "n_observations": len(df),
+            "n_features": len(features),
+        },
+        "coefficients": coefficients,
+        "timestamp": datetime.now().isoformat(timespec='seconds'),
+        "dashboard_version": "demographic_explorer v2",
+    }
+
+    # Remove None values from model_config for cleanliness
+    config["model_config"] = {k: v for k, v in config["model_config"].items() if v is not None}
+
+    # --- Display ---
+    col_summary, col_json = st.columns([1, 1])
+
+    with col_summary:
+        st.markdown("##### Summary")
+        gap = config["performance"]["overfit_gap"]
+        gap_label = "healthy" if gap < 0.05 else ("moderate" if gap < 0.10 else "concerning")
+        st.markdown(f"""
+| Setting | Value |
+|---------|-------|
+| **Model** | {selected_label} |
+| **Features** | {', '.join(features) if features else 'None'} |
+| **Poly degree** | {model_poly_degree} |
+| **Baseline** | {estimation_method}, {n_bins} bins, degree {gd_poly_degree} |
+| **Period** | {period_type} |
+| **Train R²** | {config['performance']['train_r2']:.4f} |
+| **LODO R²** | {config['performance']['lodo_r2']:.4f} |
+| **Overfit gap** | {gap:.4f} ({gap_label}) |
+| **Observations** | {config['data_summary']['n_observations']:,} |
+""")
+
+    with col_json:
+        st.markdown("##### Configuration JSON")
+        json_str = json.dumps(config, indent=2, ensure_ascii=False)
+        st.code(json_str, language="json")
+
+    # Download button
+    st.download_button(
+        label="📥 Download Configuration (JSON)",
+        data=json.dumps(config, indent=2, ensure_ascii=False),
+        file_name=f"gdx_config_{model_type}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
+        mime="application/json",
+        help="Download the full model configuration as a JSON file for later implementation.",
+    )
+
+    with st.expander("ℹ️ How to use this configuration"):
+        st.markdown("""
+This JSON captures everything needed to reproduce the g(D, x) model:
+
+1. **`model_config`**: The model type, features, and hyperparameters. Use this to reconstruct the scikit-learn estimator.
+2. **`baseline_config`**: How g(D) was estimated. Needed to compute residuals for the causal fairness term.
+3. **`performance`**: Train/LODO R² and per-district breakdown. Use LODO R² as the primary quality indicator.
+4. **`coefficients`**: The fitted model weights. For linear models, these can be applied directly without retraining.
+5. **`data_summary`**: Context about the dataset used for fitting.
+
+**Next steps**: Pass this configuration to implement g(D, x) in `objective_function/causal_fairness/term.py`, replacing the current demand-only g(D) model where appropriate.
+""")
+
+
+# =============================================================================
+# TAB 4: CROSS-VALIDATION DETAIL
 # =============================================================================
 
 def render_cv_detail_tab(
@@ -777,8 +1366,21 @@ def render_cv_detail_tab(
     valid_mask: np.ndarray,
     district_names: List[str],
     g_func,
+    *,
+    estimation_method: str = "binning",
+    n_bins: int = 10,
+    gd_poly_degree: int = 2,
+    model_poly_degree: int = 2,
+    alpha: float = 1.0,
+    l1_ratio: float = 0.5,
+    n_estimators: int = 100,
+    max_depth: int = 3,
+    min_demand: int = 1,
+    include_zero_supply: bool = False,
+    max_ratio_val: float = 0.0,
+    period_type: str = "hourly",
 ):
-    """Render detailed cross-validation analysis."""
+    """Render detailed cross-validation analysis and export configuration."""
     st.header("Cross-Validation Detail")
 
     if 'model_results' not in st.session_state:
@@ -796,9 +1398,12 @@ def render_cv_detail_tab(
     # 1. LODO R² overview
     st.subheader("1. LODO R² Overview")
     c1, c2, c3 = st.columns(3)
-    c1.metric("Overall LODO R²", f"{lr['lodo_r2']:.4f}")
-    c2.metric("Train R²", f"{mr['r2_train']:.4f}")
-    c3.metric("Overfit Gap", f"{mr['r2_train'] - lr['lodo_r2']:.4f}")
+    c1.metric("Overall LODO R²", f"{lr['lodo_r2']:.4f}",
+              help="Aggregated R² from all out-of-fold predictions. Primary generalization metric.")
+    c2.metric("Train R²", f"{mr['r2_train']:.4f}",
+              help="R² on full training data. Compare with LODO R² to assess overfitting.")
+    c3.metric("Overfit Gap", f"{mr['r2_train'] - lr['lodo_r2']:.4f}",
+              help="Train R² minus LODO R². < 0.05 healthy, > 0.10 concerning.")
 
     # Per-district bar chart
     if lr['per_district_r2']:
@@ -818,6 +1423,15 @@ def render_cv_detail_tab(
         )
         fig.update_layout(height=350)
         st.plotly_chart(fig, use_container_width=True)
+
+        with st.expander("ℹ️ How to interpret per-district LODO R²"):
+            st.markdown("""
+- **Positive R²**: The model explains some variance in the held-out district. Higher is better.
+- **Near-zero R²**: The model has no predictive power for that district — its service patterns are unique.
+- **Negative R²**: The model predicts *worse* than the district mean. This district actively contradicts the model trained on the other 9 districts.
+- **Uniform bars**: All districts similar → model generalizes consistently.
+- **One outlier**: A single low/negative bar → that district has unique demographics or service patterns. Consider investigating it in the District Summaries tab.
+""")
 
     # 2. Per-district prediction scatters
     st.subheader("2. Per-District Predictions (OOF)")
@@ -872,6 +1486,16 @@ def render_cv_detail_tab(
         fig.update_layout(height=400)
         st.plotly_chart(fig, use_container_width=True)
 
+        with st.expander("ℹ️ How to interpret the OOF residual map"):
+            st.markdown("""
+- **Red cells**: Under-predicted — actual service ratio was higher than the model expected (under-served areas the model missed).
+- **Blue cells**: Over-predicted — actual service ratio was lower than predicted (over-served areas the model missed).
+- **White/near-zero**: Model predicts well for these cells.
+- **Spatial clusters**: If red/blue cells cluster geographically, the model has systematic spatial bias — it may be missing a spatially-varying factor.
+- **Scattered noise**: Random red/blue patches suggest the model captures the main patterns and residuals are unsystematic.
+- This map uses **out-of-fold** predictions, so clusters here represent genuine model failures, not overfitting artifacts.
+""")
+
     # 4. g(D) vs g(D,x) comparison
     st.subheader("4. g(D) vs g(D, x) per District")
     if g_func is not None and lr['per_district_r2']:
@@ -905,6 +1529,15 @@ def render_cv_detail_tab(
         fig.update_layout(height=350)
         st.plotly_chart(fig, use_container_width=True)
 
+        with st.expander("ℹ️ How to interpret g(D) vs g(D,x)"):
+            st.markdown("""
+- **g(D,x) bar taller**: Demographics improve prediction for that district. The district has a service pattern correlated with its demographic profile.
+- **Both bars similar**: Demographics add little beyond demand alone. The current g(D) model is sufficient for that district.
+- **g(D) bar taller**: Adding demographics actually *hurts* for this district (possible overfitting to other districts' patterns).
+- **If most districts show improvement**: Strong evidence to adopt g(D,x) in the causal fairness term.
+- **If only 1-2 districts improve**: The signal may be idiosyncratic — the demographic effect isn't systematic across the city.
+""")
+
     # 5. Fairness implications
     st.subheader("5. Fairness Metric Implications")
     avail_features = st.session_state.get('model_features', [])
@@ -937,6 +1570,27 @@ def render_cv_detail_tab(
                 "These fairness scores show how the g(D, x) model's residuals relate to demographics. "
                 "Higher F_causal = less demographic bias remaining after accounting for demand."
             )
+
+            with st.expander("ℹ️ Understanding fairness metric options"):
+                st.markdown("""
+- **Option B** (1 − R²(OOF_resid ~ x)): Regresses the model's out-of-fold residuals on demographics. If demographics *still* predict residuals after g(D,x) accounts for them, there's remaining bias. Score near 1.0 = low remaining bias.
+- **Option C** (1 − ΔR²): Measures the *incremental* R² from adding demographics to the demand-only model. Score near 1.0 = demographics add little beyond demand.
+- **Comparing scores**: If Option B >> Option C, the model successfully absorbed demographic effects into its predictions. If Option B ≈ Option C, the demographic signal wasn't fully captured.
+- **Both near 1.0**: Demand alone explains service well — demographics don't add much. This is actually a *good* outcome for fairness (no demographic bias to correct).
+""")
+
+    # ── Export Configuration ─────────────────────────────────────────────
+    st.divider()
+    render_export_config(
+        df, selected_label if 'model_results' in st.session_state else None,
+        district_names=district_names,
+        estimation_method=estimation_method, n_bins=n_bins,
+        gd_poly_degree=gd_poly_degree, model_poly_degree=model_poly_degree,
+        alpha=alpha, l1_ratio=l1_ratio,
+        n_estimators=n_estimators, max_depth=max_depth,
+        min_demand=min_demand, include_zero_supply=include_zero_supply,
+        max_ratio_val=max_ratio_val, period_type=period_type,
+    )
 
 
 # =============================================================================
@@ -982,11 +1636,13 @@ def main():
     st.sidebar.subheader("🕐 Temporal Settings")
     period_type = st.sidebar.selectbox(
         "Aggregation Period", ["hourly", "daily", "all"], index=0,
+        help="How to aggregate 5-min time buckets. 'hourly' = 24 periods/day, 'daily' = 1/day, 'all' = single aggregate.",
     )
     dataset_option = st.sidebar.selectbox(
         "Dataset Period",
         ["July (21 days)", "August (23 days)", "September (22 days)", "All (66 days)"],
         index=3,
+        help="Which months of weekday data to include. More days = more data but slower.",
     )
     num_days_map = {
         "July (21 days)": WEEKDAYS_JULY,
@@ -1001,6 +1657,7 @@ def main():
         "Days to Include",
         ["All Weekdays", "Mon-Wed", "Thu-Fri", "Monday Only", "Friday Only"],
         index=0,
+        help="Filter by day-of-week. Useful to check if patterns differ Mon-Wed vs Thu-Fri.",
     )
     days_options = {
         "All Weekdays": None,
@@ -1016,16 +1673,26 @@ def main():
     estimation_method = st.sidebar.selectbox(
         "g(D) Method", ["binning", "polynomial", "isotonic", "lowess", "linear"],
         index=0,
+        help="Method for estimating g(D) = E[Y|D]. Binning is most robust. Polynomial can overfit with high degree.",
     )
-    n_bins = st.sidebar.slider("N Bins (binning)", 3, 30, 10)
-    gd_poly_degree = st.sidebar.slider("Poly Degree (g(D))", 1, 5, 2)
+    n_bins = st.sidebar.slider("N Bins (binning)", 3, 30, 10,
+        help="Number of demand bins for binning method. More bins = finer resolution but noisier.",
+    )
+    gd_poly_degree = st.sidebar.slider("Poly Degree (g(D))", 1, 5, 2,
+        help="Polynomial degree for baseline. Degree 2 is usually sufficient.",
+    )
 
     # --- Data Filtering ---
     st.sidebar.subheader("🔍 Data Filtering")
-    min_demand = st.sidebar.number_input("Min Demand", 0, 100, 1)
-    include_zero_supply = st.sidebar.checkbox("Include Zero Supply", value=True)
+    min_demand = st.sidebar.number_input("Min Demand", 0, 100, 1,
+        help="Minimum pickup count to include a cell. Low-demand cells have noisy ratios.",
+    )
+    include_zero_supply = st.sidebar.checkbox("Include Zero Supply", value=True,
+        help="Include cells with no taxis available? These have ratio=0, which can skew distributions.",
+    )
     max_ratio_val = st.sidebar.number_input(
         "Max Ratio (0=no cap)", 0.0, 1000.0, 0.0, step=10.0,
+        help="Cap service ratio at this value. Set to 0 for no cap. Removes extreme outliers.",
     )
     max_ratio = max_ratio_val if max_ratio_val > 0 else None
 
@@ -1037,17 +1704,25 @@ def main():
 
     # --- Model Settings ---
     st.sidebar.subheader("🔧 Model Settings")
-    model_poly_degree = st.sidebar.slider("Demand Poly Degree (g(D,x))", 1, 5, 2)
+    model_poly_degree = st.sidebar.slider("Demand Poly Degree (g(D,x))", 1, 5, 2,
+        help="Polynomial demand features in g(D,x). Higher = more flexible demand modeling.",
+    )
     alpha = st.sidebar.slider(
         "Regularization Alpha", 0.001, 100.0, 1.0,
-        help="For Ridge/Lasso/ElasticNet",
+        help="Regularization strength for Ridge/Lasso/ElasticNet. Higher = simpler model. Start ~1.0.",
     )
-    l1_ratio = st.sidebar.slider("L1 Ratio (ElasticNet)", 0.0, 1.0, 0.5, step=0.1)
-    n_estimators = st.sidebar.slider("N Estimators (Trees)", 10, 500, 100, step=10)
-    max_depth = st.sidebar.slider("Max Depth (Trees)", 2, 20, 5)
+    l1_ratio = st.sidebar.slider("L1 Ratio (ElasticNet)", 0.0, 1.0, 0.5, step=0.1,
+        help="ElasticNet L1/L2 mix. 0.0 = pure Ridge, 1.0 = pure Lasso, 0.5 = balanced.",
+    )
+    n_estimators = st.sidebar.slider("N Estimators (Trees)", 10, 500, 100, step=10,
+        help="Number of trees for RF/GB. More = better but slower. 100 is a good start.",
+    )
+    max_depth = st.sidebar.slider("Max Depth (Trees)", 2, 20, 5,
+        help="Max tree depth. With only 10 districts, keep low (3-5) to avoid overfitting.",
+    )
 
     # =========================================================================
-    # DATA LOADING
+    # DATA LOADING (cached — only reruns when data/temporal/filter settings change)
     # =========================================================================
 
     # Validate files exist
@@ -1056,125 +1731,106 @@ def main():
             st.error(f"{label} file not found: {path}")
             st.stop()
 
-    raw_data = load_data(demand_path)
-
-    supply_data = None
-    if Path(supply_path).exists():
-        try:
-            supply_data = load_active_taxis_data(supply_path)
-        except Exception:
-            pass
-
-    demo_data = load_data(demo_path)
-    district_data = load_data(district_path)
-
-    # Enrich demographics
-    enriched_grid, enriched_names = cached_enrich(
-        demo_data['demographics_grid'],
-        tuple(demo_data['feature_names']),
-    )
-    raw_feature_names = list(demo_data['feature_names'])
-
-    # Feature selection checkboxes (now that we know enriched_names)
-    # We use a container in the sidebar since we deferred this
-    with st.sidebar.container():
-        st.sidebar.markdown("**Raw Features**")
-        raw_defaults = {'AvgHousingPricePerSqM'}
-        selected_features = []
-        for fname in raw_feature_names:
-            if st.sidebar.checkbox(fname, value=(fname in raw_defaults), key=f"feat_{fname}"):
-                selected_features.append(fname)
-
-        derived_names = [n for n in enriched_names if n not in raw_feature_names]
-        if derived_names:
-            st.sidebar.markdown("**Derived Features**")
-            derived_defaults = {'GDPperCapita', 'CompPerCapita'}
-            for fname in derived_names:
-                if st.sidebar.checkbox(fname, value=(fname in derived_defaults), key=f"feat_{fname}"):
-                    selected_features.append(fname)
-
-    # Configure and compute causal fairness term
-    config = CausalFairnessConfig(
-        period_type=period_type,
-        estimation_method=estimation_method,
-        n_bins=n_bins,
-        poly_degree=gd_poly_degree,
-        min_demand=min_demand,
-        max_ratio=max_ratio,
-        include_zero_supply=include_zero_supply,
-        num_days=num_days,
-        days_filter=days_filter,
-        active_taxis_data_path=supply_path if Path(supply_path).exists() else None,
-    )
-
-    term = CausalFairnessTerm(config)
-    auxiliary_data = {'pickup_dropoff_counts': raw_data}
-    if supply_data is not None:
-        auxiliary_data['active_taxis'] = supply_data
-
-    with st.spinner("Computing causal fairness baseline..."):
-        try:
-            breakdown = term.compute_with_breakdown({}, auxiliary_data)
-        except Exception as e:
-            st.error(f"Computation failed: {e}")
-            st.exception(e)
-            st.stop()
-
-    components = breakdown['components']
-    demands = np.array(components['demands'])
-    ratios = np.array(components['ratios'])
-    expected = np.array(components['expected'])
-    keys = components['keys']
-
-    # Build master DataFrame with enriched features
-    df = prepare_demographic_analysis_data(
-        demands=demands, ratios=ratios, expected=expected, keys=keys,
-        demo_grid=enriched_grid, feature_names=enriched_names,
-        district_id_grid=district_data['district_id_grid'],
-        valid_mask=district_data['valid_mask'],
-        district_names=district_data['district_names'],
-        data_is_one_indexed=True,
-    )
+    days_filter_tuple = tuple(days_filter) if days_filter else None
+    try:
+        (
+            df, breakdown, enriched_grid, enriched_names,
+            raw_feature_names, district_data,
+        ) = cached_compute_baseline(
+            demand_path, supply_path, demo_path, district_path,
+            period_type, num_days, days_filter_tuple,
+            estimation_method, n_bins, gd_poly_degree,
+            min_demand, include_zero_supply, max_ratio_val,
+        )
+    except Exception as e:
+        st.error(f"Computation failed: {e}")
+        st.exception(e)
+        st.stop()
 
     if len(df) == 0:
         st.error("No data matched between demand observations and demographic grid.")
         st.stop()
 
-    # Get g(D) function for overlays
-    g_func = term.get_g_function()
+    # Reconstruct g_func from cached data (fast, ~ms)
+    cached_demands = np.array(breakdown['components']['demands'])
+    cached_ratios = np.array(breakdown['components']['ratios'])
+    g_func, _ = estimate_g_function(
+        cached_demands, cached_ratios,
+        method=estimation_method, n_bins=n_bins, poly_degree=gd_poly_degree,
+    )
+
+    # Feature selection checkboxes (session-state backed)
+    derived_names = [n for n in enriched_names if n not in raw_feature_names]
+    all_feature_names = list(raw_feature_names) + derived_names
+
+    # Process deferred "Apply Recommended" (must run BEFORE widget instantiation)
+    if '_apply_recommended' in st.session_state:
+        rec = st.session_state.pop('_apply_recommended')
+        for fname in all_feature_names:
+            st.session_state[f"feat_{fname}"] = (fname in rec)
+        st.session_state['feature_states_initialized'] = True
+
+    # Initialize defaults once
+    if 'feature_states_initialized' not in st.session_state:
+        raw_defaults = {'AvgHousingPricePerSqM'}
+        derived_defaults = {'GDPperCapita', 'CompPerCapita'}
+        for fname in raw_feature_names:
+            st.session_state[f"feat_{fname}"] = (fname in raw_defaults)
+        for fname in derived_names:
+            st.session_state[f"feat_{fname}"] = (fname in derived_defaults)
+        st.session_state['feature_states_initialized'] = True
+
+    with st.sidebar.container():
+        st.sidebar.markdown("**Raw Features**")
+        selected_features = []
+        for fname in raw_feature_names:
+            if st.sidebar.checkbox(fname, key=f"feat_{fname}"):
+                selected_features.append(fname)
+
+        if derived_names:
+            st.sidebar.markdown("**Derived Features**")
+            for fname in derived_names:
+                if st.sidebar.checkbox(fname, key=f"feat_{fname}"):
+                    selected_features.append(fname)
+
+    # Stale results warning
+    if 'model_features' in st.session_state:
+        if set(selected_features) != set(st.session_state['model_features']):
+            st.warning(
+                "⚠️ Features changed since last model fit. "
+                "Click **Fit Models** in the Model Training tab to update results."
+            )
 
     # Summary metrics
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Observations", f"{len(df):,}")
-    c2.metric("Districts", df['district_name'].nunique())
-    c3.metric("g(D) R²", f"{breakdown['value']:.4f}")
-    c4.metric("Selected Features", len(selected_features))
+    c1.metric("Observations", f"{len(df):,}",
+              help="Total (cell, time-period) observations after filtering.")
+    c2.metric("Districts", df['district_name'].nunique(),
+              help="Unique Shenzhen districts with demographic data.")
+    c3.metric("g(D) R²", f"{breakdown['value']:.4f}",
+              help="R² of demand-only model g(D). Higher = more variance explained by demand alone.")
+    c4.metric("Selected Features", len(selected_features),
+              help="Demographic features checked in the sidebar for model training.")
 
     # =========================================================================
     # TABS
     # =========================================================================
 
     tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
-        "🗺️ Spatial Maps",
-        "📊 District Summaries",
-        "🔬 Model Comparison",
-        "📋 Statistical Diagnostics",
-        "🧪 Feature Engineering",
-        "✅ Cross-Validation Detail",
+        "🧪 1. Feature Analysis",
+        "🔬 2. Model Training",
+        "📋 3. Diagnostics",
+        "✅ 4. Cross-Validation",
+        "🗺️ 5. Spatial Maps",
+        "📊 6. District Summaries",
     ])
 
     with tab1:
-        render_spatial_maps_tab(
-            df, enriched_grid, enriched_names,
-            district_data['valid_mask'],
-            district_data['district_id_grid'],
-            district_data['district_names'],
+        render_feature_analysis_tab(
+            df, enriched_names, raw_feature_names, selected_features,
         )
 
     with tab2:
-        render_district_summaries_tab(df, g_func, district_data['district_names'])
-
-    with tab3:
         render_model_comparison_tab(
             df, selected_features,
             poly_degree=model_poly_degree,
@@ -1182,24 +1838,50 @@ def main():
             n_estimators=n_estimators, max_depth=max_depth,
         )
 
-    with tab4:
+    with tab3:
         render_diagnostics_tab(df)
 
-    with tab5:
-        render_feature_engineering_tab(df, enriched_names, raw_feature_names, selected_features)
-
-    with tab6:
+    with tab4:
         render_cv_detail_tab(
             df, enriched_grid, enriched_names,
             district_data['valid_mask'],
             district_data['district_names'],
             g_func,
+            estimation_method=estimation_method,
+            n_bins=n_bins,
+            gd_poly_degree=gd_poly_degree,
+            model_poly_degree=model_poly_degree,
+            alpha=alpha, l1_ratio=l1_ratio,
+            n_estimators=n_estimators, max_depth=max_depth,
+            min_demand=min_demand,
+            include_zero_supply=include_zero_supply,
+            max_ratio_val=max_ratio_val,
+            period_type=period_type,
         )
+
+    with tab5:
+        render_spatial_maps_tab(
+            df, enriched_grid, enriched_names,
+            district_data['valid_mask'],
+            district_data['district_id_grid'],
+            district_data['district_names'],
+        )
+
+    with tab6:
+        render_district_summaries_tab(df, g_func, district_data['district_names'])
+
+    # Sidebar export hint
+    st.sidebar.divider()
+    st.sidebar.subheader("💾 Export")
+    if 'model_results' in st.session_state:
+        st.sidebar.success("Models fitted — export available in **Tab 4: Cross-Validation** (section 6).")
+    else:
+        st.sidebar.info("Fit models first (Tab 2) to enable export.")
 
     # Footer
     st.divider()
     st.caption(
-        "Demographic Explorer v1.0.0 | "
+        "Demographic Explorer v2.0.0 | "
         "See DEMOGRAPHIC_EXPLORER_GUIDE.md for usage instructions"
     )
 
