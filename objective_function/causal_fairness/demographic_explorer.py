@@ -548,7 +548,8 @@ def render_model_comparison_tab(
                                 default=[str(arch) for arch in default_values[:3]],
                                 key=f"hp_{mtype}_{param_name}"
                             )
-                            custom_ranges[param_name] = [eval(arch) for arch in selected_archs]
+                            import ast
+                            custom_ranges[param_name] = [ast.literal_eval(arch) for arch in selected_archs]
 
                         elif isinstance(default_values[0], float):
                             # Continuous parameter - multiselect from defaults
@@ -605,12 +606,12 @@ def render_model_comparison_tab(
                     # Run hyperparameter search
                     param_grid = hp_search_configs[mtype]
 
-                    # Progress callback for nested progress
+                    # Progress callback — bind label by value via default arg
                     search_progress_placeholder = st.empty()
 
-                    def progress_cb(current, total_combos, params):
+                    def progress_cb(current, total_combos, params, _label=label):
                         search_progress_placeholder.text(
-                            f"  → {label}: Testing {current}/{total_combos} - {params}"
+                            f"  → {_label}: Testing {current}/{total_combos} - {params}"
                         )
 
                     try:
@@ -631,22 +632,9 @@ def render_model_comparison_tab(
 
                         search_progress_placeholder.empty()
 
-                        # Use best params from search
-                        best_params = search_result['best_params']
+                        # Use best params and LODO result from search (no redundant recomputation)
                         model_result = search_result['best_model_result']
-
-                        # Run LODO with best params
-                        lodo_result = lodo_cross_validate_hp(
-                            demands=demands,
-                            ratios=ratios,
-                            demographic_features=demo_matrix,
-                            district_ids=district_ids,
-                            demo_feature_names=avail_features,
-                            model_type=mtype,
-                            poly_degree=poly_degree,
-                            use_gpu=use_gpu,
-                            **best_params,
-                        )
+                        lodo_result = search_result['best_lodo_result']
 
                         hp_search_results[label] = search_result
 
@@ -655,18 +643,20 @@ def render_model_comparison_tab(
                     except Exception as e:
                         st.error(f"Hyperparameter search failed for {label}: {e}")
                         search_progress_placeholder.empty()
-                        # Fall back to default params
-                        model_result = fit_g_dx_model(
+                        # Fall back to default params (use _hp variant for all model types)
+                        model_result = fit_g_dx_model_hp(
                             demands, ratios, demo_matrix, avail_features,
                             model_type=mtype, poly_degree=poly_degree,
+                            use_gpu=use_gpu,
                             alpha=alpha, l1_ratio=l1_ratio,
                             n_estimators=n_estimators, max_depth=max_depth,
                             hidden_layer_sizes=hidden_layer_sizes,
                         )
 
-                        lodo_result = lodo_cross_validate(
+                        lodo_result = lodo_cross_validate_hp(
                             demands, ratios, demo_matrix, district_ids, avail_features,
                             model_type=mtype, poly_degree=poly_degree,
+                            use_gpu=use_gpu,
                             alpha=alpha, l1_ratio=l1_ratio,
                             n_estimators=n_estimators, max_depth=max_depth,
                             hidden_layer_sizes=hidden_layer_sizes,
@@ -674,17 +664,19 @@ def render_model_comparison_tab(
 
                 else:
                     # Model doesn't support HP search or not configured - use defaults
-                    model_result = fit_g_dx_model(
+                    model_result = fit_g_dx_model_hp(
                         demands, ratios, demo_matrix, avail_features,
                         model_type=mtype, poly_degree=poly_degree,
+                        use_gpu=use_gpu,
                         alpha=alpha, l1_ratio=l1_ratio,
                         n_estimators=n_estimators, max_depth=max_depth,
                         hidden_layer_sizes=hidden_layer_sizes,
                     )
 
-                    lodo_result = lodo_cross_validate(
+                    lodo_result = lodo_cross_validate_hp(
                         demands, ratios, demo_matrix, district_ids, avail_features,
                         model_type=mtype, poly_degree=poly_degree,
+                        use_gpu=use_gpu,
                         alpha=alpha, l1_ratio=l1_ratio,
                         n_estimators=n_estimators, max_depth=max_depth,
                         hidden_layer_sizes=hidden_layer_sizes,
@@ -717,43 +709,24 @@ def render_model_comparison_tab(
             for i, (label, mtype) in enumerate(models_to_fit.items()):
                 status.update(label=f"Fitting {label}...")
 
-                # Fit on full data
-                if mtype in ['xgboost', 'pytorch_nn']:
-                    # Use new GPU-enabled function
-                    model_result = fit_g_dx_model_hp(
-                        demands, ratios, demo_matrix, avail_features,
-                        model_type=mtype, poly_degree=poly_degree,
-                        use_gpu=use_gpu,
-                        alpha=alpha, l1_ratio=l1_ratio,
-                        n_estimators=n_estimators, max_depth=max_depth,
-                        hidden_layer_sizes=hidden_layer_sizes,
-                    )
+                # Use unified _hp function for all model types (handles GPU)
+                model_result = fit_g_dx_model_hp(
+                    demands, ratios, demo_matrix, avail_features,
+                    model_type=mtype, poly_degree=poly_degree,
+                    use_gpu=use_gpu,
+                    alpha=alpha, l1_ratio=l1_ratio,
+                    n_estimators=n_estimators, max_depth=max_depth,
+                    hidden_layer_sizes=hidden_layer_sizes,
+                )
 
-                    lodo_result = lodo_cross_validate_hp(
-                        demands, ratios, demo_matrix, district_ids, avail_features,
-                        model_type=mtype, poly_degree=poly_degree,
-                        use_gpu=use_gpu,
-                        alpha=alpha, l1_ratio=l1_ratio,
-                        n_estimators=n_estimators, max_depth=max_depth,
-                        hidden_layer_sizes=hidden_layer_sizes,
-                    )
-                else:
-                    # Use original function
-                    model_result = fit_g_dx_model(
-                        demands, ratios, demo_matrix, avail_features,
-                        model_type=mtype, poly_degree=poly_degree,
-                        alpha=alpha, l1_ratio=l1_ratio,
-                        n_estimators=n_estimators, max_depth=max_depth,
-                        hidden_layer_sizes=hidden_layer_sizes,
-                    )
-
-                    lodo_result = lodo_cross_validate(
-                        demands, ratios, demo_matrix, district_ids, avail_features,
-                        model_type=mtype, poly_degree=poly_degree,
-                        alpha=alpha, l1_ratio=l1_ratio,
-                        n_estimators=n_estimators, max_depth=max_depth,
-                        hidden_layer_sizes=hidden_layer_sizes,
-                    )
+                lodo_result = lodo_cross_validate_hp(
+                    demands, ratios, demo_matrix, district_ids, avail_features,
+                    model_type=mtype, poly_degree=poly_degree,
+                    use_gpu=use_gpu,
+                    alpha=alpha, l1_ratio=l1_ratio,
+                    n_estimators=n_estimators, max_depth=max_depth,
+                    hidden_layer_sizes=hidden_layer_sizes,
+                )
 
                 # Diagnostics (OLS-based, only for linear models)
                 diag = None
@@ -950,7 +923,7 @@ def _display_model_results(results: Dict, df: pd.DataFrame):
                           help="Akaike Information Criterion. Lower = better fit-complexity trade-off.")
 
             # Neural network architecture summary
-            if mr.get('model_type') == 'neural_network' and hasattr(mr.get('model'), 'hidden_layer_sizes'):
+            if mr.get('model_type') in ('neural_network', 'pytorch_nn') and hasattr(mr.get('model'), 'hidden_layer_sizes'):
                 nn_model = mr['model']
                 layer_sizes = nn_model.hidden_layer_sizes
                 if isinstance(layer_sizes, int):
@@ -960,7 +933,10 @@ def _display_model_results(results: Dict, df: pd.DataFrame):
                     + [str(s) for s in layer_sizes]
                     + ["1"]
                 )
-                st.markdown(f"**Architecture:** {arch_str}")
+                device_label = ""
+                if mr.get('model_type') == 'pytorch_nn' and hasattr(nn_model, 'device'):
+                    device_label = f" (device: {nn_model.device})"
+                st.markdown(f"**Architecture:** {arch_str}{device_label}")
                 st.markdown(f"**Iterations:** {nn_model.n_iter_}")
 
             # Coefficient or importance chart

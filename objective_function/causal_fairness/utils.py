@@ -2976,11 +2976,10 @@ class PyTorchNeuralNetwork:
         self.n_iter_no_change = n_iter_no_change
         self.random_state = random_state
 
+        import torch
         if device is None:
-            import torch
             self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         else:
-            import torch
             self.device = torch.device(device)
 
         self.model_ = None
@@ -3063,7 +3062,9 @@ class PyTorchNeuralNetwork:
         )
 
         # Training loop
+        import copy
         best_val_loss = float('inf')
+        best_state_dict = None
         patience_counter = 0
 
         for epoch in range(self.max_iter):
@@ -3076,7 +3077,7 @@ class PyTorchNeuralNetwork:
                 loss.backward()
                 optimizer.step()
 
-            # Validation
+            # Validation + best-model checkpointing
             if self.early_stopping:
                 self.model_.eval()
                 with torch.no_grad():
@@ -3085,6 +3086,7 @@ class PyTorchNeuralNetwork:
 
                 if val_loss < best_val_loss:
                     best_val_loss = val_loss
+                    best_state_dict = copy.deepcopy(self.model_.state_dict())
                     patience_counter = 0
                 else:
                     patience_counter += 1
@@ -3095,6 +3097,10 @@ class PyTorchNeuralNetwork:
 
         if self.n_iter_ == 0:
             self.n_iter_ = self.max_iter
+
+        # Restore best weights (not last weights after patience exhaustion)
+        if best_state_dict is not None:
+            self.model_.load_state_dict(best_state_dict)
 
         # Store weights for compatibility
         self.coefs_ = []
@@ -3182,6 +3188,11 @@ def get_hyperparameter_ranges(model_type: str) -> Dict[str, Any]:
             'learning_rate': [0.0001, 0.0005, 0.001, 0.005, 0.01],
             'alpha': [0.0001, 0.001, 0.01, 0.1],
         },
+        'pytorch_nn': {
+            'hidden_layer_sizes': [(32,), (64,), (128,), (64, 32), (128, 64), (64, 32, 16)],
+            'learning_rate': [0.0001, 0.0005, 0.001, 0.005, 0.01],
+            'alpha': [0.0001, 0.001, 0.01, 0.1],
+        },
     }
 
     return ranges.get(model_type, {})
@@ -3246,16 +3257,25 @@ def hyperparameter_search(
             dict(zip(param_names, vals)) for vals in combinations
         ]
     elif search_method == 'random':
-        # Random search
+        # Random search — deduplicate to avoid wasting time
+        seen = set()
         param_combinations = []
-        param_names = list(param_grid.keys())
+        param_names = sorted(param_grid.keys())
 
-        for _ in range(n_random_samples):
+        # Cap attempts to avoid infinite loop on tiny search spaces
+        max_attempts = n_random_samples * 5
+        attempts = 0
+        while len(param_combinations) < n_random_samples and attempts < max_attempts:
+            attempts += 1
             combo = {
                 name: random.choice(param_grid[name])
                 for name in param_names
             }
-            param_combinations.append(combo)
+            # Hashable key for dedup (handles tuples in values)
+            key = tuple(sorted((k, str(v)) for k, v in combo.items()))
+            if key not in seen:
+                seen.add(key)
+                param_combinations.append(combo)
     else:
         raise ValueError(f"Unknown search_method: {search_method}")
 
@@ -3263,7 +3283,7 @@ def hyperparameter_search(
     all_results = []
     best_score = -float('inf')
     best_params = None
-    best_model_result = None
+    best_lodo_result = None
 
     total_combinations = len(param_combinations)
 
@@ -3273,7 +3293,7 @@ def hyperparameter_search(
             progress_callback(i + 1, total_combinations, params)
 
         try:
-            # Build kwargs for lodo_cross_validate
+            # Build kwargs for lodo_cross_validate_hp — pass all params through
             cv_kwargs = {
                 'demands': demands,
                 'ratios': ratios,
@@ -3283,35 +3303,9 @@ def hyperparameter_search(
                 'model_type': model_type,
                 'poly_degree': poly_degree,
                 'include_interactions': include_interactions,
+                'use_gpu': use_gpu,
             }
-
-            # Add model-specific parameters
-            if model_type in ('ridge', 'lasso', 'elasticnet'):
-                cv_kwargs['alpha'] = params.get('alpha', 1.0)
-                if model_type == 'elasticnet':
-                    cv_kwargs['l1_ratio'] = params.get('l1_ratio', 0.5)
-
-            elif model_type in ('random_forest', 'gradient_boosting', 'xgboost'):
-                cv_kwargs['n_estimators'] = params.get('n_estimators', 100)
-                cv_kwargs['max_depth'] = params.get('max_depth', 5)
-
-                if model_type == 'gradient_boosting' or model_type == 'xgboost':
-                    cv_kwargs['learning_rate'] = params.get('learning_rate', 0.1)
-                    cv_kwargs['subsample'] = params.get('subsample', 1.0)
-
-                if model_type == 'xgboost':
-                    cv_kwargs['colsample_bytree'] = params.get('colsample_bytree', 1.0)
-                    cv_kwargs['use_gpu'] = use_gpu
-
-                if model_type == 'random_forest':
-                    cv_kwargs['min_samples_split'] = params.get('min_samples_split', 2)
-                    cv_kwargs['min_samples_leaf'] = params.get('min_samples_leaf', 1)
-
-            elif model_type == 'neural_network':
-                cv_kwargs['hidden_layer_sizes'] = params.get('hidden_layer_sizes', (64, 32))
-                cv_kwargs['alpha'] = params.get('alpha', 0.0001)
-                cv_kwargs['learning_rate'] = params.get('learning_rate', 0.001)
-                cv_kwargs['use_gpu'] = use_gpu
+            cv_kwargs.update(params)
 
             # Run cross-validation
             lodo_result = lodo_cross_validate_hp(**cv_kwargs)
@@ -3324,22 +3318,11 @@ def hyperparameter_search(
             }
             all_results.append(result_entry)
 
-            # Track best
+            # Track best — only store the LODO result, not a redundant full fit
             if score > best_score:
                 best_score = score
                 best_params = params.copy()
-                # Fit final model with best params to get full result
-                best_model_result = fit_g_dx_model_hp(
-                    demands=demands,
-                    ratios=ratios,
-                    demographic_features=demographic_features,
-                    demo_feature_names=demo_feature_names,
-                    model_type=model_type,
-                    poly_degree=poly_degree,
-                    include_interactions=include_interactions,
-                    use_gpu=use_gpu,
-                    **params,
-                )
+                best_lodo_result = lodo_result
 
         except Exception as e:
             # Log failed configuration
@@ -3350,11 +3333,27 @@ def hyperparameter_search(
             }
             all_results.append(result_entry)
 
+    # Fit final model on full data only once, with the best params
+    best_model_result = None
+    if best_params is not None:
+        best_model_result = fit_g_dx_model_hp(
+            demands=demands,
+            ratios=ratios,
+            demographic_features=demographic_features,
+            demo_feature_names=demo_feature_names,
+            model_type=model_type,
+            poly_degree=poly_degree,
+            include_interactions=include_interactions,
+            use_gpu=use_gpu,
+            **best_params,
+        )
+
     return {
         'best_params': best_params,
         'best_score': best_score,
         'all_results': all_results,
         'best_model_result': best_model_result,
+        'best_lodo_result': best_lodo_result,
         'n_combinations_tried': len(param_combinations),
     }
 
@@ -3463,7 +3462,7 @@ def fit_g_dx_model_hp(
                 colsample_bytree=colsample_bytree,
                 device=device,
                 random_state=42,
-                tree_method='hist' if device == 'cpu' else 'gpu_hist',
+                tree_method='hist',
             )
         except ImportError:
             raise ValueError("XGBoost not installed. Install with: pip install xgboost")
@@ -3539,11 +3538,13 @@ def fit_g_dx_model_hp(
         if hasattr(model, 'coefs_'):
             n_params = sum(w.size for w in model.coefs_) + sum(b.size for b in model.intercepts_)
         else:
-            # Estimate for PyTorch model
-            n_params = X.shape[1]
-            for size in hidden_layer_sizes:
-                n_params = (n_params + 1) * size
-            n_params += hidden_layer_sizes[-1] + 1 if hidden_layer_sizes else X.shape[1] + 1
+            # Count parameters for PyTorch model: sum of (in * out + out) per layer
+            hidden_layer_sizes = hyperparams.get('hidden_layer_sizes', (64, 32))
+            layer_sizes = [X.shape[1]] + list(hidden_layer_sizes) + [1]
+            n_params = sum(
+                layer_sizes[i] * layer_sizes[i + 1] + layer_sizes[i + 1]
+                for i in range(len(layer_sizes) - 1)
+            )
     else:
         n_params = X.shape[1] + 1
 
