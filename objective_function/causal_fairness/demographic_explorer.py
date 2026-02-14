@@ -58,6 +58,11 @@ from utils import (
     compute_option_a1_demographic_attribution,
     compute_option_b_demographic_disparity,
     compute_option_c_partial_r_squared,
+    check_gpu_availability,
+    get_hyperparameter_ranges,
+    hyperparameter_search,
+    fit_g_dx_model_hp,
+    lodo_cross_validate_hp,
 )
 
 # District colors (D3 qualitative palette)
@@ -407,7 +412,13 @@ MODEL_TYPES = {
     'OLS + Interactions': 'ols_interactions',
     'Random Forest': 'random_forest',
     'Gradient Boosting': 'gradient_boosting',
+    'XGBoost': 'xgboost',
+    'Neural Network (sklearn)': 'neural_network',
+    'Neural Network (PyTorch)': 'pytorch_nn',
 }
+
+# Hyperparameter search-enabled models
+HP_SEARCH_MODELS = ['ridge', 'lasso', 'elasticnet', 'random_forest', 'gradient_boosting', 'xgboost', 'neural_network', 'pytorch_nn']
 
 
 def render_model_comparison_tab(
@@ -418,6 +429,7 @@ def render_model_comparison_tab(
     l1_ratio: float,
     n_estimators: int,
     max_depth: int,
+    hidden_layer_sizes: tuple = (64, 32),
 ):
     """Render model comparison tab — fit and compare g(D, x) models."""
     st.header("Model Comparison")
@@ -451,58 +463,356 @@ def render_model_comparison_tab(
         st.info("Select at least one model above.")
         return
 
+    # =========================================================================
+    # HYPERPARAMETER SEARCH SECTION
+    # =========================================================================
+    st.divider()
+    st.subheader("🔍 Hyperparameter Search (Optional)")
+
+    # Check GPU availability
+    gpu_info = check_gpu_availability()
+
+    col_gpu1, col_gpu2 = st.columns(2)
+    with col_gpu1:
+        if gpu_info['gpu_available']:
+            st.success(f"✅ GPU Available: {gpu_info.get('gpu_name', 'CUDA Device')}")
+        else:
+            st.info("ℹ️ GPU Not Available - using CPU")
+
+    with col_gpu2:
+        use_gpu = st.checkbox(
+            "Enable GPU Acceleration",
+            value=gpu_info['gpu_available'],
+            disabled=not gpu_info['gpu_available'],
+            help="Use GPU for training when available (PyTorch NN, XGBoost)"
+        )
+
+    enable_hp_search = st.checkbox(
+        "Enable Hyperparameter Search",
+        value=False,
+        help="Search for optimal hyperparameters instead of using fixed values from sidebar"
+    )
+
+    hp_search_configs = {}
+
+    if enable_hp_search:
+        st.markdown("Configure hyperparameter search for selected models:")
+
+        # Search method
+        search_method = st.radio(
+            "Search Method",
+            ["grid", "random"],
+            index=0,
+            help="Grid search tries all combinations (exhaustive). Random search samples N random combinations (faster)."
+        )
+
+        if search_method == "random":
+            n_random_samples = st.slider(
+                "Number of Random Samples",
+                min_value=10,
+                max_value=100,
+                value=20,
+                step=5,
+                help="How many random hyperparameter combinations to try"
+            )
+        else:
+            n_random_samples = 20
+
+        # Per-model configuration
+        search_models = {label: mtype for label, mtype in models_to_fit.items() if mtype in HP_SEARCH_MODELS}
+
+        if not search_models:
+            st.warning("None of the selected models support hyperparameter search. Select Ridge, Lasso, ElasticNet, Random Forest, Gradient Boosting, XGBoost, or Neural Network models.")
+        else:
+            st.markdown(f"**{len(search_models)} model(s) selected for hyperparameter search:**")
+
+            for label, mtype in search_models.items():
+                with st.expander(f"⚙️ {label} - Configure Search Space"):
+                    default_ranges = get_hyperparameter_ranges(mtype)
+
+                    if not default_ranges:
+                        st.info(f"No default ranges for {mtype}")
+                        continue
+
+                    custom_ranges = {}
+
+                    for param_name, default_values in default_ranges.items():
+                        st.markdown(f"**{param_name}**")
+
+                        # Different UI based on parameter type
+                        if param_name == 'hidden_layer_sizes':
+                            # Special handling for neural network architecture
+                            selected_archs = st.multiselect(
+                                f"Architectures to try",
+                                options=[str(arch) for arch in default_values],
+                                default=[str(arch) for arch in default_values[:3]],
+                                key=f"hp_{mtype}_{param_name}"
+                            )
+                            custom_ranges[param_name] = [eval(arch) for arch in selected_archs]
+
+                        elif isinstance(default_values[0], float):
+                            # Continuous parameter - multiselect from defaults
+                            selected = st.multiselect(
+                                f"Values to try",
+                                options=default_values,
+                                default=default_values[:min(3, len(default_values))],
+                                key=f"hp_{mtype}_{param_name}",
+                                help=f"Default range: {default_values}"
+                            )
+                            custom_ranges[param_name] = selected if selected else default_values[:3]
+
+                        else:
+                            # Integer or categorical - multiselect
+                            selected = st.multiselect(
+                                f"Values to try",
+                                options=default_values,
+                                default=default_values[:min(4, len(default_values))],
+                                key=f"hp_{mtype}_{param_name}",
+                                help=f"Default range: {default_values}"
+                            )
+                            custom_ranges[param_name] = selected if selected else default_values[:4]
+
+                    hp_search_configs[mtype] = custom_ranges
+
+                    # Show total combinations for this model
+                    n_combinations = 1
+                    for vals in custom_ranges.values():
+                        n_combinations *= len(vals)
+
+                    if search_method == "grid":
+                        st.caption(f"Total combinations: {n_combinations}")
+                    else:
+                        st.caption(f"Will sample {min(n_random_samples, n_combinations)} combinations")
+
+    st.divider()
+
     # Fit models button
-    if st.button("Fit Models", type="primary"):
+    fit_button_label = "🔍 Run Hyperparameter Search" if enable_hp_search else "Fit Models"
+    if st.button(fit_button_label, type="primary"):
         results = {}
+        hp_search_results = {}  # Store hyperparameter search details
         progress = st.progress(0)
         status = st.status("Fitting models...", expanded=True)
 
         total = len(models_to_fit)
-        for i, (label, mtype) in enumerate(models_to_fit.items()):
-            status.update(label=f"Fitting {label}...")
 
-            # Fit on full data
-            model_result = fit_g_dx_model(
-                demands, ratios, demo_matrix, avail_features,
-                model_type=mtype, poly_degree=poly_degree,
-                alpha=alpha, l1_ratio=l1_ratio,
-                n_estimators=n_estimators, max_depth=max_depth,
-            )
+        if enable_hp_search:
+            # HYPERPARAMETER SEARCH MODE
+            for i, (label, mtype) in enumerate(models_to_fit.items()):
+                status.update(label=f"Searching {label}...")
 
-            # LODO cross-validation
-            lodo_result = lodo_cross_validate(
-                demands, ratios, demo_matrix, district_ids, avail_features,
-                model_type=mtype, poly_degree=poly_degree,
-                alpha=alpha, l1_ratio=l1_ratio,
-                n_estimators=n_estimators, max_depth=max_depth,
-            )
+                if mtype in hp_search_configs and mtype in HP_SEARCH_MODELS:
+                    # Run hyperparameter search
+                    param_grid = hp_search_configs[mtype]
 
-            # Diagnostics (OLS-based, only for linear models)
-            diag = None
-            is_linear = mtype in ('ols', 'ridge', 'lasso', 'elasticnet', 'ols_interactions')
-            if is_linear:
-                try:
-                    diag = compute_model_diagnostics(
+                    # Progress callback for nested progress
+                    search_progress_placeholder = st.empty()
+
+                    def progress_cb(current, total_combos, params):
+                        search_progress_placeholder.text(
+                            f"  → {label}: Testing {current}/{total_combos} - {params}"
+                        )
+
+                    try:
+                        search_result = hyperparameter_search(
+                            demands=demands,
+                            ratios=ratios,
+                            demographic_features=demo_matrix,
+                            district_ids=district_ids,
+                            demo_feature_names=avail_features,
+                            model_type=mtype,
+                            param_grid=param_grid,
+                            poly_degree=poly_degree,
+                            search_method=search_method,
+                            n_random_samples=n_random_samples,
+                            use_gpu=use_gpu,
+                            progress_callback=progress_cb,
+                        )
+
+                        search_progress_placeholder.empty()
+
+                        # Use best params from search
+                        best_params = search_result['best_params']
+                        model_result = search_result['best_model_result']
+
+                        # Run LODO with best params
+                        lodo_result = lodo_cross_validate_hp(
+                            demands=demands,
+                            ratios=ratios,
+                            demographic_features=demo_matrix,
+                            district_ids=district_ids,
+                            demo_feature_names=avail_features,
+                            model_type=mtype,
+                            poly_degree=poly_degree,
+                            use_gpu=use_gpu,
+                            **best_params,
+                        )
+
+                        hp_search_results[label] = search_result
+
+                        status.update(label=f"✅ {label}: Best LODO R² = {search_result['best_score']:.4f}")
+
+                    except Exception as e:
+                        st.error(f"Hyperparameter search failed for {label}: {e}")
+                        search_progress_placeholder.empty()
+                        # Fall back to default params
+                        model_result = fit_g_dx_model(
+                            demands, ratios, demo_matrix, avail_features,
+                            model_type=mtype, poly_degree=poly_degree,
+                            alpha=alpha, l1_ratio=l1_ratio,
+                            n_estimators=n_estimators, max_depth=max_depth,
+                            hidden_layer_sizes=hidden_layer_sizes,
+                        )
+
+                        lodo_result = lodo_cross_validate(
+                            demands, ratios, demo_matrix, district_ids, avail_features,
+                            model_type=mtype, poly_degree=poly_degree,
+                            alpha=alpha, l1_ratio=l1_ratio,
+                            n_estimators=n_estimators, max_depth=max_depth,
+                            hidden_layer_sizes=hidden_layer_sizes,
+                        )
+
+                else:
+                    # Model doesn't support HP search or not configured - use defaults
+                    model_result = fit_g_dx_model(
                         demands, ratios, demo_matrix, avail_features,
-                        poly_degree=poly_degree,
-                        include_interactions=(mtype == 'ols_interactions'),
+                        model_type=mtype, poly_degree=poly_degree,
+                        alpha=alpha, l1_ratio=l1_ratio,
+                        n_estimators=n_estimators, max_depth=max_depth,
+                        hidden_layer_sizes=hidden_layer_sizes,
                     )
-                except Exception:
-                    pass
 
-            results[label] = {
-                'model_result': model_result,
-                'lodo_result': lodo_result,
-                'diagnostics': diag,
-                'model_type': mtype,
-            }
+                    lodo_result = lodo_cross_validate(
+                        demands, ratios, demo_matrix, district_ids, avail_features,
+                        model_type=mtype, poly_degree=poly_degree,
+                        alpha=alpha, l1_ratio=l1_ratio,
+                        n_estimators=n_estimators, max_depth=max_depth,
+                        hidden_layer_sizes=hidden_layer_sizes,
+                    )
 
-            progress.progress((i + 1) / total)
+                # Diagnostics (OLS-based, only for linear models)
+                diag = None
+                is_linear = mtype in ('ols', 'ridge', 'lasso', 'elasticnet', 'ols_interactions')
+                if is_linear:
+                    try:
+                        diag = compute_model_diagnostics(
+                            demands, ratios, demo_matrix, avail_features,
+                            poly_degree=poly_degree,
+                            include_interactions=(mtype == 'ols_interactions'),
+                        )
+                    except Exception:
+                        pass
+
+                results[label] = {
+                    'model_result': model_result,
+                    'lodo_result': lodo_result,
+                    'diagnostics': diag,
+                    'model_type': mtype,
+                }
+
+                progress.progress((i + 1) / total)
+
+        else:
+            # STANDARD MODE (no hyperparameter search)
+            for i, (label, mtype) in enumerate(models_to_fit.items()):
+                status.update(label=f"Fitting {label}...")
+
+                # Fit on full data
+                if mtype in ['xgboost', 'pytorch_nn']:
+                    # Use new GPU-enabled function
+                    model_result = fit_g_dx_model_hp(
+                        demands, ratios, demo_matrix, avail_features,
+                        model_type=mtype, poly_degree=poly_degree,
+                        use_gpu=use_gpu,
+                        alpha=alpha, l1_ratio=l1_ratio,
+                        n_estimators=n_estimators, max_depth=max_depth,
+                        hidden_layer_sizes=hidden_layer_sizes,
+                    )
+
+                    lodo_result = lodo_cross_validate_hp(
+                        demands, ratios, demo_matrix, district_ids, avail_features,
+                        model_type=mtype, poly_degree=poly_degree,
+                        use_gpu=use_gpu,
+                        alpha=alpha, l1_ratio=l1_ratio,
+                        n_estimators=n_estimators, max_depth=max_depth,
+                        hidden_layer_sizes=hidden_layer_sizes,
+                    )
+                else:
+                    # Use original function
+                    model_result = fit_g_dx_model(
+                        demands, ratios, demo_matrix, avail_features,
+                        model_type=mtype, poly_degree=poly_degree,
+                        alpha=alpha, l1_ratio=l1_ratio,
+                        n_estimators=n_estimators, max_depth=max_depth,
+                        hidden_layer_sizes=hidden_layer_sizes,
+                    )
+
+                    lodo_result = lodo_cross_validate(
+                        demands, ratios, demo_matrix, district_ids, avail_features,
+                        model_type=mtype, poly_degree=poly_degree,
+                        alpha=alpha, l1_ratio=l1_ratio,
+                        n_estimators=n_estimators, max_depth=max_depth,
+                        hidden_layer_sizes=hidden_layer_sizes,
+                    )
+
+                # Diagnostics (OLS-based, only for linear models)
+                diag = None
+                is_linear = mtype in ('ols', 'ridge', 'lasso', 'elasticnet', 'ols_interactions')
+                if is_linear:
+                    try:
+                        diag = compute_model_diagnostics(
+                            demands, ratios, demo_matrix, avail_features,
+                            poly_degree=poly_degree,
+                            include_interactions=(mtype == 'ols_interactions'),
+                        )
+                    except Exception:
+                        pass
+
+                results[label] = {
+                    'model_result': model_result,
+                    'lodo_result': lodo_result,
+                    'diagnostics': diag,
+                    'model_type': mtype,
+                }
+
+                progress.progress((i + 1) / total)
 
         status.update(label="All models fitted!", state="complete")
         st.session_state['model_results'] = results
         st.session_state['model_features'] = avail_features
         st.session_state['model_poly_degree'] = poly_degree
+        st.session_state['hp_search_results'] = hp_search_results if enable_hp_search else {}
+
+        # Display hyperparameter search summary
+        if enable_hp_search and hp_search_results:
+            st.subheader("🎯 Hyperparameter Search Results")
+            for label, search_res in hp_search_results.items():
+                with st.expander(f"{label} - Best Params"):
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.metric("Best LODO R²", f"{search_res['best_score']:.4f}")
+                        st.metric("Combinations Tried", search_res['n_combinations_tried'])
+                    with col2:
+                        st.json(search_res['best_params'])
+
+                    # Show top 5 configurations
+                    sorted_results = sorted(
+                        search_res['all_results'],
+                        key=lambda x: x.get('lodo_r2', -1),
+                        reverse=True
+                    )[:5]
+
+                    if sorted_results:
+                        st.markdown("**Top 5 Configurations:**")
+                        top_df = pd.DataFrame([
+                            {
+                                'Rank': i+1,
+                                'LODO R²': r['lodo_r2'],
+                                **r['params']
+                            }
+                            for i, r in enumerate(sorted_results)
+                        ])
+                        st.dataframe(top_df, use_container_width=True, hide_index=True)
 
     # Display results
     if 'model_results' not in st.session_state:
@@ -515,14 +825,24 @@ def render_model_comparison_tab(
 
 def _display_model_results(results: Dict, df: pd.DataFrame):
     """Display model comparison results with color coding and auto-identification."""
+    # Check if hyperparameter search was used
+    hp_search_results = st.session_state.get('hp_search_results', {})
+
     # Build summary table
     summary_rows = []
     for label, r in results.items():
         mr = r['model_result']
         lr = r['lodo_result']
         diag = r.get('diagnostics')
+
+        # Add hyperparameter info if available
+        hp_info = ""
+        if label in hp_search_results:
+            best_params = hp_search_results[label]['best_params']
+            hp_info = " 🎯"  # Indicator that this used HP search
+
         row = {
-            'Model': label,
+            'Model': label + hp_info,
             'Train R²': mr['r2_train'],
             'LODO R²': lr['lodo_r2'],
             'Overfit Gap': mr['r2_train'] - lr['lodo_r2'],
@@ -612,6 +932,11 @@ def _display_model_results(results: Dict, df: pd.DataFrame):
             mr = r['model_result']
             lr = r['lodo_result']
 
+            # Show hyperparameters if available
+            if label in hp_search_results:
+                st.info(f"🎯 Optimized via hyperparameter search ({hp_search_results[label]['n_combinations_tried']} combinations)")
+                st.json(hp_search_results[label]['best_params'])
+
             # Metrics row
             c1, c2, c3, c4 = st.columns(4)
             c1.metric("Train R²", f"{mr['r2_train']:.4f}",
@@ -623,6 +948,20 @@ def _display_model_results(results: Dict, df: pd.DataFrame):
             if r.get('diagnostics'):
                 c4.metric("AIC", f"{r['diagnostics']['aic']:.0f}",
                           help="Akaike Information Criterion. Lower = better fit-complexity trade-off.")
+
+            # Neural network architecture summary
+            if mr.get('model_type') == 'neural_network' and hasattr(mr.get('model'), 'hidden_layer_sizes'):
+                nn_model = mr['model']
+                layer_sizes = nn_model.hidden_layer_sizes
+                if isinstance(layer_sizes, int):
+                    layer_sizes = (layer_sizes,)
+                arch_str = " → ".join(
+                    [str(nn_model.n_features_in_)]
+                    + [str(s) for s in layer_sizes]
+                    + ["1"]
+                )
+                st.markdown(f"**Architecture:** {arch_str}")
+                st.markdown(f"**Iterations:** {nn_model.n_iter_}")
 
             # Coefficient or importance chart
             if mr['coefficients'] is not None:
@@ -1217,6 +1556,7 @@ def render_export_config(
     l1_ratio: float,
     n_estimators: int,
     max_depth: int,
+    hidden_layer_sizes: tuple = (64, 32),
     min_demand: int,
     include_zero_supply: bool,
     max_ratio_val: float,
@@ -1275,6 +1615,7 @@ def render_export_config(
             "l1_ratio": l1_ratio,
             "n_estimators": n_estimators if "forest" in model_type or "gradient" in model_type or "rf" in model_type or "gb" in model_type else None,
             "max_depth": max_depth if "forest" in model_type or "gradient" in model_type or "rf" in model_type or "gb" in model_type else None,
+            "hidden_layer_sizes": list(hidden_layer_sizes) if "neural" in model_type else None,
         },
         "baseline_config": {
             "estimation_method": estimation_method,
@@ -1375,6 +1716,7 @@ def render_cv_detail_tab(
     l1_ratio: float = 0.5,
     n_estimators: int = 100,
     max_depth: int = 3,
+    hidden_layer_sizes: tuple = (64, 32),
     min_demand: int = 1,
     include_zero_supply: bool = False,
     max_ratio_val: float = 0.0,
@@ -1588,6 +1930,7 @@ def render_cv_detail_tab(
         gd_poly_degree=gd_poly_degree, model_poly_degree=model_poly_degree,
         alpha=alpha, l1_ratio=l1_ratio,
         n_estimators=n_estimators, max_depth=max_depth,
+        hidden_layer_sizes=hidden_layer_sizes,
         min_demand=min_demand, include_zero_supply=include_zero_supply,
         max_ratio_val=max_ratio_val, period_type=period_type,
     )
@@ -1672,7 +2015,7 @@ def main():
     st.sidebar.subheader("📈 Baseline g(D)")
     estimation_method = st.sidebar.selectbox(
         "g(D) Method", ["binning", "polynomial", "isotonic", "lowess", "linear"],
-        index=0,
+        index=2,
         help="Method for estimating g(D) = E[Y|D]. Binning is most robust. Polynomial can overfit with high degree.",
     )
     n_bins = st.sidebar.slider("N Bins (binning)", 3, 30, 10,
@@ -1720,6 +2063,23 @@ def main():
     max_depth = st.sidebar.slider("Max Depth (Trees)", 2, 20, 5,
         help="Max tree depth. With only 10 districts, keep low (3-5) to avoid overfitting.",
     )
+    nn_layers_str = st.sidebar.text_input(
+        "NN Hidden Layers",
+        value="64, 32",
+        help="Comma-separated list of neurons per hidden layer. "
+             "E.g. '64, 32' = 2 layers with 64 and 32 neurons. "
+             "'10, 5, 2' = 3 layers with 10, 5, and 2 neurons.",
+    )
+    # Parse hidden layer sizes from user input
+    try:
+        hidden_layer_sizes = tuple(
+            int(x.strip()) for x in nn_layers_str.split(",") if x.strip()
+        )
+        if not hidden_layer_sizes or any(s < 1 for s in hidden_layer_sizes):
+            raise ValueError
+    except (ValueError, TypeError):
+        hidden_layer_sizes = (64, 32)
+        st.sidebar.warning("Invalid NN layers format. Using default (64, 32).")
 
     # =========================================================================
     # DATA LOADING (cached — only reruns when data/temporal/filter settings change)
@@ -1836,6 +2196,7 @@ def main():
             poly_degree=model_poly_degree,
             alpha=alpha, l1_ratio=l1_ratio,
             n_estimators=n_estimators, max_depth=max_depth,
+            hidden_layer_sizes=hidden_layer_sizes,
         )
 
     with tab3:
@@ -1853,6 +2214,7 @@ def main():
             model_poly_degree=model_poly_degree,
             alpha=alpha, l1_ratio=l1_ratio,
             n_estimators=n_estimators, max_depth=max_depth,
+            hidden_layer_sizes=hidden_layer_sizes,
             min_demand=min_demand,
             include_zero_supply=include_zero_supply,
             max_ratio_val=max_ratio_val,

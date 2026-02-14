@@ -2529,26 +2529,29 @@ def fit_g_dx_model(
     l1_ratio: float = 0.5,
     n_estimators: int = 100,
     max_depth: int = 5,
+    hidden_layer_sizes: tuple = (64, 32),
 ) -> Dict[str, Any]:
     """
     Fit a g(D, x) model and return results + diagnostics.
 
     Supported model_type values:
       "ols", "ridge", "lasso", "elasticnet",
-      "ols_interactions", "random_forest", "gradient_boosting"
+      "ols_interactions", "random_forest", "gradient_boosting",
+      "neural_network"
 
     Args:
         demands: (n,) demand array
         ratios: (n,) service ratio array Y = S/D
         demographic_features: (n, p) raw demographic features
         demo_feature_names: p feature names
-        model_type: one of the 7 supported types
+        model_type: one of the 8 supported types
         poly_degree: degree of polynomial demand features
         include_interactions: force interaction terms
-        alpha: regularization strength (ridge/lasso/elasticnet)
+        alpha: regularization strength (ridge/lasso/elasticnet/neural_network)
         l1_ratio: L1 ratio for elasticnet (0=ridge, 1=lasso)
         n_estimators: number of trees (RF/GB)
         max_depth: max tree depth (RF/GB)
+        hidden_layer_sizes: tuple of ints defining NN hidden layers (neural_network)
 
     Returns:
         Dict with model, predict_fn, r2_train, residuals, feature_names,
@@ -2556,6 +2559,7 @@ def fit_g_dx_model(
     """
     from sklearn.linear_model import LinearRegression, Ridge, Lasso, ElasticNet
     from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
+    from sklearn.neural_network import MLPRegressor
 
     use_interactions = include_interactions or model_type == "ols_interactions"
 
@@ -2578,6 +2582,11 @@ def fit_g_dx_model(
         ),
         "gradient_boosting": GradientBoostingRegressor(
             n_estimators=n_estimators, max_depth=max_depth, random_state=42,
+        ),
+        "neural_network": MLPRegressor(
+            hidden_layer_sizes=hidden_layer_sizes, alpha=alpha,
+            max_iter=1000, random_state=42, early_stopping=True,
+            validation_fraction=0.1, n_iter_no_change=20,
         ),
     }
 
@@ -2613,12 +2622,17 @@ def fit_g_dx_model(
 
     if is_linear:
         coefficients = {name: float(coef) for name, coef in zip(feat_names, model.coef_)}
-    else:
+    elif hasattr(model, 'feature_importances_'):
         feature_importances = {
             name: float(imp) for name, imp in zip(feat_names, model.feature_importances_)
         }
+    # Neural networks: no direct coefficients or importances
 
-    n_params = X.shape[1] + 1  # features + intercept
+    if model_type == "neural_network":
+        # Count actual NN parameters: weights + biases across all layers
+        n_params = sum(w.size for w in model.coefs_) + sum(b.size for b in model.intercepts_)
+    else:
+        n_params = X.shape[1] + 1  # features + intercept
 
     return {
         'model': model,
@@ -2653,6 +2667,7 @@ def lodo_cross_validate(
     l1_ratio: float = 0.5,
     n_estimators: int = 100,
     max_depth: int = 5,
+    hidden_layer_sizes: tuple = (64, 32),
 ) -> Dict[str, Any]:
     """
     Leave-One-District-Out cross-validation for g(D, x) models.
@@ -2703,6 +2718,7 @@ def lodo_cross_validate(
             l1_ratio=l1_ratio,
             n_estimators=n_estimators,
             max_depth=max_depth,
+            hidden_layer_sizes=hidden_layer_sizes,
         )
 
         # Predict on held-out district
@@ -2891,3 +2907,756 @@ def compute_permutation_importance(
 
     df = pd.DataFrame(imp_data)
     return df.sort_values('Importance_Mean', ascending=False).reset_index(drop=True)
+
+
+# =============================================================================
+# GPU ACCELERATION & HYPERPARAMETER SEARCH
+# =============================================================================
+
+def check_gpu_availability() -> Dict[str, Any]:
+    """
+    Check for GPU availability across different frameworks.
+
+    Returns:
+        Dict with gpu_available, device, framework info
+    """
+    import torch
+
+    cuda_available = torch.cuda.is_available()
+    device = 'cuda' if cuda_available else 'cpu'
+
+    result = {
+        'gpu_available': cuda_available,
+        'device': device,
+        'torch_cuda': cuda_available,
+    }
+
+    if cuda_available:
+        result['gpu_name'] = torch.cuda.get_device_name(0)
+        result['gpu_count'] = torch.cuda.device_count()
+
+    # Check for XGBoost GPU support
+    try:
+        import xgboost as xgb
+        result['xgboost_available'] = True
+        result['xgboost_version'] = xgb.__version__
+    except ImportError:
+        result['xgboost_available'] = False
+
+    return result
+
+
+class PyTorchNeuralNetwork:
+    """
+    GPU-accelerated neural network using PyTorch.
+
+    Compatible interface with sklearn models for drop-in replacement.
+    """
+
+    def __init__(
+        self,
+        hidden_layer_sizes=(64, 32),
+        learning_rate=0.001,
+        max_iter=1000,
+        batch_size=64,
+        alpha=0.0001,
+        early_stopping=True,
+        validation_fraction=0.1,
+        n_iter_no_change=20,
+        device=None,
+        random_state=42,
+    ):
+        self.hidden_layer_sizes = hidden_layer_sizes
+        self.learning_rate = learning_rate
+        self.max_iter = max_iter
+        self.batch_size = batch_size
+        self.alpha = alpha  # L2 regularization
+        self.early_stopping = early_stopping
+        self.validation_fraction = validation_fraction
+        self.n_iter_no_change = n_iter_no_change
+        self.random_state = random_state
+
+        if device is None:
+            import torch
+            self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        else:
+            import torch
+            self.device = torch.device(device)
+
+        self.model_ = None
+        self.n_features_in_ = None
+        self.n_iter_ = 0
+        self.coefs_ = []
+        self.intercepts_ = []
+
+    def _build_model(self, input_size):
+        """Build PyTorch sequential model."""
+        import torch
+        import torch.nn as nn
+
+        layers = []
+        prev_size = input_size
+
+        for hidden_size in self.hidden_layer_sizes:
+            layers.append(nn.Linear(prev_size, hidden_size))
+            layers.append(nn.ReLU())
+            prev_size = hidden_size
+
+        # Output layer
+        layers.append(nn.Linear(prev_size, 1))
+
+        model = nn.Sequential(*layers)
+        return model.to(self.device)
+
+    def fit(self, X, y):
+        """Fit the neural network."""
+        import torch
+        import torch.nn as nn
+        from torch.utils.data import TensorDataset, DataLoader
+        import numpy as np
+
+        # Set random seeds
+        torch.manual_seed(self.random_state)
+        np.random.seed(self.random_state)
+
+        X = np.asarray(X, dtype=np.float32)
+        y = np.asarray(y, dtype=np.float32).reshape(-1, 1)
+
+        self.n_features_in_ = X.shape[1]
+
+        # Train/validation split
+        if self.early_stopping:
+            n_val = int(len(X) * self.validation_fraction)
+            indices = np.random.permutation(len(X))
+            train_idx, val_idx = indices[n_val:], indices[:n_val]
+
+            X_train, X_val = X[train_idx], X[val_idx]
+            y_train, y_val = y[train_idx], y[val_idx]
+        else:
+            X_train, y_train = X, y
+
+        # Convert to tensors and move to device
+        X_train_t = torch.from_numpy(X_train).to(self.device)
+        y_train_t = torch.from_numpy(y_train).to(self.device)
+
+        if self.early_stopping:
+            X_val_t = torch.from_numpy(X_val).to(self.device)
+            y_val_t = torch.from_numpy(y_val).to(self.device)
+
+        # Build model
+        self.model_ = self._build_model(self.n_features_in_)
+
+        # Setup optimizer and loss
+        optimizer = torch.optim.Adam(
+            self.model_.parameters(),
+            lr=self.learning_rate,
+            weight_decay=self.alpha,
+        )
+        criterion = nn.MSELoss()
+
+        # Create data loader
+        dataset = TensorDataset(X_train_t, y_train_t)
+        dataloader = DataLoader(
+            dataset,
+            batch_size=self.batch_size,
+            shuffle=True,
+        )
+
+        # Training loop
+        best_val_loss = float('inf')
+        patience_counter = 0
+
+        for epoch in range(self.max_iter):
+            # Training
+            self.model_.train()
+            for batch_X, batch_y in dataloader:
+                optimizer.zero_grad()
+                outputs = self.model_(batch_X)
+                loss = criterion(outputs, batch_y)
+                loss.backward()
+                optimizer.step()
+
+            # Validation
+            if self.early_stopping:
+                self.model_.eval()
+                with torch.no_grad():
+                    val_outputs = self.model_(X_val_t)
+                    val_loss = criterion(val_outputs, y_val_t).item()
+
+                if val_loss < best_val_loss:
+                    best_val_loss = val_loss
+                    patience_counter = 0
+                else:
+                    patience_counter += 1
+
+                if patience_counter >= self.n_iter_no_change:
+                    self.n_iter_ = epoch + 1
+                    break
+
+        if self.n_iter_ == 0:
+            self.n_iter_ = self.max_iter
+
+        # Store weights for compatibility
+        self.coefs_ = []
+        self.intercepts_ = []
+        for module in self.model_.modules():
+            if isinstance(module, nn.Linear):
+                self.coefs_.append(module.weight.detach().cpu().numpy())
+                self.intercepts_.append(module.bias.detach().cpu().numpy())
+
+        return self
+
+    def predict(self, X):
+        """Predict using the trained model."""
+        import torch
+        import numpy as np
+
+        self.model_.eval()
+        X = np.asarray(X, dtype=np.float32)
+        X_t = torch.from_numpy(X).to(self.device)
+
+        with torch.no_grad():
+            outputs = self.model_(X_t)
+
+        return outputs.cpu().numpy().reshape(-1)
+
+    def score(self, X, y):
+        """Compute R² score."""
+        import numpy as np
+
+        y_pred = self.predict(X)
+        y = np.asarray(y)
+
+        ss_res = np.sum((y - y_pred) ** 2)
+        ss_tot = np.sum((y - np.mean(y)) ** 2)
+
+        if ss_tot < 1e-10:
+            return 0.0
+
+        return 1.0 - (ss_res / ss_tot)
+
+
+def get_hyperparameter_ranges(model_type: str) -> Dict[str, Any]:
+    """
+    Get reasonable hyperparameter search ranges for each model type.
+
+    Args:
+        model_type: Model type identifier
+
+    Returns:
+        Dict mapping hyperparameter names to their search ranges.
+        Ranges can be lists (categorical) or tuples (min, max) for continuous.
+    """
+    ranges = {
+        'ridge': {
+            'alpha': [0.001, 0.01, 0.1, 0.5, 1.0, 5.0, 10.0, 50.0, 100.0],
+        },
+        'lasso': {
+            'alpha': [0.001, 0.01, 0.1, 0.5, 1.0, 5.0, 10.0],
+        },
+        'elasticnet': {
+            'alpha': [0.001, 0.01, 0.1, 0.5, 1.0, 5.0, 10.0],
+            'l1_ratio': [0.1, 0.3, 0.5, 0.7, 0.9],
+        },
+        'random_forest': {
+            'n_estimators': [50, 100, 200, 300],
+            'max_depth': [2, 3, 5, 7, 10],
+            'min_samples_split': [2, 5, 10],
+            'min_samples_leaf': [1, 2, 4],
+        },
+        'gradient_boosting': {
+            'n_estimators': [50, 100, 200, 300],
+            'max_depth': [2, 3, 4, 5],
+            'learning_rate': [0.01, 0.05, 0.1, 0.2],
+            'subsample': [0.8, 0.9, 1.0],
+        },
+        'xgboost': {
+            'n_estimators': [50, 100, 200, 300],
+            'max_depth': [2, 3, 4, 5, 6],
+            'learning_rate': [0.01, 0.05, 0.1, 0.2],
+            'subsample': [0.8, 0.9, 1.0],
+            'colsample_bytree': [0.8, 0.9, 1.0],
+        },
+        'neural_network': {
+            'hidden_layer_sizes': [(32,), (64,), (128,), (64, 32), (128, 64), (64, 32, 16)],
+            'learning_rate': [0.0001, 0.0005, 0.001, 0.005, 0.01],
+            'alpha': [0.0001, 0.001, 0.01, 0.1],
+        },
+    }
+
+    return ranges.get(model_type, {})
+
+
+def hyperparameter_search(
+    demands: np.ndarray,
+    ratios: np.ndarray,
+    demographic_features: np.ndarray,
+    district_ids: np.ndarray,
+    demo_feature_names: List[str],
+    model_type: str,
+    param_grid: Dict[str, List[Any]] = None,
+    poly_degree: int = 2,
+    include_interactions: bool = False,
+    search_method: str = 'grid',
+    n_random_samples: int = 20,
+    cv_strategy: str = 'lodo',
+    use_gpu: bool = True,
+    progress_callback=None,
+) -> Dict[str, Any]:
+    """
+    Perform hyperparameter search for g(D,x) models.
+
+    Args:
+        demands, ratios, demographic_features, district_ids: data arrays
+        demo_feature_names: feature names
+        model_type: model type to search
+        param_grid: custom parameter grid (if None, uses default ranges)
+        poly_degree: polynomial degree for demand features
+        include_interactions: include D * x interactions
+        search_method: 'grid' for exhaustive, 'random' for random search
+        n_random_samples: number of random samples (for random search)
+        cv_strategy: 'lodo' for leave-one-district-out
+        use_gpu: whether to use GPU acceleration (for applicable models)
+        progress_callback: optional callback(current, total, info)
+
+    Returns:
+        Dict with:
+            - best_params: dict of best hyperparameters
+            - best_score: best LODO R²
+            - all_results: list of all tried configurations and scores
+            - best_model_result: full result dict from fit_g_dx_model
+    """
+    from itertools import product
+    import random
+
+    # Get default parameter ranges if not provided
+    if param_grid is None:
+        param_grid = get_hyperparameter_ranges(model_type)
+
+    if not param_grid:
+        raise ValueError(f"No parameter grid available for model_type '{model_type}'")
+
+    # Generate parameter combinations
+    if search_method == 'grid':
+        # Exhaustive grid search
+        param_names = sorted(param_grid.keys())
+        param_values = [param_grid[k] for k in param_names]
+        combinations = list(product(*param_values))
+        param_combinations = [
+            dict(zip(param_names, vals)) for vals in combinations
+        ]
+    elif search_method == 'random':
+        # Random search
+        param_combinations = []
+        param_names = list(param_grid.keys())
+
+        for _ in range(n_random_samples):
+            combo = {
+                name: random.choice(param_grid[name])
+                for name in param_names
+            }
+            param_combinations.append(combo)
+    else:
+        raise ValueError(f"Unknown search_method: {search_method}")
+
+    # Search loop
+    all_results = []
+    best_score = -float('inf')
+    best_params = None
+    best_model_result = None
+
+    total_combinations = len(param_combinations)
+
+    for i, params in enumerate(param_combinations):
+        # Notify progress
+        if progress_callback:
+            progress_callback(i + 1, total_combinations, params)
+
+        try:
+            # Build kwargs for lodo_cross_validate
+            cv_kwargs = {
+                'demands': demands,
+                'ratios': ratios,
+                'demographic_features': demographic_features,
+                'district_ids': district_ids,
+                'demo_feature_names': demo_feature_names,
+                'model_type': model_type,
+                'poly_degree': poly_degree,
+                'include_interactions': include_interactions,
+            }
+
+            # Add model-specific parameters
+            if model_type in ('ridge', 'lasso', 'elasticnet'):
+                cv_kwargs['alpha'] = params.get('alpha', 1.0)
+                if model_type == 'elasticnet':
+                    cv_kwargs['l1_ratio'] = params.get('l1_ratio', 0.5)
+
+            elif model_type in ('random_forest', 'gradient_boosting', 'xgboost'):
+                cv_kwargs['n_estimators'] = params.get('n_estimators', 100)
+                cv_kwargs['max_depth'] = params.get('max_depth', 5)
+
+                if model_type == 'gradient_boosting' or model_type == 'xgboost':
+                    cv_kwargs['learning_rate'] = params.get('learning_rate', 0.1)
+                    cv_kwargs['subsample'] = params.get('subsample', 1.0)
+
+                if model_type == 'xgboost':
+                    cv_kwargs['colsample_bytree'] = params.get('colsample_bytree', 1.0)
+                    cv_kwargs['use_gpu'] = use_gpu
+
+                if model_type == 'random_forest':
+                    cv_kwargs['min_samples_split'] = params.get('min_samples_split', 2)
+                    cv_kwargs['min_samples_leaf'] = params.get('min_samples_leaf', 1)
+
+            elif model_type == 'neural_network':
+                cv_kwargs['hidden_layer_sizes'] = params.get('hidden_layer_sizes', (64, 32))
+                cv_kwargs['alpha'] = params.get('alpha', 0.0001)
+                cv_kwargs['learning_rate'] = params.get('learning_rate', 0.001)
+                cv_kwargs['use_gpu'] = use_gpu
+
+            # Run cross-validation
+            lodo_result = lodo_cross_validate_hp(**cv_kwargs)
+            score = lodo_result['lodo_r2']
+
+            result_entry = {
+                'params': params.copy(),
+                'lodo_r2': score,
+                'per_district_r2': lodo_result['per_district_r2'],
+            }
+            all_results.append(result_entry)
+
+            # Track best
+            if score > best_score:
+                best_score = score
+                best_params = params.copy()
+                # Fit final model with best params to get full result
+                best_model_result = fit_g_dx_model_hp(
+                    demands=demands,
+                    ratios=ratios,
+                    demographic_features=demographic_features,
+                    demo_feature_names=demo_feature_names,
+                    model_type=model_type,
+                    poly_degree=poly_degree,
+                    include_interactions=include_interactions,
+                    use_gpu=use_gpu,
+                    **params,
+                )
+
+        except Exception as e:
+            # Log failed configuration
+            result_entry = {
+                'params': params.copy(),
+                'lodo_r2': -1.0,
+                'error': str(e),
+            }
+            all_results.append(result_entry)
+
+    return {
+        'best_params': best_params,
+        'best_score': best_score,
+        'all_results': all_results,
+        'best_model_result': best_model_result,
+        'n_combinations_tried': len(param_combinations),
+    }
+
+
+def fit_g_dx_model_hp(
+    demands: np.ndarray,
+    ratios: np.ndarray,
+    demographic_features: np.ndarray,
+    demo_feature_names: List[str],
+    model_type: str = "ols",
+    poly_degree: int = 2,
+    include_interactions: bool = False,
+    use_gpu: bool = True,
+    **hyperparams,
+) -> Dict[str, Any]:
+    """
+    Extended version of fit_g_dx_model with hyperparameter support and GPU.
+
+    Additional model types: 'xgboost', 'pytorch_nn'
+
+    Args:
+        Same as fit_g_dx_model, plus:
+        use_gpu: enable GPU acceleration where available
+        **hyperparams: model-specific hyperparameters
+
+    Returns:
+        Same as fit_g_dx_model
+    """
+    from sklearn.linear_model import LinearRegression, Ridge, Lasso, ElasticNet
+    from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
+    from sklearn.neural_network import MLPRegressor
+
+    use_interactions = include_interactions or model_type == "ols_interactions"
+
+    X, feat_names, poly, scaler = build_feature_matrix(
+        demands, demographic_features,
+        poly_degree=poly_degree,
+        include_interactions=use_interactions,
+        demo_feature_names=demo_feature_names,
+    )
+
+    # Build model with hyperparameters
+    if model_type == 'ols' or model_type == 'ols_interactions':
+        model = LinearRegression()
+
+    elif model_type == 'ridge':
+        alpha = hyperparams.get('alpha', 1.0)
+        model = Ridge(alpha=alpha)
+
+    elif model_type == 'lasso':
+        alpha = hyperparams.get('alpha', 1.0)
+        model = Lasso(alpha=alpha, max_iter=10000)
+
+    elif model_type == 'elasticnet':
+        alpha = hyperparams.get('alpha', 1.0)
+        l1_ratio = hyperparams.get('l1_ratio', 0.5)
+        model = ElasticNet(alpha=alpha, l1_ratio=l1_ratio, max_iter=10000)
+
+    elif model_type == 'random_forest':
+        n_estimators = hyperparams.get('n_estimators', 100)
+        max_depth = hyperparams.get('max_depth', 5)
+        min_samples_split = hyperparams.get('min_samples_split', 2)
+        min_samples_leaf = hyperparams.get('min_samples_leaf', 1)
+        model = RandomForestRegressor(
+            n_estimators=n_estimators,
+            max_depth=max_depth,
+            min_samples_split=min_samples_split,
+            min_samples_leaf=min_samples_leaf,
+            random_state=42,
+            n_jobs=-1,
+        )
+
+    elif model_type == 'gradient_boosting':
+        n_estimators = hyperparams.get('n_estimators', 100)
+        max_depth = hyperparams.get('max_depth', 3)
+        learning_rate = hyperparams.get('learning_rate', 0.1)
+        subsample = hyperparams.get('subsample', 1.0)
+        model = GradientBoostingRegressor(
+            n_estimators=n_estimators,
+            max_depth=max_depth,
+            learning_rate=learning_rate,
+            subsample=subsample,
+            random_state=42,
+        )
+
+    elif model_type == 'xgboost':
+        try:
+            import xgboost as xgb
+
+            n_estimators = hyperparams.get('n_estimators', 100)
+            max_depth = hyperparams.get('max_depth', 3)
+            learning_rate = hyperparams.get('learning_rate', 0.1)
+            subsample = hyperparams.get('subsample', 1.0)
+            colsample_bytree = hyperparams.get('colsample_bytree', 1.0)
+
+            device = 'cuda' if use_gpu else 'cpu'
+            import torch
+            if not torch.cuda.is_available():
+                device = 'cpu'
+
+            model = xgb.XGBRegressor(
+                n_estimators=n_estimators,
+                max_depth=max_depth,
+                learning_rate=learning_rate,
+                subsample=subsample,
+                colsample_bytree=colsample_bytree,
+                device=device,
+                random_state=42,
+                tree_method='hist' if device == 'cpu' else 'gpu_hist',
+            )
+        except ImportError:
+            raise ValueError("XGBoost not installed. Install with: pip install xgboost")
+
+    elif model_type == 'neural_network' or model_type == 'pytorch_nn':
+        hidden_layer_sizes = hyperparams.get('hidden_layer_sizes', (64, 32))
+        alpha = hyperparams.get('alpha', 0.0001)
+        learning_rate = hyperparams.get('learning_rate', 0.001)
+
+        if use_gpu and model_type == 'pytorch_nn':
+            # Use GPU-accelerated PyTorch implementation
+            model = PyTorchNeuralNetwork(
+                hidden_layer_sizes=hidden_layer_sizes,
+                learning_rate=learning_rate,
+                alpha=alpha,
+                max_iter=1000,
+                early_stopping=True,
+                validation_fraction=0.1,
+                n_iter_no_change=20,
+                random_state=42,
+            )
+        else:
+            # Use sklearn MLPRegressor
+            model = MLPRegressor(
+                hidden_layer_sizes=hidden_layer_sizes,
+                alpha=alpha,
+                max_iter=1000,
+                random_state=42,
+                early_stopping=True,
+                validation_fraction=0.1,
+                n_iter_no_change=20,
+            )
+
+    else:
+        raise ValueError(f"Unknown model_type: {model_type}")
+
+    # Fit model
+    model.fit(X, ratios)
+
+    r2_train = max(0.0, float(model.score(X, ratios)))
+    predicted = model.predict(X)
+    residuals = ratios - predicted
+
+    # Build prediction closure
+    _poly, _scaler, _model = poly, scaler, model
+    _use_interactions = use_interactions
+    _poly_degree = poly_degree
+
+    def predict_fn(new_demands, new_demo_features):
+        X_new, _, _, _ = build_feature_matrix(
+            new_demands, new_demo_features,
+            poly_degree=_poly_degree,
+            include_interactions=_use_interactions,
+            poly_transformer=_poly,
+            scaler=_scaler,
+        )
+        return _model.predict(X_new)
+
+    # Extract coefficients or feature importances
+    coefficients = None
+    feature_importances = None
+    is_linear = model_type in ("ols", "ridge", "lasso", "elasticnet", "ols_interactions")
+
+    if is_linear:
+        coefficients = {name: float(coef) for name, coef in zip(feat_names, model.coef_)}
+    elif hasattr(model, 'feature_importances_'):
+        feature_importances = {
+            name: float(imp) for name, imp in zip(feat_names, model.feature_importances_)
+        }
+
+    # Count parameters
+    if model_type in ('neural_network', 'pytorch_nn'):
+        if hasattr(model, 'coefs_'):
+            n_params = sum(w.size for w in model.coefs_) + sum(b.size for b in model.intercepts_)
+        else:
+            # Estimate for PyTorch model
+            n_params = X.shape[1]
+            for size in hidden_layer_sizes:
+                n_params = (n_params + 1) * size
+            n_params += hidden_layer_sizes[-1] + 1 if hidden_layer_sizes else X.shape[1] + 1
+    else:
+        n_params = X.shape[1] + 1
+
+    return {
+        'model': model,
+        'predict_fn': predict_fn,
+        'r2_train': r2_train,
+        'predicted': predicted,
+        'residuals': residuals,
+        'feature_names': feat_names,
+        'demo_feature_names': list(demo_feature_names),
+        'coefficients': coefficients,
+        'feature_importances': feature_importances,
+        'poly_transformer': poly,
+        'scaler': scaler,
+        'model_type': model_type,
+        'n_params': n_params,
+        'n_samples': len(demands),
+        'include_interactions': use_interactions,
+        'poly_degree': poly_degree,
+        'hyperparams': hyperparams,
+    }
+
+
+def lodo_cross_validate_hp(
+    demands: np.ndarray,
+    ratios: np.ndarray,
+    demographic_features: np.ndarray,
+    district_ids: np.ndarray,
+    demo_feature_names: List[str],
+    model_type: str = "ols",
+    poly_degree: int = 2,
+    include_interactions: bool = False,
+    use_gpu: bool = True,
+    **hyperparams,
+) -> Dict[str, Any]:
+    """
+    Extended LODO cross-validation with hyperparameter and GPU support.
+
+    Args:
+        Same as lodo_cross_validate, plus:
+        use_gpu: enable GPU acceleration
+        **hyperparams: model-specific hyperparameters
+
+    Returns:
+        Same as lodo_cross_validate
+    """
+    unique_districts = np.unique(district_ids)
+    n = len(demands)
+
+    oof_predictions = np.full(n, np.nan)
+    per_district_r2 = {}
+    per_district_n = {}
+
+    use_interactions = include_interactions or model_type == "ols_interactions"
+
+    for dist_id in unique_districts:
+        test_mask = district_ids == dist_id
+        train_mask = ~test_mask
+
+        if train_mask.sum() < 5 or test_mask.sum() < 1:
+            continue
+
+        # Fit on training data
+        result = fit_g_dx_model_hp(
+            demands=demands[train_mask],
+            ratios=ratios[train_mask],
+            demographic_features=demographic_features[train_mask],
+            demo_feature_names=demo_feature_names,
+            model_type=model_type,
+            poly_degree=poly_degree,
+            include_interactions=include_interactions,
+            use_gpu=use_gpu,
+            **hyperparams,
+        )
+
+        # Predict on held-out district
+        preds = result['predict_fn'](
+            demands[test_mask],
+            demographic_features[test_mask],
+        )
+        oof_predictions[test_mask] = preds
+
+        # Per-district R²
+        y_test = ratios[test_mask]
+        var_y = np.var(y_test)
+        if var_y > 1e-10:
+            r2 = max(0.0, 1.0 - np.var(y_test - preds) / var_y)
+        else:
+            r2 = 0.0
+
+        per_district_r2[int(dist_id)] = float(r2)
+        per_district_n[int(dist_id)] = int(test_mask.sum())
+
+    # Overall LODO R²
+    valid = ~np.isnan(oof_predictions)
+    if valid.sum() > 0:
+        var_y_all = np.var(ratios[valid])
+        if var_y_all > 1e-10:
+            lodo_r2 = max(0.0, 1.0 - np.var(ratios[valid] - oof_predictions[valid]) / var_y_all)
+        else:
+            lodo_r2 = 0.0
+    else:
+        lodo_r2 = 0.0
+
+    oof_residuals = np.where(valid, ratios - oof_predictions, np.nan)
+
+    return {
+        'lodo_r2': float(lodo_r2),
+        'per_district_r2': per_district_r2,
+        'per_district_n': per_district_n,
+        'oof_predictions': oof_predictions,
+        'oof_residuals': oof_residuals,
+        'n_folds': len(per_district_r2),
+        'n_valid': int(valid.sum()),
+    }

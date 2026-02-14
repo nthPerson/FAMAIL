@@ -13,6 +13,8 @@ plotly>=5.0.0
 torch>=1.12.0
 scikit-learn>=1.0.0
 scipy>=1.7.0
+xgboost>=2.0.0
+statsmodels>=0.13.0
 
 # Optional: for isotonic regression
 # sklearn is included in scikit-learn
