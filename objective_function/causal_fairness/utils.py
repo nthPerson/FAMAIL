@@ -3008,11 +3008,17 @@ class PyTorchNeuralNetwork:
         return model.to(self.device)
 
     def fit(self, X, y):
-        """Fit the neural network."""
+        """Fit the neural network.
+
+        Uses full-batch training when data fits in GPU memory (typical for
+        tabular data), falling back to mini-batch DataLoader only for very
+        large datasets. Full-batch eliminates thousands of per-batch kernel
+        launch overheads that dominate training time for small operations.
+        """
         import torch
         import torch.nn as nn
-        from torch.utils.data import TensorDataset, DataLoader
         import numpy as np
+        import copy
 
         # Set random seeds
         torch.manual_seed(self.random_state)
@@ -3025,7 +3031,7 @@ class PyTorchNeuralNetwork:
 
         # Train/validation split
         if self.early_stopping:
-            n_val = int(len(X) * self.validation_fraction)
+            n_val = max(1, int(len(X) * self.validation_fraction))
             indices = np.random.permutation(len(X))
             train_idx, val_idx = indices[n_val:], indices[:n_val]
 
@@ -3034,13 +3040,26 @@ class PyTorchNeuralNetwork:
         else:
             X_train, y_train = X, y
 
-        # Convert to tensors and move to device
+        # Convert to tensors and move to device in one shot
         X_train_t = torch.from_numpy(X_train).to(self.device)
         y_train_t = torch.from_numpy(y_train).to(self.device)
 
         if self.early_stopping:
             X_val_t = torch.from_numpy(X_val).to(self.device)
             y_val_t = torch.from_numpy(y_val).to(self.device)
+
+        # Decide training strategy: full-batch vs mini-batch
+        # Full-batch is faster for tabular data because it avoids thousands
+        # of kernel launch overheads per epoch. Only fall back to mini-batch
+        # for very large datasets that risk OOM.
+        data_bytes = X_train_t.nelement() * X_train_t.element_size()
+        if self.device.type == 'cuda':
+            gpu_mem = torch.cuda.get_device_properties(self.device).total_memory
+            # Use full-batch if data < 25% of GPU memory
+            use_full_batch = data_bytes < gpu_mem * 0.25
+        else:
+            # CPU: use full-batch for datasets under ~100MB
+            use_full_batch = data_bytes < 100 * 1024 * 1024
 
         # Build model
         self.model_ = self._build_model(self.n_features_in_)
@@ -3053,29 +3072,40 @@ class PyTorchNeuralNetwork:
         )
         criterion = nn.MSELoss()
 
-        # Create data loader
-        dataset = TensorDataset(X_train_t, y_train_t)
-        dataloader = DataLoader(
-            dataset,
-            batch_size=self.batch_size,
-            shuffle=True,
-        )
+        # Pre-build mini-batch infrastructure only if needed
+        if not use_full_batch:
+            from torch.utils.data import TensorDataset, DataLoader
+            effective_batch = min(self.batch_size, len(X_train))
+            dataset = TensorDataset(X_train_t, y_train_t)
+            dataloader = DataLoader(
+                dataset,
+                batch_size=effective_batch,
+                shuffle=True,
+            )
 
         # Training loop
-        import copy
         best_val_loss = float('inf')
         best_state_dict = None
         patience_counter = 0
 
         for epoch in range(self.max_iter):
-            # Training
             self.model_.train()
-            for batch_X, batch_y in dataloader:
+
+            if use_full_batch:
+                # Single forward/backward pass per epoch — eliminates
+                # kernel launch overhead that dominates small-batch GPU training
                 optimizer.zero_grad()
-                outputs = self.model_(batch_X)
-                loss = criterion(outputs, batch_y)
+                outputs = self.model_(X_train_t)
+                loss = criterion(outputs, y_train_t)
                 loss.backward()
                 optimizer.step()
+            else:
+                for batch_X, batch_y in dataloader:
+                    optimizer.zero_grad()
+                    outputs = self.model_(batch_X)
+                    loss = criterion(outputs, batch_y)
+                    loss.backward()
+                    optimizer.step()
 
             # Validation + best-model checkpointing
             if self.early_stopping:
@@ -3189,9 +3219,11 @@ def get_hyperparameter_ranges(model_type: str) -> Dict[str, Any]:
             'alpha': [0.0001, 0.001, 0.01, 0.1],
         },
         'pytorch_nn': {
-            'hidden_layer_sizes': [(32,), (64,), (128,), (64, 32), (128, 64), (64, 32, 16)],
+            'hidden_layer_sizes': [(128, 64), (256, 128), (512, 256), (64, 32, 16), (128, 64, 32), (256, 128, 64, 32) ],
+            # 'hidden_layer_sizes': [(32,), (64,), (128,), (64, 32), (128, 64), (64, 32, 16)],
             'learning_rate': [0.0001, 0.0005, 0.001, 0.005, 0.01],
-            'alpha': [0.0001, 0.001, 0.01, 0.1],
+            'alpha': [0.01, 0.025, 0.05, 0.075, 0.10],
+            # 'alpha': [0.0001, 0.001, 0.01, 0.1],
         },
     }
 
@@ -3472,8 +3504,10 @@ def fit_g_dx_model_hp(
         alpha = hyperparams.get('alpha', 0.0001)
         learning_rate = hyperparams.get('learning_rate', 0.001)
 
-        if use_gpu and model_type == 'pytorch_nn':
-            # Use GPU-accelerated PyTorch implementation
+        if model_type == 'pytorch_nn':
+            # Always use PyTorch implementation for pytorch_nn;
+            # use_gpu controls the device, not whether PyTorch is used
+            device = 'cuda' if use_gpu else 'cpu'
             model = PyTorchNeuralNetwork(
                 hidden_layer_sizes=hidden_layer_sizes,
                 learning_rate=learning_rate,
@@ -3482,10 +3516,11 @@ def fit_g_dx_model_hp(
                 early_stopping=True,
                 validation_fraction=0.1,
                 n_iter_no_change=20,
+                device=device,
                 random_state=42,
             )
         else:
-            # Use sklearn MLPRegressor
+            # Use sklearn MLPRegressor for 'neural_network' type
             model = MLPRegressor(
                 hidden_layer_sizes=hidden_layer_sizes,
                 alpha=alpha,

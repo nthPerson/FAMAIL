@@ -808,14 +808,9 @@ def _display_model_results(results: Dict, df: pd.DataFrame):
         lr = r['lodo_result']
         diag = r.get('diagnostics')
 
-        # Add hyperparameter info if available
-        hp_info = ""
-        if label in hp_search_results:
-            best_params = hp_search_results[label]['best_params']
-            hp_info = " 🎯"  # Indicator that this used HP search
-
         row = {
-            'Model': label + hp_info,
+            'Model': label,
+            'HP Search': '🎯' if label in hp_search_results else '',
             'Train R²': mr['r2_train'],
             'LODO R²': lr['lodo_r2'],
             'Overfit Gap': mr['r2_train'] - lr['lodo_r2'],
