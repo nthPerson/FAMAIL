@@ -1,0 +1,83 @@
+site_name: "FAMAIL"
+site_description: "Fairness-Aware Multi-Agent Imitation Learning — Improving Spatial Fairness in Taxi Services Through Trajectory Editing"
+site_url: https://nthperson.github.io/FAMAIL/
+repo_url: https://github.com/nthPerson/FAMAIL
+repo_name: nthPerson/FAMAIL
+
+docs_dir: docs/site
+
+theme:
+  name: material
+  custom_dir: docs/site/overrides
+  logo: assets/FAMAIL_icon.png
+  favicon: assets/FAMAIL_icon.png
+  font:
+    text: Inter
+    code: Fira Code
+  palette:
+    scheme: famail
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - navigation.footer
+    - navigation.indexes
+    - toc.integrate
+    - content.tabs.link
+    - header.autohide
+  icon:
+    repo: fontawesome/brands/github
+
+extra_css:
+  - stylesheets/famail.css
+
+extra_javascript:
+  - javascripts/katex.js
+  - https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js
+  - https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js
+
+markdown_extensions:
+  - pymdownx.arithmatex:
+      generic: true
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - attr_list
+  - md_in_html
+  - tables
+  - def_list
+  - pymdownx.critic
+  - pymdownx.caret
+  - pymdownx.mark
+  - pymdownx.tilde
+  - toc:
+      permalink: true
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/nthPerson/FAMAIL
+  generator: false
+
+copyright: "&copy; 2025–2026 &nbsp;|&nbsp; San Diego State University · Department of Computer Science"
+
+nav:
+  - Home: index.md
+  - The Problem: problem.md
+  - Approach:
+    - What is FAMAIL?: approach/overview.md
+    - Research Goals: approach/goals.md
+  - Methodology:
+    - Two-Phase Pipeline: methodology/pipeline.md
+    - Objective Function: methodology/objective-function.md
+    - The Algorithm: methodology/algorithm.md
+    - Soft Cell Assignment: methodology/soft-cell-assignment.md
+    - Trajectory Discriminator: methodology/discriminator.md
+  - Data:
+    - Study Area & Sources: data/study-area.md
+  - Fairness: fairness.md
+  - References:
+    - Related Work: references/related-work.md
+    - Team: references/team.md
