@@ -13,7 +13,7 @@ hide:
 FAMAIL is a research project at San Diego State University that addresses <strong>spatial inequality in urban taxi services</strong>. Using GPS trajectory data from Shenzhen, China, we develop trajectory editing techniques that modify expert driver trajectories to improve fairness metrics — ensuring that all areas of a city receive equitable taxi service — while maintaining the behavioral realism of the original trajectories.
 </p>
 
-<p class="affiliation">Robert Ashe (Researcher)<br>Dr. Xin Zhang (Advisor)<br>San Diego State University · Department of Computer Science</p>
+<p class="affiliation">Dr. Xin Zhang (Advisor)<br>Robert Ashe (Researcher)<br>San Diego State University · Department of Computer Science</p>
 
 </div>
 
