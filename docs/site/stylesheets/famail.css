@@ -39,7 +39,7 @@
 /* Override Material's centred 61 rem grid so content hugs the left
    edge. The search-box right side automatically aligns with the
    content right side because both live inside .md-grid containers. */
-/* .md-grid {
+.md-grid {
   max-width: 65rem;          
   margin-left: 2.5rem;       
   margin-right: 2.0rem;
@@ -47,20 +47,21 @@
 } */
 
 /* Centre the header and tab grids so logo/search span full width */
-/*.md-header .md-grid,
+.md-header .md-grid,
 .md-tabs .md-grid {
   margin-left: auto;
   margin-right: auto;
-} */
+}
 
 /* ── Search Box Fix ──────────────────────────────────────────── */
 /* Ensure search box stays visible and functional on hover */
-/* .md-search {
+.md-search {
   pointer-events: auto !important;
   visibility: visible !important;
+  right: 3.0rem;
 }
 
-.md-search__form,
+/* .md-search__form,
 .md-search__input,
 .md-search__icon {
   pointer-events: auto !important;
@@ -80,13 +81,33 @@
   background: var(--md-default-bg-color);
   border-bottom: 3px solid var(--md-primary-fg-color);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-  
+  color: var(--md-typeset-color)
 }
 
 /* Header logo size control */
 .md-header .md-logo img {
   width: 5.0rem;           /* Adjust this value to resize logo */
   height: 2.3rem;          /* Keep width and height equal for square logos */
+  display: block;
+}
+
+/* University logo in upper-right corner */
+.university-logo {
+  position: absolute;
+  top: 1.7rem;
+  /* top: 50%; */
+  right: 0.9rem;
+  /* right: 1rem; */
+  transform: translateY(-50%);
+  z-index: 10;
+  /* z-index: 3; */
+  display: flex;
+  align-items: center;
+}
+
+.university-logo img {
+  height: 1.4rem;          /* Adjust height to match desired size */
+  width: auto;             /* Maintain aspect ratio */
   display: block;
 }
 

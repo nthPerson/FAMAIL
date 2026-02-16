@@ -1,1 +1,9 @@
 {% extends "base.html" %}
+
+{% block header %}
+  {{ super() }}
+  <!-- University logo in upper-right corner -->
+  <div class="university-logo">
+    <img src="{{ base_url }}/assets/sdsu_primary_logo_rgb_horizontal_full_color.png" alt="SDSU Logo">
+  </div>
+{% endblock %}
