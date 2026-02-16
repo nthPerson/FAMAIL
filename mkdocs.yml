@@ -1,4 +1,4 @@
-site_name: "FAMAIL"
+site_name: "Fairness-Aware Multi Agent Imitation Learning (FAMAIL)"
 site_description: "Fairness-Aware Multi-Agent Imitation Learning — Improving Spatial Fairness in Taxi Services Through Trajectory Editing"
 site_url: https://nthperson.github.io/FAMAIL/
 repo_url: https://github.com/nthPerson/FAMAIL
@@ -9,8 +9,8 @@ docs_dir: docs/site
 theme:
   name: material
   custom_dir: docs/site/overrides
-  logo: assets/FAMAIL_icon.png
-  favicon: assets/FAMAIL_icon.png
+  logo: assets/FAMAIL_icon_small.png
+  favicon: assets/FAMAIL_icon_small.png
   font:
     text: Inter
     code: Fira Code
@@ -30,6 +30,7 @@ theme:
 
 extra_css:
   - stylesheets/famail.css
+  - https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css
 
 extra_javascript:
   - javascripts/katex.js

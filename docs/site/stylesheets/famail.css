@@ -35,11 +35,59 @@
   --md-footer-fg-color--lighter:#9e9e99;
 }
 
+/* ── Layout Grid — left-aligned, wider ─────────────────────────
+/* Override Material's centred 61 rem grid so content hugs the left
+   edge. The search-box right side automatically aligns with the
+   content right side because both live inside .md-grid containers. */
+/* .md-grid {
+  max-width: 65rem;          
+  margin-left: 2.5rem;       
+  margin-right: 2.0rem;
+  margin-right: auto;        
+} */
+
+/* Centre the header and tab grids so logo/search span full width */
+/*.md-header .md-grid,
+.md-tabs .md-grid {
+  margin-left: auto;
+  margin-right: auto;
+} */
+
+/* ── Search Box Fix ──────────────────────────────────────────── */
+/* Ensure search box stays visible and functional on hover */
+/* .md-search {
+  pointer-events: auto !important;
+  visibility: visible !important;
+}
+
+.md-search__form,
+.md-search__input,
+.md-search__icon {
+  pointer-events: auto !important;
+  visibility: visible !important;
+}
+
+.md-search:hover,
+.md-search__form:hover,
+.md-search__input:hover {
+  opacity: 1 !important;
+  visibility: visible !important;
+  display: block !important;
+} */
+
 /* ── Header ──────────────────────────────────────────────────── */
 .md-header {
   background: var(--md-default-bg-color);
   border-bottom: 3px solid var(--md-primary-fg-color);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  
+}
+
+/* Header logo size control */
+.md-header .md-logo img {
+  width: 5.0rem;           /* Adjust this value to resize logo */
+  height: 2.3rem;          /* Keep width and height equal for square logos */
+  display: block;
 }
 
 .md-header[data-md-state="shadow"] {
@@ -74,8 +122,9 @@
 }
 
 .md-tabs__link--active,
+.md-tabs__item--active > .md-tabs__link,
 .md-tabs__link:hover {
-  color: var(--md-primary-fg-color);
+  color: var(--md-primary-fg-color) !important;
 }
 
 /* ── Navigation Sidebar ──────────────────────────────────────── */
@@ -268,8 +317,10 @@
     #f5f5f4 40%,
     rgba(0, 128, 128, 0.03) 100%
   );
-  border-bottom: 3px solid var(--md-primary-fg-color);
-  border-radius: 0 0 8px 8px;
+  border: 3px solid var(--md-primary-fg-color);
+  /* border-bottom: 3px solid var(--md-primary-fg-color); */
+  border-radius: 8px;
+  /* border-radius: 0 0 8px 8px; */
 }
 
 .hero h1 {
@@ -462,7 +513,19 @@
     font-size: 1rem;
   }
 }
-
+/* ── KaTeX MathML Accessibility Layer (must be hidden) ────────── */
+/* KaTeX renders a .katex-mathml element for screen readers that
+   should be visually hidden. If KaTeX CSS doesn't load or loses
+   a specificity battle, this defensive rule ensures it stays hidden. */
+.katex-mathml {
+  position: absolute !important;
+  clip: rect(1px, 1px, 1px, 1px) !important;
+  padding: 0 !important;
+  border: 0 !important;
+  height: 1px !important;
+  width: 1px !important;
+  overflow: hidden !important;
+}
 /* ── Print ───────────────────────────────────────────────────── */
 @media print {
   .hero {

@@ -25,7 +25,7 @@ Editing is preferred for several reasons:
 
 ## The FAMAIL Pipeline
 
-<div class="pipeline" markdown>
+<div class="pipeline">
   <div class="pipeline-step">
     <div class="step-number">1</div>
     <h4>Identify Unfair Trajectories</h4>
@@ -67,6 +67,6 @@ Expert GPS Trajectories
 ---
 
 <div style="display: flex; justify-content: space-between; margin-top: 2rem;">
-<a href="../problem/" class="md-button">← The Problem</a>
-<a href="goals/" class="md-button md-button--primary">Next: Research Goals →</a>
+<a href="../../problem/" class="md-button">← The Problem</a>
+<a href="../goals/" class="md-button md-button--primary">Next: Research Goals →</a>
 </div>

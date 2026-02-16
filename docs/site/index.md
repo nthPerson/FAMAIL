@@ -5,15 +5,15 @@ hide:
 
 <div class="hero" markdown>
 
-# FAMAIL
+# Welcome to the Fairness-Aware Multi Agent Imitation Learning Project
 
-<p class="tagline">Fairness-Aware Multi-Agent Imitation Learning</p>
+<p class="tagline">FAMAIL</p>
 
 <p class="summary">
 FAMAIL is a research project at San Diego State University that addresses <strong>spatial inequality in urban taxi services</strong>. Using GPS trajectory data from Shenzhen, China, we develop trajectory editing techniques that modify expert driver trajectories to improve fairness metrics — ensuring that all areas of a city receive equitable taxi service — while maintaining the behavioral realism of the original trajectories.
 </p>
 
-<p class="affiliation">San Diego State University · Department of Computer Science</p>
+<p class="affiliation">Robert Ashe (Researcher)<br>Dr. Xin Zhang (Advisor)<br>San Diego State University · Department of Computer Science</p>
 
 </div>
 
@@ -21,13 +21,13 @@ FAMAIL is a research project at San Diego State University that addresses <stron
 
 Taxi services in cities like Shenzhen exhibit significant spatial inequality. Certain areas — often wealthier, centrally-located neighborhoods — receive disproportionately more service relative to demand, while other areas — frequently lower-income or peripheral neighborhoods — are systematically underserved. When this inequality correlates with socioeconomic factors, it raises a systemic fairness concern in urban mobility.
 
-[Learn more about the problem :material-arrow-right:](problem.md){ .md-button }
+[Learn more about the problem →](problem.md){ .md-button }
 
 ## Our Approach
 
 Rather than generating entirely new synthetic trajectories, FAMAIL **edits existing expert driver trajectories** — applying small, bounded adjustments to real-world GPS data to improve the equity of taxi service distribution. This preserves the expert knowledge embedded in real driver behavior while steering the overall service pattern toward fairness.
 
-<div class="pipeline" markdown>
+<div class="pipeline">
   <div class="pipeline-step">
     <div class="step-number">1</div>
     <h4>Identify</h4>
@@ -52,7 +52,7 @@ Rather than generating entirely new synthetic trajectories, FAMAIL **edits exist
 <div class="feature-grid" markdown>
 
 <div class="feature-card" markdown>
-<div class="card-icon">🎯</div>
+<!-- <div class="card-icon">🎯</div> -->
 
 ### Research Goals
 
@@ -62,7 +62,7 @@ Four interrelated objectives — from multi-objective optimization to imitation 
 </div>
 
 <div class="feature-card" markdown>
-<div class="card-icon">⚙️</div>
+<!-- <div class="card-icon">⚙️</div> -->
 
 ### Methodology
 
@@ -72,7 +72,7 @@ A two-phase pipeline combining attribution-based trajectory selection with gradi
 </div>
 
 <div class="feature-card" markdown>
-<div class="card-icon">📐</div>
+<!-- <div class="card-icon">📐</div> -->
 
 ### Objective Function
 
@@ -82,7 +82,7 @@ Three terms — spatial fairness, causal fairness, and trajectory fidelity — i
 </div>
 
 <div class="feature-card" markdown>
-<div class="card-icon">🗺️</div>
+<!-- <div class="card-icon">🗺️</div> -->
 
 ### Study Area & Data
 
@@ -92,7 +92,7 @@ Real-world GPS taxi data from Shenzhen, China — 50 expert drivers, 4,320 grid 
 </div>
 
 <div class="feature-card" markdown>
-<div class="card-icon">⚖️</div>
+<!-- <div class="card-icon">⚖️</div> -->
 
 ### Fairness
 
@@ -102,7 +102,7 @@ Two complementary lenses: spatial equality of service and causal independence fr
 </div>
 
 <div class="feature-card" markdown>
-<div class="card-icon">🧠</div>
+<!-- <div class="card-icon">🧠</div> -->
 
 ### Discriminator
 

@@ -8,7 +8,7 @@ $$\mathcal{L} = \alpha_1 \cdot F_{\text{spatial}} + \alpha_2 \cdot F_{\text{caus
 
 </div>
 
-where $\alpha_1 + \alpha_2 + \alpha_3 = 1$ and each term lies in $[0, 1]$. The objective is **maximized** — higher values indicate fairer, more realistic outcomes.
+where $\sum_{i} \alpha_i = 1$ and each term lies in $[0, 1]$. The objective is **maximized** — higher values indicate fairer, more realistic outcomes.
 
 ---
 
@@ -22,7 +22,7 @@ where $\alpha_1 + \alpha_2 + \alpha_3 = 1$ and each term lies in $[0, 1]$. The o
 
 ---
 
-## Spatial Fairness ($F_{\text{spatial}}$)
+## Spatial Fairness - $F_{\text{spatial}}$
 
 Spatial fairness uses the **Gini coefficient** — a widely-used inequality measure from economics — applied to taxi service rates across the city grid. Service rates are computed by normalizing raw pickup and dropoff counts by the number of active taxis in each cell, isolating true service inequality from differences in taxi presence.
 
@@ -42,7 +42,7 @@ For more context on the Gini coefficient and its interpretation, see the [Fairne
 
 ---
 
-## Causal Fairness ($F_{\text{causal}}$)
+## Causal Fairness - $F_{\text{causal}}$
 
 Causal fairness asks a deeper question than spatial fairness: not just "is service equal?" but "is service driven by the right factors?" Specifically, it measures whether the variance in service ratios across the city can be explained by demand patterns rather than by sensitive demographic attributes like neighborhood income.
 
@@ -50,7 +50,7 @@ The term uses the **coefficient of determination** ($R^2$) to quantify how well 
 
 ---
 
-## Trajectory Fidelity ($F_{\text{fidelity}}$)
+## Trajectory Fidelity - $F_{\text{fidelity}}$
 
 Fidelity ensures that trajectory edits remain realistic. A neural network [discriminator](discriminator.md) evaluates each modified trajectory against the original, producing a similarity score:
 
