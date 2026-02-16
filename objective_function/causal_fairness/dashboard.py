@@ -401,8 +401,10 @@ def plot_method_comparison(
     ratios: np.ndarray,
 ) -> go.Figure:
     """Compare different g(d) estimation methods."""
-    methods = ['binning', 'linear', 'polynomial', 'isotonic', 'lowess']
-    colors = ['blue', 'green', 'orange', 'red', 'purple']
+    methods = ['binning', 'linear', 'polynomial', 'isotonic', 'lowess',
+               'reciprocal', 'log', 'power_basis']
+    colors = ['blue', 'green', 'orange', 'red', 'purple',
+              'darkcyan', 'goldenrod', 'magenta']
     
     fig = go.Figure()
     
@@ -2861,14 +2863,17 @@ def main():
         else:
             st.markdown("""
             Compare different methods for estimating g(d) = E[Y|D=d]:
-            
-            | Method | Description | Best For |
-            |--------|-------------|----------|
-            | **Binning** | Group by demand bins, compute mean | Robust, non-parametric |
-            | **Linear** | Fit Y = β₀ + β₁D | Simple trends |
-            | **Polynomial** | Fit Y = Σβₖdᵏ | Curved relationships |
-            | **Isotonic** | Monotonic fit | Ordered relationships |
-            | **LOWESS** | Local smoothing | Complex patterns |
+
+            | Method | Description | Hat Matrix | Best For |
+            |--------|-------------|:----------:|----------|
+            | **Binning** | Group by demand bins, compute mean | | Robust, non-parametric |
+            | **Linear** | Fit Y = β₀ + β₁D | Yes | Simple trends |
+            | **Polynomial** | Fit Y = Σβₖdᵏ | Yes | Curved relationships |
+            | **Isotonic** | Monotonic fit | | Ordered relationships |
+            | **LOWESS** | Local smoothing | | Complex patterns |
+            | **Reciprocal** | Fit Y = β₀ + β₁/(D+1) | Yes | Hyperbolic Y ≈ a/D |
+            | **Log** | Fit Y = β₀ + β₁·log(D+1) | Yes | Concave decay |
+            | **Power Basis** | Fit Y = β₀ + β₁/D + β₂/√D + β₃√D | Yes | Flexible power-law |
             """)
             
             fig_compare, r2_values = plot_method_comparison(demands_arr, ratios_arr)

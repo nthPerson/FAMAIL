@@ -122,7 +122,12 @@ def load_data_section():
                 st.session_state.causal_demand_grid = bundle.causal_demand_grid
                 st.session_state.causal_supply_grid = bundle.causal_supply_grid
                 st.session_state.g_function_diagnostics = bundle.g_function_diagnostics
-                
+
+                # Store hat matrices and demographics for Option B/C formulations
+                st.session_state.hat_matrices = bundle.hat_matrices
+                st.session_state.g0_power_basis_func = bundle.g0_power_basis_func
+                st.session_state.active_cell_indices = bundle.active_cell_indices
+
                 st.session_state.data_loaded = True
                 st.sidebar.success(f"Loaded {len(bundle.trajectories)} trajectories")
                 
@@ -180,7 +185,20 @@ def algorithm_params_section() -> Dict:
         w1, w2, w3 = w1/total, w2/total, w3/total
     
     st.sidebar.caption(f"Normalized: ({w1:.2f}, {w2:.2f}, {w3:.2f})")
-    
+
+    st.sidebar.subheader("F_causal Formulation")
+    causal_formulation = st.sidebar.selectbox(
+        "Formulation",
+        ["baseline", "option_b", "option_c"],
+        index=1,
+        help=(
+            "**baseline**: Historical R² with isotonic g₀(D). "
+            "**option_b** (default): Demographic residual independence via hat matrix. "
+            "**option_c**: Partial ΔR² via dual hat matrices. "
+            "See FCAUSAL_FORMULATIONS.md for details."
+        ),
+    )
+
     return {
         'alpha': alpha,
         'epsilon': epsilon,
@@ -189,6 +207,7 @@ def algorithm_params_section() -> Dict:
         'alpha_spatial': w1,
         'alpha_causal': w2,
         'alpha_fidelity': w3,
+        'causal_formulation': causal_formulation,
     }
 
 
@@ -475,7 +494,8 @@ def trajectory_selection_section():
         selection_mode = st.radio(
             "Selection Mode",
             ["Single", "Batch", "Random Sample", "Top-k by Fairness Impact"],
-            horizontal=False  # Vertical layout to accommodate longer option name
+            horizontal=False,  # Vertical layout to accommodate longer option name
+            index=3
         )
         
         if selection_mode == "Single":
@@ -914,6 +934,7 @@ def _execute_modification(
             st.code(traceback.format_exc())
     
     # Create objective function
+    causal_formulation = params.get('causal_formulation', 'baseline')
     try:
         objective = FAMAILObjective(
             alpha_spatial=params['alpha_spatial'],
@@ -921,8 +942,12 @@ def _execute_modification(
             alpha_fidelity=params['alpha_fidelity'],
             g_function=st.session_state.g_function,
             discriminator=discriminator,
+            causal_formulation=causal_formulation,
+            hat_matrices=st.session_state.get('hat_matrices'),
+            g0_power_basis_func=st.session_state.get('g0_power_basis_func'),
+            active_cell_indices=st.session_state.get('active_cell_indices'),
         )
-        st.success("✅ Objective function initialized")
+        st.success(f"✅ Objective function initialized (F_causal: {causal_formulation})")
     except ImportError as e:
         st.error(f"❌ Failed to initialize objective function: {e}")
         return

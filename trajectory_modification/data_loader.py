@@ -675,6 +675,13 @@ class DataBundle:
     causal_demand_grid: Optional[np.ndarray] = None  # Mean demand per cell (for F_causal)
     causal_supply_grid: Optional[np.ndarray] = None  # Mean supply per cell (for F_causal)
     g_function_diagnostics: Optional[Dict[str, Any]] = None  # g(d) fitting info
+
+    # Demographics and hat matrices for Option B/C causal fairness formulations
+    hat_matrices: Optional[Dict[str, Any]] = None       # From precompute_hat_matrices()
+    g0_power_basis_func: Optional[Callable] = None       # g₀(D) fitted with power basis
+    active_cell_indices: Optional[np.ndarray] = None     # Boolean mask for hat matrix cells
+    demographics_grid: Optional[np.ndarray] = None       # (48, 90, n_features) demographics
+    demographic_feature_names: Optional[List[str]] = None  # Feature names
     
     @classmethod
     def load_default(
@@ -824,6 +831,85 @@ class DataBundle:
             causal_supply_grid = at_loader.aggregate_to_grid(active_taxis_data, aggregation='mean')
             causal_supply_grid = np.maximum(causal_supply_grid, 0.1)
         
+        # --- Load demographics and pre-compute hat matrices for Option B/C ---
+        hat_matrices = None
+        g0_power_basis_func = None
+        active_cell_indices = None
+        demographics_grid = None
+        demographic_feature_names = None
+
+        demo_path = root / "source_data" / "cell_demographics.pkl"
+        district_path = root / "source_data" / "grid_to_district_mapping.pkl"
+
+        if demo_path.exists() and district_path.exists() and causal_demand_grid is not None:
+            try:
+                with open(demo_path, 'rb') as f:
+                    demo_data = pickle.load(f)
+                with open(district_path, 'rb') as f:
+                    district_data = pickle.load(f)
+
+                demographics_grid = demo_data['demographics_grid']  # (48, 90, n_features)
+                raw_feature_names = list(demo_data['feature_names'])
+
+                # Enrich with derived features (GDPperCapita, CompPerCapita, etc.)
+                try:
+                    from objective_function.causal_fairness.utils import enrich_demographic_features
+                    demographics_grid, demographic_feature_names = enrich_demographic_features(
+                        demographics_grid, raw_feature_names
+                    )
+                except ImportError:
+                    demographic_feature_names = raw_feature_names
+
+                valid_mask = district_data['valid_mask']  # (48, 90) bool
+
+                # Default feature set for hat matrix
+                default_features = ['AvgHousingPricePerSqM', 'GDPperCapita', 'CompPerCapita']
+                hat_features = [f for f in default_features if f in demographic_feature_names]
+                if not hat_features:
+                    hat_features = demographic_feature_names[:3]  # fallback
+
+                # Identify active cells: demand > 0 AND valid demographics
+                demand_flat = causal_demand_grid.flatten()
+                valid_flat = valid_mask.flatten()
+                active_mask = (demand_flat >= 1.0) & valid_flat
+
+                # Check for NaN demographics in active cells
+                feat_indices = [demographic_feature_names.index(f) for f in hat_features]
+                demo_flat = demographics_grid.reshape(-1, demographics_grid.shape[-1])
+                for fi in feat_indices:
+                    active_mask &= ~np.isnan(demo_flat[:, fi])
+
+                active_cell_indices = active_mask
+                n_active = active_mask.sum()
+
+                if n_active >= 10:  # Need enough cells for meaningful regression
+                    # Extract data for active cells
+                    active_demands = demand_flat[active_mask]
+                    active_supply = causal_supply_grid.flatten()[active_mask]
+                    active_ratios = active_supply / np.maximum(active_demands, 1e-8)
+
+                    # Fit g₀(D) using power basis
+                    from objective_function.causal_fairness.utils import (
+                        estimate_g_power_basis, precompute_hat_matrices,
+                    )
+                    g0_power_basis_func, _ = estimate_g_power_basis(active_demands, active_ratios)
+
+                    # Extract demographic features for active cells
+                    active_demo = demo_flat[active_mask][:, feat_indices]
+
+                    # Pre-compute hat matrices
+                    hat_matrices = precompute_hat_matrices(
+                        demands=active_demands,
+                        demographic_features=active_demo,
+                        feature_names=hat_features,
+                    )
+            except Exception as e:
+                import warnings
+                warnings.warn(
+                    f"Failed to load demographics / compute hat matrices: {e}. "
+                    "Option B/C causal fairness will not be available."
+                )
+
         return cls(
             trajectories=trajectories,
             pickup_dropoff_data=pickup_dropoff_data,
@@ -835,6 +921,11 @@ class DataBundle:
             causal_demand_grid=causal_demand_grid,
             causal_supply_grid=causal_supply_grid,
             g_function_diagnostics=g_diagnostics,
+            hat_matrices=hat_matrices,
+            g0_power_basis_func=g0_power_basis_func,
+            active_cell_indices=active_cell_indices,
+            demographics_grid=demographics_grid,
+            demographic_feature_names=demographic_feature_names,
         )
     
     def to_tensors(self, device: str = 'cpu') -> Dict[str, 'torch.Tensor']:

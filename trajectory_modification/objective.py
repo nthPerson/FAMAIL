@@ -68,10 +68,14 @@ class FAMAILObjective(nn.Module):
         g_function: Optional[Callable] = None,
         discriminator: Optional[nn.Module] = None,
         eps: float = 1e-8,
+        causal_formulation: str = "baseline",
+        hat_matrices: Optional[Dict[str, Any]] = None,
+        g0_power_basis_func: Optional[Callable] = None,
+        active_cell_indices: Optional[np.ndarray] = None,
     ):
         """
         Initialize the FAMAIL objective function.
-        
+
         Args:
             alpha_spatial: Weight for F_spatial (default: 0.33)
             alpha_causal: Weight for F_causal (default: 0.33)
@@ -79,11 +83,23 @@ class FAMAILObjective(nn.Module):
             grid_dims: Spatial grid dimensions (x_cells, y_cells)
             neighborhood_size: Size of soft assignment neighborhood (must be odd)
             temperature: Initial temperature for soft cell assignment
-            g_function: Pre-fitted g(d) function for causal fairness.
-                       Must be provided for causal fairness computation.
+            g_function: Pre-fitted g(d) function for causal fairness (baseline formulation).
+                       Must be provided for baseline causal fairness computation.
             discriminator: Pre-trained discriminator for fidelity term.
                           Must be provided for fidelity computation.
             eps: Numerical stability constant
+            causal_formulation: Which F_causal formulation to use:
+                "baseline" - Historical R² with isotonic g₀(D)
+                "option_b" - Demographic residual independence via hat matrix
+                "option_c" - Partial ΔR² via dual hat matrices
+            hat_matrices: Pre-computed hat matrices from precompute_hat_matrices().
+                Required for option_b and option_c. Contains 'I_minus_H_demo', 'M',
+                'I_minus_H_red', 'I_minus_H_full'.
+            g0_power_basis_func: Pre-fitted g₀(D) using power basis (for option_b).
+                Maps demand array → expected ratio array.
+            active_cell_indices: Boolean mask or index array identifying which flattened
+                cells (in the grid) correspond to the hat matrix rows. Shape matches
+                the hat matrix dimension. Required for option_b and option_c.
         """
         super().__init__()
         self.alpha_spatial = alpha_spatial
@@ -91,7 +107,8 @@ class FAMAILObjective(nn.Module):
         self.alpha_fidelity = alpha_fidelity
         self.grid_dims = grid_dims
         self.eps = eps
-        
+        self.causal_formulation = causal_formulation
+
         # Import and initialize soft cell assignment
         try:
             from objective_function.soft_cell_assignment import SoftCellAssignment
@@ -105,17 +122,25 @@ class FAMAILObjective(nn.Module):
                 "SoftCellAssignment module not found. "
                 "Please ensure objective_function.soft_cell_assignment is available."
             )
-        
-        # Store g(d) function (frozen - no parameters)
+
+        # Store g(d) function (frozen - no parameters) for baseline
         self.g_function = g_function
-        
+
+        # Store g₀ power basis function for option_b
+        self.g0_power_basis_func = g0_power_basis_func
+
+        # Store hat matrices as registered buffers (constant, no gradients)
+        self._hat_matrices_np = hat_matrices
+        self._hat_matrix_tensors = {}  # Lazily initialized on first use
+        self.active_cell_indices = active_cell_indices
+
         # Store discriminator (frozen - set to eval mode)
         self.discriminator = discriminator
         if self.discriminator is not None:
             self.discriminator.eval()
             for param in self.discriminator.parameters():
                 param.requires_grad = False
-        
+
         # Debug storage for inspection
         self.last_debug = {}
         self._last_spatial_debug = {}
@@ -323,44 +348,59 @@ class FAMAILObjective(nn.Module):
         supply: torch.Tensor,
     ) -> torch.Tensor:
         """
-        Compute causal fairness: F_causal = max(0, R²)
-        
-        R² = 1 - Var(Y - g(D)) / Var(Y) where Y = S/D
-        
-        The g(D) function represents the expected supply-to-demand ratio
-        given demand level D, fitted on historical data. R² measures how
-        well the current supply-demand relationship follows the expected
-        pattern.
-        
+        Compute causal fairness using the configured formulation.
+
+        Dispatches to the appropriate method based on self.causal_formulation:
+        - "baseline": Historical R² = 1 - Var(R)/Var(Y) with isotonic g₀
+        - "option_b": Demographic residual independence via hat matrix
+        - "option_c": Partial ΔR² via dual hat matrices
+
         Args:
             demand: Demand (pickup counts) per cell [grid_x, grid_y]
             supply: Supply (dropoff counts or taxi availability) per cell [grid_x, grid_y]
-            
+
         Returns:
             Causal fairness score in [0, 1]
-            
-        Raises:
-            MissingComponentError: If g_function is not provided
-            InsufficientDataError: If there are too few active cells
+        """
+        if self.causal_formulation == "option_b":
+            return self._compute_option_b_causal(demand, supply)
+        elif self.causal_formulation == "option_c":
+            return self._compute_option_c_causal(demand, supply)
+        else:
+            return self._compute_baseline_causal(demand, supply)
+
+    def _get_hat_matrix_tensors(self, device, dtype):
+        """Lazily convert numpy hat matrices to torch tensors on the right device."""
+        key = (str(device), str(dtype))
+        if key not in self._hat_matrix_tensors:
+            hm = self._hat_matrices_np
+            self._hat_matrix_tensors[key] = {
+                k: torch.tensor(v, device=device, dtype=dtype)
+                for k, v in hm.items()
+                if isinstance(v, np.ndarray) and v.ndim == 2
+            }
+        return self._hat_matrix_tensors[key]
+
+    def _compute_baseline_causal(
+        self,
+        demand: torch.Tensor,
+        supply: torch.Tensor,
+    ) -> torch.Tensor:
+        """
+        Baseline F_causal: R² = 1 - Var(Y - g₀(D)) / Var(Y) with isotonic g₀.
+
+        This is the historical formulation preserved for backward compatibility.
         """
         if self.g_function is None:
             raise MissingComponentError(
-                "g_function not provided. Causal fairness requires a pre-fitted g(d) function. "
+                "g_function not provided. Baseline causal fairness requires a pre-fitted g(d) function. "
                 "Load g_function parameters from the data source."
             )
-        
-        # Filter cells with sufficient demand
-        # CRITICAL: This threshold MUST match the min_demand used when fitting g(d)
-        # (default min_demand=1.0 in GFunctionLoader.estimate_from_data)
-        #
-        # If threshold is too low (e.g., 0.1), we include cells with tiny demand
-        # where Y = S/D becomes artificially high, inflating Var(Y) and 
-        # making R² artificially low. Using 1.0 matches g(d) training data.
+
         DEMAND_THRESHOLD = 1.0
         mask = demand >= DEMAND_THRESHOLD
         n_active = mask.sum().item()
-        
-        # Require at least 2 cells to compute meaningful variance
+
         MIN_CELLS_FOR_VARIANCE = 2
         if n_active < MIN_CELLS_FOR_VARIANCE:
             raise InsufficientDataError(
@@ -368,34 +408,24 @@ class FAMAILObjective(nn.Module):
                 f"Causal fairness requires at least {MIN_CELLS_FOR_VARIANCE} active cells. "
                 "Check that demand tensor contains realistic values."
             )
-        
+
         D = demand[mask]
         S = supply[mask]
-        
-        # Compute Y = S/D (supply-to-demand ratio)
         Y = S / (D + self.eps)
-        
-        # Get g(D) predictions (frozen - no gradient tracking)
+
         with torch.no_grad():
             D_np = D.detach().cpu().numpy()
             g_d_np = self.g_function(D_np)
             g_d = torch.tensor(g_d_np, device=Y.device, dtype=Y.dtype)
-        
-        # Compute residual R = Y - g(D)
-        # This is differentiable through Y
+
         R = Y - g_d
-        
-        # R² computation
-        # R² = 1 - SS_res/SS_tot = 1 - Var(R)/Var(Y)
-        # High R² means g(d) explains the variance well (fair supply allocation)
         var_Y = Y.var() + self.eps
         var_R = R.var()
         r_squared = 1.0 - var_R / var_Y
-        
         f_causal = torch.clamp(r_squared, 0.0, 1.0)
-        
-        # Store debug info
+
         self._last_causal_debug = {
+            'formulation': 'baseline',
             'n_active_cells': int(n_active),
             'demand_range': (D.min().item(), D.max().item()),
             'supply_range': (S.min().item(), S.max().item()),
@@ -407,7 +437,153 @@ class FAMAILObjective(nn.Module):
         }
         self.last_debug['r_squared'] = r_squared.item()
         self.last_debug['f_causal'] = f_causal.item()
-        
+
+        return f_causal
+
+    def _compute_option_b_causal(
+        self,
+        demand: torch.Tensor,
+        supply: torch.Tensor,
+    ) -> torch.Tensor:
+        """
+        Option B F_causal: Demographic residual independence via hat matrix.
+
+        F = R'(I-H)R / R'MR where R = Y - g₀(D) and H projects onto demographics.
+        """
+        if self._hat_matrices_np is None:
+            raise MissingComponentError(
+                "hat_matrices not provided. Option B requires pre-computed hat matrices. "
+                "Load demographic data and call precompute_hat_matrices()."
+            )
+        g0_func = self.g0_power_basis_func
+        if g0_func is None:
+            raise MissingComponentError(
+                "g0_power_basis_func not provided. Option B requires a power basis g₀(D)."
+            )
+
+        # Extract active cells using the pre-computed index
+        if self.active_cell_indices is not None:
+            mask = torch.tensor(self.active_cell_indices, device=demand.device, dtype=torch.bool)
+            D = demand.flatten()[mask]
+            S = supply.flatten()[mask]
+        else:
+            DEMAND_THRESHOLD = 1.0
+            mask = demand >= DEMAND_THRESHOLD
+            D = demand[mask]
+            S = supply[mask]
+
+        n_active = D.shape[0]
+        n_hat = self._hat_matrices_np['I_minus_H_demo'].shape[0]
+        if n_active != n_hat:
+            raise InsufficientDataError(
+                f"Active cells ({n_active}) != hat matrix dimension ({n_hat}). "
+                "Ensure active_cell_indices matches the cells used to build hat matrices."
+            )
+
+        Y = S / (D + self.eps)
+
+        # Compute g₀(D) with frozen power basis (no gradient tracking)
+        with torch.no_grad():
+            D_np = D.detach().cpu().numpy()
+            g0_np = g0_func(D_np)
+            g0 = torch.tensor(g0_np, device=Y.device, dtype=Y.dtype)
+
+        # R = Y - g₀(D) — differentiable through Y (g₀ is frozen)
+        R = Y - g0
+
+        # Get constant matrices as tensors
+        tensors = self._get_hat_matrix_tensors(R.device, R.dtype)
+        I_minus_H = tensors['I_minus_H_demo']
+        M = tensors['M']
+
+        # F_causal = R'(I-H)R / R'MR
+        from objective_function.causal_fairness.utils import compute_fcausal_option_b_torch
+        f_causal = compute_fcausal_option_b_torch(R, I_minus_H, M, self.eps)
+
+        # Debug info
+        r2_demo = 1.0 - f_causal.item()
+        self._last_causal_debug = {
+            'formulation': 'option_b',
+            'n_active_cells': int(n_active),
+            'r2_demo': r2_demo,
+            'f_causal': f_causal.item(),
+            'Y_range': (Y.min().item(), Y.max().item()),
+            'R_range': (R.min().item(), R.max().item()),
+            'g0_range': (g0.min().item(), g0.max().item()),
+        }
+        self.last_debug['r_squared'] = r2_demo
+        self.last_debug['f_causal'] = f_causal.item()
+
+        return f_causal
+
+    def _compute_option_c_causal(
+        self,
+        demand: torch.Tensor,
+        supply: torch.Tensor,
+    ) -> torch.Tensor:
+        """
+        Option C F_causal: Partial ΔR² via dual hat matrices.
+
+        F = 1 - ΔR² = 1 - (R²_full - R²_red) where:
+        - R²_red uses demand-only hat matrix (power basis)
+        - R²_full uses demand + demographics hat matrix
+        """
+        if self._hat_matrices_np is None:
+            raise MissingComponentError(
+                "hat_matrices not provided. Option C requires pre-computed hat matrices."
+            )
+
+        # Extract active cells
+        if self.active_cell_indices is not None:
+            mask = torch.tensor(self.active_cell_indices, device=demand.device, dtype=torch.bool)
+            D = demand.flatten()[mask]
+            S = supply.flatten()[mask]
+        else:
+            DEMAND_THRESHOLD = 1.0
+            mask = demand >= DEMAND_THRESHOLD
+            D = demand[mask]
+            S = supply[mask]
+
+        n_active = D.shape[0]
+        n_hat = self._hat_matrices_np['I_minus_H_red'].shape[0]
+        if n_active != n_hat:
+            raise InsufficientDataError(
+                f"Active cells ({n_active}) != hat matrix dimension ({n_hat}). "
+                "Ensure active_cell_indices matches the cells used to build hat matrices."
+            )
+
+        Y = S / (D + self.eps)
+
+        # Get constant matrices as tensors
+        tensors = self._get_hat_matrix_tensors(Y.device, Y.dtype)
+        I_minus_H_red = tensors['I_minus_H_red']
+        I_minus_H_full = tensors['I_minus_H_full']
+        M = tensors['M']
+
+        # F_causal = 1 - ΔR²
+        from objective_function.causal_fairness.utils import compute_fcausal_option_c_torch
+        f_causal = compute_fcausal_option_c_torch(Y, I_minus_H_red, I_minus_H_full, M, self.eps)
+
+        # Debug info
+        ss_tot = (Y @ M @ Y).item()
+        ss_res_red = (Y @ I_minus_H_red @ Y).item()
+        ss_res_full = (Y @ I_minus_H_full @ Y).item()
+        r2_red = max(0.0, 1.0 - ss_res_red / (ss_tot + self.eps))
+        r2_full = max(0.0, 1.0 - ss_res_full / (ss_tot + self.eps))
+        delta_r2 = max(0.0, r2_full - r2_red)
+
+        self._last_causal_debug = {
+            'formulation': 'option_c',
+            'n_active_cells': int(n_active),
+            'r2_reduced': r2_red,
+            'r2_full': r2_full,
+            'delta_r2': delta_r2,
+            'f_causal': f_causal.item(),
+            'Y_range': (Y.min().item(), Y.max().item()),
+        }
+        self.last_debug['r_squared'] = delta_r2
+        self.last_debug['f_causal'] = f_causal.item()
+
         return f_causal
     
     def compute_fidelity(

@@ -271,10 +271,174 @@ def estimate_g_lowess(
     return predict, diagnostics
 
 
+def estimate_g_reciprocal(
+    demands: np.ndarray,
+    ratios: np.ndarray,
+) -> Tuple[Callable[[np.ndarray], np.ndarray], Dict[str, Any]]:
+    """
+    Estimate g(d) using reciprocal basis: Y = β₀ + β₁/(D+1).
+
+    Captures the hyperbolic Y ≈ a/D relationship with 2 parameters.
+    The +1 offset avoids division by zero. This is linear-in-parameters
+    and compatible with the hat matrix formulation.
+
+    Args:
+        demands: Array of demand values
+        ratios: Array of service ratios
+
+    Returns:
+        Tuple of (prediction function, diagnostics dict)
+    """
+    from sklearn.linear_model import LinearRegression
+
+    if len(demands) == 0:
+        def empty_predict(d):
+            return np.zeros_like(d, dtype=float)
+        return empty_predict, {'method': 'reciprocal', 'error': 'no data'}
+
+    X = (1.0 / (demands + 1)).reshape(-1, 1)
+    y = ratios
+
+    model = LinearRegression()
+    model.fit(X, y)
+
+    def predict(d: np.ndarray) -> np.ndarray:
+        d = np.atleast_1d(d).astype(float)
+        X_new = (1.0 / (d + 1)).reshape(-1, 1)
+        return model.predict(X_new)
+
+    diagnostics = {
+        'method': 'reciprocal',
+        'intercept': float(model.intercept_),
+        'coefficient': float(model.coef_[0]),
+        'formula': f'Y = {model.intercept_:.4f} + {model.coef_[0]:.4f} / (D+1)',
+        'r2_train': float(model.score(X, y)),
+        'hat_matrix_compatible': True,
+    }
+
+    return predict, diagnostics
+
+
+def estimate_g_log(
+    demands: np.ndarray,
+    ratios: np.ndarray,
+) -> Tuple[Callable[[np.ndarray], np.ndarray], Dict[str, Any]]:
+    """
+    Estimate g(d) using log basis: Y = β₀ + β₁·log(D+1).
+
+    Captures concave decay. The +1 offset avoids log(0). This is
+    linear-in-parameters and compatible with the hat matrix formulation.
+
+    Args:
+        demands: Array of demand values
+        ratios: Array of service ratios
+
+    Returns:
+        Tuple of (prediction function, diagnostics dict)
+    """
+    from sklearn.linear_model import LinearRegression
+
+    if len(demands) == 0:
+        def empty_predict(d):
+            return np.zeros_like(d, dtype=float)
+        return empty_predict, {'method': 'log', 'error': 'no data'}
+
+    X = np.log(demands + 1).reshape(-1, 1)
+    y = ratios
+
+    model = LinearRegression()
+    model.fit(X, y)
+
+    def predict(d: np.ndarray) -> np.ndarray:
+        d = np.atleast_1d(d).astype(float)
+        X_new = np.log(d + 1).reshape(-1, 1)
+        return model.predict(X_new)
+
+    diagnostics = {
+        'method': 'log',
+        'intercept': float(model.intercept_),
+        'coefficient': float(model.coef_[0]),
+        'formula': f'Y = {model.intercept_:.4f} + {model.coef_[0]:.4f} * log(D+1)',
+        'r2_train': float(model.score(X, y)),
+        'hat_matrix_compatible': True,
+    }
+
+    return predict, diagnostics
+
+
+def estimate_g_power_basis(
+    demands: np.ndarray,
+    ratios: np.ndarray,
+) -> Tuple[Callable[[np.ndarray], np.ndarray], Dict[str, Any]]:
+    """
+    Estimate g(d) using power basis: Y = β₀ + β₁·D⁻¹ + β₂·D⁻⁰·⁵ + β₃·D⁰·⁵.
+
+    A flexible power-law family with 4 parameters. Uses D+1 offsets to avoid
+    singularity at D=0. This is linear-in-parameters and compatible with the
+    hat matrix formulation.
+
+    The basis spans multiple decay rates:
+    - D⁻¹: rapid hyperbolic decay (dominant at low D)
+    - D⁻⁰·⁵: moderate decay
+    - D⁰·⁵: slow growth (captures any sub-linear supply scaling)
+
+    Args:
+        demands: Array of demand values
+        ratios: Array of service ratios
+
+    Returns:
+        Tuple of (prediction function, diagnostics dict)
+    """
+    from sklearn.linear_model import LinearRegression
+
+    if len(demands) == 0:
+        def empty_predict(d):
+            return np.zeros_like(d, dtype=float)
+        return empty_predict, {'method': 'power_basis', 'error': 'no data'}
+
+    d_safe = demands.astype(float) + 1.0
+    X = np.column_stack([
+        1.0 / d_safe,           # D⁻¹
+        1.0 / np.sqrt(d_safe),  # D⁻⁰·⁵
+        np.sqrt(d_safe),        # D⁰·⁵
+    ])
+    y = ratios
+
+    model = LinearRegression()
+    model.fit(X, y)
+
+    def predict(d: np.ndarray) -> np.ndarray:
+        d = np.atleast_1d(d).astype(float) + 1.0
+        X_new = np.column_stack([
+            1.0 / d,
+            1.0 / np.sqrt(d),
+            np.sqrt(d),
+        ])
+        return model.predict(X_new)
+
+    coefs = model.coef_
+    diagnostics = {
+        'method': 'power_basis',
+        'intercept': float(model.intercept_),
+        'coefficients': {
+            'D^(-1)': float(coefs[0]),
+            'D^(-0.5)': float(coefs[1]),
+            'D^(0.5)': float(coefs[2]),
+        },
+        'formula': (f'Y = {model.intercept_:.4f} + {coefs[0]:.4f}/(D+1) '
+                    f'+ {coefs[1]:.4f}/√(D+1) + {coefs[2]:.4f}·√(D+1)'),
+        'r2_train': float(model.score(X, y)),
+        'hat_matrix_compatible': True,
+    }
+
+    return predict, diagnostics
+
+
 def estimate_g_function(
     demands: np.ndarray,
     ratios: np.ndarray,
-    method: Literal["binning", "linear", "polynomial", "isotonic", "lowess"] = "binning",
+    method: Literal["binning", "linear", "polynomial", "isotonic", "lowess",
+                    "reciprocal", "log", "power_basis"] = "binning",
     n_bins: int = 10,
     poly_degree: int = 2,
     lowess_frac: float = 0.3,
@@ -306,6 +470,12 @@ def estimate_g_function(
         return estimate_g_isotonic(demands, ratios)
     elif method == "lowess":
         return estimate_g_lowess(demands, ratios, lowess_frac)
+    elif method == "reciprocal":
+        return estimate_g_reciprocal(demands, ratios)
+    elif method == "log":
+        return estimate_g_log(demands, ratios)
+    elif method == "power_basis":
+        return estimate_g_power_basis(demands, ratios)
     else:
         raise ValueError(f"Unknown estimation method: {method}")
 
@@ -2336,6 +2506,324 @@ def compute_option_d_group_fairness(
         'n_income_groups': actual_n_groups,
         'n_samples': len(demands),
     }
+
+
+# =============================================================================
+# HAT MATRIX FORMULATIONS (Option B & Option C)
+# =============================================================================
+
+def build_power_basis_features(
+    demands: np.ndarray,
+    include_intercept: bool = True,
+) -> np.ndarray:
+    """
+    Build power basis feature matrix from demand values.
+
+    Creates X_D = [1, 1/(D+1), 1/√(D+1), √(D+1)] for each cell.
+    This captures the hyperbolic Y ≈ a/D relationship with 4 linear parameters.
+
+    Args:
+        demands: Array of demand values, shape (n,)
+        include_intercept: Whether to prepend an intercept column of 1s
+
+    Returns:
+        Feature matrix, shape (n, 3) or (n, 4) with intercept
+    """
+    d_safe = np.asarray(demands, dtype=np.float64) + 1.0
+    features = np.column_stack([
+        1.0 / d_safe,           # D⁻¹  (rapid hyperbolic decay)
+        1.0 / np.sqrt(d_safe),  # D⁻⁰·⁵ (moderate decay)
+        np.sqrt(d_safe),        # D⁰·⁵  (slow sub-linear growth)
+    ])
+    if include_intercept:
+        features = np.column_stack([np.ones(len(demands)), features])
+    return features
+
+
+def build_hat_matrix(X: np.ndarray) -> np.ndarray:
+    """
+    Compute the hat matrix H = X(X'X)⁻¹X'.
+
+    Uses the pseudoinverse for numerical stability when X'X is
+    nearly singular (e.g., collinear demographic features).
+
+    Args:
+        X: Design matrix, shape (n, p)
+
+    Returns:
+        Hat matrix H, shape (n, n)
+    """
+    # Use SVD-based pseudoinverse for numerical stability
+    # H = X @ pinv(X) is equivalent to X @ (X'X)⁻¹ @ X' but more stable
+    return X @ np.linalg.pinv(X)
+
+
+def build_centering_matrix(n: int) -> np.ndarray:
+    """
+    Build the centering matrix M = I - 11'/n.
+
+    M centers any vector: Mv = v - mean(v).
+
+    Args:
+        n: Dimension (number of cells)
+
+    Returns:
+        Centering matrix M, shape (n, n)
+    """
+    return np.eye(n) - np.ones((n, n)) / n
+
+
+def precompute_hat_matrices(
+    demands: np.ndarray,
+    demographic_features: np.ndarray,
+    feature_names: Optional[List[str]] = None,
+) -> Dict[str, Any]:
+    """
+    Pre-compute all constant matrices needed for Option B and Option C.
+
+    This function is called once during data loading. The returned matrices
+    are constant during optimization — only the residual/ratio vectors change.
+
+    Args:
+        demands: Demand values for active cells, shape (n,)
+        demographic_features: Demographic feature matrix, shape (n, p)
+        feature_names: Names of demographic features (for diagnostics)
+
+    Returns:
+        Dictionary containing:
+        - 'I_minus_H_demo': (I-H) for demographic projection, shape (n, n)
+        - 'M': Centering matrix, shape (n, n)
+        - 'I_minus_H_red': (I-H_red) for demand-only model, shape (n, n)
+        - 'I_minus_H_full': (I-H_full) for demand+demographics model, shape (n, n)
+        - 'g0_power_basis_func': Fitted g₀(D) using power basis
+        - 'g0_predictions': g₀(D) values for the active cells
+        - 'n_cells': Number of active cells
+        - 'n_demo_features': Number of demographic features
+        - 'diagnostics': Fitting diagnostics
+    """
+    from sklearn.preprocessing import StandardScaler
+
+    n = len(demands)
+    assert n == demographic_features.shape[0], (
+        f"demands ({n}) and demographic_features ({demographic_features.shape[0]}) must have same length"
+    )
+
+    # --- Fit g₀(D) using power basis ---
+    g0_func, g0_diag = estimate_g_power_basis(demands, demands)  # placeholder, refitted below
+
+    # Actually fit on real data: we need ratios, but they're not passed here.
+    # Instead, we just build the matrices — g₀ is fitted separately.
+    # The caller will provide g₀ predictions.
+
+    # --- Build feature matrices ---
+
+    # Demand features: power basis with intercept
+    X_demand = build_power_basis_features(demands, include_intercept=True)
+
+    # Demographic features: standardize, no intercept (already in X_demand)
+    scaler = StandardScaler()
+    X_demo_scaled = scaler.fit_transform(demographic_features)
+
+    # Demographics-only design matrix (with intercept for Option B)
+    X_demo_with_intercept = np.column_stack([np.ones(n), X_demo_scaled])
+
+    # Full design matrix: demand + demographics
+    X_full = np.column_stack([X_demand, X_demo_scaled])
+
+    # --- Compute hat matrices ---
+    M = build_centering_matrix(n)
+
+    # Option B: project residuals onto demographics
+    H_demo = build_hat_matrix(X_demo_with_intercept)
+    I_minus_H_demo = np.eye(n) - H_demo
+
+    # Option C: demand-only and full models
+    H_red = build_hat_matrix(X_demand)
+    H_full = build_hat_matrix(X_full)
+    I_minus_H_red = np.eye(n) - H_red
+    I_minus_H_full = np.eye(n) - H_full
+
+    # Diagnostics
+    diagnostics = {
+        'n_cells': n,
+        'n_demo_features': demographic_features.shape[1],
+        'n_demand_features': X_demand.shape[1],
+        'n_full_features': X_full.shape[1],
+        'feature_names': feature_names or [],
+        'demo_scaler_mean': scaler.mean_.tolist(),
+        'demo_scaler_std': scaler.scale_.tolist(),
+        'H_demo_rank': int(np.linalg.matrix_rank(H_demo)),
+        'H_red_rank': int(np.linalg.matrix_rank(H_red)),
+        'H_full_rank': int(np.linalg.matrix_rank(H_full)),
+    }
+
+    return {
+        'I_minus_H_demo': I_minus_H_demo,
+        'M': M,
+        'I_minus_H_red': I_minus_H_red,
+        'I_minus_H_full': I_minus_H_full,
+        'H_demo': H_demo,
+        'H_red': H_red,
+        'H_full': H_full,
+        'demo_scaler': scaler,
+        'n_cells': n,
+        'diagnostics': diagnostics,
+    }
+
+
+def compute_fcausal_option_b_numpy(
+    residuals: np.ndarray,
+    I_minus_H: np.ndarray,
+    M: np.ndarray,
+    eps: float = 1e-10,
+) -> Dict[str, float]:
+    """
+    Compute Option B F_causal using hat matrix: F = R'(I-H)R / R'MR.
+
+    Args:
+        residuals: Demand-adjusted residuals R = Y - g₀(D), shape (n,)
+        I_minus_H: (I - H_demo) residual-maker matrix, shape (n, n)
+        M: Centering matrix, shape (n, n)
+        eps: Numerical stability constant
+
+    Returns:
+        Dict with f_causal, r2_demo, ss_res, ss_tot
+    """
+    R = np.asarray(residuals, dtype=np.float64)
+    ss_res_demo = R @ I_minus_H @ R   # R'(I-H)R: variance NOT explained by demographics
+    ss_tot = R @ M @ R                 # R'MR: total centered variance
+    ss_explained = ss_tot - ss_res_demo  # Variance explained by demographics
+
+    if ss_tot < eps:
+        return {'f_causal': 1.0, 'r2_demo': 0.0, 'ss_res': 0.0, 'ss_tot': 0.0}
+
+    r2_demo = max(0.0, ss_explained / ss_tot)
+    f_causal = max(0.0, min(1.0, 1.0 - r2_demo))
+
+    return {
+        'f_causal': f_causal,
+        'r2_demo': r2_demo,
+        'ss_res': float(ss_res_demo),
+        'ss_tot': float(ss_tot),
+    }
+
+
+def compute_fcausal_option_c_numpy(
+    ratios: np.ndarray,
+    I_minus_H_red: np.ndarray,
+    I_minus_H_full: np.ndarray,
+    M: np.ndarray,
+    eps: float = 1e-10,
+) -> Dict[str, float]:
+    """
+    Compute Option C F_causal using dual hat matrices: F = 1 - ΔR².
+
+    ΔR² = R²_full - R²_red where:
+    - R²_red = 1 - Y'(I-H_red)Y / Y'MY   (demand-only model)
+    - R²_full = 1 - Y'(I-H_full)Y / Y'MY  (demand + demographics model)
+
+    Args:
+        ratios: Service ratios Y = S/D, shape (n,)
+        I_minus_H_red: (I - H_red) for demand-only model, shape (n, n)
+        I_minus_H_full: (I - H_full) for full model, shape (n, n)
+        M: Centering matrix, shape (n, n)
+        eps: Numerical stability constant
+
+    Returns:
+        Dict with f_causal, delta_r2, r2_reduced, r2_full
+    """
+    Y = np.asarray(ratios, dtype=np.float64)
+    ss_tot = Y @ M @ Y
+
+    if ss_tot < eps:
+        return {
+            'f_causal': 1.0, 'delta_r2': 0.0,
+            'r2_reduced': 0.0, 'r2_full': 0.0, 'ss_tot': 0.0,
+        }
+
+    ss_res_red = Y @ I_minus_H_red @ Y
+    ss_res_full = Y @ I_minus_H_full @ Y
+
+    r2_red = max(0.0, 1.0 - ss_res_red / ss_tot)
+    r2_full = max(0.0, 1.0 - ss_res_full / ss_tot)
+    delta_r2 = max(0.0, r2_full - r2_red)
+
+    f_causal = max(0.0, min(1.0, 1.0 - delta_r2))
+
+    return {
+        'f_causal': f_causal,
+        'delta_r2': delta_r2,
+        'r2_reduced': r2_red,
+        'r2_full': r2_full,
+        'ss_tot': float(ss_tot),
+    }
+
+
+def compute_fcausal_option_b_torch(
+    residuals: 'torch.Tensor',
+    I_minus_H: 'torch.Tensor',
+    M: 'torch.Tensor',
+    eps: float = 1e-10,
+) -> 'torch.Tensor':
+    """
+    Differentiable Option B F_causal: F = R'(I-H)R / R'MR.
+
+    Both (I-H) and M are constant matrices; only R carries gradients.
+    The gradient is: ∂F/∂R = (2/R'MR) · [(I-H)R - F·MR]
+
+    Args:
+        residuals: Demand-adjusted residuals R = Y - g₀(D), shape (n,)
+        I_minus_H: Constant (I - H_demo) matrix, shape (n, n)
+        M: Constant centering matrix, shape (n, n)
+        eps: Numerical stability constant
+
+    Returns:
+        Scalar tensor F_causal in [0, 1]
+    """
+    import torch
+
+    ss_res = residuals @ I_minus_H @ residuals
+    ss_tot = residuals @ M @ residuals + eps
+
+    # F = SS_res / SS_tot = (1 - R²_demo)
+    f_causal = ss_res / ss_tot
+    return torch.clamp(f_causal, 0.0, 1.0)
+
+
+def compute_fcausal_option_c_torch(
+    ratios: 'torch.Tensor',
+    I_minus_H_red: 'torch.Tensor',
+    I_minus_H_full: 'torch.Tensor',
+    M: 'torch.Tensor',
+    eps: float = 1e-10,
+) -> 'torch.Tensor':
+    """
+    Differentiable Option C F_causal: F = 1 - ΔR².
+
+    ΔR² = R²_full - R²_red, computed via constant hat matrices.
+
+    Args:
+        ratios: Service ratios Y = S/D, shape (n,)
+        I_minus_H_red: Constant (I - H_red) for demand model, shape (n, n)
+        I_minus_H_full: Constant (I - H_full) for full model, shape (n, n)
+        M: Constant centering matrix, shape (n, n)
+        eps: Numerical stability constant
+
+    Returns:
+        Scalar tensor F_causal in [0, 1]
+    """
+    import torch
+
+    ss_tot = ratios @ M @ ratios + eps
+    ss_res_red = ratios @ I_minus_H_red @ ratios
+    ss_res_full = ratios @ I_minus_H_full @ ratios
+
+    # ΔR² = (SS_res_red - SS_res_full) / SS_tot
+    delta_r2 = (ss_res_red - ss_res_full) / ss_tot
+    delta_r2 = torch.clamp(delta_r2, 0.0, 1.0)
+
+    f_causal = 1.0 - delta_r2
+    return torch.clamp(f_causal, 0.0, 1.0)
 
 
 def compute_residual_demographic_correlation(

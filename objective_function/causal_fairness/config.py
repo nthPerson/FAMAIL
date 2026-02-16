@@ -75,15 +75,21 @@ class CausalFairnessConfig(TermConfig):
         time_filter: Time bucket range to include (None = all)
     """
     
+    # F_causal formulation
+    formulation: Literal[
+        "baseline", "option_b", "option_c"
+    ] = "option_b"
+
     # Temporal aggregation
     period_type: str = "hourly"  # "time_bucket", "hourly", "daily", "all"
-    
+
     # Spatial configuration
     grid_dims: Tuple[int, int] = (48, 90)  # (x_cells, y_cells)
-    
-    # g(d) estimation method
+
+    # g(d) estimation method (used by baseline formulation; option_b/c use power_basis)
     estimation_method: Literal[
-        "binning", "linear", "polynomial", "isotonic", "lowess"
+        "binning", "linear", "polynomial", "isotonic", "lowess",
+        "reciprocal", "log", "power_basis"
     ] = "binning"
     n_bins: int = 10                    # For binning method
     poly_degree: int = 2                # For polynomial method
@@ -109,6 +115,11 @@ class CausalFairnessConfig(TermConfig):
     # Include all cells (for compatibility with spatial fairness dashboard)
     include_zero_cells: bool = False    # For causal, usually False (need demand > 0)
     data_is_one_indexed: bool = True    # Whether source data uses 1-based indexing
+
+    # Demographics configuration (for option_b / option_c formulations)
+    demographic_features: Optional[List[str]] = None  # Feature names for hat matrix (None = default set)
+    demographics_data_path: Optional[str] = None      # Path to cell_demographics.pkl
+    district_mapping_path: Optional[str] = None       # Path to grid_to_district_mapping.pkl
     
     def validate(self) -> None:
         """Validate configuration parameters."""
@@ -124,7 +135,17 @@ class CausalFairnessConfig(TermConfig):
         if self.grid_dims[0] <= 0 or self.grid_dims[1] <= 0:
             raise ValueError("Grid dimensions must be positive")
         
-        valid_methods = ["binning", "linear", "polynomial", "isotonic", "lowess"]
+        valid_formulations = ["baseline", "option_b", "option_c"]
+        if self.formulation not in valid_formulations:
+            raise ValueError(
+                f"Invalid formulation '{self.formulation}'. "
+                f"Must be one of: {valid_formulations}"
+            )
+
+        valid_methods = [
+            "binning", "linear", "polynomial", "isotonic", "lowess",
+            "reciprocal", "log", "power_basis",
+        ]
         if self.estimation_method not in valid_methods:
             raise ValueError(
                 f"Invalid estimation_method '{self.estimation_method}'. "

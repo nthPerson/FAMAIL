@@ -1985,9 +1985,10 @@ def main():
     # --- Baseline g(D) ---
     st.sidebar.subheader("📈 Baseline g(D)")
     estimation_method = st.sidebar.selectbox(
-        "g(D) Method", ["binning", "polynomial", "isotonic", "lowess", "linear"],
+        "g(D) Method", ["binning", "polynomial", "isotonic", "lowess", "linear",
+                        "reciprocal", "log", "power_basis"],
         index=2,
-        help="Method for estimating g(D) = E[Y|D]. Binning is most robust. Polynomial can overfit with high degree.",
+        help="Method for estimating g(D) = E[Y|D]. Isotonic is non-parametric. Reciprocal/power_basis match hyperbolic Y≈a/D shape and are hat-matrix compatible.",
     )
     n_bins = st.sidebar.slider("N Bins (binning)", 3, 30, 10,
         help="Number of demand bins for binning method. More bins = finer resolution but noisier.",
