@@ -64,8 +64,3 @@ This relative framing is ideal for FAMAIL because:
     ST-SiameseNet is trained once on the full trajectory dataset, then frozen during the optimization loop. Only the trajectory pickup locations are modified — the discriminator provides gradient signal but is never updated.
 
 ---
-
-<div style="display: flex; justify-content: space-between; margin-top: 2rem;">
-<a href="../soft-cell-assignment/" class="md-button">← Soft Cell Assignment</a>
-<a href="../../data/study-area/" class="md-button md-button--primary">Next: Study Area & Data →</a>
-</div>

@@ -35,8 +35,3 @@ The **causal reasoning framework** for algorithmic fairness — in particular, t
 > Kilbertus, N., et al. "Avoiding Discrimination through Causal Reasoning"
 
 ---
-
-<div style="display: flex; justify-content: space-between; margin-top: 2rem;">
-<a href="../../fairness/" class="md-button">← Fairness Definitions</a>
-<a href="../team/" class="md-button md-button--primary">Next: Team →</a>
-</div>

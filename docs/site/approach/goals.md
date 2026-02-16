@@ -39,8 +39,3 @@ The ultimate downstream application: agents that learn equitable service pattern
     Goals 1–3 are the focus of ongoing development. Goal 4 represents the downstream application that will follow once the trajectory editing framework is validated.
 
 ---
-
-<div style="display: flex; justify-content: space-between; margin-top: 2rem;">
-<a href="../overview/" class="md-button">← What is FAMAIL?</a>
-<a href="../../methodology/pipeline/" class="md-button md-button--primary">Next: Two-Phase Pipeline →</a>
-</div>

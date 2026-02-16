@@ -69,8 +69,3 @@ All three terms — and the entire optimization pipeline — are fully different
     By formulating all objectives as differentiable functions in $[0, 1]$ (higher is better), the terms can be freely combined with different weight configurations to explore the trade-off space between fairness and fidelity.
 
 ---
-
-<div style="display: flex; justify-content: space-between; margin-top: 2rem;">
-<a href="../pipeline/" class="md-button">← Two-Phase Pipeline</a>
-<a href="../algorithm/" class="md-button md-button--primary">Next: The Algorithm →</a>
-</div>

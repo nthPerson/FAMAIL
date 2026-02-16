@@ -52,8 +52,3 @@ Each grid cell is mapped to its majority-overlap Shenzhen district via ArcGIS sp
     Raw pickup counts can be misleading — a cell might have few pickups simply because few taxis pass through it. By dividing by the number of active taxis, we obtain a **service rate** that measures how effectively taxis serve an area given their presence. This is the quantity that the [spatial fairness](../fairness.md) metric operates on.
 
 ---
-
-<div style="display: flex; justify-content: space-between; margin-top: 2rem;">
-<a href="../methodology/discriminator/" class="md-button">← ST-SiameseNet</a>
-<a href="../fairness/" class="md-button md-button--primary">Next: Fairness Definitions →</a>
-</div>

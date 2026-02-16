@@ -27,6 +27,4 @@ FAMAIL addresses this challenge by developing algorithmic tools that can reshape
 
 ---
 
-<div style="display: flex; justify-content: flex-end; margin-top: 2rem;">
-<a href="../approach/overview/" class="md-button md-button--primary">Next: What is FAMAIL? →</a>
-</div>
+

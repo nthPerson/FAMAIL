@@ -65,8 +65,3 @@ Expert GPS Trajectories
 ```
 
 ---
-
-<div style="display: flex; justify-content: space-between; margin-top: 2rem;">
-<a href="../../problem/" class="md-button">← The Problem</a>
-<a href="../goals/" class="md-button md-button--primary">Next: Research Goals →</a>
-</div>

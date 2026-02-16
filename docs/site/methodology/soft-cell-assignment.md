@@ -80,8 +80,3 @@ Perturbation δ = clip(α · sign(∇_p L), -ε, ε)
     Without soft cell assignment, FAMAIL could not use gradient-based optimization at all. The entire pipeline — from continuous pickup locations through discrete cell counts to fairness metrics — would be non-differentiable. This module is the bridge that makes end-to-end learning possible.
 
 ---
-
-<div style="display: flex; justify-content: space-between; margin-top: 2rem;">
-<a href="../algorithm/" class="md-button">← The Algorithm</a>
-<a href="../discriminator/" class="md-button md-button--primary">Next: ST-SiameseNet →</a>
-</div>

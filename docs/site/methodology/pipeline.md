@@ -55,8 +55,3 @@ The modification algorithm enforces several constraints to ensure realistic edit
 | **Sequential processing** | Trajectories are modified one at a time, with global counts updated after each edit |
 
 ---
-
-<div style="display: flex; justify-content: space-between; margin-top: 2rem;">
-<a href="../../approach/goals/" class="md-button">← Research Goals</a>
-<a href="../objective-function/" class="md-button md-button--primary">Next: Objective Function →</a>
-</div>

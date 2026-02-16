@@ -52,8 +52,3 @@ These two fairness measures are complementary, and neither alone is sufficient:
     True fairness requires both: **equitable distribution** (spatial) that is **driven by legitimate factors** (causal). The [objective function](methodology/objective-function.md) captures both through separate, weighted terms.
 
 ---
-
-<div style="display: flex; justify-content: space-between; margin-top: 2rem;">
-<a href="data/study-area/" class="md-button">← Study Area & Data</a>
-<a href="references/related-work/" class="md-button md-button--primary">Next: Related Work →</a>
-</div>

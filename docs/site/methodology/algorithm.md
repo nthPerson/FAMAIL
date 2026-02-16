@@ -77,8 +77,3 @@ FAMAIL adapts the **Spatio-Temporal iterative Fast Gradient Sign Method (ST-iFGS
     The core insight of FAMAIL is that adversarial perturbation techniques — designed to attack models — can be repurposed as optimization tools for improving fairness. The mathematical machinery is the same; only the objective changes.
 
 ---
-
-<div style="display: flex; justify-content: space-between; margin-top: 2rem;">
-<a href="../objective-function/" class="md-button">← Objective Function</a>
-<a href="../soft-cell-assignment/" class="md-button md-button--primary">Next: Soft Cell Assignment →</a>
-</div>
