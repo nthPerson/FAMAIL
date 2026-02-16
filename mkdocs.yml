@@ -70,12 +70,12 @@ nav:
   - Approach:
     - What is FAMAIL?: approach/overview.md
     - Research Goals: approach/goals.md
-  - Methodology:
-    - Two-Phase Pipeline: methodology/pipeline.md
-    - Objective Function: methodology/objective-function.md
-    - The Algorithm: methodology/algorithm.md
-    - Soft Cell Assignment: methodology/soft-cell-assignment.md
-    - Trajectory Discriminator: methodology/discriminator.md
+  # - Methodology:
+  #   - Two-Phase Pipeline: methodology/pipeline.md
+  #   - Objective Function: methodology/objective-function.md
+  #   - The Algorithm: methodology/algorithm.md
+  #   - Soft Cell Assignment: methodology/soft-cell-assignment.md
+  #   - Trajectory Discriminator: methodology/discriminator.md
   - Data:
     - Study Area & Sources: data/study-area.md
   - Fairness: fairness.md
