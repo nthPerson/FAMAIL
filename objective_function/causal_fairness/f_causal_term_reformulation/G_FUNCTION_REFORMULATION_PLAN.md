@@ -131,7 +131,7 @@ Higher R² means the model (which includes demographics) better explains the obs
 
 ---
 
-### 3.3 Option B: Demographic Disparity Score (Preferred Approach)
+### Demographic Disparity Score
 
 **Core Idea**: Instead of fitting g to predict Y from demand + demographics, measure the *disparity* in service ratio between demographic groups at similar demand levels, and use that disparity as the causal unfairness measure.
 
@@ -245,6 +245,7 @@ $$g(D, \mathbf{x}) = \text{GBT}(D, \mathbf{x})$$
 1. Fit $g_0(D)$ via isotonic regression (current approach)
 2. Compute residuals $R_c = Y_c - g_0(D_c)$
 3. Regress residuals on demographics: $R_c \approx \boldsymbol{\beta}^T \mathbf{x}_c$
+   - Where $x$ are district-level demographic features and $\boldsymbol{\beta}$ are the parameters for $R_c \sim x$
 
 - **Advantages**: Minimal change from current pipeline, clean separation of demand and demographic effects
 - **Disadvantages**: Two-stage estimation

@@ -92,7 +92,7 @@ where $g_0(D)$ is fitted using isotonic regression (monotone decreasing).
 ---
 
 ### 3.2 Option B: Demographic Residual Independence (Default)
-
+BOOKMARK </BR>
 **Purpose**: Measure whether demand-adjusted service residuals correlate with demographics.
 
 **Formulation** (Hat Matrix Approach):
