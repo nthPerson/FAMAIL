@@ -188,10 +188,14 @@ def load_and_prepare_data(
     district_path: str,
     period_type: str = "hourly",
     min_demand: int = 1,
-    g0_model_type: str = "Power Basis",
-    nn_hidden_layers: str = "",
+    nn_hidden_layers: str = "32, 16",
 ):
     """Load all data sources and compute service ratios, residuals, hat matrices.
+
+    Always computes three formulations for side-by-side comparison:
+      1. **Power Basis (Option B)**: F_causal via hat matrix on PB residuals
+      2. **Neural Network (Option B)**: F_causal via hat matrix on NN residuals
+      3. **Original/Baseline**: F_causal = R² = 1 − Var(R)/Var(Y) (demand alignment)
 
     Two levels of data are produced:
       - **Period-level** (one observation per cell-period pair): used to fit g₀(D)
@@ -222,7 +226,7 @@ def load_and_prepare_data(
         demand_dict, ratios
     )
 
-    # Always fit power basis at period level (for reference R²)
+    # Always fit power basis at period level
     g0_pb_func, g0_pb_diag = estimate_g_power_basis(demands_period, ratios_period)
     g0_pb_pred_period = g0_pb_func(demands_period)
 
@@ -230,33 +234,24 @@ def load_and_prepare_data(
     g0_iso_func, g0_iso_diag = estimate_g_isotonic(demands_period, ratios_period)
     g0_iso_pred_period = g0_iso_func(demands_period)
 
-    # Selected model: either power basis or neural network
-    use_nn = g0_model_type == "Neural Network"
-    nn_diag_period = None
-    nn_diag_cell = None
-
-    if use_nn:
-        hidden = _parse_hidden_layers(nn_hidden_layers)
-        if hidden is None:
-            hidden = [64, 32]  # fallback default
-        g0_pred_period, nn_diag_period = _train_g0_nn(
-            demands_period, ratios_period, hidden
-        )
-        g0_diag = nn_diag_period
-    else:
-        g0_pred_period = g0_pb_pred_period
-        g0_diag = g0_pb_diag
+    # Always fit neural network at period level
+    hidden = _parse_hidden_layers(nn_hidden_layers)
+    if hidden is None:
+        hidden = [32, 16]  # fallback default
+    g0_nn_pred_period, nn_diag_period = _train_g0_nn(
+        demands_period, ratios_period, hidden
+    )
 
     # Compute R² at period level for all models
     ss_tot_period = np.sum((ratios_period - ratios_period.mean()) ** 2)
     if ss_tot_period > 1e-10:
-        g0_r2 = 1.0 - np.sum((ratios_period - g0_pred_period) ** 2) / ss_tot_period
-        g0_iso_r2 = 1.0 - np.sum((ratios_period - g0_iso_pred_period) ** 2) / ss_tot_period
         g0_pb_r2 = 1.0 - np.sum((ratios_period - g0_pb_pred_period) ** 2) / ss_tot_period
+        g0_iso_r2 = 1.0 - np.sum((ratios_period - g0_iso_pred_period) ** 2) / ss_tot_period
+        g0_nn_r2 = 1.0 - np.sum((ratios_period - g0_nn_pred_period) ** 2) / ss_tot_period
     else:
-        g0_r2 = 0.0
-        g0_iso_r2 = 0.0
         g0_pb_r2 = 0.0
+        g0_iso_r2 = 0.0
+        g0_nn_r2 = 0.0
 
     # =====================================================================
     # CELL-LEVEL: aggregate properly using ratio-of-totals (not avg-of-ratios)
@@ -351,98 +346,110 @@ def load_and_prepare_data(
     # matrix decomposition and F_causal computation.
     # =====================================================================
 
-    # Always: power basis at cell level (for reference)
+    # Power basis at cell level
     g0_pb_cell_func, g0_pb_cell_diag = estimate_g_power_basis(demands, Y)
     g0_pb_pred_cell = g0_pb_cell_func(demands)
 
-    # Always: isotonic at cell level (for reference)
+    # Isotonic at cell level (for reference)
     g0_iso_cell_func, g0_iso_cell_diag = estimate_g_isotonic(demands, Y)
-    g0_iso_pred = g0_iso_cell_func(demands)
-    R_iso = Y - g0_iso_pred
+    g0_iso_pred_cell = g0_iso_cell_func(demands)
 
-    # Selected model at cell level
-    if use_nn:
-        hidden = _parse_hidden_layers(nn_hidden_layers)
-        if hidden is None:
-            hidden = [64, 32]
-        g0_pred, nn_diag_cell = _train_g0_nn(demands, Y, hidden)
-        g0_cell_diag = nn_diag_cell
-    else:
-        g0_pred = g0_pb_pred_cell
-        g0_cell_diag = g0_pb_cell_diag
+    # Neural network at cell level
+    g0_nn_pred_cell, nn_diag_cell = _train_g0_nn(demands, Y, hidden)
 
-    R = Y - g0_pred  # residuals (centered by OLS construction for power basis)
+    # Residuals for each g₀ variant
+    R_pb = Y - g0_pb_pred_cell   # power basis residuals
+    R_nn = Y - g0_nn_pred_cell   # neural network residuals
 
-    # Cell-level R² (for reference — period-level R² is the primary metric)
+    # Cell-level R² for all models
     ss_tot_cell = np.sum((Y - Y.mean()) ** 2)
     if ss_tot_cell > 1e-10:
-        g0_cell_r2 = 1.0 - np.sum((Y - g0_pred) ** 2) / ss_tot_cell
-        g0_iso_cell_r2 = 1.0 - np.sum((Y - g0_iso_pred) ** 2) / ss_tot_cell
         g0_pb_cell_r2 = 1.0 - np.sum((Y - g0_pb_pred_cell) ** 2) / ss_tot_cell
+        g0_iso_cell_r2 = 1.0 - np.sum((Y - g0_iso_pred_cell) ** 2) / ss_tot_cell
+        g0_nn_cell_r2 = 1.0 - np.sum((Y - g0_nn_pred_cell) ** 2) / ss_tot_cell
     else:
-        g0_cell_r2 = 0.0
-        g0_iso_cell_r2 = 0.0
         g0_pb_cell_r2 = 0.0
+        g0_iso_cell_r2 = 0.0
+        g0_nn_cell_r2 = 0.0
 
-    # --- Pre-compute hat matrices (cell-level) ---
+    # --- Pre-compute hat matrices (cell-level, shared across formulations) ---
     hat_result = precompute_hat_matrices(demands, demo_features, feature_names=used_features)
 
-    # --- Compute F_causal ---
-    fcausal_result = compute_fcausal_option_b_numpy(
-        R, hat_result["I_minus_H_demo"], hat_result["M"]
+    # --- Compute F_causal (Option B) for both g₀ variants ---
+    fcausal_pb = compute_fcausal_option_b_numpy(
+        R_pb, hat_result["I_minus_H_demo"], hat_result["M"]
+    )
+    fcausal_nn = compute_fcausal_option_b_numpy(
+        R_nn, hat_result["I_minus_H_demo"], hat_result["M"]
     )
 
-    # --- Compute regression coefficients: β = (X'X)⁻¹X'R ---
+    # --- Compute baseline (original) F_causal = R² = 1 − Var(R)/Var(Y) ---
+    var_Y = np.var(Y)
+    if var_Y > 1e-10:
+        baseline_r2_pb = 1.0 - np.var(R_pb) / var_Y
+        baseline_r2_nn = 1.0 - np.var(R_nn) / var_Y
+    else:
+        baseline_r2_pb = 0.0
+        baseline_r2_nn = 0.0
+
+    # --- Compute regression coefficients: β = (X'X)⁻¹X'R for each variant ---
     from sklearn.preprocessing import StandardScaler
     scaler = StandardScaler()
     X_scaled = scaler.fit_transform(demo_features)
-    X_design = np.column_stack([np.ones(len(R)), X_scaled])
-    beta = np.linalg.lstsq(X_design, R, rcond=None)[0]
-    R_hat = X_design @ beta  # demographic-predicted residuals
+    X_design = np.column_stack([np.ones(len(R_pb)), X_scaled])
+
+    beta_pb = np.linalg.lstsq(X_design, R_pb, rcond=None)[0]
+    R_hat_pb = X_design @ beta_pb  # demographic-predicted residuals (PB)
+
+    beta_nn = np.linalg.lstsq(X_design, R_nn, rcond=None)[0]
+    R_hat_nn = X_design @ beta_nn  # demographic-predicted residuals (NN)
 
     return {
-        # Cell-level data (for hat matrix, F_causal, spatial maps)
+        # Cell-level data (shared)
         "cells": cell_list,
         "demands": demands,
         "Y": Y,
         "supply": supply_arr,
-        "R": R,
-        "R_iso": R_iso,
-        "g0_pred": g0_pred,
-        "g0_iso_pred": g0_iso_pred,
         "demo_features": demo_features,
         "feature_names": used_features,
         "districts": districts,
         "hat_result": hat_result,
-        "fcausal_result": fcausal_result,
-        "beta": beta,
-        "R_hat": R_hat,
         "X_design": X_design,
         "n_cells": len(cell_list),
+        # Power Basis (Option B) results
+        "R_pb": R_pb,
+        "R_hat_pb": R_hat_pb,
+        "fcausal_pb": fcausal_pb,
+        "beta_pb": beta_pb,
+        "g0_pb_pred_cell": g0_pb_pred_cell,
+        "baseline_r2_pb": baseline_r2_pb,
+        # Neural Network (Option B) results
+        "R_nn": R_nn,
+        "R_hat_nn": R_hat_nn,
+        "fcausal_nn": fcausal_nn,
+        "beta_nn": beta_nn,
+        "g0_nn_pred_cell": g0_nn_pred_cell,
+        "baseline_r2_nn": baseline_r2_nn,
         # Period-level data (for g₀ model quality and scatter plots)
         "demands_period": demands_period,
         "ratios_period": ratios_period,
-        "g0_pred_period": g0_pred_period,
+        "g0_pb_pred_period": g0_pb_pred_period,
+        "g0_nn_pred_period": g0_nn_pred_period,
         "g0_iso_pred_period": g0_iso_pred_period,
         "n_period_obs": len(demands_period),
         # g₀ diagnostics
-        "g0_diag": g0_diag,            # period-level fit diagnostics (active model)
+        "g0_pb_diag": g0_pb_diag,
         "g0_iso_diag": g0_iso_diag,
-        "g0_cell_diag": g0_cell_diag,  # cell-level fit diagnostics (active model)
-        "g0_pb_diag": g0_pb_diag,      # power basis diagnostics (always available)
-        # R² at both levels
-        "g0_r2": g0_r2,                # period-level R² of active model
-        "g0_iso_r2": g0_iso_r2,        # period-level isotonic (reference)
-        "g0_pb_r2": g0_pb_r2,          # period-level power basis (reference)
-        "g0_cell_r2": g0_cell_r2,      # cell-level R² of active model
-        "g0_iso_cell_r2": g0_iso_cell_r2,
-        "g0_pb_cell_r2": g0_pb_cell_r2,
-        # Power basis predictions (always available for scatter plot comparison)
-        "g0_pb_pred_period": g0_pb_pred_period,
-        # Model selection metadata
-        "g0_model_type": g0_model_type,
         "nn_diag_period": nn_diag_period,
+        "g0_pb_cell_diag": g0_pb_cell_diag,
         "nn_diag_cell": nn_diag_cell,
+        # R² at both levels
+        "g0_pb_r2": g0_pb_r2,              # period-level power basis
+        "g0_nn_r2": g0_nn_r2,              # period-level neural network
+        "g0_iso_r2": g0_iso_r2,            # period-level isotonic (reference)
+        "g0_pb_cell_r2": g0_pb_cell_r2,    # cell-level power basis
+        "g0_nn_cell_r2": g0_nn_cell_r2,    # cell-level neural network
+        "g0_iso_cell_r2": g0_iso_cell_r2,  # cell-level isotonic (reference)
     }
 
 
@@ -479,25 +486,16 @@ period_type = st.sidebar.selectbox("Period Type", ["hourly", "daily", "all"], in
 min_demand = st.sidebar.slider("Min Demand per Cell", 1, 20, 1)
 
 st.sidebar.divider()
-st.sidebar.subheader("g₀(D) Model")
-g0_model_type = st.sidebar.selectbox(
-    "Model Type",
-    ["Power Basis", "Neural Network"],
-    index=0,
-    help="Power Basis: OLS with hand-crafted features (FWL-compatible). "
-         "Neural Network: learned nonlinear mapping (more flexible).",
+st.sidebar.subheader("Neural Network g₀(D)")
+nn_hidden_layers = st.sidebar.text_input(
+    "Hidden Layers (comma-separated neuron counts)",
+    "32, 16",
+    help="e.g. '32, 16' → two hidden layers with 32 and 16 neurons. "
+         "Input (demand) and output (predicted Y) layers are added automatically.",
 )
-nn_hidden_layers = ""
-if g0_model_type == "Neural Network":
-    nn_hidden_layers = st.sidebar.text_input(
-        "Hidden Layers (comma-separated neuron counts)",
-        "32, 16",
-        help="e.g. '32, 16' → two hidden layers with 32 and 316 neurons. "
-             "Input (demand) and output (predicted Y) layers are added automatically.",
-    )
-    parsed = _parse_hidden_layers(nn_hidden_layers)
-    if parsed is None:
-        st.sidebar.error("Invalid architecture. Use comma-separated positive integers, e.g. '64, 32'.")
+parsed = _parse_hidden_layers(nn_hidden_layers)
+if parsed is None:
+    st.sidebar.error("Invalid architecture. Use comma-separated positive integers, e.g. '64, 32'.")
 
 # ---------------------------------------------------------------------------
 # Load data
@@ -515,7 +513,7 @@ try:
     data = load_and_prepare_data(
         pickup_path, active_path, demo_path, district_path,
         period_type=period_type, min_demand=min_demand,
-        g0_model_type=g0_model_type, nn_hidden_layers=nn_hidden_layers,
+        nn_hidden_layers=nn_hidden_layers,
     )
     data_loaded = True
 except Exception as e:
@@ -545,17 +543,29 @@ with tab_overview:
     st.header("F_causal: Demographic Residual Independence")
     st.markdown("*The reformulated causal fairness term for the FAMAIL objective function*")
 
-    # --- Key metrics ---
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        st.metric("F_causal", f"{data['fcausal_result']['f_causal']:.4f}")
-    with col2:
-        st.metric("R²_demo", f"{data['fcausal_result']['r2_demo']:.4f}")
-    with col3:
-        st.metric("Active Cells", data["n_cells"])
-    with col4:
-        _g0_label = "g₀(D) R² [NN]" if data["g0_model_type"] == "Neural Network" else "g₀(D) R²"
-        st.metric(_g0_label, f"{data['g0_r2']:.4f}")
+    # --- Key metrics: three-way comparison ---
+    st.markdown("#### Formulation Comparison")
+    col_pb, col_nn, col_base = st.columns(3)
+
+    with col_pb:
+        st.markdown("**:blue[Power Basis (Option B)]**")
+        st.metric("F_causal", f"{data['fcausal_pb']['f_causal']:.4f}")
+        st.metric("R²_demo", f"{data['fcausal_pb']['r2_demo']:.4f}")
+        st.metric("g₀(D) R²", f"{data['g0_pb_r2']:.4f}")
+
+    with col_nn:
+        st.markdown("**:orange[Neural Network (Option B)]**")
+        st.metric("F_causal", f"{data['fcausal_nn']['f_causal']:.4f}")
+        st.metric("R²_demo", f"{data['fcausal_nn']['r2_demo']:.4f}")
+        st.metric("g₀(D) R²", f"{data['g0_nn_r2']:.4f}")
+
+    with col_base:
+        st.markdown("**:gray[Original (Baseline)]**")
+        st.metric("F_causal (= R²)", f"{data['baseline_r2_pb']:.4f}")
+        st.metric("R²_demo", "N/A", help="The original formulation does not measure demographic influence")
+        st.metric("g₀(D) R²", f"{data['g0_pb_r2']:.4f}")
+
+    st.caption(f"Active Cells: **{data['n_cells']}** | Period-level observations: **{data['n_period_obs']:,}**")
 
     st.divider()
 
@@ -652,7 +662,7 @@ with tab_formulation:
         col1, col2 = st.columns(2)
         with col1:
             fig_r = px.histogram(
-                x=data["R"], nbins=50, labels={"x": "Residual R", "y": "Count"},
+                x=data["R_pb"], nbins=50, labels={"x": "Residual R", "y": "Count"},
                 title="Distribution of Residuals R = Y − g₀(D)",
                 color_discrete_sequence=[D3_COLORS[0]],
             )
@@ -662,7 +672,7 @@ with tab_formulation:
 
         with col2:
             fig_yr = px.scatter(
-                x=data["demands"], y=data["R"],
+                x=data["demands"], y=data["R_pb"],
                 labels={"x": "Demand (D)", "y": "Residual (R)"},
                 title="Residuals vs Demand (should show no trend)",
                 color_discrete_sequence=[D3_COLORS[1]],
@@ -823,16 +833,16 @@ with tab_matrix:
     # --- Real data decomposition ---
     st.subheader("Real Data: Variance Decomposition")
 
-    R_hat_real = data["R_hat"]
-    e_real = data["R"] - R_hat_real
+    R_hat_real = data["R_hat_pb"]
+    e_real = data["R_pb"] - R_hat_real
 
     ss_explained = np.sum((R_hat_real - R_hat_real.mean()) ** 2)
-    ss_residual = data["fcausal_result"]["ss_res"]
-    ss_total = data["fcausal_result"]["ss_tot"]
+    ss_residual = data["fcausal_pb"]["ss_res"]
+    ss_total = data["fcausal_pb"]["ss_tot"]
 
     fig_pie = go.Figure(data=[go.Pie(
         labels=["Fair (not demographic)", "Demographic influence"],
-        values=[data["fcausal_result"]["f_causal"], data["fcausal_result"]["r2_demo"]],
+        values=[data["fcausal_pb"]["f_causal"], data["fcausal_pb"]["r2_demo"]],
         marker_colors=[D3_COLORS[2], D3_COLORS[3]],
         textinfo="label+percent",
         hole=0.4,
@@ -851,19 +861,19 @@ with tab_matrix:
 | SS_tot (R'MR) | {ss_total:.4f} |
 | SS_res (R'(I−H)R) | {ss_residual:.4f} |
 | SS_explained | {ss_total - ss_residual:.4f} |
-| R²_demo | {data['fcausal_result']['r2_demo']:.6f} |
-| **F_causal** | **{data['fcausal_result']['f_causal']:.6f}** |
+| R²_demo | {data['fcausal_pb']['r2_demo']:.6f} |
+| **F_causal** | **{data['fcausal_pb']['f_causal']:.6f}** |
         """)
 
     with col2:
         fig_scatter_rhat = px.scatter(
-            x=data["R"], y=R_hat_real,
+            x=data["R_pb"], y=R_hat_real,
             labels={"x": "Actual Residual (R)", "y": "Demographic-Predicted (R̂ = HR)"},
             title="R̂ vs R: How well do demographics predict residuals?",
             color_discrete_sequence=[D3_COLORS[1]],
             opacity=0.6,
         )
-        lim = max(abs(data["R"].min()), abs(data["R"].max()))
+        lim = max(abs(data["R_pb"].min()), abs(data["R_pb"].max()))
         fig_scatter_rhat.add_shape(type="line", x0=-lim, y0=-lim, x1=lim, y1=lim,
                                    line=dict(dash="dash", color="gray"))
         fig_scatter_rhat.update_layout(height=400)
@@ -874,32 +884,21 @@ with tab_matrix:
 # TAB 4: g₀(D) Demand Model
 # =========================================================================
 with tab_g0:
-    _is_nn = data["g0_model_type"] == "Neural Network"
-    _model_label = "neural net" if _is_nn else "power basis"
-
     st.header("g₀(D): The Demand Model")
     st.markdown(
-        f"g₀(D) removes the demand effect from service ratios to produce residuals. "
-        f"**Active model: {data['g0_model_type']}.**"
+        "g₀(D) removes the demand effect from service ratios to produce residuals. "
+        "Both **Power Basis** (OLS) and **Neural Network** (learned) models are shown."
     )
 
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        st.metric(f"Period-Level R² ({_model_label})", f"{data['g0_r2']:.4f}")
-    with col2:
-        st.metric("Period-Level R² (isotonic)", f"{data['g0_iso_r2']:.4f}")
-    with col3:
-        st.metric(f"Cell-Level R² ({_model_label})", f"{data['g0_cell_r2']:.4f}")
-    with col4:
-        st.metric("Cell-Level R² (isotonic)", f"{data['g0_iso_cell_r2']:.4f}")
-
-    # Show power basis R² for comparison when NN is active
-    if _is_nn:
-        col1, col2 = st.columns(2)
-        with col1:
-            st.metric("Power Basis R² (period, reference)", f"{data['g0_pb_r2']:.4f}")
-        with col2:
-            st.metric("Power Basis R² (cell, reference)", f"{data['g0_pb_cell_r2']:.4f}")
+    # --- R² comparison table ---
+    nn_diag = data["nn_diag_period"]
+    st.markdown(f"""
+| Model | Period R² | Cell R² | Parameters | FWL Compatible |
+|-------|:---------:|:-------:|:----------:|:--------------:|
+| **Power Basis** | **{data['g0_pb_r2']:.4f}** | **{data['g0_pb_cell_r2']:.4f}** | 4 | Yes |
+| **Neural Network** | **{data['g0_nn_r2']:.4f}** | **{data['g0_nn_cell_r2']:.4f}** | {nn_diag['n_params']:,} | No |
+| Isotonic (reference) | {data['g0_iso_r2']:.4f} | {data['g0_iso_cell_r2']:.4f} | non-parametric | No |
+    """)
 
     with st.expander("**Why two models?** Role of g₀(D) vs Hat Matrix"):
         st.markdown("""
@@ -911,18 +910,17 @@ with tab_g0:
 The hat matrix replaces the need for a **demographic model**.
 But g₀(D) — the **demand-only model** — is still essential for producing the residuals.
 Any differentiable function g₀: D → Y works — the F_causal formulation is agnostic to
-how g₀ is implemented. Use the sidebar to switch between **Power Basis** (OLS, FWL-compatible)
-and **Neural Network** (learned nonlinear mapping).
+how g₀ is implemented.
         """)
 
     with st.expander("**Why two R² values?** Period-level vs cell-level g₀"):
         st.markdown(f"""
 g₀(D) is fit at **two levels of aggregation**, each serving a distinct purpose:
 
-| Level | N observations | R² ({_model_label}) | Purpose |
-|-------|:-----------:|:----------:|---------|
-| **Period-level** | {data['n_period_obs']:,} | {data['g0_r2']:.4f} | Model quality metric — how well g₀ captures the D→Y relationship in raw (cell, period) data |
-| **Cell-level** | {data['n_cells']:,} | {data['g0_cell_r2']:.4f} | Residual analysis — fitted on cell-aggregated Y=ΣS/ΣD for the hat matrix decomposition |
+| Level | N observations | PB R² | NN R² | Purpose |
+|-------|:-----------:|:----------:|:----------:|---------|
+| **Period-level** | {data['n_period_obs']:,} | {data['g0_pb_r2']:.4f} | {data['g0_nn_r2']:.4f} | Model quality metric — how well g₀ captures the D→Y relationship in raw (cell, period) data |
+| **Cell-level** | {data['n_cells']:,} | {data['g0_pb_cell_r2']:.4f} | {data['g0_nn_cell_r2']:.4f} | Residual analysis — fitted on cell-aggregated Y=ΣS/ΣD for the hat matrix decomposition |
 
 **Why the cell-level R² is lower**: Cell Y = ΣS/ΣD (ratio of totals) follows a different
 distribution than period-level Y = S/D. At the cell level, demand-driven variance is smoothed
@@ -937,36 +935,25 @@ matrix's orthogonal decomposition R = R̂ + e to be exact.
     # --- Demand vs service ratio scatter (period-level data, what g₀ was fit on) ---
     sort_idx = np.argsort(data["demands_period"])
     demands_sorted = data["demands_period"][sort_idx]
-    g0_sorted = data["g0_pred_period"][sort_idx]
-    g0_iso_sorted = data["g0_iso_pred_period"][sort_idx]
     g0_pb_sorted = data["g0_pb_pred_period"][sort_idx]
+    g0_nn_sorted = data["g0_nn_pred_period"][sort_idx]
+    g0_iso_sorted = data["g0_iso_pred_period"][sort_idx]
 
     fig_g0 = go.Figure()
     fig_g0.add_trace(go.Scatter(
         x=data["demands_period"], y=data["ratios_period"], mode="markers",
         name="Observed Y = S/D (period-level)", marker=dict(color=D3_COLORS[0], opacity=0.15, size=3),
     ))
-
-    if _is_nn:
-        # Show NN curve (active), power basis (reference), and isotonic (reference)
-        fig_g0.add_trace(go.Scatter(
-            x=demands_sorted, y=g0_sorted, mode="lines",
-            name=f"g₀(D) Neural Net (R²={data['g0_r2']:.4f})",
-            line=dict(color=D3_COLORS[3], width=3),
-        ))
-        fig_g0.add_trace(go.Scatter(
-            x=demands_sorted, y=g0_pb_sorted, mode="lines",
-            name=f"g₀(D) Power Basis (R²={data['g0_pb_r2']:.4f})",
-            line=dict(color=D3_COLORS[1], width=2, dash="dot"),
-        ))
-    else:
-        # Show power basis (active) and isotonic (reference)
-        fig_g0.add_trace(go.Scatter(
-            x=demands_sorted, y=g0_sorted, mode="lines",
-            name=f"g₀(D) Power Basis (R²={data['g0_r2']:.4f})",
-            line=dict(color=D3_COLORS[1], width=3),
-        ))
-
+    fig_g0.add_trace(go.Scatter(
+        x=demands_sorted, y=g0_pb_sorted, mode="lines",
+        name=f"g₀(D) Power Basis (R²={data['g0_pb_r2']:.4f})",
+        line=dict(color=D3_COLORS[1], width=3),
+    ))
+    fig_g0.add_trace(go.Scatter(
+        x=demands_sorted, y=g0_nn_sorted, mode="lines",
+        name=f"g₀(D) Neural Net (R²={data['g0_nn_r2']:.4f})",
+        line=dict(color=D3_COLORS[3], width=3, dash="dot"),
+    ))
     fig_g0.add_trace(go.Scatter(
         x=demands_sorted, y=g0_iso_sorted, mode="lines",
         name=f"g₀(D) Isotonic (R²={data['g0_iso_r2']:.4f})",
@@ -974,105 +961,95 @@ matrix's orthogonal decomposition R = R̂ + e to be exact.
     ))
 
     fig_g0.update_layout(
-        title=f"Period-Level: Demand → Service Ratio (N={data['n_period_obs']:,}, "
-              f"Active model R²={data['g0_r2']:.4f})",
+        title=f"Period-Level: Demand → Service Ratio (N={data['n_period_obs']:,})",
         xaxis_title="Demand (D)", yaxis_title="Service Ratio (Y = S/D)",
         height=500,
     )
     st.plotly_chart(fig_g0, use_container_width=True)
 
-    # --- Model-specific details ---
-    if _is_nn:
-        with st.expander("**Neural Network Model Details**", expanded=True):
-            nn_diag = data["nn_diag_period"]
-            st.markdown(f"**Architecture**: `{nn_diag['architecture']}`")
-            st.markdown(f"**Parameters**: {nn_diag['n_params']:,} trainable weights")
-            st.markdown(f"**Training**: {nn_diag['epochs']:,} epochs, lr={nn_diag['lr']}")
-            st.markdown(f"**Final MSE loss** (normalized): {nn_diag['final_loss']:.6f}")
+    st.divider()
 
-            # Training loss curve
-            loss_hist = nn_diag["loss_history"]
-            fig_loss = go.Figure()
-            fig_loss.add_trace(go.Scatter(
-                x=list(range(len(loss_hist))),
-                y=loss_hist,
-                mode="lines",
-                name="Training Loss (MSE)",
-                line=dict(color=D3_COLORS[1]),
-            ))
-            fig_loss.update_layout(
-                title="Training Loss Curve (Period-Level g₀)",
-                xaxis_title="Epoch",
-                yaxis_title="MSE Loss (normalized scale)",
-                height=350,
-            )
-            st.plotly_chart(fig_loss, use_container_width=True)
+    # --- Power Basis Model Details ---
+    with st.expander("**Power Basis Model Details**", expanded=True):
+        st.latex(r"g_0(D) = \beta_0 + \frac{\beta_1}{D+1} + \frac{\beta_2}{\sqrt{D+1}} + \beta_3 \cdot \sqrt{D+1}")
 
+        coeffs = data["g0_pb_diag"].get("coefficients", {})
+        intercept = data["g0_pb_diag"].get("intercept", "N/A")
+        if coeffs:
             st.markdown(f"""
-**R² comparison** (period-level):
-
-| Model | R² | Parameters |
-|-------|:--:|:----------:|
-| **Neural Network** (active) | **{data['g0_r2']:.4f}** | {nn_diag['n_params']:,} |
-| Power Basis (reference) | {data['g0_pb_r2']:.4f} | 4 |
-| Isotonic (reference) | {data['g0_iso_r2']:.4f} | non-parametric |
-            """)
-
-            st.info(
-                "**FWL compatibility note**: The Frisch-Waugh-Lovell theorem requires g₀ "
-                "to be linear in parameters. With a neural network g₀, the FWL equivalence "
-                "does **not** hold. However, the F_causal formulation remains valid — it still "
-                "measures demographic independence of residuals via the hat matrix. "
-                "The mediation analysis interpretation (isolating the direct X→Y path by "
-                "conditioning on D) is preserved regardless of g₀'s functional form."
-            )
-
-        # Cell-level NN details
-        if data["nn_diag_cell"] is not None:
-            with st.expander("**Cell-Level Neural Network Details**"):
-                nn_cell = data["nn_diag_cell"]
-                st.markdown(f"**Architecture**: `{nn_cell['architecture']}`")
-                st.markdown(f"**Final MSE loss** (normalized): {nn_cell['final_loss']:.6f}")
-
-                loss_hist_cell = nn_cell["loss_history"]
-                fig_loss_cell = go.Figure()
-                fig_loss_cell.add_trace(go.Scatter(
-                    x=list(range(len(loss_hist_cell))),
-                    y=loss_hist_cell,
-                    mode="lines",
-                    name="Training Loss (MSE)",
-                    line=dict(color=D3_COLORS[3]),
-                ))
-                fig_loss_cell.update_layout(
-                    title="Training Loss Curve (Cell-Level g₀)",
-                    xaxis_title="Epoch",
-                    yaxis_title="MSE Loss (normalized scale)",
-                    height=300,
-                )
-                st.plotly_chart(fig_loss_cell, use_container_width=True)
-    else:
-        with st.expander("**Power Basis Model Details**"):
-            st.latex(r"g_0(D) = \beta_0 + \frac{\beta_1}{D+1} + \frac{\beta_2}{\sqrt{D+1}} + \beta_3 \cdot \sqrt{D+1}")
-
-            coeffs = data["g0_pb_diag"].get("coefficients", {})
-            intercept = data["g0_pb_diag"].get("intercept", "N/A")
-            if coeffs:
-                st.markdown(f"""
 | Term | Coefficient | Interpretation |
 |------|:-----------:|---------------|
 | Intercept (β₀) | {intercept} | Asymptotic base level |
 | 1/(D+1) (β₁) | {coeffs.get('D^(-1)', 'N/A')} | Rapid hyperbolic decay |
 | 1/√(D+1) (β₂) | {coeffs.get('D^(-0.5)', 'N/A')} | Moderate decay |
 | √(D+1) (β₃) | {coeffs.get('D^(0.5)', 'N/A')} | Slow sub-linear growth |
-                """)
+            """)
 
-            st.markdown("""
+        st.markdown("""
 **Why power basis over isotonic?**
 - Matches isotonic R² within 0.0003
 - Linear in parameters → hat matrix compatible
 - Enables Frisch-Waugh-Lovell validation
 - Baseline formulation retains isotonic for backward compatibility
-            """)
+        """)
+
+    # --- Neural Network Model Details ---
+    with st.expander("**Neural Network Model Details**", expanded=True):
+        st.markdown(f"**Architecture**: `{nn_diag['architecture']}`")
+        st.markdown(f"**Parameters**: {nn_diag['n_params']:,} trainable weights")
+        st.markdown(f"**Training**: {nn_diag['epochs']:,} epochs, lr={nn_diag['lr']}")
+        st.markdown(f"**Final MSE loss** (normalized): {nn_diag['final_loss']:.6f}")
+
+        # Training loss curve
+        loss_hist = nn_diag["loss_history"]
+        fig_loss = go.Figure()
+        fig_loss.add_trace(go.Scatter(
+            x=list(range(len(loss_hist))),
+            y=loss_hist,
+            mode="lines",
+            name="Training Loss (MSE)",
+            line=dict(color=D3_COLORS[1]),
+        ))
+        fig_loss.update_layout(
+            title="Training Loss Curve (Period-Level g₀)",
+            xaxis_title="Epoch",
+            yaxis_title="MSE Loss (normalized scale)",
+            height=350,
+        )
+        st.plotly_chart(fig_loss, use_container_width=True)
+
+        st.info(
+            "**FWL compatibility note**: The Frisch-Waugh-Lovell theorem requires g₀ "
+            "to be linear in parameters. With a neural network g₀, the FWL equivalence "
+            "does **not** hold. However, the F_causal formulation remains valid — it still "
+            "measures demographic independence of residuals via the hat matrix. "
+            "The mediation analysis interpretation (isolating the direct X→Y path by "
+            "conditioning on D) is preserved regardless of g₀'s functional form."
+        )
+
+    # Cell-level NN details
+    if data["nn_diag_cell"] is not None:
+        with st.expander("**Cell-Level Neural Network Details**"):
+            nn_cell = data["nn_diag_cell"]
+            st.markdown(f"**Architecture**: `{nn_cell['architecture']}`")
+            st.markdown(f"**Final MSE loss** (normalized): {nn_cell['final_loss']:.6f}")
+
+            loss_hist_cell = nn_cell["loss_history"]
+            fig_loss_cell = go.Figure()
+            fig_loss_cell.add_trace(go.Scatter(
+                x=list(range(len(loss_hist_cell))),
+                y=loss_hist_cell,
+                mode="lines",
+                name="Training Loss (MSE)",
+                line=dict(color=D3_COLORS[3]),
+            ))
+            fig_loss_cell.update_layout(
+                title="Training Loss Curve (Cell-Level g₀)",
+                xaxis_title="Epoch",
+                yaxis_title="MSE Loss (normalized scale)",
+                height=300,
+            )
+            st.plotly_chart(fig_loss_cell, use_container_width=True)
 
 
 # =========================================================================
@@ -1178,8 +1155,8 @@ under counterfactual demographic reassignment.
     if len(unique_districts) > 1:
         df_district = pd.DataFrame({
             "District": districts,
-            "Residual (R)": data["R"],
-            "Predicted (R̂)": data["R_hat"],
+            "Residual (R)": data["R_pb"],
+            "Predicted (R̂)": data["R_hat_pb"],
             "Demand": data["demands"],
         })
         fig_cf = px.box(
@@ -1224,7 +1201,7 @@ $$\text{CDE}_j = \hat{\beta}_j$$
         """)
 
     # Show CDE coefficients
-    beta = data["beta"]
+    beta = data["beta_pb"]
     feature_names = data["feature_names"]
 
     cde_data = []
@@ -1348,21 +1325,42 @@ $F_{\text{causal}} = 1$ corresponds to exact conditional statistical parity at t
 with tab_real:
     st.header("Real Data Analysis: Shenzhen Taxi Service")
 
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        st.metric("F_causal", f"{data['fcausal_result']['f_causal']:.6f}")
-    with col2:
-        st.metric("R²_demo", f"{data['fcausal_result']['r2_demo']:.6f}")
-    with col3:
-        st.metric("N cells", data["n_cells"])
-    with col4:
-        mean_Y = data["Y"].mean()
-        st.metric("Mean Y", f"{mean_Y:.3f}")
+    # --- Three-way F_causal comparison ---
+    st.subheader("Formulation Comparison")
+    col_pb, col_nn, col_base = st.columns(3)
+
+    with col_pb:
+        st.markdown("**:blue[Power Basis (Option B)]**")
+        st.metric("F_causal", f"{data['fcausal_pb']['f_causal']:.6f}")
+        st.metric("R²_demo", f"{data['fcausal_pb']['r2_demo']:.6f}")
+        st.metric("g₀(D) R²", f"{data['g0_pb_r2']:.4f}")
+
+    with col_nn:
+        st.markdown("**:orange[Neural Network (Option B)]**")
+        st.metric("F_causal", f"{data['fcausal_nn']['f_causal']:.6f}")
+        st.metric("R²_demo", f"{data['fcausal_nn']['r2_demo']:.6f}")
+        st.metric("g₀(D) R²", f"{data['g0_nn_r2']:.4f}")
+
+    with col_base:
+        st.markdown("**:gray[Original (Baseline)]**")
+        st.metric("F_causal (= R²)", f"{data['baseline_r2_pb']:.6f}")
+        st.metric("R²_demo", "N/A")
+        st.metric("g₀(D) R²", f"{data['g0_pb_r2']:.4f}")
+
+    st.caption(f"N cells: **{data['n_cells']}** | Mean Y: **{data['Y'].mean():.3f}**")
 
     st.divider()
 
     # --- Spatial maps ---
     st.subheader("Spatial Distribution")
+
+    map_g0_variant = st.radio(
+        "g₀(D) variant for residual maps:",
+        ["Power Basis", "Neural Network"],
+        horizontal=True,
+    )
+    _R = data["R_pb"] if map_g0_variant == "Power Basis" else data["R_nn"]
+    _R_hat = data["R_hat_pb"] if map_g0_variant == "Power Basis" else data["R_hat_nn"]
 
     grid_R = np.full((48, 90), np.nan)
     grid_Rhat = np.full((48, 90), np.nan)
@@ -1370,8 +1368,8 @@ with tab_real:
     grid_D = np.full((48, 90), np.nan)
 
     for i, (x, y) in enumerate(data["cells"]):
-        grid_R[x, y] = data["R"][i]
-        grid_Rhat[x, y] = data["R_hat"][i]
+        grid_R[x, y] = _R[i]
+        grid_Rhat[x, y] = _R_hat[i]
         grid_Y[x, y] = data["Y"][i]
         grid_D[x, y] = data["demands"][i]
 
@@ -1398,7 +1396,7 @@ with tab_real:
         color_continuous_scale=colorscale,
         color_continuous_midpoint=zmid,
         labels={"color": map_choice},
-        title=f"Spatial Map: {map_choice}",
+        title=f"Spatial Map: {map_choice} ({map_g0_variant})",
         aspect="auto",
     )
     fig_map.update_layout(height=500)
@@ -1413,24 +1411,43 @@ with tab_real:
     feat_idx = data["feature_names"].index(feature_select)
     feat_vals = data["demo_features"][:, feat_idx]
 
-    fig_demo_r = px.scatter(
-        x=feat_vals, y=data["R"],
-        color=data["districts"],
-        labels={"x": feature_select, "y": "Residual (R)", "color": "District"},
-        title=f"Residual vs {feature_select} (colored by district)",
-        color_discrete_sequence=D3_COLORS,
-        opacity=0.7,
-    )
-    # Add regression line
-    z = np.polyfit(feat_vals, data["R"], 1)
+    # Show both PB and NN residuals on the same plot
+    fig_demo_r = go.Figure()
+
+    fig_demo_r.add_trace(go.Scatter(
+        x=feat_vals, y=data["R_pb"],
+        mode="markers",
+        name="Power Basis residuals",
+        marker=dict(color=D3_COLORS[1], opacity=0.5, size=5),
+    ))
+    fig_demo_r.add_trace(go.Scatter(
+        x=feat_vals, y=data["R_nn"],
+        mode="markers",
+        name="Neural Network residuals",
+        marker=dict(color=D3_COLORS[3], opacity=0.5, size=5, symbol="diamond"),
+    ))
+
+    # Add regression lines for both
+    z_pb = np.polyfit(feat_vals, data["R_pb"], 1)
+    z_nn = np.polyfit(feat_vals, data["R_nn"], 1)
     x_line = np.linspace(feat_vals.min(), feat_vals.max(), 100)
     fig_demo_r.add_trace(go.Scatter(
-        x=x_line, y=np.polyval(z, x_line),
-        mode="lines", name="Linear trend",
-        line=dict(color="black", dash="dash", width=2),
+        x=x_line, y=np.polyval(z_pb, x_line),
+        mode="lines", name="PB trend",
+        line=dict(color=D3_COLORS[1], dash="dash", width=2),
+    ))
+    fig_demo_r.add_trace(go.Scatter(
+        x=x_line, y=np.polyval(z_nn, x_line),
+        mode="lines", name="NN trend",
+        line=dict(color=D3_COLORS[3], dash="dot", width=2),
     ))
     fig_demo_r.add_hline(y=0, line_dash="dot", line_color="gray")
-    fig_demo_r.update_layout(height=450)
+    fig_demo_r.update_layout(
+        title=f"Residual vs {feature_select} (Power Basis & Neural Network)",
+        xaxis_title=feature_select,
+        yaxis_title="Residual (R)",
+        height=450,
+    )
     st.plotly_chart(fig_demo_r, use_container_width=True)
 
     st.divider()
@@ -1441,29 +1458,42 @@ with tab_real:
     district_stats = []
     for d in sorted(set(data["districts"])):
         mask = data["districts"] == d
-        district_stats.append({
+        row = {
             "District": d,
             "N Cells": int(mask.sum()),
             "Mean Demand": float(data["demands"][mask].mean()),
             "Mean Y": float(data["Y"][mask].mean()),
-            "Mean R": float(data["R"][mask].mean()),
-            "Mean R̂": float(data["R_hat"][mask].mean()),
-            "Std R": float(data["R"][mask].std()),
-            f"Mean {data['feature_names'][0]}": float(data["demo_features"][mask, 0].mean()),
-        })
+            "Mean R (PB)": float(data["R_pb"][mask].mean()),
+            "Mean R̂ (PB)": float(data["R_hat_pb"][mask].mean()),
+            "Mean R (NN)": float(data["R_nn"][mask].mean()),
+            "Mean R̂ (NN)": float(data["R_hat_nn"][mask].mean()),
+        }
+        # Add ALL demographic features
+        for i, fname in enumerate(data["feature_names"]):
+            row[f"Mean {fname}"] = float(data["demo_features"][mask, i].mean())
+        district_stats.append(row)
 
     df_districts = pd.DataFrame(district_stats)
+
+    # Build format dict for all columns
+    fmt = {
+        "Mean Demand": "{:.1f}", "Mean Y": "{:.3f}",
+        "Mean R (PB)": "{:.4f}", "Mean R̂ (PB)": "{:.4f}",
+        "Mean R (NN)": "{:.4f}", "Mean R̂ (NN)": "{:.4f}",
+    }
+    for fname in data["feature_names"]:
+        fmt[f"Mean {fname}"] = "{:.0f}"
+
     st.dataframe(
-        df_districts.style.format({
-            "Mean Demand": "{:.1f}", "Mean Y": "{:.3f}",
-            "Mean R": "{:.4f}", "Mean R̂": "{:.4f}", "Std R": "{:.4f}",
-            f"Mean {data['feature_names'][0]}": "{:.0f}",
-        }).background_gradient(subset=["Mean R̂"], cmap="RdBu_r"),
+        df_districts.style.format(fmt).background_gradient(
+            subset=["Mean R̂ (PB)"], cmap="RdBu_r"
+        ),
         use_container_width=True, hide_index=True,
     )
     st.caption(
         "R̂ (demographic-predicted residual) shows the hat matrix's assessment of each district's "
-        "demographic advantage/disadvantage. Districts with large |R̂| contribute most to R²_demo."
+        "demographic advantage/disadvantage. Districts with large |R̂| contribute most to R²_demo. "
+        "PB = Power Basis g₀(D), NN = Neural Network g₀(D)."
     )
 
 
@@ -1472,12 +1502,25 @@ with tab_real:
 # =========================================================================
 with tab_validate:
     st.header("Validation")
-    st.markdown("Mathematical and empirical checks confirming the formulation's correctness.")
+    st.markdown("Mathematical and empirical checks for both Power Basis and Neural Network variants.")
+
+    val_variant = st.radio(
+        "Validation variant:",
+        ["Power Basis", "Neural Network"],
+        horizontal=True,
+        help="Select which g₀(D) variant's residuals to validate. "
+             "The FWL check only applies to Power Basis.",
+    )
+    _val_R = data["R_pb"] if val_variant == "Power Basis" else data["R_nn"]
+    _val_R_hat = data["R_hat_pb"] if val_variant == "Power Basis" else data["R_hat_nn"]
+    _val_fcausal = data["fcausal_pb"] if val_variant == "Power Basis" else data["fcausal_nn"]
+    _val_beta = data["beta_pb"] if val_variant == "Power Basis" else data["beta_nn"]
+    _val_g0_pred = data["g0_pb_pred_cell"] if val_variant == "Power Basis" else data["g0_nn_pred_cell"]
 
     # --- Check 1: FWL Equivalence ---
     st.subheader("1. Frisch-Waugh-Lovell Equivalence Check")
 
-    if data["g0_model_type"] == "Neural Network":
+    if val_variant == "Neural Network":
         st.warning(
             "**FWL theorem does not apply** when g₀ is a neural network. "
             "The FWL theorem requires g₀ to be linear in parameters (true for the power basis, "
@@ -1510,8 +1553,8 @@ with tab_validate:
 
         delta_r2 = r2_full - r2_demand
 
-        # F_causal's R²_demo
-        r2_demo_option_b = data["fcausal_result"]["r2_demo"]
+        # F_causal's R²_demo for selected variant
+        r2_demo_option_b = _val_fcausal["r2_demo"]
 
         # FWL relationship: ΔR² = R²_demo × (1 - R²_demand)
         fwl_predicted = r2_demo_option_b * (1 - r2_demand)
@@ -1526,21 +1569,21 @@ with tab_validate:
 
         col1, col2, col3 = st.columns(3)
         with col1:
-            st.metric("R²_demo (F_causal)", f"{r2_demo_option_b:.6f}")
+            st.metric(f"R²_demo ({val_variant})", f"{r2_demo_option_b:.6f}")
         with col2:
             st.metric("FWL prediction: R²_demo × (1−R²_demand)", f"{fwl_predicted:.6f}")
         with col3:
             match = abs(delta_r2 - fwl_predicted) < 0.001
-            if data["g0_model_type"] == "Neural Network":
+            if val_variant == "Neural Network":
                 st.metric("ΔR² ≈ FWL prediction?",
-                          "N/A (nonlinear g₀)" if not match else "✅ Yes (coincidental)")
+                          "N/A (nonlinear g₀)" if not match else "Coincidental match")
             else:
-                st.metric("ΔR² ≈ FWL prediction?", "✅ Yes" if match else "❌ No")
+                st.metric("ΔR² ≈ FWL prediction?", "Yes" if match else "No")
 
     st.divider()
 
     # --- Check 2: Gradient Direction ---
-    st.subheader("2. Gradient Direction Verification")
+    st.subheader(f"2. Gradient Direction Verification ({val_variant})")
 
     with st.expander("Details", expanded=True):
         st.markdown("""
@@ -1550,18 +1593,16 @@ with tab_validate:
         # Compute gradient: ∂F/∂R = (2/SS_tot) * [(I-H)R - F * MR]
         I_minus_H = data["hat_result"]["I_minus_H_demo"]
         M_mat = data["hat_result"]["M"]
-        R = data["R"]
-        F = data["fcausal_result"]["f_causal"]
-        ss_tot = data["fcausal_result"]["ss_tot"]
+        F_val = _val_fcausal["f_causal"]
+        ss_tot = _val_fcausal["ss_tot"]
 
-        IH_R = I_minus_H @ R
-        MR = M_mat @ R
-        gradient = (2.0 / (ss_tot + 1e-10)) * (IH_R - F * MR)
+        IH_R = I_minus_H @ _val_R
+        MR = M_mat @ _val_R
+        gradient = (2.0 / (ss_tot + 1e-10)) * (IH_R - F_val * MR)
 
         # Classify cells
-        R_hat = data["R_hat"]
-        over_served_wealthy = (R > np.median(R)) & (R_hat > 0)
-        under_served_poor = (R < np.median(R)) & (R_hat < 0)
+        over_served_wealthy = (_val_R > np.median(_val_R)) & (_val_R_hat > 0)
+        under_served_poor = (_val_R < np.median(_val_R)) & (_val_R_hat < 0)
 
         grad_over = gradient[over_served_wealthy].mean() if over_served_wealthy.any() else 0
         grad_under = gradient[under_served_poor].mean() if under_served_poor.any() else 0
@@ -1572,7 +1613,7 @@ with tab_validate:
             st.metric(
                 "Avg gradient (over-served wealthy)",
                 f"{grad_over:.6f}",
-                delta="Negative ✅" if sign_correct else "Positive ❌",
+                delta="Negative (correct)" if sign_correct else "Positive (wrong)",
                 delta_color="normal" if sign_correct else "inverse",
             )
         with col2:
@@ -1580,14 +1621,14 @@ with tab_validate:
             st.metric(
                 "Avg gradient (under-served poor)",
                 f"{grad_under:.6f}",
-                delta="Positive ✅" if sign_correct else "Negative ❌",
+                delta="Positive (correct)" if sign_correct else "Negative (wrong)",
                 delta_color="normal" if sign_correct else "inverse",
             )
 
         fig_grad = px.scatter(
-            x=R_hat, y=gradient,
+            x=_val_R_hat, y=gradient,
             labels={"x": "R̂ (demographic prediction)", "y": "∂F/∂R (gradient)"},
-            title="Gradient vs Demographic Prediction: Should be negatively correlated",
+            title=f"Gradient vs Demographic Prediction ({val_variant})",
             color_discrete_sequence=[D3_COLORS[4]],
             opacity=0.5,
         )
@@ -1605,15 +1646,15 @@ with tab_validate:
     st.divider()
 
     # --- Check 3: Orthogonality ---
-    st.subheader("3. Orthogonality Check: R̂ ⊥ e")
+    st.subheader(f"3. Orthogonality Check: R̂ ⊥ e ({val_variant})")
 
     with st.expander("Details", expanded=True):
-        e_real = data["R"] - data["R_hat"]
-        dot_prod = data["R_hat"] @ e_real
+        e_real = _val_R - _val_R_hat
+        dot_prod = _val_R_hat @ e_real
         st.metric("R̂ · e (should be ≈ 0)", f"{dot_prod:.2e}")
 
-        norm_R = np.linalg.norm(data["R"]) ** 2
-        norm_Rhat = np.linalg.norm(data["R_hat"]) ** 2
+        norm_R = np.linalg.norm(_val_R) ** 2
+        norm_Rhat = np.linalg.norm(_val_R_hat) ** 2
         norm_e = np.linalg.norm(e_real) ** 2
         st.markdown(f"""
 | Check | Value |
@@ -1627,12 +1668,12 @@ with tab_validate:
     st.divider()
 
     # --- Check 4: CDE Y terms ---
-    st.subheader("4. CDE Y-Term Decomposition")
+    st.subheader(f"4. CDE Y-Term Decomposition ({val_variant})")
 
     with st.expander("Details", expanded=True):
         Y1 = data["Y"].mean()
-        Y2 = data["g0_pred"]
-        Y3 = data["g0_pred"] + data["R_hat"]
+        Y2 = _val_g0_pred
+        Y3 = _val_g0_pred + _val_R_hat
 
         col1, col2, col3 = st.columns(3)
         with col1:
@@ -1642,19 +1683,17 @@ with tab_validate:
         with col3:
             st.metric("Y3 range = g₀(D) + β'x", f"[{Y3.min():.3f}, {Y3.max():.3f}]")
 
-        st.markdown(f"""
-**CDE per feature** (how much demographics shift service, holding demand constant):
-        """)
+        st.markdown("**CDE per feature** (how much demographics shift service, holding demand constant):")
 
         for i, fname in enumerate(data["feature_names"]):
-            b = data["beta"][i + 1]
+            b = _val_beta[i + 1]
             st.markdown(f"- **{fname}**: CDE = {b:+.6f} per std. dev.")
 
         # Show Y2 vs Y3 to visualize demographic shift
         fig_y23 = px.scatter(
             x=Y2, y=Y3,
             labels={"x": "Y2 = g₀(D) (demand only)", "y": "Y3 = g₀(D) + β'x (demand + demographics)"},
-            title="Y2 vs Y3: Demographic Shift of Expected Service",
+            title=f"Y2 vs Y3: Demographic Shift ({val_variant})",
             color=data["districts"],
             color_discrete_sequence=D3_COLORS,
             opacity=0.7,
@@ -1679,6 +1718,7 @@ st.sidebar.divider()
 st.sidebar.caption(
     f"Dashboard: F_causal Explorer\n"
     f"Data: {data['n_cells']} active cells\n"
-    f"F_causal = {data['fcausal_result']['f_causal']:.6f}\n"
-    f"R²_demo = {data['fcausal_result']['r2_demo']:.6f}"
+    f"F_causal (PB) = {data['fcausal_pb']['f_causal']:.6f}\n"
+    f"F_causal (NN) = {data['fcausal_nn']['f_causal']:.6f}\n"
+    f"Baseline R² = {data['baseline_r2_pb']:.6f}"
 )
