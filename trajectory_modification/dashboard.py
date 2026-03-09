@@ -27,6 +27,14 @@ try:
 except ImportError:
     PLOTLY_AVAILABLE = False
 
+try:
+    import matplotlib
+    matplotlib.use('Agg')  # Non-interactive backend for Streamlit
+    import matplotlib.pyplot as plt
+    MATPLOTLIB_AVAILABLE = True
+except ImportError:
+    MATPLOTLIB_AVAILABLE = False
+
 
 # ============================================================================
 # Page Configuration
@@ -636,151 +644,53 @@ def trajectory_selection_section():
         
     with col2:
         st.subheader("Trajectory Preview")
-        
-        if selected_indices and PLOTLY_AVAILABLE:
+
+        if selected_indices and MATPLOTLIB_AVAILABLE:
             # Determine which trajectories to display based on selection mode
             if selection_mode == "Single":
                 display_indices = [selected_indices[0]]
             else:
-                # For Batch or Random Sample, show all selected trajectories
                 display_indices = selected_indices
-            
-            # Color palette for multiple trajectories
-            colors = px.colors.qualitative.Plotly
-            
-            fig = go.Figure()
-            
-            # Grid dimensions (original data is 48 x 90)
-            # After transformation, display will be 90 wide x 48 tall
-            orig_grid_x, orig_grid_y = 48, 90
-            display_width, display_height = orig_grid_y, orig_grid_x  # 90 x 48 after transform
-            
-            def transform_coords(x, y):
-                """
-                Transform coordinates from data grid to display grid.
-                Original data: (x, y) in 48x90 grid (x: 0-47, y: 0-89)
-                Display: 90 wide × 48 tall (swap x and y for horizontal layout)
-                """
-                new_x = y
-                new_y = x
-                return new_x, new_y
-            
+
+            colors = _get_trajectory_color_palette(len(display_indices))
+
+            fig, ax = plt.subplots(figsize=(10, 5.5))
+
+            all_display_x = []
+            all_display_y = []
+
             for i, traj_idx in enumerate(display_indices):
                 traj = trajectories[traj_idx]
-                color = colors[i % len(colors)]
-                
-                # Transform coordinates for display
-                transformed_coords = [transform_coords(s.x_grid, s.y_grid) for s in traj.states]
-                x_coords = [c[0] for c in transformed_coords]
-                y_coords = [c[1] for c in transformed_coords]
-                
-                # Get trajectory and driver IDs for label
-                traj_id = getattr(traj, 'trajectory_id', 'N/A')
+                color = colors[i]
+
                 driver_id = getattr(traj, 'driver_id', 'N/A')
                 n_states = len(traj.states)
                 label = f"Traj {traj_idx} (D:{driver_id}, {n_states}pts)"
-                
-                # Draw trajectory path
-                fig.add_trace(go.Scatter(
-                    x=x_coords, y=y_coords,
-                    mode='lines+markers',
-                    name=label,
-                    line=dict(color=color, width=2),
-                    marker=dict(size=6, color=color),
-                    legendgroup=f"traj_{traj_idx}",
-                    hovertemplate=f"{label}<br>State %{{customdata}}<br>Display: (%{{x:.1f}}, %{{y:.1f}})<extra></extra>",
-                    customdata=list(range(len(x_coords))),
-                ))
-                
-                # Add direction arrows between states
-                for j in range(len(x_coords) - 1):
-                    x_start, y_start = x_coords[j], y_coords[j]
-                    x_end, y_end = x_coords[j + 1], y_coords[j + 1]
-                    
-                    # Calculate midpoint for arrow placement
-                    mid_x = (x_start + x_end) / 2
-                    mid_y = (y_start + y_end) / 2
-                    
-                    # Add arrow annotation
-                    fig.add_annotation(
-                        x=mid_x + (x_end - x_start) * 0.2,
-                        y=mid_y + (y_end - y_start) * 0.2,
-                        ax=mid_x - (x_end - x_start) * 0.2,
-                        ay=mid_y - (y_end - y_start) * 0.2,
-                        xref="x", yref="y",
-                        axref="x", ayref="y",
-                        showarrow=True,
-                        arrowhead=2,
-                        arrowsize=1.2,
-                        arrowwidth=1.5,
-                        arrowcolor=color,
-                        opacity=0.7,
-                    )
-                
-                # Mark dropoff location (first state) with a circle
-                fig.add_trace(go.Scatter(
-                    x=[x_coords[0]],
-                    y=[y_coords[0]],
-                    mode='markers',
-                    name=f'Dropoff (Traj {traj_idx})',
-                    marker=dict(color=color, size=14, symbol='circle', 
-                               line=dict(color='white', width=2)),
-                    legendgroup=f"traj_{traj_idx}",
-                    showlegend=False,
-                    hovertemplate=f"Dropoff<br>{label}<br>Display: (%{{x:.1f}}, %{{y:.1f}})<extra></extra>",
-                ))
-                
-                # Mark pickup location (last state) with a star
-                fig.add_trace(go.Scatter(
-                    x=[x_coords[-1]],
-                    y=[y_coords[-1]],
-                    mode='markers',
-                    name=f'Pickup (Traj {traj_idx})',
-                    marker=dict(color=color, size=16, symbol='star',
-                               line=dict(color='white', width=1)),
-                    legendgroup=f"traj_{traj_idx}",
-                    showlegend=False,
-                    hovertemplate=f"Pickup<br>{label}<br>Display: (%{{x:.1f}}, %{{y:.1f}})<extra></extra>",
-                ))
-            
-            # Configure layout for square grid cells (now 90 wide x 48 tall)
-            # dtick=1 shows every cell boundary
-            fig.update_layout(
-                title=f"Trajectory Preview ({len(display_indices)} trajectory{'s' if len(display_indices) > 1 else ''})  |  ⭐ = Pickup  ● = Dropoff",
-                xaxis=dict(
-                    title="Grid (transformed)",
-                    range=[-0.5, display_width - 0.5],
-                    constrain="domain",
-                    dtick=1,
-                    showgrid=True,
-                    gridwidth=1,
-                    gridcolor='rgba(128, 128, 128, 0.3)',
-                    minor=dict(dtick=1, showgrid=True, gridcolor='rgba(128, 128, 128, 0.15)'),
-                ),
-                yaxis=dict(
-                    title="",
-                    range=[-0.5, display_height - 0.5],
-                    scaleanchor="x",
-                    scaleratio=1,
-                    dtick=1,
-                    showgrid=True,
-                    gridwidth=1,
-                    gridcolor='rgba(128, 128, 128, 0.3)',
-                    minor=dict(dtick=1, showgrid=True, gridcolor='rgba(128, 128, 128, 0.15)'),
-                ),
-                height=450,
-                legend=dict(
-                    orientation="h",
-                    yanchor="bottom",
-                    y=-0.25,
-                    xanchor="center",
-                    x=0.5,
-                    bgcolor="rgba(255, 255, 255, 0.9)",
-                ),
-                margin=dict(b=100),  # Make room for legend below
+
+                _plot_trajectory_matplotlib(ax, traj.states, color=color, label=label)
+
+                all_display_x.extend(s.y_grid for s in traj.states)
+                all_display_y.extend(s.x_grid for s in traj.states)
+
+            _set_trajectory_axes_bounds(ax, all_display_x, all_display_y)
+
+            ax.set_title(
+                f"Trajectory Preview ({len(display_indices)} traj)  |  "
+                f"x = Start (Dropoff)   * = End (Pickup)",
+                fontsize=10,
             )
-            
-            st.plotly_chart(fig, use_container_width=True)
+            ax.grid(True, alpha=0.3, linewidth=0.5)
+            ax.legend(
+                loc='upper center', bbox_to_anchor=(0.5, -0.08),
+                ncol=min(3, len(display_indices)),
+                fontsize=8, framealpha=0.9,
+            )
+
+            fig.tight_layout()
+            st.pyplot(fig)
+            plt.close(fig)
+        elif selected_indices and not MATPLOTLIB_AVAILABLE:
+            st.warning("Matplotlib not available for trajectory visualization.")
         else:
             # Fallback text display
             if selected_indices:
@@ -1279,6 +1189,80 @@ def _transform_coords_for_viz(x, y):
     return y, x
 
 
+def _plot_trajectory_matplotlib(
+    ax,
+    trajectory_states: list,
+    color: str = '#636EFA',
+    label: str = '',
+    show_start_end: bool = True,
+    line_markersize: int = 3,
+    linewidth: float = 1.0,
+    alpha: float = 0.9,
+):
+    """
+    Plot a single trajectory on a matplotlib Axes using the clean 'o-' style.
+
+    Matches the ST-Siamese-Attack reference visualization:
+    - Sequential line with small circle markers
+    - Start (dropoff, states[0]) = black 'x'
+    - End (pickup, states[-1]) = black '*'
+
+    Coordinate transform is inlined: display_x = y_grid, display_y = x_grid.
+    """
+    display_x = [s.y_grid for s in trajectory_states]
+    display_y = [s.x_grid for s in trajectory_states]
+
+    ax.plot(
+        display_x, display_y, 'o-',
+        color=color,
+        markersize=line_markersize,
+        linewidth=linewidth,
+        alpha=alpha,
+        label=label,
+        zorder=2,
+    )
+
+    if show_start_end and len(display_x) >= 1:
+        ax.scatter(
+            [display_x[0]], [display_y[0]],
+            c='k', marker='x', s=80, zorder=3, linewidths=1.5,
+        )
+        ax.scatter(
+            [display_x[-1]], [display_y[-1]],
+            c='k', marker='*', s=120, zorder=3,
+        )
+
+
+def _get_trajectory_color_palette(n_colors: int) -> list:
+    """Return n distinct colors from matplotlib's tab10 colormap."""
+    cmap = plt.cm.get_cmap('tab10')
+    return [cmap(i % 10) for i in range(n_colors)]
+
+
+def _set_trajectory_axes_bounds(
+    ax,
+    all_display_x: list,
+    all_display_y: list,
+    padding: float = 2.0,
+    grid_limits: tuple = (90, 48),
+):
+    """
+    Auto-zoom axes to trajectory bounding box with padding.
+    Sets equal aspect ratio for square grid cells.
+    """
+    if not all_display_x or not all_display_y:
+        ax.set_xlim(-0.5, grid_limits[0] - 0.5)
+        ax.set_ylim(-0.5, grid_limits[1] - 0.5)
+    else:
+        x_min = max(-0.5, min(all_display_x) - padding)
+        x_max = min(grid_limits[0] - 0.5, max(all_display_x) + padding)
+        y_min = max(-0.5, min(all_display_y) - padding)
+        y_max = min(grid_limits[1] - 0.5, max(all_display_y) + padding)
+        ax.set_xlim(x_min, x_max)
+        ax.set_ylim(y_min, y_max)
+    ax.set_aspect('equal', adjustable='box')
+
+
 def _compute_cell_fairness_scores(
     pickup_counts: np.ndarray,
     dropoff_counts: np.ndarray,
@@ -1364,10 +1348,10 @@ def _display_before_after_fairness_viz(histories):
         st.info("No modification results to visualize.")
         return
     
-    if not PLOTLY_AVAILABLE:
-        st.warning("Plotly not available for visualization.")
+    if not MATPLOTLIB_AVAILABLE:
+        st.warning("Matplotlib not available for visualization.")
         return
-    
+
     # Get required data from session state
     pickup_grid = st.session_state.get('pickup_grid')
     dropoff_grid = st.session_state.get('dropoff_grid')
@@ -1445,270 +1429,155 @@ def _display_before_after_fairness_viz(histories):
     vmin = min(before_fairness.min(), after_fairness.min())
     vmax = max(before_fairness.max(), after_fairness.max())
     
-    # Grid dimensions
-    orig_grid_x, orig_grid_y = 48, 90
-    display_width, display_height = orig_grid_y, orig_grid_x  # 90 x 48 after transform
-    
     # Create side-by-side plots
     before_col, after_col = st.columns(2)
-    
+
     # Color palette for trajectories
-    colors = px.colors.qualitative.Plotly
-    
+    colors = _get_trajectory_color_palette(len(traj_indices_to_show))
+
     # === BEFORE VISUALIZATION ===
     with before_col:
         st.markdown("**BEFORE Modification**")
-        
-        fig_before = go.Figure()
-        
-        # Add fairness heatmap
-        # Note: go.Heatmap displays z[i,j] at position (x=j, y=i)
-        # Our fairness array is (48, 90), so z[y_idx, x_idx] where x goes 0-89, y goes 0-47
-        # This matches our display: 90 wide (x-axis) × 48 tall (y-axis)
-        fig_before.add_trace(go.Heatmap(
-            z=before_fairness,  # No transpose needed - (48, 90) displays as 90 wide × 48 tall
-            colorscale='RdYlGn_r',  # Red=high unfairness, Green=low unfairness
-            zmin=vmin,
-            zmax=vmax,
-            showscale=True,
-            xgap=1,  # Add cell borders
-            ygap=1,  # Add cell borders
-            colorbar=dict(
-                title=dict(text=fairness_key.upper(), side='right'),
-                orientation='h',
-                yanchor='bottom',
-                y=-0.2,
-                xanchor='center',
-                x=0.5,
-                len=0.8,
-                thickness=15,
-            ),
-            hovertemplate=f"{fairness_key.upper()}: %{{z:.4f}}<br>Cell: (%{{x}}, %{{y}})<extra></extra>",
-        ))
-        
-        # Draw ORIGINAL trajectories
+
+        fig_before, ax_before = plt.subplots(figsize=(8, 5))
+
+        # Fairness heatmap: (48, 90) array with origin='lower' puts row 0 (south) at bottom
+        # extent maps cols 0-89 to horizontal x and rows 0-47 to vertical y,
+        # consistent with trajectory transform (display_x = y_grid, display_y = x_grid)
+        im_before = ax_before.imshow(
+            before_fairness,
+            cmap='RdYlGn_r',
+            vmin=vmin, vmax=vmax,
+            origin='lower',
+            aspect='equal',
+            extent=[-0.5, 89.5, -0.5, 47.5],
+            zorder=1,
+            interpolation='nearest',
+        )
+
+        # Draw original trajectories
+        all_display_x = []
+        all_display_y = []
+
         for i, hist_idx in enumerate(traj_indices_to_show):
             history = histories[hist_idx]
             traj = history.original
-            color = colors[i % len(colors)]
-            
-            # Transform coordinates for display
-            transformed_coords = [_transform_coords_for_viz(s.x_grid, s.y_grid) for s in traj.states]
-            x_coords = [c[0] for c in transformed_coords]
-            y_coords = [c[1] for c in transformed_coords]
-            
-            # Store original coordinates for hover display
-            orig_coords = [(s.x_grid, s.y_grid) for s in traj.states]
-            
+            color = colors[i]
             driver_id = getattr(traj, 'driver_id', 'N/A')
             label = f"Traj {hist_idx} (D:{driver_id})"
-            
-            # Draw trajectory path
-            fig_before.add_trace(go.Scatter(
-                x=x_coords, y=y_coords,
-                mode='lines+markers',
-                name=label,
-                line=dict(color=color, width=2),
-                marker=dict(size=5, color=color),
-                legendgroup=f"traj_{hist_idx}",
-                showlegend=True,
-                hovertemplate=f"{label}<br>State %{{customdata[0]}}<br>Coords: (%{{customdata[1]:.1f}}, %{{customdata[2]:.1f}})<extra></extra>",
-                customdata=[[i, orig_coords[i][0], orig_coords[i][1]] for i in range(len(x_coords))],
-            ))
-            
-            # Mark dropoff (first state) with circle
-            fig_before.add_trace(go.Scatter(
-                x=[x_coords[0]], y=[y_coords[0]],
-                mode='markers',
-                marker=dict(color=color, size=12, symbol='circle', line=dict(color='white', width=2)),
-                legendgroup=f"traj_{hist_idx}",
-                showlegend=False,
-                hovertemplate=f"Dropoff<br>{label}<extra></extra>",
-            ))
-            
-            # Mark pickup (last state) with star
-            fig_before.add_trace(go.Scatter(
-                x=[x_coords[-1]], y=[y_coords[-1]],
-                mode='markers',
-                marker=dict(color=color, size=14, symbol='star', line=dict(color='white', width=1)),
-                legendgroup=f"traj_{hist_idx}",
-                showlegend=False,
-                hovertemplate=f"Pickup (Original)<br>{label}<extra></extra>",
-            ))
-        
-        # Configure layout
-        fig_before.update_layout(
-            title=f"Original | {fairness_type} | ⭐=Pickup ●=Dropoff",
-            xaxis=dict(
-                range=[-0.5, display_width - 0.5],
-                constrain="domain",
-                showgrid=True,
-                gridwidth=1,
-                gridcolor='rgba(200, 200, 200, 0.3)',
-            ),
-            yaxis=dict(
-                range=[-0.5, display_height - 0.5],
-                scaleanchor="x",
-                scaleratio=1,
-                showgrid=True,
-                gridwidth=1,
-                gridcolor='rgba(200, 200, 200, 0.3)',
-            ),
-            height=550,
-            margin=dict(l=40, r=40, t=60, b=100),  # Extra bottom margin for colorbar
-            legend=dict(
-                orientation='h',
-                yanchor='top',
-                y=1.12,
-                xanchor='left',
-                x=0,
-                bgcolor='rgba(255,255,255,0.8)',
-                font=dict(size=9),
-            ),
+
+            _plot_trajectory_matplotlib(ax_before, traj.states, color=color, label=label)
+
+            all_display_x.extend(s.y_grid for s in traj.states)
+            all_display_y.extend(s.x_grid for s in traj.states)
+
+        _set_trajectory_axes_bounds(ax_before, all_display_x, all_display_y, padding=3.0)
+
+        ax_before.set_title(
+            f"Original | {fairness_type}\nx = Dropoff   * = Pickup",
+            fontsize=9,
         )
-        
-        st.plotly_chart(fig_before, use_container_width=True)
-        
+
+        cbar_before = fig_before.colorbar(
+            im_before, ax=ax_before, orientation='horizontal',
+            fraction=0.06, pad=0.12, aspect=30,
+        )
+        cbar_before.set_label(fairness_key.upper(), fontsize=8)
+        cbar_before.ax.tick_params(labelsize=7)
+
+        ax_before.legend(
+            loc='upper center', bbox_to_anchor=(0.5, -0.18),
+            ncol=min(3, len(traj_indices_to_show)),
+            fontsize=7, framealpha=0.9,
+        )
+
+        fig_before.tight_layout()
+        st.pyplot(fig_before)
+        plt.close(fig_before)
+
         # Show stats
         active_cells = (before_fairness > 0).sum()
         avg_fairness = before_fairness[before_fairness > 0].mean() if active_cells > 0 else 0
         st.caption(f"Avg {fairness_key.upper()}: {avg_fairness:.4f} | Active cells: {active_cells}")
-    
+
     # === AFTER VISUALIZATION ===
     with after_col:
         st.markdown("**AFTER Modification**")
-        
-        fig_after = go.Figure()
-        
-        # Add fairness heatmap
-        # Note: go.Heatmap displays z[i,j] at position (x=j, y=i)
-        # Our fairness array is (48, 90), so z[y_idx, x_idx] where x goes 0-89, y goes 0-47
-        # This matches our display: 90 wide (x-axis) × 48 tall (y-axis)
-        fig_after.add_trace(go.Heatmap(
-            z=after_fairness,  # No transpose needed - (48, 90) displays as 90 wide × 48 tall
-            colorscale='RdYlGn_r',  # Red=high unfairness, Green=low unfairness
-            zmin=vmin,
-            zmax=vmax,
-            showscale=True,
-            xgap=1,  # Add cell borders
-            ygap=1,  # Add cell borders
-            colorbar=dict(
-                title=dict(text=fairness_key.upper(), side='right'),
-                orientation='h',
-                yanchor='bottom',
-                y=-0.2,
-                xanchor='center',
-                x=0.5,
-                len=0.8,
-                thickness=15,
-            ),
-            hovertemplate=f"{fairness_key.upper()}: %{{z:.4f}}<br>Cell: (%{{x}}, %{{y}})<extra></extra>",
-        ))
-        
-        # Draw MODIFIED trajectories
+
+        fig_after, ax_after = plt.subplots(figsize=(8, 5))
+
+        im_after = ax_after.imshow(
+            after_fairness,
+            cmap='RdYlGn_r',
+            vmin=vmin, vmax=vmax,
+            origin='lower',
+            aspect='equal',
+            extent=[-0.5, 89.5, -0.5, 47.5],
+            zorder=1,
+            interpolation='nearest',
+        )
+
+        # Draw modified trajectories
+        all_display_x = []
+        all_display_y = []
+
         for i, hist_idx in enumerate(traj_indices_to_show):
             history = histories[hist_idx]
             traj = history.modified
-            color = colors[i % len(colors)]
-            
-            # Transform coordinates for display
-            transformed_coords = [_transform_coords_for_viz(s.x_grid, s.y_grid) for s in traj.states]
-            x_coords = [c[0] for c in transformed_coords]
-            y_coords = [c[1] for c in transformed_coords]
-            
-            # Store original coordinates for hover display
-            orig_coords = [(s.x_grid, s.y_grid) for s in traj.states]
-            
+            color = colors[i]
             driver_id = getattr(history.original, 'driver_id', 'N/A')
             label = f"Traj {hist_idx} (D:{driver_id})"
-            
-            # Draw trajectory path
-            fig_after.add_trace(go.Scatter(
-                x=x_coords, y=y_coords,
-                mode='lines+markers',
-                name=label,
-                line=dict(color=color, width=2),
-                marker=dict(size=5, color=color),
-                legendgroup=f"traj_{hist_idx}",
-                showlegend=True,
-                hovertemplate=f"{label}<br>State %{{customdata[0]}}<br>Coords: (%{{customdata[1]:.1f}}, %{{customdata[2]:.1f}})<extra></extra>",
-                customdata=[[i, orig_coords[i][0], orig_coords[i][1]] for i in range(len(x_coords))],
-            ))
-            
-            # Mark dropoff (first state) with circle
-            fig_after.add_trace(go.Scatter(
-                x=[x_coords[0]], y=[y_coords[0]],
-                mode='markers',
-                marker=dict(color=color, size=12, symbol='circle', line=dict(color='white', width=2)),
-                legendgroup=f"traj_{hist_idx}",
-                showlegend=False,
-                hovertemplate=f"Dropoff<br>{label}<extra></extra>",
-            ))
-            
-            # Mark pickup (last state) with star - this is the MODIFIED location
-            mod_pickup_coords = orig_coords[-1]  # Get the modified pickup coordinates
-            fig_after.add_trace(go.Scatter(
-                x=[x_coords[-1]], y=[y_coords[-1]],
-                mode='markers',
-                marker=dict(color=color, size=14, symbol='star', line=dict(color='white', width=1)),
-                legendgroup=f"traj_{hist_idx}",
-                showlegend=False,
-                hovertemplate=f"Pickup (Modified)<br>{label}<br>Coords: ({mod_pickup_coords[0]:.1f}, {mod_pickup_coords[1]:.1f})<extra></extra>",
-            ))
-            
-            # Draw arrow from original pickup to modified pickup to highlight the change
+
+            _plot_trajectory_matplotlib(ax_after, traj.states, color=color, label=label)
+
+            all_display_x.extend(s.y_grid for s in traj.states)
+            all_display_y.extend(s.x_grid for s in traj.states)
+
+            # Draw red arrow from original pickup to modified pickup
             orig_pickup = history.original.states[-1]
             mod_pickup = history.modified.states[-1]
-            orig_x, orig_y = _transform_coords_for_viz(orig_pickup.x_grid, orig_pickup.y_grid)
-            mod_x, mod_y = _transform_coords_for_viz(mod_pickup.x_grid, mod_pickup.y_grid)
-            
-            # Only draw if there's a meaningful change
-            if abs(orig_x - mod_x) > 0.1 or abs(orig_y - mod_y) > 0.1:
-                fig_after.add_annotation(
-                    x=mod_x, y=mod_y,
-                    ax=orig_x, ay=orig_y,
-                    xref="x", yref="y",
-                    axref="x", ayref="y",
-                    showarrow=True,
-                    arrowhead=3,
-                    arrowsize=1.5,
-                    arrowwidth=2,
-                    arrowcolor='rgba(255, 0, 0, 0.8)',
+            orig_dx, orig_dy = orig_pickup.y_grid, orig_pickup.x_grid
+            mod_dx, mod_dy = mod_pickup.y_grid, mod_pickup.x_grid
+
+            if abs(orig_dx - mod_dx) > 0.1 or abs(orig_dy - mod_dy) > 0.1:
+                ax_after.annotate(
+                    '',
+                    xy=(mod_dx, mod_dy),
+                    xytext=(orig_dx, orig_dy),
+                    arrowprops=dict(
+                        arrowstyle='-|>',
+                        color='red',
+                        lw=2.0,
+                        alpha=0.8,
+                        mutation_scale=15,
+                    ),
+                    zorder=4,
                 )
-        
-        # Configure layout
-        fig_after.update_layout(
-            title=f"Modified | {fairness_type} | ⭐=Pickup ●=Dropoff",
-            xaxis=dict(
-                range=[-0.5, display_width - 0.5],
-                constrain="domain",
-                showgrid=True,
-                gridwidth=1,
-                gridcolor='rgba(200, 200, 200, 0.3)',
-            ),
-            yaxis=dict(
-                range=[-0.5, display_height - 0.5],
-                scaleanchor="x",
-                scaleratio=1,
-                showgrid=True,
-                gridwidth=1,
-                gridcolor='rgba(200, 200, 200, 0.3)',
-            ),
-            height=550,
-            margin=dict(l=40, r=40, t=60, b=100),  # Extra bottom margin for colorbar
-            legend=dict(
-                orientation='h',
-                yanchor='top',
-                y=1.12,
-                xanchor='left',
-                x=0,
-                bgcolor='rgba(255,255,255,0.8)',
-                font=dict(size=9),
-            ),
+
+        _set_trajectory_axes_bounds(ax_after, all_display_x, all_display_y, padding=3.0)
+
+        ax_after.set_title(
+            f"Modified | {fairness_type}\nx = Dropoff   * = Pickup",
+            fontsize=9,
         )
-        
-        st.plotly_chart(fig_after, use_container_width=True)
-        
+
+        cbar_after = fig_after.colorbar(
+            im_after, ax=ax_after, orientation='horizontal',
+            fraction=0.06, pad=0.12, aspect=30,
+        )
+        cbar_after.set_label(fairness_key.upper(), fontsize=8)
+        cbar_after.ax.tick_params(labelsize=7)
+
+        ax_after.legend(
+            loc='upper center', bbox_to_anchor=(0.5, -0.18),
+            ncol=min(3, len(traj_indices_to_show)),
+            fontsize=7, framealpha=0.9,
+        )
+
+        fig_after.tight_layout()
+        st.pyplot(fig_after)
+        plt.close(fig_after)
+
         # Show stats
         active_cells_after = (after_fairness > 0).sum()
         avg_fairness_after = after_fairness[after_fairness > 0].mean() if active_cells_after > 0 else 0
