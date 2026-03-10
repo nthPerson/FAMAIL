@@ -109,21 +109,25 @@ class GlobalMetrics:
             self.fidelity_scores.append(fidelity_score)
     
     def compute_gini(self) -> float:
-        """Compute Gini coefficient of DSR (demand-supply ratio)."""
+        """Compute Gini coefficient of DSR (demand-supply ratio) over service-active cells."""
         # DSR = pickups / active_taxis
         mask = self.active_taxis > self.eps
         dsr = np.zeros_like(self.pickup_counts)
         dsr[mask] = self.pickup_counts[mask] / self.active_taxis[mask]
-        
-        values = dsr.flatten()
+
+        # Filter to cells with real service activity for Gini computation.
+        # active_taxis has a 0.1 floor, so > 0.5 identifies cells with real taxi presence.
+        # pickup_counts > eps identifies cells with observed demand.
+        service_mask = (self.pickup_counts > self.eps) | (self.active_taxis > 0.5)
+        values = dsr[service_mask].flatten()
         n = len(values)
         if n <= 1:
             return 0.0
-        
+
         mean_val = values.mean() + self.eps
         diff_matrix = np.abs(values[:, None] - values[None, :])
         gini = diff_matrix.sum() / (2 * n * n * mean_val)
-        
+
         return float(np.clip(gini, 0.0, 1.0))
     
     def compute_r_squared(self) -> float:

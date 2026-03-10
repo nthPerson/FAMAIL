@@ -300,38 +300,46 @@ class FAMAILObjective(nn.Module):
         # Active taxis mask to avoid division by zero
         active_mask = active_taxis > self.eps
         n_active = active_mask.sum().item()
-        
+
         if n_active == 0:
             raise InsufficientDataError(
                 "No cells with active taxis found. Cannot compute spatial fairness. "
                 "Ensure active_taxis tensor contains positive values."
             )
-        
+
         # Compute DSR (Departure Service Rate) = pickups / active_taxis
         dsr = torch.zeros_like(pickup_counts)
         dsr[active_mask] = pickup_counts[active_mask] / active_taxis[active_mask]
-        
-        # Compute ASR (Arrival Service Rate) = dropoffs / active_taxis  
+
+        # Compute ASR (Arrival Service Rate) = dropoffs / active_taxis
         asr = torch.zeros_like(dropoff_counts)
         asr[active_mask] = dropoff_counts[active_mask] / active_taxis[active_mask]
-        
-        # Flatten for Gini computation
-        dsr_flat = dsr.flatten()
-        asr_flat = asr.flatten()
-        
-        # Compute pairwise Gini for each rate
-        gini_dsr = self._pairwise_gini(dsr_flat)
-        gini_asr = self._pairwise_gini(asr_flat)
-        
+
+        # Service mask: cells with real taxi service activity
+        # active_taxis has a 0.1 floor (data_loader.py), so > 0.5 filters to real activity.
+        # pickup/dropoff > eps identifies cells with observed demand/arrivals.
+        # Without this filter, Gini is diluted by thousands of zero-activity cells.
+        service_mask = (pickup_counts > self.eps) | (dropoff_counts > self.eps) | (active_taxis > 0.5)
+        n_service = service_mask.sum().item()
+
+        # Filter to service-active cells for Gini computation
+        dsr_active = dsr[service_mask]
+        asr_active = asr[service_mask]
+
+        # Compute pairwise Gini for each rate over active cells only
+        gini_dsr = self._pairwise_gini(dsr_active)
+        gini_asr = self._pairwise_gini(asr_active)
+
         # Spatial fairness = 1 - average Gini
         f_spatial = 1.0 - 0.5 * (gini_dsr + gini_asr)
-        
+
         # Store debug info
         self._last_spatial_debug = {
             'normalization': 'active_taxis',
             'n_active_cells': int(n_active),
-            'dsr_range': (dsr.min().item(), dsr.max().item()),
-            'asr_range': (asr.min().item(), asr.max().item()),
+            'n_cells_in_gini': int(n_service),
+            'dsr_range': (dsr_active.min().item(), dsr_active.max().item()),
+            'asr_range': (asr_active.min().item(), asr_active.max().item()),
             'active_taxis_range': (active_taxis.min().item(), active_taxis.max().item()),
             'gini_dsr': gini_dsr.item(),
             'gini_asr': gini_asr.item(),

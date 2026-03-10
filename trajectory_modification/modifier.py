@@ -399,14 +399,16 @@ class TrajectoryModifier:
             new_pickup = self._clip_to_grid(original_pickup + cumulative_delta)
             new_cell = (int(new_pickup[0]), int(new_pickup[1]))
             
-            # Update global counts if cell changed (for heuristic mode tracking)
+            # Update global counts if cell changed
             if old_cell != new_cell:
                 self._update_counts(old_cell, new_cell)
-            
+
             current_pickup = new_pickup
-            
-            # Update modified trajectory (apply_perturbation always modifies the last state)
-            modified = modified.apply_perturbation(cumulative_delta)
+
+            # Update modified trajectory: apply cumulative perturbation to the ORIGINAL
+            # trajectory so the pickup position is always original + cumulative_delta,
+            # correctly bounded by the ε-ball constraint.
+            modified = trajectory.apply_perturbation(cumulative_delta)
             
             # Record iteration
             result = ModificationResult(
@@ -424,7 +426,13 @@ class TrajectoryModifier:
             if abs(total.item() - prev_objective) < self.convergence_threshold:
                 break
             prev_objective = total.item()
-        
+
+        # Sync base counts so the next trajectory in batch mode sees current world state
+        if self._base_pickup_counts is not None:
+            self._base_pickup_counts = self.pickup_counts.clone()
+        if self._base_dropoff_counts is not None:
+            self._base_dropoff_counts = self.dropoff_counts.clone()
+
         # Build history
         history = ModificationHistory(
             original=trajectory,

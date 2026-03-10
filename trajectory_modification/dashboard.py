@@ -8,7 +8,7 @@ Allows visualization of trajectory modifications and fairness metric changes.
 import streamlit as st
 import numpy as np
 from pathlib import Path
-from typing import Optional, Dict, List, Tuple
+from typing import Callable, Optional, Dict, List, Tuple
 import sys
 
 # Add parent to path for imports
@@ -199,6 +199,7 @@ def algorithm_params_section() -> Dict:
         "Formulation",
         ["baseline", "option_b", "option_c"],
         index=1,
+        key="causal_formulation",
         help=(
             "**baseline**: Historical R² with isotonic g₀(D). "
             "**option_b** (default): Demographic residual independence via hat matrix. "
@@ -252,29 +253,70 @@ def compute_cell_dcd_scores(
     supply_counts: np.ndarray,
     g_function,
     eps: float = 1e-8,
+    causal_formulation: str = "baseline",
+    hat_matrices: Optional[Dict] = None,
+    g0_power_basis_func: Optional[Callable] = None,
+    active_cell_indices: Optional[np.ndarray] = None,
 ) -> np.ndarray:
     """
     Compute Demand-Conditional Deviation (DCD) for all cells.
-    
-    DCD measures how much the actual service ratio Y = S/D deviates
-    from the expected fair ratio g(D): DCD_i = |Y_i - g(D_i)|
-    
-    Higher DCD indicates the cell deviates more from causal fairness.
-    
+
+    Supports two formulations:
+    - **Baseline**: DCD_c = |Y_c - g(D_c)| — deviation from demand-predicted service ratio.
+    - **Option B**: DCD_c = |R̂_c| where R̂ = H_demo @ R and R = Y - g₀(D).
+      Measures how much of the demand-controlled residual is explained by demographics.
+      Cells where demographics strongly predict the residual are prioritized for modification.
+
     Args:
         demand_counts: Demand array [grid_x, grid_y] (pickups)
         supply_counts: Supply array [grid_x, grid_y] (active taxis or dropoffs)
         g_function: Pre-fitted g(d) function mapping demand -> expected ratio
         eps: Numerical stability constant
-        
+        causal_formulation: 'baseline' or 'option_b'
+        hat_matrices: Pre-computed hat matrices (required for option_b).
+                     Must contain 'H_demo' key with (n, n) demographic hat matrix.
+        g0_power_basis_func: Power basis g₀(D) function (required for option_b)
+        active_cell_indices: Boolean mask identifying active cells for hat matrix (required for option_b)
+
     Returns:
         DCD array [grid_x, grid_y] with values >= 0
     """
     dcd = np.zeros_like(demand_counts, dtype=float)
-    
+
+    # ── Option B: Demographic residual projection ──
+    if (causal_formulation == "option_b"
+            and hat_matrices is not None
+            and g0_power_basis_func is not None
+            and active_cell_indices is not None):
+
+        H_demo = hat_matrices.get('H_demo')
+        if H_demo is not None:
+            # Extract active cells (aligned with hat matrix rows)
+            D = demand_counts.flatten()[active_cell_indices]
+            S = supply_counts.flatten()[active_cell_indices]
+            Y = S / (D + eps)
+
+            # Demand-controlled residuals: R = Y - g₀(D)
+            g0_D = g0_power_basis_func(D)
+            R = Y - g0_D
+
+            # Project residuals onto demographics: R̂ = H_demo @ R
+            R_hat = H_demo @ R
+
+            # DCD = magnitude of demographically-explained residual per cell
+            DCD_active = np.abs(R_hat)
+
+            # Map back to full grid
+            dcd_flat = dcd.flatten()
+            dcd_flat[active_cell_indices] = DCD_active
+            dcd = dcd_flat.reshape(demand_counts.shape)
+
+            return dcd
+
+    # ── Baseline: |Y - g(D)| ──
+
     # If no g_function available, use simple deviation from mean
     if g_function is None:
-        # Fallback: use deviation from mean service ratio
         mask = demand_counts > eps
         if not mask.any():
             return dcd
@@ -283,25 +325,25 @@ def compute_cell_dcd_scores(
         mean_Y = Y[mask].mean()
         dcd[mask] = np.abs(Y[mask] - mean_Y)
         return dcd
-    
+
     # Only compute for cells with sufficient demand
     mask = demand_counts > eps
-    
+
     if not mask.any():
         return dcd
-    
+
     # Compute actual service ratio Y = S / D for active cells
     Y = np.zeros_like(demand_counts, dtype=float)
     Y[mask] = supply_counts[mask] / (demand_counts[mask] + eps)
-    
+
     # Compute expected ratio g(D) for all cells
     D_flat = demand_counts.flatten()
     g_d_flat = g_function(D_flat)
     g_d = g_d_flat.reshape(demand_counts.shape)
-    
+
     # DCD = |Y - g(D)| for active cells
     dcd[mask] = np.abs(Y[mask] - g_d[mask])
-    
+
     return dcd
 
 
@@ -314,19 +356,23 @@ def compute_trajectory_attribution_scores(
     lis_weight: float = 0.5,
     dcd_weight: float = 0.5,
     normalize: bool = True,
+    causal_formulation: str = "baseline",
+    hat_matrices: Optional[Dict] = None,
+    g0_power_basis_func: Optional[Callable] = None,
+    active_cell_indices: Optional[np.ndarray] = None,
 ) -> List[Dict]:
     """
     Compute combined attribution scores for all trajectories.
-    
+
     Combined Score = w_lis * LIS_τ + w_dcd * DCD_τ
-    
+
     Where:
     - LIS_τ = max(LIS_pickup, LIS_dropoff) for trajectory τ
     - DCD_τ = DCD at the pickup cell (since we modify pickups)
-    
+
     Trajectories with higher combined scores have greater impact on
     fairness and should be prioritized for modification.
-    
+
     Args:
         trajectories: List of Trajectory objects
         pickup_counts: Pickup count grid [grid_x, grid_y]
@@ -336,16 +382,26 @@ def compute_trajectory_attribution_scores(
         lis_weight: Weight for LIS (spatial fairness impact)
         dcd_weight: Weight for DCD (causal fairness impact)
         normalize: If True, normalize scores to [0, 1] range
-        
+        causal_formulation: 'baseline' or 'option_b' — controls DCD computation
+        hat_matrices: Pre-computed hat matrices (for option_b DCD)
+        g0_power_basis_func: Power basis g₀(D) function (for option_b DCD)
+        active_cell_indices: Boolean mask for hat matrix cells (for option_b DCD)
+
     Returns:
         List of dicts with trajectory index, scores, and cell info
     """
     # Compute cell-level LIS scores
     pickup_lis = compute_cell_lis_scores(pickup_counts)
     dropoff_lis = compute_cell_lis_scores(dropoff_counts)
-    
-    # Compute cell-level DCD scores
-    dcd_scores = compute_cell_dcd_scores(pickup_counts, supply_counts, g_function)
+
+    # Compute cell-level DCD scores (dispatches to baseline or option_b)
+    dcd_scores = compute_cell_dcd_scores(
+        pickup_counts, supply_counts, g_function,
+        causal_formulation=causal_formulation,
+        hat_matrices=hat_matrices,
+        g0_power_basis_func=g0_power_basis_func,
+        active_cell_indices=active_cell_indices,
+    )
     
     # Compute per-trajectory scores
     trajectory_scores = []
@@ -583,7 +639,11 @@ def trajectory_selection_section():
                                 g_function=g_function,
                                 lis_weight=lis_weight,
                                 dcd_weight=dcd_weight,
-                                normalize=True
+                                normalize=True,
+                                causal_formulation=st.session_state.get('causal_formulation', 'baseline'),
+                                hat_matrices=st.session_state.get('hat_matrices'),
+                                g0_power_basis_func=st.session_state.get('g0_power_basis_func'),
+                                active_cell_indices=st.session_state.get('active_cell_indices'),
                             )
                             
                             # Select top-k
@@ -1269,17 +1329,25 @@ def _compute_cell_fairness_scores(
     supply_counts: np.ndarray,
     g_function,
     fairness_type: str = 'spatial',
+    causal_formulation: str = 'baseline',
+    hat_matrices=None,
+    g0_power_basis_func=None,
+    active_cell_indices=None,
 ) -> np.ndarray:
     """
     Compute cell-level fairness scores.
-    
+
     Args:
         pickup_counts: [48, 90] pickup counts
-        dropoff_counts: [48, 90] dropoff counts  
+        dropoff_counts: [48, 90] dropoff counts
         supply_counts: [48, 90] active taxis / supply
         g_function: Expected service ratio function
         fairness_type: 'spatial' for LIS, 'causal' for DCD
-        
+        causal_formulation: 'baseline' or 'option_b'
+        hat_matrices: Dict with 'H_demo' key for Option B
+        g0_power_basis_func: Power basis g₀(D) function for Option B
+        active_cell_indices: Indices of cells with valid demographic data
+
     Returns:
         [48, 90] array of fairness scores (lower is better/more fair)
     """
@@ -1287,8 +1355,14 @@ def _compute_cell_fairness_scores(
         # LIS = |c_i - μ| / μ
         return compute_cell_lis_scores(pickup_counts)
     else:
-        # DCD = |Y_i - g(D_i)|
-        return compute_cell_dcd_scores(pickup_counts, supply_counts, g_function)
+        # DCD: baseline |Y_i - g(D_i)| or Option B |R̂_i| = |H_demo @ R|_i
+        return compute_cell_dcd_scores(
+            pickup_counts, supply_counts, g_function,
+            causal_formulation=causal_formulation,
+            hat_matrices=hat_matrices,
+            g0_power_basis_func=g0_power_basis_func,
+            active_cell_indices=active_cell_indices,
+        )
 
 
 def _apply_trajectory_modification_to_grid(
@@ -1412,7 +1486,11 @@ def _display_before_after_fairness_viz(histories):
     
     # Compute fairness scores for BEFORE state
     before_fairness = _compute_cell_fairness_scores(
-        pickup_grid, dropoff_grid, active_taxis_grid, g_function, fairness_key
+        pickup_grid, dropoff_grid, active_taxis_grid, g_function, fairness_key,
+        causal_formulation=st.session_state.get('causal_formulation', 'baseline'),
+        hat_matrices=st.session_state.get('hat_matrices'),
+        g0_power_basis_func=st.session_state.get('g0_power_basis_func'),
+        active_cell_indices=st.session_state.get('active_cell_indices'),
     )
     
     # Compute modified pickup grid for selected trajectories
@@ -1422,7 +1500,11 @@ def _display_before_after_fairness_viz(histories):
     
     # Compute fairness scores for AFTER state
     after_fairness = _compute_cell_fairness_scores(
-        modified_pickup_grid, dropoff_grid, active_taxis_grid, g_function, fairness_key
+        modified_pickup_grid, dropoff_grid, active_taxis_grid, g_function, fairness_key,
+        causal_formulation=st.session_state.get('causal_formulation', 'baseline'),
+        hat_matrices=st.session_state.get('hat_matrices'),
+        g0_power_basis_func=st.session_state.get('g0_power_basis_func'),
+        active_cell_indices=st.session_state.get('active_cell_indices'),
     )
     
     # Determine common color scale range for both grids
