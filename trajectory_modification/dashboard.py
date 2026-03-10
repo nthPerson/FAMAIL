@@ -962,7 +962,10 @@ def _execute_modification(
     # Initialize metrics tracker
     metrics = GlobalMetrics(
         g_function=st.session_state.g_function,
-        alpha_weights=(params['alpha_spatial'], params['alpha_causal'], params['alpha_fidelity'])
+        alpha_weights=(params['alpha_spatial'], params['alpha_causal'], params['alpha_fidelity']),
+        hat_matrices=st.session_state.get('hat_matrices'),
+        active_cell_indices=st.session_state.get('active_cell_indices'),
+        g0_power_basis_func=st.session_state.get('g0_power_basis_func'),
     )
     metrics.initialize_from_data(
         st.session_state.pickup_grid,
@@ -1046,53 +1049,82 @@ def display_results_section():
         st.info("Run a trajectory modification to see results here.")
         return
     
-    # Summary metrics
-    col1, col2, col3, col4 = st.columns(4)
+    # Summary metrics: Before/After comparison
+    st.subheader("Summary Metrics")
+
+    # "Before" row
+    st.caption("**Before** (initial state)")
+    b1, b2, b3, b4 = st.columns(4)
+    b1.metric(
+        "F_spatial",
+        f"{initial_snapshot.f_spatial:.4f}",
+        help="Initial F_spatial score (1 − Gini). Higher = more equitable spatial distribution.",
+    )
+    b2.metric(
+        "F_causal",
+        f"{initial_snapshot.f_causal:.4f}",
+        help="Initial F_causal score (Option B: demographic residual independence). Higher = less demographic bias.",
+    )
+    b3.metric(
+        "F_fidelity",
+        f"{initial_snapshot.f_fidelity:.4f}",
+        help="Initial fidelity score (discriminator authenticity). Higher = more realistic trajectories.",
+    )
+    b4.metric(
+        "Combined L",
+        f"{initial_snapshot.combined_objective:.4f}",
+        help="Initial weighted objective L = α₁·F_spatial + α₂·F_causal + α₃·F_fidelity.",
+    )
+
+    # "After" row with deltas
+    st.caption("**After** (post-modification)")
+    a1, a2, a3, a4 = st.columns(4)
+    a1.metric(
+        "F_spatial",
+        f"{final_snapshot.f_spatial:.4f}",
+        f"{final_snapshot.f_spatial - initial_snapshot.f_spatial:+.4f}",
+        help="Final F_spatial score after trajectory modification.",
+    )
+    a2.metric(
+        "F_causal",
+        f"{final_snapshot.f_causal:.4f}",
+        f"{final_snapshot.f_causal - initial_snapshot.f_causal:+.4f}",
+        help="Final F_causal score after trajectory modification.",
+    )
+    a3.metric(
+        "F_fidelity",
+        f"{final_snapshot.f_fidelity:.4f}",
+        f"{final_snapshot.f_fidelity - initial_snapshot.f_fidelity:+.4f}",
+        help="Final fidelity score after trajectory modification.",
+    )
+    a4.metric(
+        "Combined L",
+        f"{final_snapshot.combined_objective:.4f}",
+        f"{final_snapshot.combined_objective - initial_snapshot.combined_objective:+.4f}",
+        help="Final weighted objective L after trajectory modification.",
+    )
     
-    with col1:
-        delta_gini = final_snapshot.gini_coefficient - initial_snapshot.gini_coefficient
-        color = "inverse" if delta_gini < 0 else "normal"
-        st.metric(
-            "Gini Coefficient",
-            f"{final_snapshot.gini_coefficient:.4f}",
-            f"{delta_gini:+.4f}",
-            delta_color=color
-        )
-    
-    with col2:
-        delta_spatial = final_snapshot.f_spatial - initial_snapshot.f_spatial
-        st.metric(
-            "F_spatial",
-            f"{final_snapshot.f_spatial:.4f}",
-            f"{delta_spatial:+.4f}"
-        )
-    
-    with col3:
-        delta_causal = final_snapshot.f_causal - initial_snapshot.f_causal
-        st.metric(
-            "F_causal",
-            f"{final_snapshot.f_causal:.4f}",
-            f"{delta_causal:+.4f}"
-        )
-    
-    with col4:
-        delta_combined = final_snapshot.combined_objective - initial_snapshot.combined_objective
-        st.metric(
-            "Combined L",
-            f"{final_snapshot.combined_objective:.4f}",
-            f"{delta_combined:+.4f}"
-        )
-    
-    # Convergence statistics
-    st.subheader("Convergence Statistics")
-    
+    # Modification statistics
+    st.subheader("Modification Statistics")
+
     converged = sum(1 for h in histories if h.converged)
     avg_iterations = np.mean([h.total_iterations for h in histories])
-    
+
+    # Compute perturbation magnitudes
+    perturbation_mags = [
+        np.linalg.norm(h.iterations[-1].perturbation) if h.iterations else 0.0
+        for h in histories
+    ]
+
     col1, col2, col3 = st.columns(3)
     col1.metric("Converged", f"{converged}/{len(histories)}")
     col2.metric("Avg Iterations", f"{avg_iterations:.1f}")
     col3.metric("Mean Fidelity", f"{final_snapshot.mean_fidelity:.4f}")
+
+    col4, col5, col6 = st.columns(3)
+    col4.metric("Min Perturbation", f"{min(perturbation_mags):.4f}", help="Minimum perturbation magnitude (grid cells)")
+    col5.metric("Avg Perturbation", f"{np.mean(perturbation_mags):.4f}", help="Average perturbation magnitude (grid cells)")
+    col6.metric("Max Perturbation", f"{max(perturbation_mags):.4f}", help="Maximum perturbation magnitude (grid cells)")
     
     # NEW: Before/After Fairness Visualization (with trajectory selection built-in)
     st.divider()
@@ -1185,7 +1217,13 @@ def _display_iteration_details_fragment(histories):
             'δy': [r.perturbation[1] for r in history.iterations],
         }
         df = pd.DataFrame(iter_data)
-        st.dataframe(df, use_container_width=True)
+        styled_df = df.style.format({
+            'Objective L': '{:.8f}',
+            'F_spatial': '{:.8f}',
+            'F_causal': '{:.8f}',
+            'F_fidelity': '{:.8f}',
+        })
+        st.dataframe(styled_df, use_container_width=True)
         
         # Plot if we have plotly and more than 1 iteration
         if PLOTLY_AVAILABLE and len(history.iterations) > 1:
@@ -1445,7 +1483,7 @@ def _display_before_after_fairness_viz(histories):
             "Fairness Metric",
             ["Spatial (LIS)", "Causal (DCD)"],
             horizontal=True,
-            help="Spatial: Local Inequality Score |c_i - μ| / μ\nCausal: Demand-Conditional Deviation |Y_i - g(D_i)|"
+            help="Spatial: Local Inequality Score |cᵢ − μ| / μ\nCausal (Option B): Demographic Residual Deviation |R̂ᵢ| where R = Y − g₀(D) and R̂ = H_demo·R"
         )
         fairness_key = 'spatial' if 'Spatial' in fairness_type else 'causal'
     
@@ -1683,10 +1721,11 @@ def _display_before_after_fairness_viz(histories):
                 mod_fairness_score = after_fairness[mod_cell[0], mod_cell[1]]
                 
                 driver_id = getattr(history.original, 'driver_id', 'N/A')
+                label = "F_spatial" if fairness_key == 'spatial' else "F_causal"
                 st.markdown(
                     f"**Traj {hist_idx}** (Driver {driver_id}): "
                     f"({orig_cell[0]}, {orig_cell[1]}) → ({mod_cell[0]}, {mod_cell[1]}) | "
-                    f"{fairness_key.upper()}: {orig_fairness_score:.4f} → {mod_fairness_score:.4f}"
+                    f"{label}: {orig_fairness_score:.4f} → {mod_fairness_score:.4f}"
                 )
 
 

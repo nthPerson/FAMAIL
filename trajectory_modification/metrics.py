@@ -55,21 +55,29 @@ class GlobalMetrics:
         grid_dims: Tuple[int, int] = (48, 90),
         g_function=None,
         alpha_weights: Tuple[float, float, float] = (0.33, 0.33, 0.34),
+        hat_matrices: Optional[Dict] = None,
+        active_cell_indices: Optional[np.ndarray] = None,
+        g0_power_basis_func=None,
     ):
         self.grid_dims = grid_dims
         self.g_function = g_function
         self.alpha_spatial, self.alpha_causal, self.alpha_fidelity = alpha_weights
         self.eps = 1e-8
-        
+
+        # Option B causal fairness data
+        self.hat_matrices = hat_matrices
+        self.active_cell_indices = active_cell_indices
+        self.g0_power_basis_func = g0_power_basis_func
+
         # Initialize counts as numpy arrays
         self.pickup_counts = np.zeros(grid_dims, dtype=np.float32)
         self.supply_counts = np.zeros(grid_dims, dtype=np.float32)
         self.active_taxis = np.zeros(grid_dims, dtype=np.float32)
-        
+
         # Fidelity tracking
         self.fidelity_scores: List[float] = []
         self.num_modified = 0
-        
+
         # History
         self.snapshots: List[FairnessSnapshot] = []
     
@@ -130,27 +138,62 @@ class GlobalMetrics:
 
         return float(np.clip(gini, 0.0, 1.0))
     
-    def compute_r_squared(self) -> float:
-        """Compute R² for causal fairness."""
+    def compute_f_causal(self) -> float:
+        """
+        Compute F_causal using Option B (hat-matrix) when available, else baseline.
+
+        Option B: F = R'(I-H)R / R'MR where R = Y - g₀(D).
+        Baseline fallback: F = max(0, 1 - var(R)/var(Y)) where R = Y - g(D).
+        """
+        # --- Option B path (preferred) ---
+        if (
+            self.hat_matrices is not None
+            and self.active_cell_indices is not None
+            and self.g0_power_basis_func is not None
+        ):
+            from objective_function.causal_fairness.utils import compute_fcausal_option_b_numpy
+
+            mask = self.active_cell_indices.flatten().astype(bool)
+            D = self.pickup_counts.flatten()[mask]
+            S = self.supply_counts.flatten()[mask]
+
+            n_active = int(mask.sum())
+            n_hat = self.hat_matrices['I_minus_H_demo'].shape[0]
+            if n_active != n_hat:
+                # Dimension mismatch — fall through to baseline
+                pass
+            else:
+                Y = S / (D + self.eps)
+                g0_D = self.g0_power_basis_func(D)
+                R = Y - g0_D
+
+                result = compute_fcausal_option_b_numpy(
+                    R,
+                    self.hat_matrices['I_minus_H_demo'],
+                    self.hat_matrices['M'],
+                    eps=self.eps,
+                )
+                return float(result['f_causal'])
+
+        # --- Baseline fallback ---
         if self.g_function is None:
             return 0.5
-        
-        # Filter active cells
+
         mask = self.pickup_counts.flatten() > 0.1
         if mask.sum() < 2:
             return 0.5
-        
-        D = self.pickup_counts.flatten()[mask]  # Demand proxy
-        S = self.supply_counts.flatten()[mask]  # Supply
-        Y = S / (D + self.eps)  # Outcome: supply per demand
-        
+
+        D = self.pickup_counts.flatten()[mask]
+        S = self.supply_counts.flatten()[mask]
+        Y = S / (D + self.eps)
+
         g_d = self.g_function(D)
         R = Y - g_d
-        
+
         var_Y = Y.var() + self.eps
         var_R = R.var()
         r_squared = 1.0 - var_R / var_Y
-        
+
         return float(np.clip(r_squared, 0.0, 1.0))
     
     def compute_mean_fidelity(self) -> float:
@@ -162,11 +205,10 @@ class GlobalMetrics:
     def compute_snapshot(self) -> FairnessSnapshot:
         """Compute current fairness snapshot."""
         gini = self.compute_gini()
-        r_squared = self.compute_r_squared()
+        f_causal = self.compute_f_causal()
         mean_fidelity = self.compute_mean_fidelity()
-        
+
         f_spatial = 1.0 - gini
-        f_causal = max(0.0, r_squared)
         f_fidelity = mean_fidelity
         
         combined = (
@@ -177,7 +219,7 @@ class GlobalMetrics:
         
         snapshot = FairnessSnapshot(
             gini_coefficient=gini,
-            r_squared=r_squared,
+            r_squared=f_causal,
             mean_fidelity=mean_fidelity,
             f_spatial=f_spatial,
             f_causal=f_causal,

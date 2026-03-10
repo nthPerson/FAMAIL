@@ -5,6 +5,49 @@ and non-trivial edits. Minor bugfixes and UI tweaks are omitted.
 
 ---
 
+## 2026-03-09 — GlobalMetrics F_causal: Option B Alignment + Dashboard Results Overhaul
+
+### F_causal Always Zero in Summary Metrics (Bug Fix)
+
+**Files**: `trajectory_modification/metrics.py`
+
+`GlobalMetrics.compute_r_squared()` used the baseline variance-ratio formula
+`F = max(0, 1 − var(R)/var(Y))` with the isotonic `g(D)`. This is the wrong formulation
+when Option B is selected — and when the isotonic fit is poor, `var(R) > var(Y)` yields
+R² < 0, which `max(0, ...)` clamps to exactly 0.0000. Meanwhile, per-iteration F_causal
+values (computed via `FAMAILObjective._compute_option_b_causal()`) used the correct
+hat-matrix formula and returned non-zero values.
+
+**Fix**: Replaced `compute_r_squared()` with `compute_f_causal()`. When `hat_matrices`,
+`active_cell_indices`, and `g0_power_basis_func` are provided, it delegates to
+`compute_fcausal_option_b_numpy()` — the same `R'(I-H)R / R'MR` quadratic form used in
+the differentiable objective. Falls back to the baseline formula only when hat matrices
+are unavailable. Updated `compute_snapshot()` to call the new method directly.
+
+Dashboard initialization (`dashboard.py`) now passes `hat_matrices`,
+`active_cell_indices`, and `g0_power_basis_func` from session state to `GlobalMetrics()`.
+
+### Dashboard Results Section Rework
+
+**Files**: `trajectory_modification/dashboard.py`
+
+- **Summary Metrics**: Replaced single-value metric cards with a Before/After two-row
+  layout showing F_spatial, F_causal, F_fidelity, and Combined L. Removed standalone
+  Gini Coefficient card (redundant with F_spatial = 1 − Gini). Added tooltips describing
+  each metric and its interpretation.
+- **Modification Statistics**: Renamed from "Convergence Statistics". Added min/max/average
+  perturbation magnitude metrics alongside existing Converged, Avg Iterations, Mean Fidelity.
+- **Modification Details labels**: Changed per-trajectory fairness labels from generic
+  `SPATIAL`/`CAUSAL` to `F_spatial`/`F_causal` for consistency with objective function
+  terminology.
+- **Iteration Details precision**: Increased display precision for Objective L, F_spatial,
+  F_causal, and F_fidelity columns from default (~4 digits) to 8 decimal places via
+  `df.style.format()`.
+- **Before/After viz tooltip**: Updated Fairness Metric radio help text to describe
+  the Option B DCD formula (`R̂ = H_demo·R`).
+
+---
+
 ## 2026-03-09 — Trajectory Modification Algorithm: 5-Issue Fix Set
 
 Addresses five known issues (7.1–7.5) identified during pseudocode documentation of
@@ -106,3 +149,6 @@ Updated `trajectory_modification/pseudocode_docs/algorithm_pseudocode.md` throug
 - Section 5.1: Noted Gini computed over service-active cells only
 - Section 7.1–7.5: All marked as FIXED with concise descriptions
 - Section 7.4: Replaced with computational complexity analysis
+
+---
+
