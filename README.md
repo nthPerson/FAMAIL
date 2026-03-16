@@ -2,6 +2,8 @@
 
 <p align="center">
   <strong>Improving Spatial Fairness in Taxi Services Through Trajectory Editing</strong>
+  <br><br>
+  <a href="https://nthperson.github.io/FAMAIL/">Project Website</a>
 </p>
 
 ---
@@ -227,18 +229,20 @@ pip install -r pickup_dropoff_counts/requirements.txt
 
 ### Quick Start
 
-1. **Explore the data**: Start with the data dictionary and explorer notebooks
+1. **Visit the project website**: [nthperson.github.io/FAMAIL](https://nthperson.github.io/FAMAIL/) for an overview of the research goals, methodology, and fairness definitions.
+
+2. **Explore the data**: Start with the data dictionary and explorer notebooks
    ```bash
    jupyter notebook data_dictionary/explorers/all_trajs_explorer.ipynb
    ```
 
-2. **Process pickup/dropoff counts**: Generate aggregated event data
+3. **Process pickup/dropoff counts**: Generate aggregated event data
    ```bash
    cd pickup_dropoff_counts
    streamlit run app.py
    ```
 
-3. **Train the discriminator**: Build the trajectory authenticity model
+4. **Train the discriminator**: Build the trajectory authenticity model
    ```bash
    cd discriminator/model
    python train.py --data-dir ../datasets/traj_pair_5000pos_5000neg_80-20_split
