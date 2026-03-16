@@ -18,7 +18,7 @@ from datetime import datetime
 from typing import Dict, List, Tuple, Optional, Callable
 from collections import defaultdict
 
-from config import (
+from .config import (
     ProcessingConfig, 
     GlobalBounds, 
     Step1Stats,
