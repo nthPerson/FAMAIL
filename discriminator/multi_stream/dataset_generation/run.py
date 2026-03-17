@@ -36,6 +36,10 @@ def main():
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--val-ratio", type=float, default=0.15)
     parser.add_argument("--test-ratio", type=float, default=0.10)
+    parser.add_argument("--seeking-fixed-length", type=int, default=None,
+                        help="Fixed sequence length for seeking trajectories (truncate/pad)")
+    parser.add_argument("--driving-fixed-length", type=int, default=None,
+                        help="Fixed sequence length for driving trajectories (truncate/pad)")
     parser.add_argument("--profile-noise", type=float, default=0.0,
                         help="Gaussian noise std on profile features (default: 0)")
     parser.add_argument("--analyze-only", action="store_true",
@@ -53,6 +57,12 @@ def main():
         test_ratio=args.test_ratio,
         profile_noise_std=args.profile_noise,
     )
+    if args.seeking_fixed_length:
+        config.seeking_padding = "fixed_length"
+        config.seeking_fixed_length = args.seeking_fixed_length
+    if args.driving_fixed_length:
+        config.driving_padding = "fixed_length"
+        config.driving_fixed_length = args.driving_fixed_length
     if args.extracted_data_dir:
         config.extracted_data_dir = Path(args.extracted_data_dir)
     if args.output_dir:

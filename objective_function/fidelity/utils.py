@@ -63,22 +63,26 @@ def load_discriminator(
 ) -> Tuple[Any, dict, str]:
     """
     Load a pre-trained discriminator model from checkpoint.
-    
+
+    Supports V1 (SiameseLSTMDiscriminator), V2 (SiameseLSTMDiscriminatorV2),
+    and V3 (MultiStreamSiameseDiscriminator). Model version is auto-detected
+    from the checkpoint's model_config.
+
     Args:
         checkpoint_path: Path to .pt checkpoint file
         config_path: Path to config.json (auto-detected if None)
         device: Device to load model on ('cuda', 'cpu', or None for auto)
-        
+
     Returns:
         Tuple of (model, config_dict, device_str)
-        
+
     Raises:
         FileNotFoundError: If checkpoint not found
         RuntimeError: If model loading fails
     """
     if not TORCH_AVAILABLE:
         raise RuntimeError("PyTorch is required for discriminator loading")
-    
+
     checkpoint_path = Path(checkpoint_path)
     if not checkpoint_path.exists():
         # Try relative to project root
@@ -87,61 +91,34 @@ def load_discriminator(
             checkpoint_path = alt_path
         else:
             raise FileNotFoundError(f"Checkpoint not found: {checkpoint_path}")
-    
+
     # Determine device
     if device is None:
         device = "cuda" if torch.cuda.is_available() else "cpu"
-    
-    # Load checkpoint
-    checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
-    
-    # Load config
-    config = None
+
+    # Use version-aware loader from trainer (handles V1/V2/V3 dispatch)
+    try:
+        from trainer import load_model_from_checkpoint
+    except ImportError:
+        from discriminator.model.trainer import load_model_from_checkpoint
+
+    model, checkpoint_data = load_model_from_checkpoint(
+        str(checkpoint_path), device=device
+    )
+    model_config = checkpoint_data.get('model_config', checkpoint_data.get('config', {}))
+
+    # Merge external config.json info if available (training params, history refs)
     if config_path:
         config_path = Path(config_path)
     else:
         config_path = checkpoint_path.parent / "config.json"
-    
+
     if config_path.exists():
         with open(config_path, 'r') as f:
-            config = json.load(f)
-    
-    # Extract model config from checkpoint or config file
-    model_config = checkpoint.get('config', {})
-    if not model_config and config:
-        model_config = {
-            'lstm_hidden_dims': tuple(config.get('lstm_hidden_dims', [200, 100])),
-            'dropout': config.get('dropout', 0.2),
-            'bidirectional': config.get('bidirectional', True),
-            'classifier_hidden_dims': tuple(config.get('classifier_hidden_dims', [64, 32, 8])),
-        }
-    
-    # Verify checkpoint is from new architecture (stacked LSTM layers)
-    state_dict = checkpoint.get('model_state_dict', checkpoint)
-    if 'encoder.lstm.weight_ih_l0' in state_dict:
-        raise ValueError(
-            "This checkpoint was trained with the old discriminator architecture "
-            "(single nn.LSTM). Please train a new model with the current architecture "
-            "(stacked LSTM layers with variable hidden dimensions)."
-        )
-    
-    # Import and create model
-    from model import SiameseLSTMDiscriminator
-    
-    model = SiameseLSTMDiscriminator(
-        lstm_hidden_dims=tuple(model_config.get('lstm_hidden_dims', [200, 100])),
-        dropout=model_config.get('dropout', 0.2),
-        bidirectional=model_config.get('bidirectional', True),
-        classifier_hidden_dims=tuple(model_config.get('classifier_hidden_dims', [64, 32, 8])),
-    )
-    
-    # Load weights
-    model.load_state_dict(state_dict)
-    
-    # Move to device and set to eval mode
-    model = model.to(device)
-    model.eval()
-    
+            external_config = json.load(f)
+        # Checkpoint model_config takes precedence on conflicts
+        model_config = {**external_config, **model_config}
+
     return model, model_config, device
 
 

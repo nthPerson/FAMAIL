@@ -59,6 +59,7 @@ st.set_page_config(
 
 # Default paths
 DEFAULT_DATASET_DIR = Path("/home/robert/FAMAIL/discriminator/datasets").resolve()
+MULTI_STREAM_DATASET_DIR = Path("/home/robert/FAMAIL/discriminator/multi_stream/datasets").resolve()
 DEFAULT_CHECKPOINT_DIR = Path("/home/robert/FAMAIL/discriminator/model/checkpoints").resolve()
 
 
@@ -92,20 +93,36 @@ def load_dataset_info(dataset_dir: Path) -> Dict[str, Any]:
                 info[f"{split}_samples"] = len(data["label"])
                 info[f"{split}_pos"] = int((data["label"] == 1).sum())
                 info[f"{split}_neg"] = int((data["label"] == 0).sum())
-                info[f"{split}_seq_len"] = data["x1"].shape[1]
-                info[f"{split}_features"] = data["x1"].shape[2]
+
+                x1_shape = data["x1"].shape
+                if len(x1_shape) == 4:
+                    # Multi-stream V3: [N_pairs, N_trajs, L, 4]
+                    info["is_multi_stream"] = True
+                    info[f"{split}_n_trajs"] = x1_shape[1]
+                    info[f"{split}_seq_len"] = x1_shape[2]
+                    info[f"{split}_features"] = x1_shape[3]
+                    if "driving_1" in data:
+                        info[f"{split}_driving_seq_len"] = data["driving_1"].shape[2]
+                    if "profile_1" in data:
+                        info[f"{split}_profile_dim"] = data["profile_1"].shape[1]
+                else:
+                    # V1/V2: [N_pairs, L, 4]
+                    info["is_multi_stream"] = False
+                    info[f"{split}_seq_len"] = x1_shape[1]
+                    info[f"{split}_features"] = x1_shape[2]
             info[f"{split}_size_mb"] = npz_path.stat().st_size / (1024 * 1024)
-    
+
     return info
 
 
-def list_available_datasets(base_dir: Path) -> List[Path]:
-    """List available dataset directories."""
+def list_available_datasets(*base_dirs: Path) -> List[Path]:
+    """List available dataset directories from one or more base directories."""
     datasets = []
-    if base_dir.exists():
-        for item in base_dir.iterdir():
-            if item.is_dir() and (item / "train.npz").exists():
-                datasets.append(item)
+    for base_dir in base_dirs:
+        if base_dir.exists():
+            for item in base_dir.iterdir():
+                if item.is_dir() and (item / "train.npz").exists():
+                    datasets.append(item)
     return sorted(datasets)
 
 
@@ -137,16 +154,17 @@ def render_dataset_selector():
         dataset_dir_str = st.text_input(
             "Dataset directory",
             value=str(DEFAULT_DATASET_DIR),
-            help="Base directory containing dataset subdirectories"
+            help="Base directory containing dataset subdirectories. "
+                 "Multi-stream datasets are also searched automatically."
         )
     with col2:
         st.markdown("<br>", unsafe_allow_html=True)
         refresh = st.button("🔄 Refresh")
-    
+
     dataset_dir = Path(dataset_dir_str)
-    
-    # List available datasets
-    datasets = list_available_datasets(dataset_dir)
+
+    # List available datasets from both single-stream and multi-stream dirs
+    datasets = list_available_datasets(dataset_dir, MULTI_STREAM_DATASET_DIR)
     
     if not datasets:
         st.warning(f"No datasets found in {dataset_dir}. Generate a dataset using the Dataset Generator tool first.")
@@ -160,7 +178,14 @@ def render_dataset_selector():
             datasets = [Path(custom_path)]
     
     if datasets:
-        dataset_options = {d.name: d for d in datasets}
+        # Label datasets with their parent dir for disambiguation
+        def _dataset_label(d: Path) -> str:
+            # Show parent context if from multi-stream dir
+            if MULTI_STREAM_DATASET_DIR in d.parents or d.parent == MULTI_STREAM_DATASET_DIR:
+                return f"multi_stream/{d.name}"
+            return d.name
+
+        dataset_options = {_dataset_label(d): d for d in datasets}
         selected_name = st.selectbox(
             "Select dataset",
             options=list(dataset_options.keys()),
@@ -185,7 +210,18 @@ def render_dataset_selector():
                     st.caption(f"Pos: {info.get('val_pos', 0):,} | Neg: {info.get('val_neg', 0):,}")
                     
             with col3:
-                if info.get("train_seq_len"):
+                if info.get("is_multi_stream"):
+                    st.metric("Dataset Type", "Multi-Stream (V3)")
+                    n_trajs = info.get('train_n_trajs', '?')
+                    seek_l = info.get('train_seq_len', '?')
+                    drive_l = info.get('train_driving_seq_len', '?')
+                    prof_d = info.get('train_profile_dim', '?')
+                    st.caption(
+                        f"{n_trajs} trajs/stream | "
+                        f"Seek L={seek_l}, Drive L={drive_l} | "
+                        f"Profile dim={prof_d}"
+                    )
+                elif info.get("train_seq_len"):
                     st.metric("Sequence Length", info.get('train_seq_len', 0))
                     st.caption(f"Features: {info.get('train_features', 0)}")
             
@@ -200,22 +236,43 @@ def render_dataset_selector():
     return None, None
 
 
-def render_hyperparameters():
+def render_hyperparameters(is_multi_stream: bool = False):
     """Render hyperparameter configuration UI."""
     st.subheader("⚙️ Hyperparameters")
-    
+
     with st.expander("Model Architecture", expanded=True):
+        # Model version selector
+        version_help = {
+            "v1": "Original Siamese LSTM (concatenation-based)",
+            "v2": "Improved with distance-based similarity",
+            "v3": "Multi-stream Ren-aligned (seeking + driving + profile)",
+        }
+        default_version = "v3" if is_multi_stream else "v2"
+        available_versions = ["v1", "v2", "v3"]
+        model_version = st.selectbox(
+            "Model Version",
+            available_versions,
+            index=available_versions.index(default_version),
+            format_func=lambda v: f"{v.upper()} — {version_help[v]}",
+            help="V3 requires multi-stream datasets with seeking, driving, and profile data."
+        )
+
+        if is_multi_stream and model_version != "v3":
+            st.warning("Dataset is multi-stream but selected model is not V3. "
+                       "V1/V2 will only use the seeking stream.")
+        elif not is_multi_stream and model_version == "v3":
+            st.error("V3 requires a multi-stream dataset with driving and profile data.")
+
         col1, col2 = st.columns(2)
         with col1:
-            # LSTM hidden dims - text input for advanced users, default follows ST-SiameseNet
             lstm_dims_str = st.text_input(
-                "LSTM Hidden Dims", 
+                "LSTM Hidden Dims",
                 "200, 100",
                 help="Hidden dimensions per LSTM layer (comma-separated). Default: 200, 100 follows ST-SiameseNet."
             )
             lstm_hidden_dims = tuple(int(x.strip()) for x in lstm_dims_str.split(",") if x.strip())
             classifier_dims_str = st.text_input(
-                "Classifier Hidden Dims", 
+                "Classifier Hidden Dims",
                 "64, 32, 8",
                 help="Hidden dimensions for classifier MLP (comma-separated). Default: 64, 32, 8 follows ST-SiameseNet."
             )
@@ -223,6 +280,53 @@ def render_hyperparameters():
         with col2:
             dropout = st.slider("Dropout", 0.0, 0.5, 0.2, 0.05)
             bidirectional = st.checkbox("Bidirectional", value=False)
+
+        # Combination mode (V2 and V3)
+        if model_version in ("v2", "v3"):
+            combo_options = ["difference", "concatenation", "distance", "hybrid"]
+            default_combo = "concatenation" if model_version == "v3" else "difference"
+            combination_mode = st.selectbox(
+                "Combination Mode",
+                combo_options,
+                index=combo_options.index(default_combo),
+                help="How branch embeddings are combined. 'concatenation' matches Ren et al. for V3."
+            )
+        else:
+            combination_mode = None
+
+        # V3-specific parameters
+        if model_version == "v3":
+            st.markdown("**V3 Multi-Stream Options:**")
+            v3_col1, v3_col2, v3_col3 = st.columns(3)
+            with v3_col1:
+                streams_str = st.text_input(
+                    "Active Streams", "seeking, driving, profile",
+                    help="Comma-separated list of active streams"
+                )
+                streams = tuple(s.strip() for s in streams_str.split(",") if s.strip())
+                n_trajs_per_stream = st.number_input(
+                    "Trajs per Stream", 1, 20, 5,
+                    help="Number of independent trajectories per stream per branch (Ren: 5)"
+                )
+            with v3_col2:
+                traj_projection_dim = st.number_input(
+                    "Traj Projection Dim", 8, 128, 48,
+                    help="Per-trajectory projection dimension after LSTM (Ren: 48)"
+                )
+                n_profile_features = st.number_input(
+                    "Profile Features", 1, 50, 11,
+                    help="Number of profile input features (default: 11)"
+                )
+            with v3_col3:
+                profile_hidden_str = st.text_input(
+                    "Profile Hidden Dims", "64, 32",
+                    help="Profile encoder hidden dims (Ren: 64, 32)"
+                )
+                profile_hidden_dims = tuple(int(x.strip()) for x in profile_hidden_str.split(",") if x.strip())
+                profile_output_dim = st.number_input(
+                    "Profile Output Dim", 2, 64, 8,
+                    help="Profile embedding dimension (Ren: 8)"
+                )
     
     with st.expander("Training", expanded=True):
         col1, col2, col3 = st.columns(3)
@@ -253,11 +357,13 @@ def render_hyperparameters():
             seed = st.number_input("Random Seed", 0, 10000, 42)
             save_best_only = st.checkbox("Save Best Only", value=True)
     
-    return {
+    params = {
+        "model_version": model_version,
         "lstm_hidden_dims": lstm_hidden_dims,
         "dropout": dropout,
         "bidirectional": bidirectional,
         "classifier_hidden_dims": classifier_dims,
+        "combination_mode": combination_mode,
         "batch_size": batch_size,
         "learning_rate": learning_rate,
         "weight_decay": weight_decay,
@@ -267,8 +373,20 @@ def render_hyperparameters():
         "device": device,
         "num_workers": num_workers,
         "seed": seed,
-        "save_best_only": save_best_only
+        "save_best_only": save_best_only,
     }
+
+    if model_version == "v3":
+        params.update({
+            "streams": streams,
+            "n_trajs_per_stream": n_trajs_per_stream,
+            "traj_projection_dim": traj_projection_dim,
+            "n_profile_features": n_profile_features,
+            "profile_hidden_dims": profile_hidden_dims,
+            "profile_output_dim": profile_output_dim,
+        })
+
+    return params
 
 
 def render_training_progress(history: Dict):
@@ -563,7 +681,11 @@ def start_training(dataset_path: Path, params: Dict, experiment_name: str, progr
         progress_container: Optional Streamlit container for progress updates
     """
     # Import from local modules (when running from model/ directory)
-    from model import SiameseLSTMDiscriminator
+    from model import (
+        SiameseLSTMDiscriminator,
+        SiameseLSTMDiscriminatorV2,
+        MultiStreamSiameseDiscriminator,
+    )
     from dataset import TrajectoryPairDataset, create_data_loaders, load_dataset_from_directory
     from trainer import Trainer, TrainingConfig
     
@@ -594,14 +716,38 @@ def start_training(dataset_path: Path, params: Dict, experiment_name: str, progr
             if 'config' in metadata:
                 dataset_info['source_data_path'] = metadata['config'].get('data_path')
     
-    # Create model
-    model = SiameseLSTMDiscriminator(
-        lstm_hidden_dims=params["lstm_hidden_dims"],
-        dropout=params["dropout"],
-        bidirectional=params["bidirectional"],
-        classifier_hidden_dims=params["classifier_hidden_dims"]
-    )
-    
+    # Create model based on version
+    model_version = params.get("model_version", "v1")
+    if model_version == "v3":
+        model = MultiStreamSiameseDiscriminator(
+            lstm_hidden_dims=params["lstm_hidden_dims"],
+            dropout=params["dropout"],
+            bidirectional=params["bidirectional"],
+            classifier_hidden_dims=params["classifier_hidden_dims"],
+            combination_mode=params.get("combination_mode", "concatenation"),
+            n_profile_features=params.get("n_profile_features", 11),
+            profile_hidden_dims=params.get("profile_hidden_dims", (64, 32)),
+            profile_output_dim=params.get("profile_output_dim", 8),
+            streams=params.get("streams", ("seeking", "driving", "profile")),
+            n_trajs_per_stream=params.get("n_trajs_per_stream", 5),
+            traj_projection_dim=params.get("traj_projection_dim", 48),
+        )
+    elif model_version == "v2":
+        model = SiameseLSTMDiscriminatorV2(
+            lstm_hidden_dims=params["lstm_hidden_dims"],
+            dropout=params["dropout"],
+            bidirectional=params["bidirectional"],
+            classifier_hidden_dims=params["classifier_hidden_dims"],
+            combination_mode=params.get("combination_mode", "difference"),
+        )
+    else:
+        model = SiameseLSTMDiscriminator(
+            lstm_hidden_dims=params["lstm_hidden_dims"],
+            dropout=params["dropout"],
+            bidirectional=params["bidirectional"],
+            classifier_hidden_dims=params["classifier_hidden_dims"],
+        )
+
     # Create config
     from dataclasses import fields
     valid_fields = {f.name for f in fields(TrainingConfig)}
@@ -1008,8 +1154,9 @@ def main():
         
         st.divider()
         
-        # Hyperparameters
-        params = render_hyperparameters()
+        # Hyperparameters — auto-detect if dataset is multi-stream
+        is_multi_stream = dataset_info.get("is_multi_stream", False) if dataset_info else False
+        params = render_hyperparameters(is_multi_stream=is_multi_stream)
         
         st.divider()
         
@@ -1091,23 +1238,44 @@ def main():
         with col2:
             # Show CLI command
             with st.expander("🖥️ CLI Command"):
-                # Use experiment_name if provided, otherwise show placeholder
                 exp_name_arg = f'--experiment-name "{experiment_name}"' if experiment_name else ''
-                cmd = f"""python train.py \\
-    --data-dir "{dataset_path}" \\
-    --lstm_hidden_dims {params['lstm_hidden_dims']} \\
-    --dropout {params['dropout']} \\
-    {"--no-bidirectional" if not params['bidirectional'] else ""} \\
-    --classifier-dims "{','.join(map(str, params['classifier_hidden_dims']))}" \\
-    --epochs {params['epochs']} \\
-    --batch-size {params['batch_size']} \\
-    --lr {params['learning_rate']} \\
-    --early-stopping {params['early_stopping_patience']} \\
-    --scheduler {params['scheduler']} \\
-    {exp_name_arg} \\
-    --output "{DEFAULT_CHECKPOINT_DIR}"
-"""
-                st.code(cmd, language="bash")
+                model_version = params.get("model_version", "v1")
+
+                cmd_parts = [
+                    f'python -m discriminator.model.train \\',
+                    f'    --model-version {model_version} \\',
+                    f'    --data-dir "{dataset_path}" \\',
+                    f'    --lstm-hidden-dims "{",".join(map(str, params["lstm_hidden_dims"]))}" \\',
+                    f'    --dropout {params["dropout"]} \\',
+                ]
+                if not params['bidirectional']:
+                    cmd_parts.append('    --no-bidirectional \\')
+                cmd_parts.append(
+                    f'    --classifier-dims "{",".join(map(str, params["classifier_hidden_dims"]))}" \\'
+                )
+                if params.get("combination_mode"):
+                    cmd_parts.append(f'    --combination-mode {params["combination_mode"]} \\')
+                if model_version == "v3":
+                    cmd_parts.extend([
+                        f'    --streams "{",".join(params.get("streams", ("seeking","driving","profile")))}" \\',
+                        f'    --n-trajs-per-stream {params.get("n_trajs_per_stream", 5)} \\',
+                        f'    --traj-projection-dim {params.get("traj_projection_dim", 48)} \\',
+                        f'    --profile-hidden-dims "{",".join(map(str, params.get("profile_hidden_dims", (64,32))))}" \\',
+                        f'    --profile-output-dim {params.get("profile_output_dim", 8)} \\',
+                        f'    --n-profile-features {params.get("n_profile_features", 11)} \\',
+                    ])
+                cmd_parts.extend([
+                    f'    --epochs {params["epochs"]} \\',
+                    f'    --batch-size {params["batch_size"]} \\',
+                    f'    --lr {params["learning_rate"]} \\',
+                    f'    --early-stopping {params["early_stopping_patience"]} \\',
+                    f'    --scheduler {params["scheduler"]} \\',
+                ])
+                if exp_name_arg:
+                    cmd_parts.append(f'    {exp_name_arg} \\')
+                cmd_parts.append(f'    --output "{DEFAULT_CHECKPOINT_DIR}"')
+
+                st.code('\n'.join(cmd_parts), language="bash")
         
         # Progress container (placed below buttons, will be populated during training)
         progress_container = st.container()
@@ -1177,28 +1345,36 @@ def main():
         if st.button("🔍 Evaluate Model", type="primary"):
             with st.spinner("Evaluating..."):
                 try:
-                    from dataset import TrajectoryPairDataset
+                    from dataset import (
+                        TrajectoryPairDataset,
+                        MultiStreamPairDataset,
+                        load_dataset_from_directory,
+                    )
                     from trainer import load_model_from_checkpoint
                     from torch.utils.data import DataLoader
-                    
+
                     # Load model
-                    model, _ = load_model_from_checkpoint(checkpoint / "best.pt")
-                    
-                    # Load test data
-                    test_dataset = TrajectoryPairDataset(eval_path)
+                    model, ckpt = load_model_from_checkpoint(checkpoint / "best.pt")
+                    model_version = ckpt.get('model_config', {}).get('model_version', 'v1')
+
+                    # Auto-detect dataset type
+                    with np.load(eval_path) as probe:
+                        is_ms = "driving_1" in probe
+                    if is_ms:
+                        test_dataset = MultiStreamPairDataset(eval_path)
+                    else:
+                        test_dataset = TrajectoryPairDataset(eval_path)
                     test_loader = DataLoader(test_dataset, batch_size=32, shuffle=False)
-                    
-                    # Create dummy trainer for evaluation
-                    # (This is a workaround - ideally we'd have a standalone evaluate function)
+
                     device = "cuda" if torch.cuda.is_available() else "cpu"
                     model.to(device)
                     model.eval()
-                    
+
                     # Manual evaluation
                     all_preds = []
                     all_probs = []
                     all_labels = []
-                    
+
                     with torch.no_grad():
                         for batch in test_loader:
                             x1 = batch['x1'].to(device)
@@ -1206,11 +1382,22 @@ def main():
                             mask1 = batch['mask1'].to(device)
                             mask2 = batch['mask2'].to(device)
                             labels = batch['label']
-                            
-                            outputs = model(x1, x2, mask1, mask2).squeeze(-1)
+
+                            # Build multi-stream kwargs if present
+                            kwargs = {}
+                            if 'driving_1' in batch:
+                                kwargs['driving_1'] = batch['driving_1'].to(device)
+                                kwargs['driving_2'] = batch['driving_2'].to(device)
+                                kwargs['mask_d1'] = batch['mask_d1'].to(device)
+                                kwargs['mask_d2'] = batch['mask_d2'].to(device)
+                            if 'profile_1' in batch:
+                                kwargs['profile_1'] = batch['profile_1'].to(device)
+                                kwargs['profile_2'] = batch['profile_2'].to(device)
+
+                            outputs = model(x1, x2, mask1, mask2, **kwargs).squeeze(-1)
                             probs = outputs.cpu().numpy()
                             preds = (probs >= 0.5).astype(float)
-                            
+
                             all_probs.extend(probs.tolist())
                             all_preds.extend(preds.tolist())
                             all_labels.extend(labels.numpy().tolist())
