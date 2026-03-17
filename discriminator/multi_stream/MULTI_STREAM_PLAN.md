@@ -300,262 +300,194 @@ Optional additional features (if they improve discrimination — to be determine
 
 ## Phase 3: Model Architecture Enhancement
 
+> **Status**: COMPLETE. Implementation diverged from original plan after analyzing Ren et al.'s
+> reference implementation (`github.com/huiminren/ST-SiameseNet`). Key changes noted inline.
+
 ### 3.1 Goal
 
-Extend `SiameseLSTMDiscriminatorV2` to support three input streams. The new model class should be backward-compatible — it should work with seeking-only data (single stream) by default, and optionally accept driving trajectories and profile features.
+Extend `SiameseLSTMDiscriminatorV2` to support three input streams with N independent trajectories per stream, closely replicating Ren et al. (KDD 2020).
 
 ### 3.2 New Model Class: `MultiStreamSiameseDiscriminator`
 
-**Location**: `discriminator/model/model.py` (add as a new class, preserve existing V1/V2)
+**Location**: `discriminator/model/model.py`
+
+#### Ren-Aligned Architecture (as implemented)
+
+After studying Ren's reference code (`models.py:build_model_best`, `utils.py:get_pairs_s_and_d`), the key architectural insight was that **each stream processes N=5 independent trajectories** through the shared LSTM, not a single concatenated sequence.
 
 ```
-class MultiStreamSiameseDiscriminator(nn.Module):
-    """Three-stream ST-SiameseNet following Ren et al. (KDD 2020).
+Per branch (one driver on one calendar day):
+  5 seeking trajs → shared LSTM_S each → 5 × Dense(48, ReLU) → concat → 240-dim
+  5 driving trajs → shared LSTM_D each → 5 × Dense(48, ReLU) → concat → 240-dim
+  profile → FCN(64, 32) → 8-dim
 
-    Streams:
-        1. LSTM_S: Shared-weight LSTM for seeking trajectories
-        2. LSTM_D: Shared-weight LSTM for driving trajectories
-        3. FCN_P: Shared-weight FCN for profile features
+  trip_embedding = concat(seeking_240, driving_240) = 480-dim
+  branch_embedding = concat(trip_480, profile_8) = 488-dim
 
-    The three stream embeddings are combined and passed through
-    a dissimilarity-learner (FC classifier) to produce P(same_agent).
-    """
+Classifier input (combination_mode dependent):
+  "concatenation" (Ren): [branch_A_488, branch_B_488] = 976-dim → FC(64,32,8,1)
+  "difference" (V2):     |branch_A - branch_B|        = 488-dim → FC(64,32,8,1)
 ```
 
-#### Architecture Details
+**Key design decisions**:
 
-**Stream 1 — LSTM_S (Seeking Encoder)**
-- Input: `[batch, seq_len, 4]` → FeatureNormalizer → `[batch, seq_len, 6]`
-- Architecture: Same as current `SiameseLSTMEncoder` (200, 100 hidden dims, bidirectional)
-- Output: `[batch, emb_dim_s]` where `emb_dim_s = 200` (100 × 2 for bidirectional)
+1. **N independent trajectories**: Each of the N=5 trajectories goes through the LSTM separately, producing N independent embeddings. These are concatenated (not averaged) into the trip embedding. This is architecturally different from processing one concatenated sequence. Efficient batched processing via `reshape [B, N, L, F] → [B*N, L, F]`.
 
-**Stream 2 — LSTM_D (Driving Encoder)**
-- Input: `[batch, seq_len, 4]` → FeatureNormalizer (shared with LSTM_S) → `[batch, seq_len, 6]`
-- Architecture: Separate LSTM encoder, same architecture as LSTM_S but **independent weights** (per Ren: "each two identical sub-networks share the set of weights" within a stream, but LSTM_S and LSTM_D have different weights)
-- Output: `[batch, emb_dim_d]` where `emb_dim_d = 200`
-- Note: Ren states LSTM_D has "the same components of neurons as LSTM_S" — same architecture, different weights
+2. **Trajectory projection layer**: `Dense(48, ReLU)` after each LSTM compresses 200-dim bidirectional output to 48-dim per trajectory. Without this, N=5 would give 1000-dim per stream — too large. With projection: 5 × 48 = 240 per stream. Matches Ren's `seq_lstm()` function.
 
-**Stream 3 — FCN_P (Profile Feature Learner)**
-- Input: `[batch, n_profile_features]` (e.g., `[batch, 11]`)
-- Architecture: FC layers [64, 32, 8] with ReLU activation (per Ren Appendix A.3)
-- Output: `[batch, emb_dim_p]` where `emb_dim_p = 8`
-- Shared weights between both branches of the Siamese pair
+3. **Two combination modes**: Ren uses concatenation `[emb_A, emb_B]`; our V2 uses difference `|emb_A - emb_B|`. Both are supported for ablation in Phase 7. Additionally supports `"distance"` and `"hybrid"` modes.
 
-**Dissimilarity Learner (Classifier)**
-Following the V2 distance-based approach (not V1 concatenation), compute per-stream differences and combine:
+4. **3D/4D auto-detect**: `_encode_trajectory_stream()` detects input dimensionality — 3D `[B, L, 4]` is treated as N=1 (legacy compatibility), 4D `[B, N, L, 4]` is the Ren-aligned path.
+
+#### Constructor Parameters
 
 ```python
-# Per-stream differences
-diff_s = |emb_s_A - emb_s_B|    # [batch, 200]
-diff_d = |emb_d_A - emb_d_B|    # [batch, 200]
-diff_p = |emb_p_A - emb_p_B|    # [batch, 8]
-
-# Concatenate all differences
-combined = cat([diff_s, diff_d, diff_p])  # [batch, 408]
-
-# FC classifier
-classifier: 408 → 64 → 32 → 8 → 1 (sigmoid)
+MultiStreamSiameseDiscriminator(
+    lstm_hidden_dims=(200, 100),        # Shared architecture for LSTM_S and LSTM_D
+    dropout=0.2,
+    bidirectional=True,
+    classifier_hidden_dims=(64, 32, 8),
+    combination_mode="difference",       # "difference" | "concatenation" | "distance" | "hybrid"
+    n_profile_features=11,
+    profile_hidden_dims=(64, 32),
+    profile_output_dim=8,
+    streams=("seeking", "driving", "profile"),
+    n_trajs_per_stream=5,               # N independent trajectories per stream per branch
+    traj_projection_dim=48,             # Dense(48, ReLU) after LSTM (None to skip)
+)
 ```
 
-This preserves the V2 distance-based insight (identical inputs → zero difference → high similarity) while extending it to three streams.
+#### Classifier Input Dimensions
+
+| `combination_mode` | N=5, all 3 streams | Formula |
+|---|---|---|
+| `"difference"` | 240 + 240 + 8 = **488** | `sum(stream_dims)` |
+| `"concatenation"` | (240 + 240 + 8) × 2 = **976** | `sum(stream_dims) × 2` |
 
 #### Graceful Degradation
 
-The model should handle missing streams gracefully for backward compatibility and for cases where a driver has seeking but no driving trajectories for a given period:
+When driving/profile inputs are `None`, zero-initialized default embeddings are used. The difference of two identical zero embeddings is zero, contributing no signal — effectively reducing the active stream count.
 
-```python
-def forward(self,
-            seeking_1, seeking_2,           # Required
-            mask_s1, mask_s2,               # Required
-            driving_1=None, driving_2=None, # Optional
-            mask_d1=None, mask_d2=None,     # Optional
-            profile_1=None, profile_2=None  # Optional
-           ) -> torch.Tensor:
-```
+### 3.3 Loss Function
 
-**When driving trajectories are missing**: Use a learned `driving_default_embedding` parameter (zero-initialized) as the embedding. The difference of two default embeddings is zero, so this stream contributes no signal — effectively reducing to a two-stream model.
-
-**When profile features are missing**: Same approach — use a learned `profile_default_embedding`.
-
-This design means:
-- Training with all three streams: full discriminatory power
-- Inference with seeking-only: degrades gracefully to V2-like behavior
-- Inference with seeking + profile: two-stream model
-
-### 3.3 Model Configuration
-
-Extend the existing config dict to include multi-stream parameters:
-
-```python
-config = {
-    "model_version": "v3",           # New version identifier
-    "lstm_hidden_dims": (200, 100),  # Shared architecture for both LSTM_S and LSTM_D
-    "dropout": 0.2,
-    "bidirectional": True,
-    "classifier_hidden_dims": (64, 32, 8),
-    "combination_mode": "difference",  # For all streams
-    "n_profile_features": 11,         # Profile feature vector dimension
-    "profile_hidden_dims": (64, 32, 8),  # FCN_P architecture
-    "streams": ["seeking", "driving", "profile"],  # Active streams
-}
-```
-
-### 3.4 Loss Function
-
-Unchanged: Binary cross-entropy loss, same as V2. The only difference is that the classifier receives richer input from three streams instead of one.
+Unchanged: Binary cross-entropy loss. Matches Ren et al. Equation 3:
 
 ```
 min_θ −(y·log(D_θ(X1,X2)) + (1−y)·log(1−D_θ(X1,X2)))
-
-where X1 = (seeking_1, driving_1, profile_1)
-      X2 = (seeking_2, driving_2, profile_2)
 ```
-
-This matches Ren et al. Equation 3 exactly.
 
 ---
 
 ## Phase 4: Dataset Generation Enhancement
 
+> **Status**: COMPLETE. Implemented as a new module at `discriminator/multi_stream/dataset_generation/`
+> rather than extending the existing `dataset_generation_tool/`. Uses Ren-aligned day-based
+> pair sampling instead of multi-day segment construction.
+
 ### 4.1 Goal
 
-Extend the `discriminator/dataset_generation_tool/` to produce multi-stream training datasets that include seeking trajectories, driving trajectories, and profile features.
+Generate multi-stream training datasets using Ren-aligned day-based pair sampling, where each branch represents one driver on one calendar day with N independently-sampled trajectories per stream.
 
-### 4.2 New Dataset Format
+### 4.2 Prerequisite: Calendar Day Tracking (Phase 2 Extension)
 
-**Output**: `.npz` files with the following arrays:
+The Phase 2 extractor was extended to output per-trajectory calendar day indices:
+
+**New output files** (in `discriminator/multi_stream/extracted_data/`):
+- `seeking_calendar_days.pkl`: `{driver_idx: [cal_day_idx_for_traj_0, ...]}`
+- `driving_calendar_days.pkl`: same structure for driving
+- `calendar_day_map.pkl`: `{cal_day_idx: "YYYY-MM-DD"}`
+
+Each trajectory is guaranteed to fall within a single calendar day (the extractor splits on day boundaries). This enables grouping by `(driver, calendar_day)` for Ren-aligned sampling.
+
+### 4.3 Day-Based Pair Sampling (Ren-Aligned)
+
+The generation module groups trajectories by `(driver, calendar_day)` and defines a day as "usable" if the driver has ≥ `min_trajs_per_day` trajectories in **both** seeking and driving streams on that day.
+
+**Positive pair** (same driver, 2 different days):
+1. Pick a driver with ≥ 2 usable days
+2. Pick 2 different usable calendar days
+3. For each day: sample N seeking trajs + N driving trajs (with replacement if < N available)
+4. Profile features for the driver (same for both branches — per-driver, not per-day)
+5. Label = 1
+
+**Negative pair** (2 different drivers):
+1. Pick 2 different drivers, each with ≥ 1 usable day
+2. Pick 1 usable day per driver
+3. Sample N trajs per stream per driver-day
+4. Profile features for each driver
+5. Label = 0
+
+**Identical pair** (same driver, same day, same trajectories):
+1. Pick driver + usable day, sample N trajs per stream
+2. Use identical data for both branches
+3. Label = 1
+
+### 4.4 Dataset Format (.npz)
 
 ```python
 {
-    # Seeking trajectories (existing)
-    'seeking_1': np.ndarray,     # [N, L_s, 4]
-    'seeking_2': np.ndarray,     # [N, L_s, 4]
-    'mask_s1': np.ndarray,       # [N, L_s]
-    'mask_s2': np.ndarray,       # [N, L_s]
-
-    # Driving trajectories (new)
-    'driving_1': np.ndarray,     # [N, L_d, 4]
-    'driving_2': np.ndarray,     # [N, L_d, 4]
-    'mask_d1': np.ndarray,       # [N, L_d]
-    'mask_d2': np.ndarray,       # [N, L_d]
-
-    # Profile features (new)
-    'profile_1': np.ndarray,     # [N, F_p]
-    'profile_2': np.ndarray,     # [N, F_p]
-
-    # Labels
-    'label': np.ndarray,         # [N]
-
-    # Backward compatibility aliases
-    'x1': np.ndarray,            # Same as seeking_1 (for V1/V2 model loading)
-    'x2': np.ndarray,            # Same as seeking_2
-    'mask1': np.ndarray,         # Same as mask_s1
-    'mask2': np.ndarray,         # Same as mask_s2
+    'x1':        [N_pairs, N_trajs, L_s, 4],   # seeking branch 1
+    'x2':        [N_pairs, N_trajs, L_s, 4],   # seeking branch 2
+    'mask1':     [N_pairs, N_trajs, L_s],       # seeking masks
+    'mask2':     [N_pairs, N_trajs, L_s],
+    'driving_1': [N_pairs, N_trajs, L_d, 4],   # driving branch 1
+    'driving_2': [N_pairs, N_trajs, L_d, 4],   # driving branch 2
+    'mask_d1':   [N_pairs, N_trajs, L_d],
+    'mask_d2':   [N_pairs, N_trajs, L_d],
+    'profile_1': [N_pairs, 11],                 # profile branch 1
+    'profile_2': [N_pairs, 11],                 # profile branch 2
+    'label':     [N_pairs],                     # 1=same, 0=different
 }
 ```
 
-Note: `L_s` and `L_d` may differ because seeking and driving trajectories have different length distributions. Each is padded independently.
+Key: seeking/driving arrays are **4D** `[N_pairs, N_trajs, L, 4]` — each of the N trajectories is stored separately, not concatenated. This matches V3's `_encode_trajectory_stream()` input format.
 
-### 4.3 Pair Sampling Strategy
-
-The key constraint is that all three streams for a given pair must come from the **same time period** for both branches:
-
-**For a positive pair (same agent, label=1)**:
-1. Select agent A, time periods T1 and T2
-2. Sample a seeking trajectory from A in T1, and one from A in T2
-3. Sample a driving trajectory from A in T1, and one from A in T2
-4. Extract profile features for A in T1 and T2
-
-**For a negative pair (different agents, label=0)**:
-1. Select agents A and B, time periods T1 and T2
-2. Sample seeking from A in T1, seeking from B in T2
-3. Sample driving from A in T1, driving from B in T2
-4. Extract profile features for A in T1 and B in T2
-
-**Time period definition**: Following Ren, T = 1 day for profile features. This means profile features are computed per driver per day. If per-day granularity proves too noisy (only ~20 trips per driver per day), we can fall back to per-month or per-study-period.
-
-### 4.4 Handling Missing Data
-
-Some drivers may have seeking trajectories on a given day but no driving trajectories (rare but possible). Options:
-1. **Skip the day**: Only include days where both trajectory types exist
-2. **Fill with zeros**: Use zero-padded dummy trajectories with all-zero masks
-3. **Random substitute**: Use a driving trajectory from a nearby day
-
-Recommendation: Option 1 (skip) for clean training data. Option 2 for inference when the model must produce a score regardless.
-
-### 4.5 Input Data Sources
-
-The generation tool needs access to:
-1. **Seeking trajectories**: Output from Phase 2 extraction tool
-2. **Driving trajectories**: Output from Phase 2 extraction tool
-3. **Profile features**: Output from Phase 2.5 profile computation
-
-All three should be saved as a single bundle or in a known directory structure:
+### 4.5 Module Structure
 
 ```
-discriminator/extracted_data/
-├── seeking_trajs.pkl           # {driver_index: [trajectories]}
-├── driving_trajs.pkl           # {driver_index: [trajectories]}
-├── profile_features.pkl        # {driver_index: feature_vector} per period
-└── extraction_metadata.json    # Bounds, config, driver mapping
+discriminator/multi_stream/dataset_generation/
+├── __init__.py          # Exports
+├── __main__.py          # Module runner
+├── config.py            # MultiStreamGenerationConfig dataclass
+├── generation.py        # Core logic: loading, sampling, assembly, saving
+└── run.py               # CLI entry point with --analyze-only mode
 ```
 
-### 4.6 GenerationConfig Extension
+### 4.6 Usage
 
-```python
-@dataclass
-class MultiStreamGenerationConfig(GenerationConfig):
-    # New fields
-    seeking_data_path: Path         # Path to seeking_trajs.pkl
-    driving_data_path: Path         # Path to driving_trajs.pkl
-    profile_data_path: Path         # Path to profile_features.pkl
-    include_driving: bool = True    # Include driving stream
-    include_profile: bool = True    # Include profile stream
-    driving_padding: str = "pad_to_longer"   # Independent padding for driving
-    profile_time_period: str = "monthly"     # "daily" | "monthly" | "full"
+```bash
+# Analyze usable days (no dataset generation)
+python -m discriminator.multi_stream.dataset_generation --analyze-only
+
+# Generate with defaults
+python -m discriminator.multi_stream.dataset_generation
+
+# Custom configuration
+python -m discriminator.multi_stream.dataset_generation \
+    --positive-pairs 10000 --negative-pairs 10000 \
+    --n-trajs 5 --min-trajs-per-day 3 --seed 42
 ```
 
 ---
 
 ## Phase 5: Training Pipeline Updates
 
-### 5.1 Dataset Class
+> **Status**: PARTIALLY COMPLETE. Dataset class and trainer batch unpacking are done (implemented
+> as part of Phase 4). CLI updates and training strategy remain.
 
-**New file or extension**: `discriminator/model/dataset.py`
+### 5.1 Dataset Class (COMPLETE)
 
-Add a `MultiStreamTrajectoryPairDataset` that loads the enhanced `.npz` files:
+**File**: `discriminator/model/dataset.py`
 
-```python
-class MultiStreamTrajectoryPairDataset(Dataset):
-    def __getitem__(self, idx):
-        return {
-            'seeking_1': self.seeking_1[idx],
-            'seeking_2': self.seeking_2[idx],
-            'mask_s1': self.mask_s1[idx],
-            'mask_s2': self.mask_s2[idx],
-            'driving_1': self.driving_1[idx],
-            'driving_2': self.driving_2[idx],
-            'mask_d1': self.mask_d1[idx],
-            'mask_d2': self.mask_d2[idx],
-            'profile_1': self.profile_1[idx],
-            'profile_2': self.profile_2[idx],
-            'label': self.label[idx],
-        }
-```
+`MultiStreamPairDataset` loads 4D trajectory arrays from multi-stream `.npz` files. Auto-detection in `load_dataset_from_directory()` checks for `driving_1` key to select the appropriate dataset class.
 
-Backward-compatible: if `driving_1` key is absent in the `.npz` file, return None for those fields.
-
-### 5.2 Trainer Updates
+### 5.2 Trainer Updates (COMPLETE)
 
 **File**: `discriminator/model/trainer.py`
 
-Changes needed:
-1. **Model instantiation**: Support `model_version="v3"` to create `MultiStreamSiameseDiscriminator`
-2. **Training loop**: Unpack multi-stream batch and pass all six inputs to `model.forward()`
-3. **Validation metrics**: Same metrics (accuracy, F1, AUC, split accuracy, identical trajectory validation), but also report per-stream ablation scores (seeking-only, driving-only, combined) to understand each stream's contribution
-4. **Checkpoint format**: Store `n_profile_features` and `profile_hidden_dims` in config
+The `_extract_multi_stream_kwargs()` helper method extracts optional multi-stream inputs from each batch and passes them as `**kwargs` to `model.forward()`. Updated in `_train_epoch`, `_validate`, and `_validate_identical_trajectories`. Fully backward-compatible with V1/V2 single-stream datasets.
 
-### 5.3 CLI Updates
+### 5.3 CLI Updates (PENDING)
 
 **File**: `discriminator/model/train.py`
 
@@ -564,10 +496,11 @@ Add new command-line arguments:
 ```bash
 python train.py \
     --model-version v3 \
-    --n-profile-features 11 \
-    --profile-hidden-dims 64,32,8 \
+    --combination-mode concatenation \
+    --n-trajs-per-stream 5 \
+    --traj-projection-dim 48 \
     --streams seeking,driving,profile \
-    --data-dir discriminator/datasets/multi_stream/
+    --data-dir discriminator/multi_stream/datasets/default/
 ```
 
 ### 5.4 Training Strategy
@@ -581,15 +514,18 @@ python train.py \
 | Batch size | 1 (Ren) or 32 (ours) | Ren used 1 due to variable-length; we can use 32 with padding |
 | LSTM_S hidden dims | (200, 100) | Ren A.3 |
 | LSTM_D hidden dims | (200, 100) | Ren A.3 ("same components as LSTM_S") |
-| Profile FCN dims | (64, 32, 8) | Ren A.3 |
+| Profile FCN dims | (64, 32) → 8 | Ren A.3 |
+| Traj projection | Dense(48, ReLU) | Ren A.3 (`seq_lstm` output) |
 | Classifier dims | (64, 32, 8, 1) | Ren A.3 |
+| N trajs per stream | 5 | Ren `get_pairs_s_and_d` |
 | Iterations | 1,000,000 | Ren A.3 (we use epochs instead) |
 
 **Training schedule recommendation**:
 1. First, train seeking-only (V2) as a baseline to compare against
 2. Then train with all three streams (V3) using the same dataset split
 3. Compare F1 scores, per-stream ablation, and identical trajectory validation
-4. Tune learning rate (Ren's 6e-5 vs our 1e-3) — the additional model capacity may benefit from a lower rate
+4. Ablate combination modes: concatenation (Ren) vs difference (V2-style)
+5. Tune learning rate (Ren's 6e-5 vs our 1e-3) — the additional model capacity may benefit from a lower rate
 
 ---
 

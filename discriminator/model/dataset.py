@@ -104,6 +104,83 @@ class TrajectoryPairDataset(Dataset):
                 f"seq_len={self.seq_len})")
 
 
+class MultiStreamPairDataset(Dataset):
+    """PyTorch Dataset for multi-stream trajectory pairs (Ren-aligned).
+
+    Loads data from .npz files with 4D trajectory arrays [N_pairs, N_trajs, L, 4]
+    plus driving and profile streams.
+    """
+
+    def __init__(self,
+                 data_path: Union[str, Path],
+                 transform: Optional[callable] = None):
+        self.data_path = Path(data_path)
+        self.transform = transform
+
+        with np.load(self.data_path) as data:
+            self.x1 = data['x1'].astype(np.float32)            # [N, N_t, L_s, 4]
+            self.x2 = data['x2'].astype(np.float32)
+            self.mask1 = data['mask1'].astype(bool)             # [N, N_t, L_s]
+            self.mask2 = data['mask2'].astype(bool)
+            self.driving_1 = data['driving_1'].astype(np.float32)  # [N, N_t, L_d, 4]
+            self.driving_2 = data['driving_2'].astype(np.float32)
+            self.mask_d1 = data['mask_d1'].astype(bool)
+            self.mask_d2 = data['mask_d2'].astype(bool)
+            self.profile_1 = data['profile_1'].astype(np.float32)  # [N, n_feat]
+            self.profile_2 = data['profile_2'].astype(np.float32)
+            self.labels = data['label'].astype(np.float32)
+
+        self.n_samples = len(self.labels)
+        self._compute_stats()
+
+    def _compute_stats(self):
+        self.n_positive = int((self.labels == 1).sum())
+        self.n_negative = int((self.labels == 0).sum())
+        self.n_trajs = self.x1.shape[1]
+        self.seeking_len = self.x1.shape[2]
+        self.driving_len = self.driving_1.shape[2]
+        self.n_features = self.x1.shape[3]
+        self.profile_dim = self.profile_1.shape[1]
+
+    def __len__(self) -> int:
+        return self.n_samples
+
+    def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
+        item = {
+            'x1': torch.from_numpy(self.x1[idx]),               # [N_t, L_s, 4]
+            'x2': torch.from_numpy(self.x2[idx]),
+            'mask1': torch.from_numpy(self.mask1[idx]),          # [N_t, L_s]
+            'mask2': torch.from_numpy(self.mask2[idx]),
+            'driving_1': torch.from_numpy(self.driving_1[idx]),  # [N_t, L_d, 4]
+            'driving_2': torch.from_numpy(self.driving_2[idx]),
+            'mask_d1': torch.from_numpy(self.mask_d1[idx]),
+            'mask_d2': torch.from_numpy(self.mask_d2[idx]),
+            'profile_1': torch.from_numpy(self.profile_1[idx]),  # [n_feat]
+            'profile_2': torch.from_numpy(self.profile_2[idx]),
+            'label': torch.tensor(self.labels[idx], dtype=torch.float32),
+        }
+        if self.transform:
+            item = self.transform(item)
+        return item
+
+    def get_stats(self) -> Dict:
+        return {
+            'n_samples': self.n_samples,
+            'n_positive': self.n_positive,
+            'n_negative': self.n_negative,
+            'positive_ratio': self.n_positive / self.n_samples,
+            'n_trajs_per_stream': self.n_trajs,
+            'seeking_len': self.seeking_len,
+            'driving_len': self.driving_len,
+            'profile_dim': self.profile_dim,
+        }
+
+    def __repr__(self) -> str:
+        return (f"MultiStreamPairDataset(n_samples={self.n_samples}, "
+                f"n_trajs={self.n_trajs}, seek_L={self.seeking_len}, "
+                f"drive_L={self.driving_len})")
+
+
 class MultiFileDataset(Dataset):
     """Dataset that loads from multiple .npz files.
     
@@ -160,50 +237,65 @@ class MultiFileDataset(Dataset):
         return item
 
 
+def _detect_dataset_type(npz_path: Path) -> type:
+    """Auto-detect whether an .npz file is single-stream or multi-stream.
+
+    Checks for the presence of 'driving_1' key to distinguish formats.
+    """
+    with np.load(npz_path) as data:
+        if 'driving_1' in data:
+            return MultiStreamPairDataset
+        return TrajectoryPairDataset
+
+
 def load_dataset_from_directory(
     directory: Union[str, Path],
     train_file: str = "train.npz",
     val_file: str = "val.npz",
     test_file: Optional[str] = "test.npz"
-) -> Dict[str, TrajectoryPairDataset]:
+) -> Dict[str, Union[TrajectoryPairDataset, MultiStreamPairDataset]]:
     """Load train/val/test datasets from a directory.
-    
+
+    Auto-detects whether the dataset is single-stream (V1/V2) or multi-stream
+    (V3) based on the presence of 'driving_1' key in the .npz files.
+
     Expected directory structure:
         directory/
             train.npz
             val.npz
             test.npz (optional)
-            
+
     Args:
         directory: Path to dataset directory
         train_file: Filename for training data
         val_file: Filename for validation data
         test_file: Filename for test data (None to skip)
-        
+
     Returns:
         Dict with 'train', 'val', and optionally 'test' datasets
     """
     directory = Path(directory)
-    
+
     datasets = {}
-    
+
     train_path = directory / train_file
     if train_path.exists():
-        datasets['train'] = TrajectoryPairDataset(train_path)
+        DatasetClass = _detect_dataset_type(train_path)
+        datasets['train'] = DatasetClass(train_path)
     else:
         raise FileNotFoundError(f"Training file not found: {train_path}")
-        
+
     val_path = directory / val_file
     if val_path.exists():
-        datasets['val'] = TrajectoryPairDataset(val_path)
+        datasets['val'] = DatasetClass(val_path)
     else:
         raise FileNotFoundError(f"Validation file not found: {val_path}")
-        
+
     if test_file:
         test_path = directory / test_file
         if test_path.exists():
-            datasets['test'] = TrajectoryPairDataset(test_path)
-            
+            datasets['test'] = DatasetClass(test_path)
+
     return datasets
 
 
@@ -285,13 +377,23 @@ class RandomSwapPair:
         
     def __call__(self, item: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
         if torch.rand(1).item() < self.p:
-            return {
+            swapped = {
                 'x1': item['x2'],
                 'x2': item['x1'],
                 'mask1': item['mask2'],
                 'mask2': item['mask1'],
-                'label': item['label']
+                'label': item['label'],
             }
+            # Multi-stream keys (if present)
+            if 'driving_1' in item:
+                swapped['driving_1'] = item['driving_2']
+                swapped['driving_2'] = item['driving_1']
+                swapped['mask_d1'] = item['mask_d2']
+                swapped['mask_d2'] = item['mask_d1']
+            if 'profile_1' in item:
+                swapped['profile_1'] = item['profile_2']
+                swapped['profile_2'] = item['profile_1']
+            return swapped
         return item
 
 

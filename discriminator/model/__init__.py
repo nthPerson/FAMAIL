@@ -16,15 +16,24 @@ V2 Improvements:
 - Optional additional metrics: cosine similarity, euclidean distance
 """
 
-from .model import SiameseLSTMDiscriminator, SiameseLSTMDiscriminatorV2, FeatureNormalizer
-from .dataset import TrajectoryPairDataset, load_dataset_from_directory
+from .model import (
+    SiameseLSTMDiscriminator,
+    SiameseLSTMDiscriminatorV2,
+    MultiStreamSiameseDiscriminator,
+    ProfileEncoder,
+    FeatureNormalizer,
+)
+from .dataset import TrajectoryPairDataset, MultiStreamPairDataset, load_dataset_from_directory
 from .trainer import Trainer, TrainingConfig
 
 __all__ = [
     "SiameseLSTMDiscriminator",
     "SiameseLSTMDiscriminatorV2",
+    "MultiStreamSiameseDiscriminator",
+    "ProfileEncoder",
     "FeatureNormalizer",
     "TrajectoryPairDataset",
+    "MultiStreamPairDataset",
     "load_dataset_from_directory",
     "Trainer",
     "TrainingConfig",

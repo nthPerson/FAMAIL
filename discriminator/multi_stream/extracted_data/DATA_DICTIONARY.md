@@ -325,6 +325,64 @@ The strong distance correlation (r=0.94) confirms correct driving segment identi
 
 ---
 
+## File: `seeking_calendar_days.pkl`
+
+Per-trajectory calendar day indices for seeking trajectories. Maps each trajectory to the calendar day on which it occurred, enabling Ren-aligned day-based pair sampling in dataset generation.
+
+### Format
+
+```python
+{
+    driver_index: [       # int, 0-indexed (0–49)
+        cal_day_idx,      # int, 0-indexed calendar day for trajectory 0
+        cal_day_idx,      # int, 0-indexed calendar day for trajectory 1
+        ...               # len matches len of seeking_trajs[driver_index]
+    ],
+    ...
+}
+```
+
+### Notes
+
+- Each trajectory is guaranteed to fall within a single calendar day (the extractor splits segments at day boundaries).
+- The calendar day indices are global across all drivers and reference the `calendar_day_map.pkl` lookup table.
+- The list length for each driver matches the number of seeking trajectories in `seeking_trajs.pkl` for that driver.
+
+---
+
+## File: `driving_calendar_days.pkl`
+
+Per-trajectory calendar day indices for driving trajectories. Same format and semantics as `seeking_calendar_days.pkl`, but for driving trajectories.
+
+### Format
+
+Same structure as `seeking_calendar_days.pkl`. List length per driver matches `driving_trajs.pkl`.
+
+---
+
+## File: `calendar_day_map.pkl`
+
+Lookup table mapping 0-based calendar day indices to date strings.
+
+### Format
+
+```python
+{
+    0: "2016-07-01",     # first weekday in dataset
+    1: "2016-07-04",     # next weekday
+    ...
+    N: "2016-09-30",     # last date
+}
+```
+
+### Notes
+
+- Only dates that appear in the extracted data are included (weekdays July–September 2016).
+- Expected count: ~63 weekdays across the 3-month study period.
+- Used by the dataset generation module (`discriminator/multi_stream/dataset_generation/`) to group trajectories by `(driver, calendar_day)` for Ren-aligned pair sampling.
+
+---
+
 ## File: `extraction_metadata.json`
 
 JSON file containing the full extraction configuration, GPS bounds, driver index mapping, and processing statistics.
@@ -338,6 +396,8 @@ JSON file containing the full extraction configuration, GPS bounds, driver index
 | `bounds` | `{lat_min, lat_max, lon_min, lon_max}` used for grid quantization |
 | `driver_mapping` | `{"0": "粤B010VY", "1": "粤B0DR36", ...}` — index to plate ID |
 | `stats` | Full `ExtractionStats` including all filtering counts |
+| `calendar_day_map` | `{"0": "2016-07-01", ...}` — calendar day index to date string |
+| `n_calendar_days` | Total number of unique calendar days in the dataset |
 
 ---
 
@@ -351,15 +411,46 @@ JSON file containing the full extraction configuration, GPS bounds, driver index
 
 ## Downstream Usage
 
-### Discriminator Model (Phase 3+)
+### Dataset Generation (Phase 4)
 
-The extracted 4-element state vectors `[x, y, t, d]` are compatible with the existing `FeatureNormalizer` in `discriminator/model/model.py`, which expects input shape `[batch, seq_len, 4]` and normalizes to `[batch, seq_len, 6]` via:
+The calendar day files enable Ren-aligned day-based pair sampling:
+
+```bash
+# Analyze usable days before generating
+python -m discriminator.multi_stream.dataset_generation --analyze-only
+
+# Generate dataset
+python -m discriminator.multi_stream.dataset_generation --positive-pairs 5000 --negative-pairs 5000
+```
+
+A day is "usable" for a driver if it has ≥ `min_trajs_per_day` (default 5) trajectories in both seeking and driving streams. Pairs sample N=5 independent trajectories per stream per branch.
+
+Output format: `.npz` files with 4D trajectory arrays `[N_pairs, N_trajs, L, 4]`, plus driving streams, profile vectors, and masks.
+
+### Discriminator Model (V3 — `MultiStreamSiameseDiscriminator`)
+
+The V3 model (`discriminator/model/model.py`) processes N independent trajectories per stream per branch, replicating Ren et al. (KDD 2020):
+
+```
+Per branch (one driver on one calendar day):
+  5 seeking trajs → shared LSTM_S → 5 × Dense(48, ReLU) → concat → 240-dim
+  5 driving trajs → shared LSTM_D → 5 × Dense(48, ReLU) → concat → 240-dim
+  profile → FCN(64, 32, 8) → 8-dim
+
+Combination modes:
+  "concatenation" (Ren): [trip_A, pro_A, trip_B, pro_B] = 976-dim → FC(64,32,8,1)
+  "difference" (V2-style): |trip_A - trip_B|, |pro_A - pro_B| = 488-dim → FC(64,32,8,1)
+```
+
+The extracted 4-element state vectors `[x, y, t, d]` are normalized by `FeatureNormalizer` to 6 features:
 - x/49, y/89 → spatial [0, 1]
 - sin/cos(2π·t/288), sin/cos(2π·(d-1)/5) → cyclical temporal features
 
-### FCN_P Architecture Target
+Each trajectory is processed independently through the LSTM (batched via `[B*N, L, F]` reshape), then projected to 48-dim. The N=5 per-trajectory embeddings are concatenated into a 240-dim trip embedding per stream.
 
-The 11-feature profile vector feeds into an FCN with architecture `[11] → [64] → [32] → [8]` (ReLU activation), following Ren et al. Appendix A.3. The 8-dimensional output is the profile embedding used in the Siamese dissimilarity computation.
+### FCN_P Architecture
+
+The 11-feature profile vector feeds into an FCN with architecture `[11] → [64] → [32] → [8]` (ReLU activation), following Ren et al. Appendix A.3. Profile features are z-score normalized at load time using population mean/std stored in `profile_features.pkl`.
 
 ## Extraction Tool
 

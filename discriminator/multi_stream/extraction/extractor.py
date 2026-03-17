@@ -77,11 +77,17 @@ def _finalize_segment(
     config: ExtractionConfig,
     stats: ExtractionStats,
     seg_type: str,
+    date_str: Optional[str] = None,
+    date_list: Optional[List[str]] = None,
 ) -> None:
     """
     Deduplicate, filter, and append a completed segment to the output list.
 
     Pipeline: dedup → min states check → min duration check → max length truncate → append.
+
+    Args:
+        date_str: Calendar date string (YYYY-MM-DD) for this segment.
+        date_list: If provided, appended with date_str for each accepted segment.
     """
     if not states:
         return
@@ -108,6 +114,8 @@ def _finalize_segment(
         deduped = deduped[:config.max_segment_states]
 
     output_list.append(deduped)
+    if date_list is not None and date_str is not None:
+        date_list.append(date_str)
 
     # Update stats
     if seg_type == "seeking":
@@ -138,9 +146,12 @@ def extract_dual_trajectories(
         progress_callback: Optional (stage_name, fraction) callback
 
     Returns:
-        (seeking_by_plate, driving_by_plate, calendar_days_per_plate, stats)
+        (seeking_by_plate, driving_by_plate, calendar_days_per_plate,
+         seeking_dates_by_plate, driving_dates_by_plate, stats)
         Trajectory dicts: {plate_id: [[[x,y,t,d], ...], ...]}
         calendar_days_per_plate: {plate_id: n_unique_calendar_dates}
+        seeking_dates_by_plate: {plate_id: [date_str_for_traj_0, ...]}
+        driving_dates_by_plate: {plate_id: [date_str_for_traj_0, ...]}
     """
     stats = ExtractionStats()
 
@@ -149,6 +160,8 @@ def extract_dual_trajectories(
 
     seeking_by_plate: Dict[str, List] = {}
     driving_by_plate: Dict[str, List] = {}
+    seeking_dates_by_plate: Dict[str, List] = {}
+    driving_dates_by_plate: Dict[str, List] = {}
     calendar_days_per_plate: Dict[str, int] = {}
 
     plates = sorted(raw_data.keys())
@@ -170,6 +183,8 @@ def extract_dual_trajectories(
 
         seeking_trajs: List[List[List[int]]] = []
         driving_trajs: List[List[List[int]]] = []
+        seeking_dates: List[str] = []  # Calendar date per seeking trajectory
+        driving_dates: List[str] = []  # Calendar date per driving trajectory
         unique_dates: set = set()  # Track unique calendar dates per driver
 
         # Accumulators for current segment
@@ -177,6 +192,8 @@ def extract_dual_trajectories(
         cur_seeking_records: List = []
         cur_driving_states: List[List[int]] = []
         cur_driving_records: List = []
+        cur_seeking_date: Optional[str] = None
+        cur_driving_date: Optional[str] = None
 
         prev_passenger: Optional[int] = None
         prev_day: Optional[int] = None
@@ -200,6 +217,7 @@ def extract_dual_trajectories(
             # Track unique calendar dates (date portion of timestamp)
             unique_dates.add(timestamp_str[:10])
 
+
             # Weekend filter
             day = timestamp_to_day(timestamp_str, config.exclude_weekends)
             if day is None:
@@ -207,20 +225,27 @@ def extract_dual_trajectories(
                 prev_passenger = passenger
                 continue
 
+            # Extract calendar date string for this record
+            date_str = timestamp_str[:10]
+
             # Day boundary detection → finalize any open segments
             if prev_day is not None and day != prev_day:
                 _finalize_segment(
                     cur_seeking_states, cur_seeking_records,
-                    seeking_trajs, config, stats, "seeking"
+                    seeking_trajs, config, stats, "seeking",
+                    date_str=cur_seeking_date, date_list=seeking_dates
                 )
                 _finalize_segment(
                     cur_driving_states, cur_driving_records,
-                    driving_trajs, config, stats, "driving"
+                    driving_trajs, config, stats, "driving",
+                    date_str=cur_driving_date, date_list=driving_dates
                 )
                 cur_seeking_states = []
                 cur_seeking_records = []
                 cur_driving_states = []
                 cur_driving_records = []
+                cur_seeking_date = None
+                cur_driving_date = None
                 prev_passenger = None
 
             # Quantize GPS → grid + offsets
@@ -236,30 +261,40 @@ def extract_dual_trajectories(
                     # Dropoff: finalize driving, start new seeking
                     _finalize_segment(
                         cur_driving_states, cur_driving_records,
-                        driving_trajs, config, stats, "driving"
+                        driving_trajs, config, stats, "driving",
+                        date_str=cur_driving_date, date_list=driving_dates
                     )
                     cur_driving_states = []
                     cur_driving_records = []
+                    cur_driving_date = None
                     cur_seeking_states = []
                     cur_seeking_records = []
+                    cur_seeking_date = None
                 elif prev_passenger == 0 and passenger == 1:
                     # Pickup: finalize seeking, start new driving
                     _finalize_segment(
                         cur_seeking_states, cur_seeking_records,
-                        seeking_trajs, config, stats, "seeking"
+                        seeking_trajs, config, stats, "seeking",
+                        date_str=cur_seeking_date, date_list=seeking_dates
                     )
                     cur_seeking_states = []
                     cur_seeking_records = []
+                    cur_seeking_date = None
                     cur_driving_states = []
                     cur_driving_records = []
+                    cur_driving_date = None
 
             # Append to appropriate accumulator
             if passenger == 0:
                 cur_seeking_states.append(state)
                 cur_seeking_records.append(record)
+                if cur_seeking_date is None:
+                    cur_seeking_date = date_str
             else:
                 cur_driving_states.append(state)
                 cur_driving_records.append(record)
+                if cur_driving_date is None:
+                    cur_driving_date = date_str
 
             prev_passenger = passenger
             prev_day = day
@@ -267,15 +302,19 @@ def extract_dual_trajectories(
         # Finalize last segments for this driver
         _finalize_segment(
             cur_seeking_states, cur_seeking_records,
-            seeking_trajs, config, stats, "seeking"
+            seeking_trajs, config, stats, "seeking",
+            date_str=cur_seeking_date, date_list=seeking_dates
         )
         _finalize_segment(
             cur_driving_states, cur_driving_records,
-            driving_trajs, config, stats, "driving"
+            driving_trajs, config, stats, "driving",
+            date_str=cur_driving_date, date_list=driving_dates
         )
 
         seeking_by_plate[plate_id] = seeking_trajs
         driving_by_plate[plate_id] = driving_trajs
+        seeking_dates_by_plate[plate_id] = seeking_dates
+        driving_dates_by_plate[plate_id] = driving_dates
         calendar_days_per_plate[plate_id] = len(unique_dates)
         stats.drivers_processed += 1
 
@@ -286,7 +325,8 @@ def extract_dual_trajectories(
     if progress_callback:
         progress_callback("Extracting trajectories", 1.0)
 
-    return seeking_by_plate, driving_by_plate, calendar_days_per_plate, stats
+    return (seeking_by_plate, driving_by_plate, calendar_days_per_plate,
+            seeking_dates_by_plate, driving_dates_by_plate, stats)
 
 
 def _compute_length_stats(trajs_by_plate: Dict[str, List]) -> Dict[str, float]:
@@ -335,13 +375,19 @@ def _rekey_by_index(
 def run_extraction(
     config: ExtractionConfig,
     progress_callback: Optional[Callable[[str, float], None]] = None,
-) -> Tuple[Dict[int, List], Dict[int, List], Dict[int, str], Dict[int, int], GlobalBounds, ExtractionStats]:
+) -> Tuple[Dict[int, List], Dict[int, List], Dict[int, str], Dict[int, int],
+           Dict[int, List], Dict[int, List], Dict[int, str], GlobalBounds, ExtractionStats]:
     """
     Full extraction pipeline: load raw data → compute bounds → extract → index.
 
     Returns:
         (seeking_indexed, driving_indexed, index_to_plate,
-         calendar_days_per_driver, bounds, stats)
+         calendar_days_per_driver, seeking_cal_days, driving_cal_days,
+         cal_day_map, bounds, stats)
+
+        seeking_cal_days: {driver_idx: [cal_day_idx_for_traj_0, ...]}
+        driving_cal_days: {driver_idx: [cal_day_idx_for_traj_0, ...]}
+        cal_day_map: {cal_day_idx: "YYYY-MM-DD", ...}
     """
     t_start = time.time()
 
@@ -369,7 +415,8 @@ def run_extraction(
           f"lon [{bounds.lon_min:.4f}, {bounds.lon_max:.4f}]")
 
     # 3. Extract dual trajectories
-    seeking_by_plate, driving_by_plate, cal_days_plate, stats = extract_dual_trajectories(
+    (seeking_by_plate, driving_by_plate, cal_days_plate,
+     seeking_dates_plate, driving_dates_plate, stats) = extract_dual_trajectories(
         combined_raw, bounds, config, progress_callback
     )
 
@@ -384,6 +431,28 @@ def run_extraction(
     calendar_days_indexed = {plate_to_index[p]: d for p, d in cal_days_plate.items()
                              if p in plate_to_index}
 
+    # 5. Build global calendar day index mapping (sorted dates → 0-based indices)
+    all_dates = set()
+    for dates in seeking_dates_plate.values():
+        all_dates.update(dates)
+    for dates in driving_dates_plate.values():
+        all_dates.update(dates)
+    sorted_dates = sorted(all_dates)
+    date_to_idx = {d: i for i, d in enumerate(sorted_dates)}
+    cal_day_map = {i: d for i, d in enumerate(sorted_dates)}
+
+    # Convert per-trajectory date strings to calendar day indices, re-keyed by driver index
+    seeking_cal_days = {}
+    for plate, dates in seeking_dates_plate.items():
+        if plate in plate_to_index:
+            seeking_cal_days[plate_to_index[plate]] = [date_to_idx[d] for d in dates]
+
+    driving_cal_days = {}
+    for plate, dates in driving_dates_plate.items():
+        if plate in plate_to_index:
+            driving_cal_days[plate_to_index[plate]] = [date_to_idx[d] for d in dates]
+
     stats.processing_time_seconds = time.time() - t_start
 
-    return seeking_indexed, driving_indexed, index_to_plate, calendar_days_indexed, bounds, stats
+    return (seeking_indexed, driving_indexed, index_to_plate, calendar_days_indexed,
+            seeking_cal_days, driving_cal_days, cal_day_map, bounds, stats)

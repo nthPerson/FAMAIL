@@ -65,7 +65,9 @@ def main():
                 print()
 
     # Run extraction
-    seeking, driving, index_to_plate, calendar_days, bounds, stats = run_extraction(config, progress)
+    (seeking, driving, index_to_plate, calendar_days,
+     seeking_cal_days, driving_cal_days, cal_day_map,
+     bounds, stats) = run_extraction(config, progress)
 
     # Print extraction summary
     print(f"\n{'─' * 65}")
@@ -119,6 +121,23 @@ def main():
         pickle.dump(driving, f)
     print(f"  Saved: {driving_path}")
 
+    # Save calendar day mappings (for day-based pair sampling)
+    seek_cal_path = config.output_dir / "seeking_calendar_days.pkl"
+    with open(seek_cal_path, "wb") as f:
+        pickle.dump(seeking_cal_days, f)
+    print(f"  Saved: {seek_cal_path}")
+
+    drive_cal_path = config.output_dir / "driving_calendar_days.pkl"
+    with open(drive_cal_path, "wb") as f:
+        pickle.dump(driving_cal_days, f)
+    print(f"  Saved: {drive_cal_path}")
+
+    cal_map_path = config.output_dir / "calendar_day_map.pkl"
+    with open(cal_map_path, "wb") as f:
+        pickle.dump(cal_day_map, f)
+    print(f"  Saved: {cal_map_path}")
+    print(f"  Calendar days tracked: {len(cal_day_map)} unique dates")
+
     # Profile features
     if not args.skip_profiles:
         print(f"\n{'=' * 65}")
@@ -163,6 +182,8 @@ def main():
         "bounds": bounds.to_dict(),
         "driver_mapping": {str(k): v for k, v in index_to_plate.items()},
         "stats": stats.to_dict(),
+        "calendar_day_map": {str(k): v for k, v in cal_day_map.items()},
+        "n_calendar_days": len(cal_day_map),
     }
     metadata_path = config.output_dir / "extraction_metadata.json"
     with open(metadata_path, "w") as f:

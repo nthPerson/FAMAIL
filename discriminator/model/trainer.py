@@ -240,27 +240,46 @@ class Trainer:
         else:
             return None
             
+    def _extract_multi_stream_kwargs(self, batch: Dict) -> Dict:
+        """Extract optional multi-stream inputs from a batch dict.
+
+        Returns keyword arguments for driving and profile streams,
+        ready to pass to model.forward(**kwargs). Returns empty dict
+        for single-stream (V1/V2) datasets.
+        """
+        kwargs = {}
+        if 'driving_1' in batch:
+            kwargs['driving_1'] = batch['driving_1'].to(self.device)
+            kwargs['driving_2'] = batch['driving_2'].to(self.device)
+            kwargs['mask_d1'] = batch['mask_d1'].to(self.device)
+            kwargs['mask_d2'] = batch['mask_d2'].to(self.device)
+        if 'profile_1' in batch:
+            kwargs['profile_1'] = batch['profile_1'].to(self.device)
+            kwargs['profile_2'] = batch['profile_2'].to(self.device)
+        return kwargs
+
     def _train_epoch(self) -> float:
         """Train for one epoch.
-        
+
         Returns:
             Average training loss
         """
         self.model.train()
         total_loss = 0.0
         n_batches = 0
-        
+
         for batch in self.train_loader:
             x1 = batch['x1'].to(self.device)
             x2 = batch['x2'].to(self.device)
             mask1 = batch['mask1'].to(self.device)
             mask2 = batch['mask2'].to(self.device)
             labels = batch['label'].to(self.device)
-            
+            kwargs = self._extract_multi_stream_kwargs(batch)
+
             self.optimizer.zero_grad()
-            
+
             # Forward pass
-            outputs = self.model(x1, x2, mask1, mask2).squeeze(-1)
+            outputs = self.model(x1, x2, mask1, mask2, **kwargs).squeeze(-1)
             
             # Compute loss
             loss = self.criterion(outputs, labels)
@@ -297,10 +316,11 @@ class Trainer:
             mask1 = batch['mask1'].to(self.device)
             mask2 = batch['mask2'].to(self.device)
             labels = batch['label'].to(self.device)
-            
+            kwargs = self._extract_multi_stream_kwargs(batch)
+
             # Forward pass
-            outputs = self.model(x1, x2, mask1, mask2).squeeze(-1)
-            
+            outputs = self.model(x1, x2, mask1, mask2, **kwargs).squeeze(-1)
+
             # Compute loss
             loss = self.criterion(outputs, labels)
             total_loss += loss.item() * len(labels)
@@ -376,20 +396,38 @@ class Trainer:
         for batch in self.val_loader:
             x1 = batch['x1'].to(self.device)
             mask1 = batch['mask1'].to(self.device)
-            
+
+            # Build identical-pair kwargs for multi-stream
+            id_kwargs = {}
+            if 'driving_1' in batch:
+                d1 = batch['driving_1'].to(self.device)
+                md1 = batch['mask_d1'].to(self.device)
+            if 'profile_1' in batch:
+                p1 = batch['profile_1'].to(self.device)
+
             # Test each trajectory against itself
             for i in range(min(len(x1), n_samples - samples_tested)):
-                traj = x1[i:i+1]  # [1, seq_len, 4]
-                mask = mask1[i:i+1]  # [1, seq_len]
-                
+                traj = x1[i:i+1]
+                mask = mask1[i:i+1]
+
+                kwargs = {}
+                if 'driving_1' in batch:
+                    kwargs['driving_1'] = d1[i:i+1]
+                    kwargs['driving_2'] = d1[i:i+1]
+                    kwargs['mask_d1'] = md1[i:i+1]
+                    kwargs['mask_d2'] = md1[i:i+1]
+                if 'profile_1' in batch:
+                    kwargs['profile_1'] = p1[i:i+1]
+                    kwargs['profile_2'] = p1[i:i+1]
+
                 # Compare trajectory to itself
-                output = self.model(traj, traj, mask, mask).squeeze().item()
+                output = self.model(traj, traj, mask, mask, **kwargs).squeeze().item()
                 all_scores.append(output)
                 samples_tested += 1
-                
+
                 if samples_tested >= n_samples:
                     break
-                    
+
             if samples_tested >= n_samples:
                 break
         
@@ -849,20 +887,36 @@ def load_model_from_checkpoint(
     """
     # Support both package and direct imports
     try:
-        from .model import SiameseLSTMDiscriminator
+        from .model import (
+            SiameseLSTMDiscriminator,
+            SiameseLSTMDiscriminatorV2,
+            MultiStreamSiameseDiscriminator,
+        )
     except ImportError:
-        from model import SiameseLSTMDiscriminator
-    
+        from model import (
+            SiameseLSTMDiscriminator,
+            SiameseLSTMDiscriminatorV2,
+            MultiStreamSiameseDiscriminator,
+        )
+
     if device == "auto":
         device = "cuda" if torch.cuda.is_available() else "cpu"
-        
+
     checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
-    
-    # Reconstruct model from saved config
+
+    # Reconstruct model from saved config, dispatching on model_version
     model_config = checkpoint.get('model_config', {})
-    model = SiameseLSTMDiscriminator(**model_config)
+    version = model_config.get('model_version', 'v1')
+
+    if version == 'v3':
+        model = MultiStreamSiameseDiscriminator(**model_config)
+    elif version == 'v2':
+        model = SiameseLSTMDiscriminatorV2(**model_config)
+    else:
+        model = SiameseLSTMDiscriminator(**model_config)
+
     model.load_state_dict(checkpoint['model_state_dict'])
     model.to(device)
     model.eval()
-    
+
     return model, checkpoint
