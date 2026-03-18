@@ -345,25 +345,39 @@ def run_discriminator_test(
 def analyze_test_results(
     scores: np.ndarray,
     test_mode: str,
-    threshold: float = 0.5
+    threshold: float = 0.5,
+    is_concatenation: bool = False,
 ) -> dict:
-    """Analyze test results and determine if behavior is correct."""
+    """Analyze test results and determine if behavior is correct.
+
+    Args:
+        is_concatenation: If True, uses relaxed thresholds for identical-trajectory
+            checks (concatenation mode produces lower identical scores than
+            distance mode because [emb, emb] still carries information, unlike
+            |emb - emb| = 0).
+    """
     if len(scores) == 0:
         return {'error': 'No scores computed'}
-    
+
     mean_score = float(np.mean(scores))
     std_score = float(np.std(scores))
     min_score = float(np.min(scores))
     max_score = float(np.max(scores))
     above_threshold = float(np.mean(scores > threshold))
     below_threshold = float(np.mean(scores < threshold))
-    
+
     # Determine expected behavior based on test mode
     if test_mode == "identical_trajectories":
-        expected_range = (0.95, 1.0)  # Should be very close to 1.0
-        passed = mean_score >= 0.9
-        diagnosis = "PASS: Identical inputs produce high scores" if passed else \
-                   "FAIL: Model not recognizing identical inputs - check architecture"
+        if is_concatenation:
+            expected_range = (0.80, 1.0)
+            passed = mean_score >= 0.75
+            diagnosis = ("PASS: Identical inputs produce high scores (concatenation mode)" if passed
+                         else "FAIL: Model not recognizing identical inputs - check architecture")
+        else:
+            expected_range = (0.95, 1.0)
+            passed = mean_score >= 0.9
+            diagnosis = ("PASS: Identical inputs produce high scores" if passed
+                         else "FAIL: Model not recognizing identical inputs - check architecture")
     elif test_mode in ["same_driver_same_day", "same_driver_different_days"]:
         expected_range = (0.5, 1.0)  # Should be above 0.5
         passed = mean_score > 0.5
@@ -378,7 +392,7 @@ def analyze_test_results(
         expected_range = (0.0, 1.0)
         passed = True
         diagnosis = "Standard fidelity computation"
-    
+
     return {
         'mean': mean_score,
         'std': std_score,
@@ -593,7 +607,10 @@ Default 0.5 aligns with the paper's methodology."""
     try:
         with st.spinner("Loading discriminator model..."):
             model, model_config, device = load_model_cached(checkpoint_path, use_gpu)
-        st.sidebar.success(f"✅ Model on {device}")
+        model_version = model_config.get('model_version', 'v1').upper()
+        combo = model_config.get('combination_mode', '')
+        version_label = f"{model_version} ({combo})" if combo else model_version
+        st.sidebar.success(f"✅ Model {version_label} on {device}")
     except Exception as e:
         st.error(f"Failed to load model: {e}")
         st.info("Make sure the discriminator model is trained and checkpoint exists.")
@@ -603,7 +620,10 @@ Default 0.5 aligns with the paper's methodology."""
     # MAIN CONTENT - TABS
     # ==========================================================================
     
-    tabs = st.tabs([
+    is_v3 = model_config.get('model_version', 'v1') == 'v3'
+    is_concatenation = model_config.get('combination_mode', '') == 'concatenation'
+
+    tab_names = [
         "🔬 Discriminator Tests",
         "📊 Fidelity Analysis",
         "📈 Score Distribution",
@@ -611,7 +631,14 @@ Default 0.5 aligns with the paper's methodology."""
         "🔬 Trajectory Comparison",
         "🧪 Gradient Verification",
         "ℹ️ Model Info",
-    ])
+    ]
+    if is_v3:
+        tab_names.insert(1, "🔀 V3 Multi-Stream Eval")
+
+    tabs = st.tabs(tab_names)
+
+    # Tab index offset: V3 inserts a tab at position 1, shifting all others
+    _t = 1 if is_v3 else 0  # offset for tabs after position 0
     
     # --------------------------------------------------------------------------
     # TAB 1: DISCRIMINATOR TESTS (NEW)
@@ -694,7 +721,7 @@ Default 0.5 aligns with the paper's methodology."""
                                 batch_size=32, device=device
                             )
                             
-                            analysis = analyze_test_results(scores, mode, threshold)
+                            analysis = analyze_test_results(scores, mode, threshold, is_concatenation=is_concatenation)
                             all_results[mode] = {
                                 'scores': scores,
                                 'analysis': analysis,
@@ -767,12 +794,20 @@ Default 0.5 aligns with the paper's methodology."""
             
             # Compute readiness score
             readiness_checks = []
-            
+
+            # Thresholds depend on combination mode: concatenation naturally
+            # produces lower identical scores because [emb, emb] still carries
+            # information, unlike |emb - emb| = 0 in distance mode.
+            identical_pass_thresh = 0.80 if is_concatenation else 0.95
+            identical_marginal_thresh = 0.65 if is_concatenation else 0.80
+            identical_pass_min = 0.75 if is_concatenation else 0.90
+            mode_note = " (concatenation mode)" if is_concatenation else ""
+
             # Check 1: Identical trajectory handling
-            if identical_mean >= 0.95:
-                readiness_checks.append(("✅", "Identical Handling", "PASS", "Model correctly identifies identical trajectories"))
-            elif identical_mean >= 0.8:
-                readiness_checks.append(("⚠️", "Identical Handling", "MARGINAL", f"Score {identical_mean:.2f} is below ideal (0.95+)"))
+            if identical_mean >= identical_pass_thresh:
+                readiness_checks.append(("✅", "Identical Handling", "PASS", f"Model correctly identifies identical trajectories{mode_note}"))
+            elif identical_mean >= identical_marginal_thresh:
+                readiness_checks.append(("⚠️", "Identical Handling", "MARGINAL", f"Score {identical_mean:.2f} is below ideal ({identical_pass_thresh}+){mode_note}"))
             else:
                 readiness_checks.append(("❌", "Identical Handling", "FAIL", f"Score {identical_mean:.2f} is too low - model may have issues"))
             
@@ -799,7 +834,26 @@ Default 0.5 aligns with the paper's methodology."""
                 readiness_checks.append(("⚠️", "Temporal Generalization", "MARGINAL", "Some temporal overfitting detected"))
             else:
                 readiness_checks.append(("❌", "Temporal Generalization", "FAIL", "Model may be overfitting to time-of-day patterns"))
-            
+
+            # Check 5 (V3 only): Seeking-only reliability from ablation results
+            if is_v3:
+                abl_res = st.session_state.get('ablation_results', {})
+                seeking_only_data = abl_res.get('Seeking only', {})
+                if seeking_only_data:
+                    seeking_acc = seeking_only_data.get('accuracy', 0)
+                    if seeking_acc >= 0.7:
+                        readiness_checks.append(("✅", "Seeking-Only Reliability", "PASS",
+                                                 f"V3 seeking-only accuracy {seeking_acc:.0%} — fidelity term is reliable"))
+                    elif seeking_acc >= 0.55:
+                        readiness_checks.append(("⚠️", "Seeking-Only Reliability", "MARGINAL",
+                                                 f"V3 seeking-only accuracy {seeking_acc:.0%} — fidelity term is degraded"))
+                    else:
+                        readiness_checks.append(("❌", "Seeking-Only Reliability", "FAIL",
+                                                 f"V3 seeking-only accuracy {seeking_acc:.0%} — fidelity term is ineffective (run Stream Ablation in V3 tab)"))
+                else:
+                    readiness_checks.append(("ℹ️", "Seeking-Only Reliability", "MARGINAL",
+                                             "Run Stream Ablation in the V3 Multi-Stream Eval tab to check seeking-only accuracy"))
+
             # Display readiness checks
             for icon, check_name, status, description in readiness_checks:
                 if status == "PASS":
@@ -1238,7 +1292,7 @@ Default 0.5 aligns with the paper's methodology."""
                     )
                     
                     # Analyze results
-                    results = analyze_test_results(scores, test_mode, threshold)
+                    results = analyze_test_results(scores, test_mode, threshold, is_concatenation=is_concatenation)
                     
                     # Store in session state
                     st.session_state['test_results'] = {
@@ -1670,9 +1724,366 @@ Default 0.5 aligns with the paper's methodology."""
                 """)
 
     # --------------------------------------------------------------------------
+    # TAB 1.5: V3 MULTI-STREAM EVALUATION (conditional)
+    # --------------------------------------------------------------------------
+    if is_v3:
+      with tabs[1]:
+        st.header("🔀 V3 Multi-Stream Evaluation")
+
+        st.markdown("""
+        Evaluate the **V3 MultiStreamSiameseDiscriminator** using the held-out test split
+        with all three data streams (seeking, driving, profile), and measure the impact of
+        each stream via ablation analysis.
+        """)
+
+        # Locate multi-stream test dataset
+        ms_test_path = PROJECT_ROOT / "discriminator" / "multi_stream" / "datasets" / "default" / "test.npz"
+        if not ms_test_path.exists():
+            st.warning(f"Multi-stream test dataset not found at `{ms_test_path}`")
+        else:
+            # --- C.2: Test Dataset Evaluation ---
+            st.subheader("📊 Test Dataset Evaluation")
+
+            col_cfg1, col_cfg2 = st.columns(2)
+            with col_cfg1:
+                ms_sample_size = st.slider(
+                    "Sample size (pairs)", 50, 2000, 500, 50,
+                    key="ms_sample_size",
+                    help="Number of pairs to evaluate from the test split."
+                )
+            with col_cfg2:
+                ms_batch_size = st.number_input(
+                    "Batch size", 8, 128, 32, key="ms_batch_size",
+                    help="Batch size for GPU inference."
+                )
+
+            run_ms_eval = st.button("⚡ Run Multi-Stream Evaluation", type="primary", key="run_ms_eval")
+
+            if run_ms_eval or 'ms_eval_results' in st.session_state:
+                if run_ms_eval:
+                    with st.spinner("Loading multi-stream test data and running evaluation..."):
+                        try:
+                            from dataset import MultiStreamPairDataset
+                        except ImportError:
+                            from discriminator.model.dataset import MultiStreamPairDataset
+
+                        ms_dataset = MultiStreamPairDataset(str(ms_test_path))
+                        n_eval = min(ms_sample_size, len(ms_dataset))
+
+                        # Collect batches
+                        from torch.utils.data import DataLoader, Subset
+
+                        rng_gen = torch.Generator().manual_seed(42)
+                        indices = torch.randperm(len(ms_dataset), generator=rng_gen)[:n_eval].tolist()
+                        subset = Subset(ms_dataset, indices)
+                        loader = DataLoader(subset, batch_size=ms_batch_size, shuffle=False)
+
+                        all_scores = []
+                        all_labels = []
+                        model.eval()
+
+                        with torch.no_grad():
+                            for batch in loader:
+                                x1 = batch['x1'].to(device)
+                                x2 = batch['x2'].to(device)
+                                mask1 = batch['mask1'].to(device)
+                                mask2 = batch['mask2'].to(device)
+                                probs = model(
+                                    x1, x2, mask1, mask2,
+                                    driving_1=batch['driving_1'].to(device),
+                                    driving_2=batch['driving_2'].to(device),
+                                    mask_d1=batch['mask_d1'].to(device),
+                                    mask_d2=batch['mask_d2'].to(device),
+                                    profile_1=batch['profile_1'].to(device),
+                                    profile_2=batch['profile_2'].to(device),
+                                )
+                                all_scores.append(probs.cpu().numpy().flatten())
+                                all_labels.append(batch['label'].numpy().flatten())
+
+                        scores_arr = np.concatenate(all_scores)
+                        labels_arr = np.concatenate(all_labels)
+                        preds_arr = (scores_arr >= 0.5).astype(int)
+
+                        # Compute metrics
+                        from sklearn.metrics import (
+                            accuracy_score, precision_score, recall_score,
+                            f1_score, roc_auc_score, confusion_matrix as sk_confusion_matrix
+                        )
+                        ms_metrics = {
+                            'accuracy': accuracy_score(labels_arr, preds_arr),
+                            'precision': precision_score(labels_arr, preds_arr, zero_division=0),
+                            'recall': recall_score(labels_arr, preds_arr, zero_division=0),
+                            'f1': f1_score(labels_arr, preds_arr, zero_division=0),
+                            'auc': roc_auc_score(labels_arr, scores_arr) if len(np.unique(labels_arr)) > 1 else float('nan'),
+                            'n_eval': n_eval,
+                        }
+                        ms_cm = sk_confusion_matrix(labels_arr, preds_arr)
+                        pos_scores = scores_arr[labels_arr == 1]
+                        neg_scores = scores_arr[labels_arr == 0]
+
+                        st.session_state['ms_eval_results'] = {
+                            'metrics': ms_metrics,
+                            'cm': ms_cm,
+                            'pos_scores': pos_scores,
+                            'neg_scores': neg_scores,
+                            'scores': scores_arr,
+                            'labels': labels_arr,
+                        }
+
+                ms_res = st.session_state.get('ms_eval_results', {})
+
+                if ms_res:
+                    met = ms_res['metrics']
+
+                    # Metrics row
+                    c1, c2, c3, c4, c5 = st.columns(5)
+                    c1.metric("Accuracy", f"{met['accuracy']:.1%}")
+                    c2.metric("Precision", f"{met['precision']:.1%}")
+                    c3.metric("Recall", f"{met['recall']:.1%}")
+                    c4.metric("F1", f"{met['f1']:.3f}")
+                    c5.metric("AUC", f"{met['auc']:.3f}" if not np.isnan(met['auc']) else "N/A")
+                    st.caption(f"Evaluated on {met['n_eval']} pairs from `test.npz` with all 3 streams.")
+
+                    # Score distributions + confusion matrix side-by-side
+                    col_dist, col_cm = st.columns([3, 2])
+
+                    with col_dist:
+                        st.markdown("#### Score Distribution (Positive vs Negative)")
+                        fig_dist = go.Figure()
+                        fig_dist.add_trace(go.Histogram(
+                            x=ms_res['pos_scores'], name="Positive (same agent)",
+                            marker_color="#28A745", opacity=0.6, nbinsx=40
+                        ))
+                        fig_dist.add_trace(go.Histogram(
+                            x=ms_res['neg_scores'], name="Negative (diff agent)",
+                            marker_color="#DC3545", opacity=0.6, nbinsx=40
+                        ))
+                        fig_dist.add_vline(x=0.5, line_dash="dash", line_color="black",
+                                           annotation_text="Threshold 0.5")
+                        fig_dist.update_layout(
+                            barmode='overlay', xaxis_title="Score", yaxis_title="Count",
+                            height=350, legend=dict(yanchor="top", y=0.99, xanchor="right", x=0.99)
+                        )
+                        st.plotly_chart(fig_dist, use_container_width=True)
+
+                    with col_cm:
+                        st.markdown("#### Confusion Matrix")
+                        cm = ms_res['cm']
+                        fig_cm = px.imshow(
+                            cm, text_auto=True,
+                            labels=dict(x="Predicted", y="Actual", color="Count"),
+                            x=["Different", "Same"], y=["Different", "Same"],
+                            color_continuous_scale="Blues",
+                        )
+                        fig_cm.update_layout(height=350)
+                        st.plotly_chart(fig_cm, use_container_width=True)
+
+            # --- C.3: Stream Ablation Analysis ---
+            st.markdown("---")
+            st.subheader("🧪 Stream Ablation Analysis")
+
+            st.markdown("""
+            Compare V3 performance under four conditions to measure each stream's contribution.
+            Omitted streams use **zero embeddings** (V3's graceful degradation).
+
+            | Condition | Seeking | Driving | Profile | Purpose |
+            |-----------|:-------:|:-------:|:-------:|---------|
+            | **Full model** | ✓ | ✓ | ✓ | Baseline — all streams |
+            | **Seeking only** | ✓ | ✗ | ✗ | Fidelity-mode equivalent |
+            | **No profile** | ✓ | ✓ | ✗ | Profile contribution |
+            | **No driving** | ✓ | ✗ | ✓ | Driving contribution |
+
+            **Why this matters**: The fidelity term in the optimization pipeline only has seeking
+            data available. If seeking-only accuracy is near random, the V3 discriminator
+            cannot serve as a reliable fidelity constraint without additional stream data.
+            """)
+
+            col_abl1, col_abl2 = st.columns(2)
+            with col_abl1:
+                abl_sample_size = st.slider(
+                    "Ablation sample size", 50, 1000, 200, 50,
+                    key="abl_sample_size"
+                )
+            with col_abl2:
+                abl_batch_size = st.number_input(
+                    "Ablation batch size", 8, 128, 32, key="abl_batch_size"
+                )
+
+            run_ablation = st.button("⚡ Run Stream Ablation", type="primary", key="run_ablation")
+
+            if run_ablation or 'ablation_results' in st.session_state:
+                if run_ablation:
+                    with st.spinner("Running stream ablation (4 conditions)..."):
+                        try:
+                            from dataset import MultiStreamPairDataset
+                        except ImportError:
+                            from discriminator.model.dataset import MultiStreamPairDataset
+
+                        ms_dataset = MultiStreamPairDataset(str(ms_test_path))
+                        n_abl = min(abl_sample_size, len(ms_dataset))
+
+                        from torch.utils.data import DataLoader, Subset
+
+                        rng_gen = torch.Generator().manual_seed(123)
+                        indices = torch.randperm(len(ms_dataset), generator=rng_gen)[:n_abl].tolist()
+                        subset = Subset(ms_dataset, indices)
+                        loader = DataLoader(subset, batch_size=abl_batch_size, shuffle=False)
+
+                        # Preload all batches to avoid re-reading for each condition
+                        batches = []
+                        for batch in loader:
+                            batches.append({k: v.to(device) if torch.is_tensor(v) else v for k, v in batch.items()})
+
+                        conditions = {
+                            'Full model': {'driving': True, 'profile': True},
+                            'Seeking only': {'driving': False, 'profile': False},
+                            'No profile': {'driving': True, 'profile': False},
+                            'No driving': {'driving': False, 'profile': True},
+                        }
+
+                        ablation_data = {}
+                        model.eval()
+
+                        progress_abl = st.progress(0, text="Running ablation...")
+                        for ci, (cond_name, cond_flags) in enumerate(conditions.items()):
+                            progress_abl.progress((ci + 1) / len(conditions), text=f"Condition: {cond_name}")
+                            cond_scores = []
+                            cond_labels = []
+
+                            with torch.no_grad():
+                                for b in batches:
+                                    kwargs = {}
+                                    if cond_flags['driving']:
+                                        kwargs.update(
+                                            driving_1=b['driving_1'], driving_2=b['driving_2'],
+                                            mask_d1=b['mask_d1'], mask_d2=b['mask_d2'],
+                                        )
+                                    if cond_flags['profile']:
+                                        kwargs.update(
+                                            profile_1=b['profile_1'], profile_2=b['profile_2'],
+                                        )
+                                    probs = model(b['x1'], b['x2'], b['mask1'], b['mask2'], **kwargs)
+                                    cond_scores.append(probs.cpu().numpy().flatten())
+                                    cond_labels.append(b['label'].cpu().numpy().flatten())
+
+                            s = np.concatenate(cond_scores)
+                            l = np.concatenate(cond_labels)
+                            p = (s >= 0.5).astype(int)
+
+                            ablation_data[cond_name] = {
+                                'scores': s,
+                                'labels': l,
+                                'accuracy': float(np.mean(p == l)),
+                                'mean_score': float(np.mean(s)),
+                                'pos_mean': float(np.mean(s[l == 1])) if np.any(l == 1) else 0.0,
+                                'neg_mean': float(np.mean(s[l == 0])) if np.any(l == 0) else 0.0,
+                            }
+
+                        progress_abl.empty()
+                        st.session_state['ablation_results'] = ablation_data
+
+                abl_res = st.session_state.get('ablation_results', {})
+
+                if abl_res:
+                    # Summary table
+                    abl_table = []
+                    for cond_name, cond_data in abl_res.items():
+                        abl_table.append({
+                            'Condition': cond_name,
+                            'Accuracy': f"{cond_data['accuracy']:.1%}",
+                            'Mean Score': f"{cond_data['mean_score']:.3f}",
+                            'Pos Mean': f"{cond_data['pos_mean']:.3f}",
+                            'Neg Mean': f"{cond_data['neg_mean']:.3f}",
+                            'Separation': f"{cond_data['pos_mean'] - cond_data['neg_mean']:.3f}",
+                        })
+                    st.dataframe(pd.DataFrame(abl_table), hide_index=True, use_container_width=True)
+
+                    # Grouped bar chart
+                    cond_names = list(abl_res.keys())
+                    fig_abl = go.Figure()
+                    fig_abl.add_trace(go.Bar(
+                        name='Accuracy',
+                        x=cond_names,
+                        y=[abl_res[c]['accuracy'] for c in cond_names],
+                        marker_color='#2E86AB'
+                    ))
+                    fig_abl.add_trace(go.Bar(
+                        name='Pos Mean Score',
+                        x=cond_names,
+                        y=[abl_res[c]['pos_mean'] for c in cond_names],
+                        marker_color='#28A745'
+                    ))
+                    fig_abl.add_trace(go.Bar(
+                        name='Neg Mean Score',
+                        x=cond_names,
+                        y=[abl_res[c]['neg_mean'] for c in cond_names],
+                        marker_color='#DC3545'
+                    ))
+                    fig_abl.update_layout(
+                        barmode='group',
+                        title="Stream Ablation: Accuracy & Mean Scores by Condition",
+                        yaxis_title="Value",
+                        yaxis=dict(range=[0, 1]),
+                        height=400,
+                    )
+                    fig_abl.add_hline(y=0.5, line_dash="dash", line_color="gray",
+                                      annotation_text="Chance / Threshold")
+                    st.plotly_chart(fig_abl, use_container_width=True)
+
+                    # Per-pair delta from full model
+                    if 'Full model' in abl_res:
+                        st.markdown("#### Per-Pair Score Delta from Full Model")
+                        full_scores = abl_res['Full model']['scores']
+                        delta_fig = go.Figure()
+                        for cond_name in cond_names:
+                            if cond_name == 'Full model':
+                                continue
+                            delta = abl_res[cond_name]['scores'] - full_scores
+                            delta_fig.add_trace(go.Violin(
+                                y=delta, name=cond_name,
+                                box_visible=True, meanline_visible=True,
+                                opacity=0.7,
+                            ))
+                        delta_fig.add_hline(y=0, line_dash="dash", line_color="black")
+                        delta_fig.update_layout(
+                            title="Score Change When Streams Are Removed",
+                            yaxis_title="Δ Score (condition − full)",
+                            height=400,
+                            showlegend=False,
+                        )
+                        st.plotly_chart(delta_fig, use_container_width=True)
+
+                    # Seeking-only warning
+                    seeking_only = abl_res.get('Seeking only', {})
+                    seeking_acc = seeking_only.get('accuracy', 0)
+                    if seeking_acc < 0.6:
+                        st.error(f"""
+                        **⚠️ Seeking-only accuracy is {seeking_acc:.1%}** — near random chance.
+
+                        The fidelity term in the optimization pipeline uses only seeking data.
+                        With this V3 model, the fidelity constraint will be **ineffective** for
+                        trajectory editing. Consider:
+                        - Using a V1/V2 model for the fidelity term instead
+                        - Modifying the pipeline to supply driving/profile data
+                        - Retraining V3 with a distance-based combination mode
+                        """)
+                    elif seeking_acc < 0.7:
+                        st.warning(f"""
+                        **⚠️ Seeking-only accuracy is {seeking_acc:.1%}** — below the 70% reliability threshold.
+
+                        The fidelity constraint will be degraded when using seeking-only data in the
+                        optimization pipeline. Results should be interpreted with caution.
+                        """)
+                    else:
+                        st.success(f"""
+                        **✅ Seeking-only accuracy is {seeking_acc:.1%}** — the fidelity term remains
+                        reliable even without driving/profile streams.
+                        """)
+
+    # --------------------------------------------------------------------------
     # TAB 2: Fidelity Analysis (was Overview)
     # --------------------------------------------------------------------------
-    with tabs[1]:
+    with tabs[1 + _t]:
         st.header("📊 Fidelity Analysis")
         
         st.markdown("""
@@ -1841,7 +2252,7 @@ Default 0.5 aligns with the paper's methodology."""
     # --------------------------------------------------------------------------
     # TAB 3: Score Distribution
     # --------------------------------------------------------------------------
-    with tabs[2]:
+    with tabs[2 + _t]:
         st.header("📈 Score Distribution")
         
         if 'fidelity_result' not in st.session_state:
@@ -1950,7 +2361,7 @@ Default 0.5 aligns with the paper's methodology."""
     # --------------------------------------------------------------------------
     # TAB 4: Per-Driver Analysis
     # --------------------------------------------------------------------------
-    with tabs[3]:
+    with tabs[3 + _t]:
         st.header("👤 Per-Driver Analysis")
         
         if 'fidelity_result' not in st.session_state:
@@ -2030,7 +2441,7 @@ Default 0.5 aligns with the paper's methodology."""
     # --------------------------------------------------------------------------
     # TAB 5: Trajectory Comparison
     # --------------------------------------------------------------------------
-    with tabs[4]:
+    with tabs[4 + _t]:
         st.header("🔬 Trajectory Comparison")
         
         st.markdown("""
@@ -2122,7 +2533,7 @@ Default 0.5 aligns with the paper's methodology."""
     # --------------------------------------------------------------------------
     # TAB 6: Gradient Verification
     # --------------------------------------------------------------------------
-    with tabs[5]:
+    with tabs[5 + _t]:
         st.header("🧪 Gradient Verification")
         
         st.markdown("""
@@ -2214,7 +2625,7 @@ Default 0.5 aligns with the paper's methodology."""
     # --------------------------------------------------------------------------
     # TAB 7: Model Info
     # --------------------------------------------------------------------------
-    with tabs[6]:
+    with tabs[6 + _t]:
         st.header("ℹ️ Model Information")
         
         st.markdown("""
@@ -2225,6 +2636,49 @@ Default 0.5 aligns with the paper's methodology."""
         # Model config
         st.subheader("Model Configuration")
         
+        if is_v3:
+            st.markdown("#### V3 Multi-Stream Architecture")
+            combo_mode = model_config.get('combination_mode', 'unknown')
+            streams = model_config.get('streams', [])
+            n_trajs = model_config.get('n_trajs_per_stream', '?')
+            traj_proj = model_config.get('traj_projection_dim', '?')
+            profile_dim = model_config.get('n_profile_features', '?')
+
+            # Compute total parameters
+            total_params = sum(p.numel() for p in model.parameters())
+            trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+
+            # Compute classifier input dim from model if accessible
+            classifier_input = "N/A"
+            if hasattr(model, 'classifier') and hasattr(model.classifier, '0'):
+                first_layer = model.classifier[0]
+                if hasattr(first_layer, 'in_features'):
+                    classifier_input = str(first_layer.in_features)
+
+            v3_info = {
+                'Model Version': 'V3 (MultiStreamSiameseDiscriminator)',
+                'Combination Mode': combo_mode,
+                'Streams': ', '.join(streams) if streams else 'seeking, driving, profile',
+                'N Trajectories/Stream': str(n_trajs),
+                'Trajectory Projection Dim': str(traj_proj),
+                'Profile Features': str(profile_dim),
+                'Classifier Input Dim': classifier_input,
+                'Total Parameters': f"{total_params:,}",
+                'Trainable Parameters': f"{trainable_params:,}",
+            }
+            st.dataframe(
+                pd.DataFrame([{'Property': k, 'Value': v} for k, v in v3_info.items()]),
+                hide_index=True, use_container_width=True
+            )
+
+            st.info(f"""
+            **Combination mode: {combo_mode}** — In concatenation mode, the classifier receives
+            `[emb1, emb2]` directly. This means identical inputs produce `[emb, emb]` rather than the
+            zero-signal that distance mode yields (`|emb - emb| = 0`), so identical-trajectory
+            scores are naturally lower (~0.85 vs ~0.99).
+            """)
+
+        st.markdown("#### Full Configuration")
         if model_config:
             config_df = pd.DataFrame([
                 {'Parameter': k, 'Value': str(v)}
@@ -2233,7 +2687,7 @@ Default 0.5 aligns with the paper's methodology."""
             st.dataframe(config_df, hide_index=True)
         else:
             st.info("Model configuration not available.")
-        
+
         # Training info
         model_info = get_model_info(checkpoint_path)
         

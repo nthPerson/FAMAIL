@@ -100,7 +100,14 @@ class FidelityTerm(ObjectiveFunctionTerm):
         self._model = None
         self._model_config = None
         self._device = None
-    
+
+    def get_model_version(self) -> str:
+        """Return the version of the loaded discriminator model ('v1', 'v2', or 'v3').
+        If model not yet loaded, peeks into checkpoint metadata."""
+        if self._model_config:
+            return self._model_config.get('model_version', 'v1')
+        return self.config.detect_model_version()
+
     def _build_metadata(self) -> TermMetadata:
         """Build and return the term's metadata."""
         return TermMetadata(

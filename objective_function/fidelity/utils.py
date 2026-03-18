@@ -433,55 +433,58 @@ def compute_fidelity_scores(
     original_trajectories: List[np.ndarray],
     batch_size: int = 32,
     max_length: Optional[int] = None,
-    device: str = "cpu"
+    device: str = "cpu",
+    **model_kwargs
 ) -> np.ndarray:
     """
     Compute discriminator confidence scores for trajectory pairs.
-    
+
     Args:
-        model: Loaded discriminator model
+        model: Loaded discriminator model (V1, V2, or V3)
         edited_trajectories: List of edited trajectory features
         original_trajectories: List of original trajectory features
         batch_size: Batch size for processing
         max_length: Maximum sequence length for padding
         device: Device for computation
-        
+        **model_kwargs: Additional keyword arguments passed to model.forward()
+            (e.g., driving_1, driving_2, profile_1, profile_2 for V3)
+
     Returns:
         Array of confidence scores [n_pairs]
     """
     if not TORCH_AVAILABLE:
         raise RuntimeError("PyTorch is required for fidelity computation")
-    
+
     n_pairs = len(edited_trajectories)
     if n_pairs == 0:
         return np.array([])
-    
+
     all_scores = []
-    
+
     model.eval()
     with torch.no_grad():
         for start_idx in range(0, n_pairs, batch_size):
             end_idx = min(start_idx + batch_size, n_pairs)
-            
+
             # Prepare batch
             batch_edited = edited_trajectories[start_idx:end_idx]
             batch_original = original_trajectories[start_idx:end_idx]
-            
+
             # Pad and create masks
             x1, mask1 = prepare_trajectory_batch(batch_edited, max_length)
             x2, mask2 = prepare_trajectory_batch(batch_original, max_length)
-            
+
             # Convert to tensors
             x1 = torch.from_numpy(x1).to(device)
             x2 = torch.from_numpy(x2).to(device)
             mask1 = torch.from_numpy(mask1).to(device)
             mask2 = torch.from_numpy(mask2).to(device)
-            
-            # Forward pass
-            probs = model(x1, x2, mask1, mask2)  # [batch, 1]
-            
+
+            # Forward pass (extra kwargs passed through for V3 multi-stream)
+            probs = model(x1, x2, mask1, mask2, **model_kwargs)  # [batch, 1]
+
             all_scores.extend(probs.squeeze(-1).cpu().numpy().tolist())
-    
+
     return np.array(all_scores)
 
 
@@ -661,24 +664,27 @@ class DifferentiableFidelity(nn.Module):
         edited: torch.Tensor,
         original: torch.Tensor,
         mask_edited: Optional[torch.Tensor] = None,
-        mask_original: Optional[torch.Tensor] = None
+        mask_original: Optional[torch.Tensor] = None,
+        **kwargs
     ) -> torch.Tensor:
         """
         Compute differentiable fidelity score.
-        
+
         Args:
             edited: Edited trajectory features [batch, seq_len, 4]
             original: Original trajectory features [batch, seq_len, 4]
             mask_edited: Mask for edited [batch, seq_len]
             mask_original: Mask for original [batch, seq_len]
-            
+            **kwargs: Additional keyword arguments for V3 multi-stream
+                (driving_1, driving_2, mask_d1, mask_d2, profile_1, profile_2)
+
         Returns:
             Fidelity score (scalar tensor)
         """
         # Get discriminator probabilities
-        probs = self.discriminator(edited, original, mask_edited, mask_original)
+        probs = self.discriminator(edited, original, mask_edited, mask_original, **kwargs)
         probs = probs.squeeze(-1)  # [batch]
-        
+
         # Aggregate
         if self.aggregation == "mean":
             return probs.mean()
@@ -686,30 +692,31 @@ class DifferentiableFidelity(nn.Module):
             return probs.min()
         else:
             return probs.mean()
-    
+
     def forward_with_scores(
         self,
         edited: torch.Tensor,
         original: torch.Tensor,
         mask_edited: Optional[torch.Tensor] = None,
-        mask_original: Optional[torch.Tensor] = None
+        mask_original: Optional[torch.Tensor] = None,
+        **kwargs
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Compute fidelity with individual scores.
-        
+
         Returns:
             Tuple of (fidelity_score, individual_scores)
         """
-        probs = self.discriminator(edited, original, mask_edited, mask_original)
+        probs = self.discriminator(edited, original, mask_edited, mask_original, **kwargs)
         probs = probs.squeeze(-1)  # [batch]
-        
+
         if self.aggregation == "mean":
             fidelity = probs.mean()
         elif self.aggregation == "min":
             fidelity = probs.min()
         else:
             fidelity = probs.mean()
-        
+
         return fidelity, probs
 
 

@@ -598,24 +598,27 @@ class FAMAILObjective(nn.Module):
         self,
         tau_features: torch.Tensor,
         tau_prime_features: torch.Tensor,
+        **fidelity_kwargs,
     ) -> torch.Tensor:
         """
         Compute fidelity: F_fidelity = Discriminator(τ, τ')
-        
+
         The discriminator outputs a similarity score in [0, 1]:
         - Score ≈ 1: Modified trajectory preserves original agent behavior
         - Score ≈ 0: Modified trajectory deviates significantly from agent behavior
-        
+
         During optimization, fidelity acts as a regularizer to prevent
         modifications that would make the trajectory unrealistic for the driver.
-        
+
         Args:
             tau_features: Original trajectory features [batch, seq_len, 4]
             tau_prime_features: Modified trajectory features [batch, seq_len, 4]
-            
+            **fidelity_kwargs: Additional keyword arguments passed to discriminator
+                (e.g., driving_1, driving_2, profile_1, profile_2 for V3)
+
         Returns:
             Fidelity score in [0, 1]
-            
+
         Raises:
             MissingComponentError: If discriminator is not provided
         """
@@ -624,11 +627,11 @@ class FAMAILObjective(nn.Module):
                 "Discriminator not provided. Fidelity computation requires a trained "
                 "discriminator model. Load from discriminator/model/checkpoints/."
             )
-        
+
         # Get discriminator similarity score
         # Gradients flow through tau_prime_features for optimization
         with torch.enable_grad():
-            similarity = self.discriminator(tau_features, tau_prime_features)
+            similarity = self.discriminator(tau_features, tau_prime_features, **fidelity_kwargs)
         
         # Handle batch dimension - discriminator should return scalar per pair
         if similarity.dim() > 0:

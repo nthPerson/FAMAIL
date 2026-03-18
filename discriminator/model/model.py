@@ -1070,6 +1070,17 @@ class MultiStreamSiameseDiscriminator(nn.Module):
         # Reshape and concatenate N trajectory embeddings
         per_traj_dim = emb_flat.size(-1)
         trip_emb = emb_flat.reshape(B, N * per_traj_dim)          # [B, N*proj_dim]
+
+        # If fewer trajectories than expected, zero-pad to match trained dimensions.
+        # This happens when 3D input (N=1) is used with a model trained on N=5.
+        expected_dim = self.n_trajs_per_stream * per_traj_dim
+        if trip_emb.size(-1) < expected_dim:
+            pad_size = expected_dim - trip_emb.size(-1)
+            trip_emb = torch.cat([
+                trip_emb,
+                torch.zeros(B, pad_size, device=trip_emb.device, dtype=trip_emb.dtype)
+            ], dim=-1)
+
         return trip_emb
 
     def _combine_embeddings(

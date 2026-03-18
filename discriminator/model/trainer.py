@@ -904,6 +904,14 @@ def load_model_from_checkpoint(
 
     checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
 
+    # Reject ancient single-LSTM architecture checkpoints
+    state_dict = checkpoint.get('model_state_dict', checkpoint)
+    if 'encoder.lstm.weight_ih_l0' in state_dict:
+        raise ValueError(
+            "This checkpoint uses the old single nn.LSTM architecture. "
+            "Please train a new model with the current stacked LSTM architecture."
+        )
+
     # Reconstruct model from saved config, dispatching on model_version
     model_config = checkpoint.get('model_config', {})
     version = model_config.get('model_version', 'v1')
@@ -913,7 +921,16 @@ def load_model_from_checkpoint(
     elif version == 'v2':
         model = SiameseLSTMDiscriminatorV2(**model_config)
     else:
-        model = SiameseLSTMDiscriminator(**model_config)
+        # Legacy V1 checkpoints may use old key names (hidden_dim, num_layers)
+        # instead of current (lstm_hidden_dims). Normalize before constructing.
+        if 'hidden_dim' in model_config and 'lstm_hidden_dims' not in model_config:
+            hd = model_config.pop('hidden_dim')
+            nl = model_config.pop('num_layers', 2)
+            model_config['lstm_hidden_dims'] = tuple([hd] * nl)
+        # Remove keys not accepted by the V1 constructor
+        v1_keys = {'lstm_hidden_dims', 'dropout', 'bidirectional', 'classifier_hidden_dims'}
+        filtered = {k: v for k, v in model_config.items() if k in v1_keys}
+        model = SiameseLSTMDiscriminator(**filtered)
 
     model.load_state_dict(checkpoint['model_state_dict'])
     model.to(device)

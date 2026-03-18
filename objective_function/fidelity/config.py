@@ -31,7 +31,8 @@ from base import TermConfig
 
 
 # Default checkpoint path (relative to project root)
-DEFAULT_CHECKPOINT = "discriminator/model/checkpoints/20251229_131300/best.pt"
+# V3 multi-stream (Ren-aligned) trained 2026-03-16
+DEFAULT_CHECKPOINT = "checkpoints/20260316_223817/best.pt"
 
 
 @dataclass
@@ -182,6 +183,20 @@ class FidelityConfig(TermConfig):
                 return json.load(f)
         return None
     
+    def detect_model_version(self) -> str:
+        """Peek into checkpoint to detect model version without loading full model.
+
+        Returns:
+            'v1', 'v2', or 'v3'
+        """
+        import torch
+        checkpoint_path = self.get_checkpoint_abs_path()
+        if not checkpoint_path.exists():
+            return "v1"
+        checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
+        model_config = checkpoint.get('model_config', checkpoint.get('config', {}))
+        return model_config.get('model_version', 'v1')
+
     def get_feature_range(self) -> Tuple[int, int]:
         """Get feature extraction range as (start, end) indices."""
         if self.extract_features == "base_4":
