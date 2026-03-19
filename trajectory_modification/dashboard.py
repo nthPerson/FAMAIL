@@ -136,8 +136,21 @@ def load_data_section():
                 st.session_state.g0_power_basis_func = bundle.g0_power_basis_func
                 st.session_state.active_cell_indices = bundle.active_cell_indices
 
+                # Store multi-stream data for V3 discriminator
+                st.session_state.ms_driving_trajs = bundle.ms_driving_trajs
+                st.session_state.ms_seeking_trajs = bundle.ms_seeking_trajs
+                st.session_state.ms_profile_features = bundle.ms_profile_features
+                st.session_state.ms_seeking_days = bundle.ms_seeking_days
+                st.session_state.ms_driving_days = bundle.ms_driving_days
+
                 st.session_state.data_loaded = True
                 st.sidebar.success(f"Loaded {len(bundle.trajectories)} trajectories")
+
+                # Report multi-stream data status
+                if bundle.ms_driving_trajs is not None:
+                    n_drivers = len(bundle.ms_driving_trajs)
+                    n_driving = sum(len(v) for v in bundle.ms_driving_trajs.values())
+                    st.sidebar.info(f"V3 multi-stream: {n_drivers} drivers, {n_driving} driving trajs")
                 
                 # Show g(d) fitting diagnostics
                 if bundle.g_function_diagnostics:
@@ -785,8 +798,8 @@ def run_modification_section(selected_indices: List[int], params: Dict):
         if use_discriminator:
             checkpoint_path = st.text_input(
                 "Checkpoint Path",
-                "discriminator/model/checkpoints/pass-seek_5000-20000_(84ident_72same_44diff)/best.pt"  # this is the model with the best performance
-                # "discriminator/model/checkpoints/best_model.pt"
+                "checkpoints/20260316_223817/best.pt"  # V3 multi-stream (Ren-aligned)
+                # "discriminator/model/checkpoints/pass-seek_5000-20000_(84ident_72same_44diff)/best.pt"  # V2 single-stream
             )
     
     with col2:
@@ -894,7 +907,8 @@ def _execute_modification(
             if full_checkpoint_path.exists():
                 adapter = DiscriminatorAdapter(checkpoint_path=full_checkpoint_path, device=device)
                 discriminator = adapter.model
-                st.success("✅ Discriminator loaded successfully")
+                model_version = getattr(adapter, 'model_version', 'v1')
+                st.success(f"✅ Discriminator loaded successfully (version: {model_version})")
             else:
                 st.error(f"❌ Discriminator checkpoint not found: {full_checkpoint_path}")
                 st.warning("Fidelity term will raise an error. Please provide a valid checkpoint path.")
@@ -922,6 +936,24 @@ def _execute_modification(
         st.error(f"❌ Failed to initialize objective function: {e}")
         return
     
+    # Build multi-stream context for V3 discriminator if available
+    multi_stream_context = None
+    ms_driving = st.session_state.get('ms_driving_trajs')
+    if ms_driving is not None and getattr(adapter, 'model_version', 'v1') == 'v3':
+        try:
+            from trajectory_modification.multi_stream_context import MultiStreamContextBuilder
+            multi_stream_context = MultiStreamContextBuilder(
+                driving_trajs=ms_driving,
+                seeking_trajs=st.session_state.get('ms_seeking_trajs', {}),
+                profile_features=st.session_state.get('ms_profile_features', {}),
+                seeking_days=st.session_state.get('ms_seeking_days'),
+                driving_days=st.session_state.get('ms_driving_days'),
+                device=device,
+            )
+            st.success("✅ V3 multi-stream context loaded (3 streams: seeking + driving + profile)")
+        except Exception as e:
+            st.warning(f"⚠️ Failed to build multi-stream context: {e}. Using single-stream mode.")
+
     # Create modifier with gradient configuration
     modifier = TrajectoryModifier(
         objective_fn=objective,
@@ -934,6 +966,7 @@ def _execute_modification(
         temperature_annealing=use_annealing,
         tau_max=tau_max,
         tau_min=tau_min,
+        multi_stream_context=multi_stream_context,
     )
     st.success(f"✅ Modifier initialized with {gradient_mode} gradients")
     

@@ -57,24 +57,44 @@ class DiscriminatorAdapter:
             self.load_checkpoint(checkpoint_path)
     
     def load_checkpoint(self, checkpoint_path: Union[str, Path]) -> None:
-        """Load trained model from checkpoint."""
+        """Load trained model from checkpoint. Supports V1, V2, and V3."""
         import sys
         checkpoint_path = Path(checkpoint_path)
-        
+
         # Add discriminator model to path
         model_dir = checkpoint_path.parent.parent
         if str(model_dir) not in sys.path:
             sys.path.insert(0, str(model_dir))
-        
+
         from discriminator.model import SiameseLSTMDiscriminator, SiameseLSTMDiscriminatorV2
-        
-        checkpoint = torch.load(checkpoint_path, map_location=self.device)
-        
+
+        checkpoint = torch.load(checkpoint_path, map_location=self.device, weights_only=False)
+
         # Determine model version from checkpoint
-        config = checkpoint.get('config', checkpoint.get('model_config', {}))
-        model_version = config.get('model_version', 'v1')
-        
-        if model_version == 'v2':
+        # model_config has model_version; config has training hyperparams
+        model_config = checkpoint.get('model_config', {})
+        config = checkpoint.get('config', {})
+        # Merge: model_config takes precedence over config for model params
+        merged_config = {**config, **model_config}
+        self.model_version = merged_config.get('model_version', 'v1')
+        self.model_config = merged_config
+
+        if self.model_version == 'v3':
+            from discriminator.model.model import MultiStreamSiameseDiscriminator
+            self.model = MultiStreamSiameseDiscriminator(
+                lstm_hidden_dims=tuple(merged_config.get('lstm_hidden_dims', [200, 100])),
+                dropout=merged_config.get('dropout', 0.2),
+                bidirectional=merged_config.get('bidirectional', True),
+                combination_mode=merged_config.get('combination_mode', 'concatenation'),
+                streams=list(merged_config.get('streams', ['seeking', 'driving', 'profile'])),
+                n_trajs_per_stream=merged_config.get('n_trajs_per_stream', 5),
+                traj_projection_dim=merged_config.get('traj_projection_dim', 48),
+                n_profile_features=merged_config.get('n_profile_features', 11),
+                profile_hidden_dims=tuple(merged_config.get('profile_hidden_dims', [64, 32])),
+                profile_output_dim=merged_config.get('profile_output_dim', 8),
+                classifier_hidden_dims=tuple(merged_config.get('classifier_hidden_dims', [64, 32, 8])),
+            )
+        elif self.model_version == 'v2':
             self.model = SiameseLSTMDiscriminatorV2(
                 lstm_hidden_dims=config.get('lstm_hidden_dims', (200, 100)),
                 dropout=config.get('dropout', 0.2),
@@ -87,14 +107,19 @@ class DiscriminatorAdapter:
                 dropout=config.get('dropout', 0.2),
                 bidirectional=config.get('bidirectional', True),
             )
-        
+
         self.model.load_state_dict(checkpoint['model_state_dict'])
         self.model.to(self.device)
         self.model.eval()
-        
+
         # Freeze parameters
         for param in self.model.parameters():
             param.requires_grad = False
+
+    @property
+    def is_multi_stream(self) -> bool:
+        """True if loaded model is V3 multi-stream."""
+        return getattr(self, 'model_version', 'v1') == 'v3'
     
     def evaluate(
         self,

@@ -29,7 +29,9 @@ from .data_loader import (
     PickupDropoffLoader,
     ActiveTaxisLoader,
     GFunctionLoader,
+    MultiStreamDataLoader,
 )
+from .multi_stream_context import MultiStreamContextBuilder
 
 __all__ = [
     # Core data structures
@@ -55,4 +57,7 @@ __all__ = [
     'PickupDropoffLoader',
     'ActiveTaxisLoader',
     'GFunctionLoader',
+    'MultiStreamDataLoader',
+    # Multi-stream context
+    'MultiStreamContextBuilder',
 ]

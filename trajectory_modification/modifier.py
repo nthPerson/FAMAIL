@@ -80,8 +80,10 @@ class TrajectoryModifier:
         tau_max: float = 1.0,
         tau_min: float = 0.1,
         neighborhood_size: int = 5,
+        multi_stream_context: Optional['MultiStreamContextBuilder'] = None,
     ):
         self.objective_fn = objective_fn
+        self.multi_stream_context = multi_stream_context
         self.grid_dims = grid_dims
         self.alpha = alpha
         self.epsilon = epsilon
@@ -334,12 +336,23 @@ class TrajectoryModifier:
             # to_tensor() returns [seq_len, 4], we add batch dimension [1, seq_len, 4]
             tau_features = trajectory.to_tensor().unsqueeze(0).to(device)
             tau_prime_features = modified.to_tensor().unsqueeze(0).to(device)
-            
+
+            # Build multi-stream fidelity kwargs if V3 context is available.
+            # When present, the context builder returns full 4D seeking tensors (x1, x2)
+            # that replace tau_features/tau_prime_features for the fidelity call,
+            # plus driving and profile streams. See multi_stream_context.py for design
+            # decisions on branch construction, coordinate conversion, and gradient flow.
+            fidelity_kwargs = {}
+            if self.multi_stream_context is not None:
+                fidelity_kwargs = self.multi_stream_context.build_fidelity_kwargs(
+                    trajectory, modified
+                )
+
             # Compute counts based on gradient mode
             if self.gradient_mode == 'soft_cell':
                 # Use soft cell assignment for differentiable counts
                 soft_pickup_counts = self._compute_soft_pickup_counts(pickup_tensor, original_cell)
-                
+
                 # Compute objective with soft counts (gradients flow through)
                 # Note: For causal fairness, we use the properly scaled causal_demand/supply
                 # which have mean aggregation to match g(d) fitting scale
@@ -351,11 +364,12 @@ class TrajectoryModifier:
                     tau_features=tau_features,
                     tau_prime_features=tau_prime_features,
                     causal_demand=self.causal_demand,  # Mean-aggregated demand for F_causal
+                    **fidelity_kwargs,
                 )
-                
+
                 # Backward pass - gradients should flow to pickup_tensor
                 total.backward(retain_graph=True)
-                
+
                 if pickup_tensor.grad is not None:
                     grad = pickup_tensor.grad.detach().cpu().numpy()
                     grad_norm = np.linalg.norm(grad)
@@ -364,7 +378,7 @@ class TrajectoryModifier:
                     # TODO: instead of automatically falling back to heuristic, throw error if gradient_mode = 'soft_cell'
                     grad = self._compute_heuristic_gradient(current_pickup)
                     grad_norm = np.linalg.norm(grad)
-                    
+
             else:  # gradient_mode == 'heuristic'
                 # Use pre-aggregated counts (no gradient flow)
                 # Note: For causal fairness, we use the properly scaled causal_demand/supply
@@ -376,8 +390,9 @@ class TrajectoryModifier:
                     tau_features=tau_features,
                     tau_prime_features=tau_prime_features,
                     causal_demand=self.causal_demand,  # Mean-aggregated demand for F_causal
+                    **fidelity_kwargs,
                 )
-                
+
                 # Use heuristic gradient
                 grad = self._compute_heuristic_gradient(current_pickup)
                 grad_norm = np.linalg.norm(grad)

@@ -33,6 +33,13 @@ DEFAULT_PATHS = {
     'active_taxis_hourly': 'source_data/active_taxis_5x5_hourly.pkl',
     'active_taxis_time_bucket': 'source_data/active_taxis_5x5_time_bucket.pkl',
     'g_function_params': 'objective_function/causal_fairness/g_function_params.json', # TODO: this file does not exist and is not part of the implementation. Remove all references.
+    # Multi-stream data for V3 discriminator (extracted by discriminator/multi_stream/extraction/)
+    'ms_driving':      'discriminator/multi_stream/extracted_data/driving_trajs.pkl',
+    'ms_seeking':      'discriminator/multi_stream/extracted_data/seeking_trajs.pkl',
+    'ms_profile':      'discriminator/multi_stream/extracted_data/profile_features.pkl',
+    'ms_seeking_days': 'discriminator/multi_stream/extracted_data/seeking_calendar_days.pkl',
+    'ms_driving_days': 'discriminator/multi_stream/extracted_data/driving_calendar_days.pkl',
+    'ms_metadata':     'discriminator/multi_stream/extracted_data/extraction_metadata.json',
 }
 
 # Grid dimensions for Shenzhen
@@ -658,10 +665,72 @@ class GFunctionLoader:
         }
 
 
+class MultiStreamDataLoader:
+    """Loads driving trajectories, profile features, and calendar day mappings
+    for the V3 multi-stream discriminator.
+
+    All data is keyed by driver_index (int, 0-49), matching Trajectory.driver_id
+    from the main trajectory loader.
+
+    Coordinates in the loaded data are 1-indexed [1-48, 1-90] as produced by the
+    multi-stream extraction pipeline (discriminator/multi_stream/extraction/).
+    """
+
+    def __init__(self, workspace_root: Optional[Path] = None):
+        self.workspace_root = workspace_root or find_workspace_root()
+
+    def is_available(self) -> bool:
+        """Check if all required multi-stream data files exist."""
+        required = ['ms_driving', 'ms_seeking', 'ms_profile',
+                     'ms_seeking_days', 'ms_driving_days']
+        return all(
+            (self.workspace_root / DEFAULT_PATHS[k]).exists()
+            for k in required
+        )
+
+    def load(self) -> Dict[str, Any]:
+        """Load all multi-stream data.
+
+        Returns:
+            Dict with keys:
+                driving_trajs:  {driver_idx: [trajectories]}  (1-indexed coords)
+                seeking_trajs:  {driver_idx: [trajectories]}  (1-indexed coords)
+                profile_features: {driver_idx: ndarray(11,)}  (z-score normalized)
+                seeking_days:   {driver_idx: [cal_day_per_traj]}
+                driving_days:   {driver_idx: [cal_day_per_traj]}
+        """
+        root = self.workspace_root
+
+        driving = load_pickle(root / DEFAULT_PATHS['ms_driving'])
+        seeking = load_pickle(root / DEFAULT_PATHS['ms_seeking'])
+        profile_raw = load_pickle(root / DEFAULT_PATHS['ms_profile'])
+        seeking_days = load_pickle(root / DEFAULT_PATHS['ms_seeking_days'])
+        driving_days = load_pickle(root / DEFAULT_PATHS['ms_driving_days'])
+
+        # Extract normalized profile features keyed by int driver_index
+        profile_features = {}
+        for k, v in profile_raw['features_normalized'].items():
+            profile_features[int(k)] = v
+
+        # Ensure all keys are ints
+        driving = {int(k): v for k, v in driving.items()}
+        seeking = {int(k): v for k, v in seeking.items()}
+        seeking_days = {int(k): v for k, v in seeking_days.items()}
+        driving_days = {int(k): v for k, v in driving_days.items()}
+
+        return {
+            'driving_trajs': driving,
+            'seeking_trajs': seeking,
+            'profile_features': profile_features,
+            'seeking_days': seeking_days,
+            'driving_days': driving_days,
+        }
+
+
 @dataclass
 class DataBundle:
     """Bundle of all data needed for trajectory modification."""
-    
+
     trajectories: List[Trajectory]
     pickup_dropoff_data: Dict[Tuple, Tuple[int, int]]  # Raw pickup/dropoff counts
     pickup_grid: np.ndarray  # Aggregated pickups (48, 90) - for spatial fairness
@@ -670,7 +739,7 @@ class DataBundle:
     active_taxis_grid: np.ndarray  # Aggregated active taxis (48, 90) - for DSR/ASR
     g_function: Callable
     grid_dims: Tuple[int, int] = GRID_DIMS
-    
+
     # NEW: Separate tensors for causal fairness with proper temporal aggregation
     causal_demand_grid: Optional[np.ndarray] = None  # Mean demand per cell (for F_causal)
     causal_supply_grid: Optional[np.ndarray] = None  # Mean supply per cell (for F_causal)
@@ -682,6 +751,15 @@ class DataBundle:
     active_cell_indices: Optional[np.ndarray] = None     # Boolean mask for hat matrix cells
     demographics_grid: Optional[np.ndarray] = None       # (48, 90, n_features) demographics
     demographic_feature_names: Optional[List[str]] = None  # Feature names
+
+    # Multi-stream context for V3 discriminator
+    # Loaded from discriminator/multi_stream/extracted_data/
+    # All keyed by driver_index (int, 0-49) which matches Trajectory.driver_id
+    ms_driving_trajs: Optional[Dict[int, List]] = None       # {driver_idx: [trajs]} 1-indexed
+    ms_seeking_trajs: Optional[Dict[int, List]] = None       # {driver_idx: [trajs]} 1-indexed
+    ms_profile_features: Optional[Dict[int, np.ndarray]] = None  # {driver_idx: ndarray(11,)}
+    ms_seeking_days: Optional[Dict[int, List[int]]] = None   # {driver_idx: [cal_day, ...]}
+    ms_driving_days: Optional[Dict[int, List[int]]] = None   # {driver_idx: [cal_day, ...]}
     
     @classmethod
     def load_default(
@@ -692,14 +770,15 @@ class DataBundle:
         active_taxis_period: str = 'hourly',
         estimate_g_from_data: bool = True,
         aggregation: str = 'mean',
+        load_multi_stream: bool = True,
     ) -> 'DataBundle':
         """
         Load default data bundle from workspace.
-        
+
         IMPORTANT: When estimate_g_from_data=True (default), g(d) is fitted using
         isotonic regression on the actual supply/demand data. This ensures the
         g(d) output scale matches the Y = S/D values in the data.
-        
+
         Args:
             max_trajectories: Maximum trajectories to load
             max_drivers: Maximum drivers to load from
@@ -709,7 +788,10 @@ class DataBundle:
                                   If False, use the old hardcoded g(d) function (NOT recommended).
             aggregation: Temporal aggregation method for causal fairness: 'mean' (recommended),
                         'sum', or 'max'. Must match the scale expected by g(d).
-            
+            load_multi_stream: If True, load driving trajectories, profile features, and
+                             calendar day mappings for the V3 multi-stream discriminator.
+                             Fails gracefully if files are missing.
+
         Returns:
             DataBundle with all loaded data
         """
@@ -910,6 +992,30 @@ class DataBundle:
                     "Option B/C causal fairness will not be available."
                 )
 
+        # --- Load multi-stream data for V3 discriminator ---
+        ms_driving_trajs = None
+        ms_seeking_trajs = None
+        ms_profile_features = None
+        ms_seeking_days = None
+        ms_driving_days = None
+
+        if load_multi_stream:
+            ms_loader = MultiStreamDataLoader(root)
+            if ms_loader.is_available():
+                try:
+                    ms_data = ms_loader.load()
+                    ms_driving_trajs = ms_data['driving_trajs']
+                    ms_seeking_trajs = ms_data['seeking_trajs']
+                    ms_profile_features = ms_data['profile_features']
+                    ms_seeking_days = ms_data['seeking_days']
+                    ms_driving_days = ms_data['driving_days']
+                except Exception as e:
+                    import warnings
+                    warnings.warn(
+                        f"Failed to load multi-stream data for V3 discriminator: {e}. "
+                        "Fidelity term will use single-stream mode."
+                    )
+
         return cls(
             trajectories=trajectories,
             pickup_dropoff_data=pickup_dropoff_data,
@@ -926,6 +1032,11 @@ class DataBundle:
             active_cell_indices=active_cell_indices,
             demographics_grid=demographics_grid,
             demographic_feature_names=demographic_feature_names,
+            ms_driving_trajs=ms_driving_trajs,
+            ms_seeking_trajs=ms_seeking_trajs,
+            ms_profile_features=ms_profile_features,
+            ms_seeking_days=ms_seeking_days,
+            ms_driving_days=ms_driving_days,
         )
     
     def to_tensors(self, device: str = 'cpu') -> Dict[str, 'torch.Tensor']:

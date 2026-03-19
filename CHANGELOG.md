@@ -5,6 +5,55 @@ and non-trivial edits. Minor bugfixes and UI tweaks are omitted.
 
 ---
 
+## 2026-03-17 — V3 Multi-Stream Discriminator Integration
+
+### Why
+
+The V3 discriminator (Ren et al. KDD 2020 multi-stream architecture) was trained on three
+data streams — seeking trajectories, driving trajectories, and driver profile features —
+but the modification pipeline only passed single seeking trajectories, zero-padding the
+other two streams. This put the model far outside its training distribution, producing
+poorly calibrated fidelity scores that weakened the F_fidelity gradient signal.
+
+### What Changed
+
+Wired real driving trajectory and profile feature data through the entire modification
+pipeline so the V3 discriminator operates in-distribution during trajectory editing.
+
+**New files**:
+- `trajectory_modification/multi_stream_context.py` — `MultiStreamContextBuilder` class
+  that assembles V3 discriminator kwargs (x1/x2, driving, profile tensors with masks)
+  for each trajectory being modified. Implements three seeking fill strategies: "sample"
+  (default: 1 target + 4 context trajectories from same driver), "replicate", and "single".
+  Handles 0-indexed→1-indexed coordinate conversion. Documents key design decisions:
+  same-driver branch construction, seeking fill strategy rationale, gradient flow through
+  slot 0 only.
+- `trajectory_modification/compare_discriminators.py` — Comparison script for systematic
+  V2 vs V3 evaluation on identical trajectory sets, with V3 ablation (with/without
+  multi-stream context).
+
+**Modified files**:
+- `trajectory_modification/data_loader.py` — Added `MultiStreamDataLoader` class and
+  extended `DataBundle` with multi-stream fields (`ms_driving_trajs`, `ms_seeking_trajs`,
+  `ms_profile_features`, `ms_seeking_days`, `ms_driving_days`). `load_default()` gains
+  `load_multi_stream=True` parameter with graceful fallback.
+- `trajectory_modification/objective.py` — `forward()` accepts `**fidelity_kwargs` and
+  routes multi-stream tensors (x1/x2 keys) to `compute_fidelity()`, bypassing the
+  single-trajectory `tau_features`/`tau_prime_features` path.
+- `trajectory_modification/modifier.py` — `TrajectoryModifier` accepts optional
+  `multi_stream_context` and builds fidelity kwargs per iteration in `modify_single()`.
+- `trajectory_modification/discriminator_adapter.py` — Fixed config merging for V3
+  checkpoints (`model_config` takes precedence over `config`). Added `is_multi_stream`
+  property.
+- `objective_function/fidelity/config.py` — Added `multi_stream_data_dir`,
+  `n_trajs_per_stream`, `seeking_fill_strategy` fields.
+- `trajectory_modification/dashboard.py` — Auto-detects V3, loads multi-stream context,
+  reports stream status in sidebar.
+- `trajectory_modification/__init__.py` — Exports `MultiStreamDataLoader`,
+  `MultiStreamContextBuilder`.
+
+---
+
 ## 2026-03-09 — GlobalMetrics F_causal: Option B Alignment + Dashboard Results Overhaul
 
 ### F_causal Always Zero in Summary Metrics (Bug Fix)

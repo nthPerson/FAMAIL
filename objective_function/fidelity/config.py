@@ -99,6 +99,11 @@ class FidelityConfig(TermConfig):
     
     # Caching
     cache_model: bool = True
+
+    # Multi-stream V3 settings
+    multi_stream_data_dir: str = "discriminator/multi_stream/extracted_data"
+    n_trajs_per_stream: int = 5
+    seeking_fill_strategy: Literal["sample", "replicate", "single"] = "sample"
     
     def validate(self) -> None:
         """Validate configuration parameters."""

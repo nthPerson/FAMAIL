@@ -652,6 +652,7 @@ class FAMAILObjective(nn.Module):
         tau_features: Optional[torch.Tensor] = None,
         tau_prime_features: Optional[torch.Tensor] = None,
         causal_demand: Optional[torch.Tensor] = None,
+        **fidelity_kwargs,
     ) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
         """
         Compute combined objective L = α₁·F_spatial + α₂·F_causal + α₃·F_fidelity.
@@ -694,12 +695,28 @@ class FAMAILObjective(nn.Module):
         # Fidelity (requires trajectory features and discriminator)
         # Skip if alpha_fidelity is 0 to allow running without discriminator
         if self.alpha_fidelity > 0:
-            if tau_features is None or tau_prime_features is None:
-                raise MissingDataError(
-                    "Trajectory features (tau_features and tau_prime_features) are required "
-                    "for fidelity computation. Provide trajectory tensors [batch, seq_len, 4]."
+            # When multi-stream kwargs contain x1/x2 (from MultiStreamContextBuilder),
+            # those 4D seeking tensors replace tau_features/tau_prime_features for fidelity.
+            # Spatial/causal terms still use the standard grid-based inputs.
+            if 'x1' in fidelity_kwargs and 'x2' in fidelity_kwargs:
+                fid_x1 = fidelity_kwargs.pop('x1')
+                fid_x2 = fidelity_kwargs.pop('x2')
+                fid_mask1 = fidelity_kwargs.pop('mask1', None)
+                fid_mask2 = fidelity_kwargs.pop('mask2', None)
+                f_fidelity = self.compute_fidelity(
+                    fid_x1, fid_x2,
+                    mask1=fid_mask1, mask2=fid_mask2,
+                    **fidelity_kwargs,
                 )
-            f_fidelity = self.compute_fidelity(tau_features, tau_prime_features)
+            else:
+                if tau_features is None or tau_prime_features is None:
+                    raise MissingDataError(
+                        "Trajectory features (tau_features and tau_prime_features) are required "
+                        "for fidelity computation. Provide trajectory tensors [batch, seq_len, 4]."
+                    )
+                f_fidelity = self.compute_fidelity(
+                    tau_features, tau_prime_features, **fidelity_kwargs,
+                )
         else:
             f_fidelity = torch.tensor(0.0, device=device)
         
