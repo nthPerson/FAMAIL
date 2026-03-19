@@ -171,9 +171,12 @@ def run_modification_with_decomposition(
             current_pickup, dtype=torch.float32, device=device, requires_grad=True,
         )
 
-        # Trajectory features for fidelity
+        # Trajectory features for fidelity — build tau_prime with gradient flow
         tau_features = trajectory.to_tensor().unsqueeze(0).to(device)
-        tau_prime_features = modified.to_tensor().unsqueeze(0).to(device)
+        tau_prime_features = tau_features.clone()
+        pickup_step = len(trajectory.states) - 1
+        tau_prime_features[0, pickup_step, 0] = pickup_tensor[0]
+        tau_prime_features[0, pickup_step, 1] = pickup_tensor[1]
 
         # Multi-stream fidelity kwargs
         fidelity_kwargs = {}
@@ -181,6 +184,12 @@ def run_modification_with_decomposition(
             fidelity_kwargs = modifier.multi_stream_context.build_fidelity_kwargs(
                 trajectory, modified,
             )
+            # Inject gradient flow into x2 slot 0's pickup coordinates
+            x2 = fidelity_kwargs['x2']
+            x2_new = x2.clone()
+            x2_new[0, 0, pickup_step, 0] = pickup_tensor[0] + 1  # 0→1 indexed
+            x2_new[0, 0, pickup_step, 1] = pickup_tensor[1] + 1  # 0→1 indexed
+            fidelity_kwargs['x2'] = x2_new
 
         # Soft cell assignment → differentiable counts
         soft_pickup_counts = modifier._compute_soft_pickup_counts(pickup_tensor, original_cell)

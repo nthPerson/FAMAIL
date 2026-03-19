@@ -5,6 +5,78 @@ and non-trivial edits. Minor bugfixes and UI tweaks are omitted.
 
 ---
 
+## 2026-03-18 — Experiment Framework + Gradient Flow Fixes
+
+### Experiment & Analysis Framework (New Module)
+
+**Files**: New `experiment_framework/` directory (7 files, ~1,500 lines)
+
+The existing Streamlit dashboard is effective for interactive exploration but lacks systematic
+instrumentation for understanding how each objective term contributes to trajectory edits.
+Built a new experiment framework that provides reproducible batch experiments with structured
+output.
+
+- `experiment_config.py` — `ExperimentConfig` and `SweepConfig` dataclasses consolidating
+  all pipeline parameters (attribution, ST-iFGSM, objective weights, discriminator, etc.)
+- `experiment_runner.py` — `ExperimentRunner` orchestrates the full Phase 1 (attribution) +
+  Phase 2 (modification) pipeline with per-trajectory instrumentation and cumulative global
+  fairness tracking via `GlobalMetrics` snapshots.
+- `gradient_decomposition.py` — `GradientDecomposer` computes per-term gradient vectors
+  (∂F_spatial/∂pos, ∂F_causal/∂pos, ∂F_fidelity/∂pos) via separate backward passes with
+  `retain_graph=True`. Configurable flag (`record_gradient_decomposition`) since it requires
+  4 backward passes per iteration instead of 1.
+- `experiment_result.py` — Result types (`ExperimentResult`, `TrajectoryResult`,
+  `IterationRecord`, `GradientDecomposition`) with JSON/CSV serialization and auto-generated
+  markdown reports. Each run produces 8 output files: config.json, results.json, summary.json,
+  trajectories.csv, iterations.csv, global_snapshots.csv, attribution_scores.csv, report.md.
+- `analysis_dashboard.py` — Streamlit dashboard for loading experiment results with 7 views:
+  experiment overview, global fairness evolution, per-trajectory deep dive, gradient
+  decomposition analysis, cross-run comparison, attribution effectiveness, spatial heatmap.
+- `cli.py` — Command-line interface with `run`, `sweep`, `dashboard`, and `summarize`
+  subcommands.
+
+### Gradient Flow Fixes (Critical Bug Fixes)
+
+**Why**: The gradient decomposition framework revealed that the ST-iFGSM optimization was
+driven **entirely** by F_spatial. F_causal and F_fidelity produced zero gradients in every
+iteration of every trajectory, meaning the algorithm was effectively single-objective despite
+the multi-objective formulation `L = α₁·F_spatial + α₂·F_causal + α₃·F_fidelity`.
+
+**Root causes and fixes**:
+
+1. **F_causal gradient = 0** — The causal fairness computation received `causal_demand`
+   (a constant tensor set once in `set_global_state()`) instead of `pickup_counts` (the soft
+   cell output with gradient flow from `pickup_tensor`). The constant had no connection to
+   the computational graph. Additionally, `pickup_counts` is sum-aggregated while g₀(D) was
+   fitted on mean-aggregated data, requiring a scale correction factor (÷144 observation
+   periods) to keep g₀(D) inputs at the correct scale.
+   - `trajectory_modification/objective.py` — Changed `demand_for_causal` to use
+     `pickup_counts` (soft cell output) with lazy-computed `_causal_demand_scale` factor.
+
+2. **F_fidelity gradient = 0** — The modified trajectory features (`tau_prime_features`)
+   were built from `modified.to_tensor()`, which converts numpy→tensor and breaks the
+   computational graph. Fixed by constructing `tau_prime_features` from the original
+   trajectory tensor with the pickup coordinates replaced by the differentiable
+   `pickup_tensor` values. Same fix applied for V3 multi-stream x2 tensor slot 0.
+   - `trajectory_modification/modifier.py` — Build `tau_prime_features` via `.clone()` +
+     coordinate replacement instead of `modified.to_tensor()`.
+   - `experiment_framework/gradient_decomposition.py` — Same fix in the decomposition loop.
+
+3. **cuDNN LSTM backward in eval mode** — Once fidelity gradients flowed, backward through
+   the discriminator's LSTM failed with "cudnn RNN backward can only be called in training
+   mode". Fixed by disabling cuDNN during the discriminator forward pass
+   (`torch.backends.cudnn.flags(enabled=False)`), which uses PyTorch's native LSTM that
+   supports backward in eval mode.
+   - `trajectory_modification/objective.py` — Added `torch.backends.cudnn.flags(enabled=False)`
+     context manager around discriminator call in `compute_fidelity()`.
+
+**After fix**: Gradient decomposition shows all three terms contributing: spatial ≈ 12%,
+causal ≈ 9%, fidelity ≈ 80%. The spatial-causal alignment is consistently negative (-0.47
+to -1.0), indicating the two fairness terms push modifications in opposing directions — an
+important finding about the algorithm's multi-objective dynamics.
+
+---
+
 ## 2026-03-17 — V3 Multi-Stream Discriminator Integration
 
 ### Why

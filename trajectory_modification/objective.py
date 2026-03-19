@@ -134,6 +134,11 @@ class FAMAILObjective(nn.Module):
         self._hat_matrix_tensors = {}  # Lazily initialized on first use
         self.active_cell_indices = active_cell_indices
 
+        # Scale factor to convert sum-aggregated pickup_counts to mean scale
+        # for causal fairness. Computed lazily on first forward() call from
+        # the ratio of causal_demand (mean) to pickup_counts (sum).
+        self._causal_demand_scale = None
+
         # Store discriminator (frozen - set to eval mode)
         self.discriminator = discriminator
         if self.discriminator is not None:
@@ -629,8 +634,11 @@ class FAMAILObjective(nn.Module):
             )
 
         # Get discriminator similarity score
-        # Gradients flow through tau_prime_features for optimization
-        with torch.enable_grad():
+        # Gradients flow through tau_prime_features for optimization.
+        # Disable cuDNN for the forward pass so that backward through the LSTM
+        # works in eval mode. cuDNN's RNN backward requires training mode, but
+        # we need eval-mode behavior (no dropout) with gradient flow.
+        with torch.enable_grad(), torch.backends.cudnn.flags(enabled=False):
             similarity = self.discriminator(tau_features, tau_prime_features, **fidelity_kwargs)
         
         # Handle batch dimension - discriminator should return scalar per pair
@@ -688,8 +696,29 @@ class FAMAILObjective(nn.Module):
         f_spatial = self.compute_spatial_fairness(pickup_counts, dropoff_counts, active_taxis)
         
         # Causal fairness (requires demand and supply)
-        # Use causal_demand if provided, otherwise fall back to pickup_counts
-        demand_for_causal = causal_demand if causal_demand is not None else pickup_counts
+        # Use pickup_counts (the soft cell output) as demand — this preserves the
+        # gradient path from pickup_tensor through soft cell assignment.
+        # The causal_demand parameter (a constant) would break gradient flow.
+        #
+        # Scale correction: pickup_counts is sum-aggregated (total across all periods)
+        # while g₀(D) was fitted on mean-aggregated data. We scale by dividing by the
+        # number of observation periods to match the causal demand scale. This preserves
+        # the gradient (division by constant just scales it) while keeping g₀(D) inputs
+        # at the correct scale.
+        if self._causal_demand_scale is not None:
+            demand_for_causal = pickup_counts * self._causal_demand_scale
+        elif causal_demand is not None:
+            # Fallback: compute scale on-the-fly from the constant causal_demand
+            with torch.no_grad():
+                pc_sum = pickup_counts.sum().item()
+                cd_sum = causal_demand.sum().item()
+                if pc_sum > 0 and cd_sum > 0:
+                    self._causal_demand_scale = cd_sum / pc_sum
+                    demand_for_causal = pickup_counts * self._causal_demand_scale
+                else:
+                    demand_for_causal = pickup_counts
+        else:
+            demand_for_causal = pickup_counts
         f_causal = self.compute_causal_fairness(demand_for_causal, supply)
         
         # Fidelity (requires trajectory features and discriminator)

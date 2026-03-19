@@ -335,7 +335,14 @@ class TrajectoryModifier:
             # Build fidelity tensors for discriminator
             # to_tensor() returns [seq_len, 4], we add batch dimension [1, seq_len, 4]
             tau_features = trajectory.to_tensor().unsqueeze(0).to(device)
-            tau_prime_features = modified.to_tensor().unsqueeze(0).to(device)
+            # Build tau_prime with gradient flow: start from original trajectory,
+            # replace pickup coordinates (last timestep) with the differentiable
+            # pickup_tensor. This preserves the computational graph so that
+            # ∂F_fidelity/∂pickup_tensor is non-zero.
+            tau_prime_features = tau_features.clone()
+            pickup_step = len(trajectory.states) - 1
+            tau_prime_features[0, pickup_step, 0] = pickup_tensor[0]  # x
+            tau_prime_features[0, pickup_step, 1] = pickup_tensor[1]  # y
 
             # Build multi-stream fidelity kwargs if V3 context is available.
             # When present, the context builder returns full 4D seeking tensors (x1, x2)
@@ -347,6 +354,15 @@ class TrajectoryModifier:
                 fidelity_kwargs = self.multi_stream_context.build_fidelity_kwargs(
                     trajectory, modified
                 )
+                # Inject gradient flow into x2 slot 0's pickup coordinates.
+                # The context builder uses modified.to_tensor() which breaks the graph.
+                # We replace the pickup coords with pickup_tensor (+1 for 1-indexing
+                # since V3 was trained on 1-indexed coordinates).
+                x2 = fidelity_kwargs['x2']
+                x2_new = x2.clone()
+                x2_new[0, 0, pickup_step, 0] = pickup_tensor[0] + 1  # x, 0→1 indexed
+                x2_new[0, 0, pickup_step, 1] = pickup_tensor[1] + 1  # y, 0→1 indexed
+                fidelity_kwargs['x2'] = x2_new
 
             # Compute counts based on gradient mode
             if self.gradient_mode == 'soft_cell':
