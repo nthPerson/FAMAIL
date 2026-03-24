@@ -480,10 +480,9 @@ class FAMAILObjective(nn.Module):
             D = demand.flatten()[mask]
             S = supply.flatten()[mask]
         else:
-            DEMAND_THRESHOLD = 1.0
-            mask = demand >= DEMAND_THRESHOLD
-            D = demand[mask]
-            S = supply[mask]
+            mask = supply.flatten() > 0.5
+            D = demand.flatten()[mask]
+            S = supply.flatten()[mask]
 
         n_active = D.shape[0]
         n_hat = self._hat_matrices_np['I_minus_H_demo'].shape[0]
@@ -493,6 +492,10 @@ class FAMAILObjective(nn.Module):
                 "Ensure active_cell_indices matches the cells used to build hat matrices."
             )
 
+        # Apply demand floor to prevent extreme Y = S/D for cells with taxi
+        # activity but near-zero pickups. Preserves gradient flow (clamp is
+        # differentiable above the threshold).
+        D = torch.clamp(D, min=0.01)
         Y = S / (D + self.eps)
 
         # Compute g₀(D) with frozen power basis (no gradient tracking)

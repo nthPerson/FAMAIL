@@ -950,10 +950,16 @@ class DataBundle:
                 if not hat_features:
                     hat_features = demographic_feature_names[:3]  # fallback
 
-                # Identify active cells: demand > 0 AND valid demographics
+                # Identify active cells: taxi activity AND valid demographics.
+                # Uses active_taxis (supply) as the activity indicator rather than
+                # a demand threshold. Cells with taxis present but few pickups
+                # represent potential under-service — exactly the unfairness
+                # pattern the causal term should detect. The 0.5 threshold is
+                # above the artificial 0.1 floor applied during data loading.
                 demand_flat = causal_demand_grid.flatten()
+                supply_flat = causal_supply_grid.flatten()
                 valid_flat = valid_mask.flatten()
-                active_mask = (demand_flat >= 1.0) & valid_flat
+                active_mask = (supply_flat > 0.5) & valid_flat
 
                 # Check for NaN demographics in active cells
                 feat_indices = [demographic_feature_names.index(f) for f in hat_features]
@@ -965,10 +971,13 @@ class DataBundle:
                 n_active = active_mask.sum()
 
                 if n_active >= 10:  # Need enough cells for meaningful regression
-                    # Extract data for active cells
-                    active_demands = demand_flat[active_mask]
+                    # Extract data for active cells.
+                    # Apply demand floor of 0.01 to prevent extreme Y = S/D ratios
+                    # for cells with taxi activity but near-zero pickups. This keeps
+                    # Y bounded while preserving the under-service signal.
+                    active_demands = np.maximum(demand_flat[active_mask], 0.01)
                     active_supply = causal_supply_grid.flatten()[active_mask]
-                    active_ratios = active_supply / np.maximum(active_demands, 1e-8)
+                    active_ratios = active_supply / active_demands
 
                     # Fit g₀(D) using power basis
                     from objective_function.causal_fairness.utils import (
