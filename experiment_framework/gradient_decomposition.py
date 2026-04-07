@@ -119,6 +119,33 @@ class GradientDecomposer:
         )
 
 
+def _compose_normalized_gradient(
+    decomp: GradientDecomposition,
+    alpha_spatial: float,
+    alpha_causal: float,
+    alpha_fidelity: float,
+    eps: float = 1e-10,
+) -> np.ndarray:
+    """Compose gradient from unit-normalized per-term gradients.
+
+    Each term's gradient is normalized to unit length before applying
+    the alpha weight, so the weights act as true directional preference
+    dials regardless of gradient magnitude differences between terms.
+
+    Terms with near-zero gradient norm are skipped (they have no signal).
+    """
+    result = np.zeros(2)
+    for grad_vec, alpha in [
+        (np.array(decomp.grad_spatial), alpha_spatial),
+        (np.array(decomp.grad_causal), alpha_causal),
+        (np.array(decomp.grad_fidelity), alpha_fidelity),
+    ]:
+        norm = np.linalg.norm(grad_vec)
+        if norm > eps:
+            result += alpha * (grad_vec / norm)
+    return result
+
+
 def run_modification_with_decomposition(
     trajectory,
     traj_idx: int,
@@ -209,13 +236,55 @@ def run_modification_with_decomposition(
         # --- Gradient decomposition (3 per-term + 1 combined backward) ---
         decomp = GradientDecomposer.decompose(pickup_tensor, terms, total)
 
-        # The combined backward was done inside decompose; extract gradient
-        grad = (
+        # The combined backward was done inside decompose; extract raw gradient
+        grad_combined = (
             pickup_tensor.grad.detach().cpu().numpy()
             if pickup_tensor.grad is not None
             else np.zeros(2)
         )
+
+        # Choose gradient for ST-iFGSM step
+        if config.normalize_term_gradients:
+            grad = _compose_normalized_gradient(
+                decomp, config.alpha_spatial, config.alpha_causal, config.alpha_fidelity,
+            )
+        else:
+            grad = grad_combined
+
         grad_norm = float(np.linalg.norm(grad))
+
+        # Record which gradient was actually used and compute effective fractions
+        decomp.grad_effective = grad.tolist()
+        decomp.normalized = config.normalize_term_gradients
+
+        if config.normalize_term_gradients:
+            # Effective fractions: α_i / Σ_active(α_j) for terms with nonzero gradient
+            eps = 1e-10
+            active_weight = 0.0
+            term_weights = []
+            for grad_vec, alpha in [
+                (np.array(decomp.grad_spatial), config.alpha_spatial),
+                (np.array(decomp.grad_causal), config.alpha_causal),
+                (np.array(decomp.grad_fidelity), config.alpha_fidelity),
+            ]:
+                if np.linalg.norm(grad_vec) > eps:
+                    active_weight += alpha
+                    term_weights.append(alpha)
+                else:
+                    term_weights.append(0.0)
+            if active_weight > eps:
+                decomp.effective_spatial_fraction = term_weights[0] / active_weight
+                decomp.effective_causal_fraction = term_weights[1] / active_weight
+                decomp.effective_fidelity_fraction = term_weights[2] / active_weight
+            else:
+                decomp.effective_spatial_fraction = 0.0
+                decomp.effective_causal_fraction = 0.0
+                decomp.effective_fidelity_fraction = 0.0
+        else:
+            # When normalization is off, effective fractions equal raw fractions
+            decomp.effective_spatial_fraction = decomp.spatial_fraction
+            decomp.effective_causal_fraction = decomp.causal_fraction
+            decomp.effective_fidelity_fraction = decomp.fidelity_fraction
 
         # ST-iFGSM perturbation
         if grad_norm > 1e-8:

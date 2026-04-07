@@ -5,6 +5,48 @@ and non-trivial edits. Minor bugfixes and UI tweaks are omitted.
 
 ---
 
+## 2026-03-24 — Per-Term Gradient Normalization
+
+**Files**: `experiment_framework/experiment_config.py`, `experiment_framework/gradient_decomposition.py`, `experiment_framework/experiment_result.py`
+
+**Why**: Gradient analysis of the meeting_test experiment (2026-03-24) revealed fidelity
+gradients are ~1000x larger than fairness gradients. The soft-cell pathway dilutes fairness
+gradients across 4,320 grid cells, while the discriminator operates on local trajectory
+features. With naive weighted summation, the alpha weights (alpha_spatial, alpha_causal,
+alpha_fidelity) are ineffective as trade-off controls — fidelity captures ~98.5% of the
+combined objective improvement regardless of weight settings.
+
+**What**: Added `normalize_term_gradients` config option to `ExperimentConfig`. When enabled,
+each term's gradient is normalized to unit length before applying alpha weights:
+
+    nabla_L = a_sp * (nabla_F_sp / ||nabla_F_sp||) + a_ca * (nabla_F_ca / ||nabla_F_ca||) + a_fi * (nabla_F_fi / ||nabla_F_fi||)
+
+This decouples the weights from gradient magnitudes, making them true directional preference
+dials. Terms with zero-norm gradients (e.g., saturated F_causal) are automatically excluded.
+Requires `record_gradient_decomposition=True` (enforced by validation). Defaults to `False`
+for backward compatibility. Added `grad_effective` and `normalized` fields to
+`GradientDecomposition` for analysis of how normalization changes the step direction.
+
+### Accurate Reporting of Effective Gradient Fractions
+
+**Files**: `experiment_framework/experiment_result.py`, `experiment_framework/gradient_decomposition.py`, `experiment_framework/analysis_dashboard.py`
+
+**Why**: The first normalized experiment showed that the report, iterations CSV, and analysis
+dashboard were displaying raw per-term gradient fractions (computed from un-normalized
+backprop magnitudes) even when gradient normalization was active. These raw fractions were
+misleading — they showed fidelity dominating at ~68% when the effective step direction had
+equal-weighted contributions from all active terms.
+
+**What**: Added `effective_spatial_fraction`, `effective_causal_fraction`,
+`effective_fidelity_fraction` fields to `GradientDecomposition`, computed as the alpha weight
+renormalized over terms with nonzero gradient signal. Added `step_*_fraction` properties that
+return the effective fractions when available, falling back to raw fractions for older data.
+Updated the markdown report, iterations CSV (new columns: `effective_*_fraction`,
+`grad_effective_x/y`, `normalized`), and analysis dashboard stacked area chart + aggregate
+statistics to use the effective fractions. Backward compatible with existing experiment JSON.
+
+---
+
 ## 2026-03-18 — Experiment Framework + Gradient Flow Fixes
 
 ### Experiment & Analysis Framework (New Module)

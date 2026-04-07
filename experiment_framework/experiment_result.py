@@ -40,16 +40,42 @@ class GradientDecomposition:
     grad_causal: List[float]        # [dx, dy]
     grad_fidelity: List[float]      # [dx, dy]
     grad_combined: List[float]      # [dx, dy]
-    spatial_fraction: float         # ||grad_spatial|| / total_norm
+    spatial_fraction: float         # ||grad_spatial|| / total_norm (raw)
     causal_fraction: float
     fidelity_fraction: float
     alignment_spatial_causal: float  # cosine similarity [-1, 1]
+    grad_effective: Optional[List[float]] = None  # gradient actually used for ST-iFGSM step
+    normalized: bool = False                       # whether per-term normalization was applied
+    effective_spatial_fraction: Optional[float] = None   # effective contribution to step direction
+    effective_causal_fraction: Optional[float] = None
+    effective_fidelity_fraction: Optional[float] = None
+
+    @property
+    def step_spatial_fraction(self) -> float:
+        """Fraction of step direction attributable to spatial term (effective if available, else raw)."""
+        return self.effective_spatial_fraction if self.effective_spatial_fraction is not None else self.spatial_fraction
+
+    @property
+    def step_causal_fraction(self) -> float:
+        """Fraction of step direction attributable to causal term (effective if available, else raw)."""
+        return self.effective_causal_fraction if self.effective_causal_fraction is not None else self.causal_fraction
+
+    @property
+    def step_fidelity_fraction(self) -> float:
+        """Fraction of step direction attributable to fidelity term (effective if available, else raw)."""
+        return self.effective_fidelity_fraction if self.effective_fidelity_fraction is not None else self.fidelity_fraction
 
     def to_dict(self) -> dict:
         return asdict(self)
 
     @classmethod
     def from_dict(cls, d: dict) -> 'GradientDecomposition':
+        d = d.copy()
+        d.setdefault('grad_effective', None)
+        d.setdefault('normalized', False)
+        d.setdefault('effective_spatial_fraction', None)
+        d.setdefault('effective_causal_fraction', None)
+        d.setdefault('effective_fidelity_fraction', None)
         return cls(**d)
 
 
@@ -312,6 +338,9 @@ class ExperimentResult:
             'grad_fidelity_x', 'grad_fidelity_y',
             'spatial_fraction', 'causal_fraction', 'fidelity_fraction',
             'alignment_spatial_causal',
+            'effective_spatial_fraction', 'effective_causal_fraction',
+            'effective_fidelity_fraction',
+            'grad_effective_x', 'grad_effective_y', 'normalized',
         ]
         with open(path, 'w', newline='') as f:
             writer = csv.writer(f)
@@ -334,9 +363,20 @@ class ExperimentResult:
                             f'{gd.spatial_fraction:.4f}', f'{gd.causal_fraction:.4f}',
                             f'{gd.fidelity_fraction:.4f}',
                             f'{gd.alignment_spatial_causal:.4f}',
+                            f'{gd.step_spatial_fraction:.4f}',
+                            f'{gd.step_causal_fraction:.4f}',
+                            f'{gd.step_fidelity_fraction:.4f}',
                         ])
+                        if gd.grad_effective is not None:
+                            row.extend([
+                                f'{gd.grad_effective[0]:.6f}',
+                                f'{gd.grad_effective[1]:.6f}',
+                                int(gd.normalized),
+                            ])
+                        else:
+                            row.extend(['', '', ''])
                     else:
-                        row.extend([''] * 10)
+                        row.extend([''] * 16)
                     writer.writerow(row)
 
     def _write_global_snapshots_csv(self, path: Path) -> None:
@@ -386,6 +426,16 @@ class ExperimentResult:
         lines.append(f"**Duration**: {self.duration_seconds:.1f}s")
         lines.append("")
 
+        # Reproduce command
+        cli_command = cfg.get('cli_command', '')
+        if cli_command:
+            lines.append("## Reproduce")
+            lines.append("")
+            lines.append("```bash")
+            lines.append(cli_command)
+            lines.append("```")
+            lines.append("")
+
         # Configuration summary
         lines.append("## Configuration")
         lines.append("")
@@ -402,6 +452,7 @@ class ExperimentResult:
             ('causal_formulation', 'Causal formulation'),
             ('discriminator_checkpoint', 'Discriminator'),
             ('record_gradient_decomposition', 'Gradient decomposition'),
+            ('normalize_term_gradients', 'Gradient normalization'),
         ]
         for key, label in key_params:
             val = cfg.get(key, 'N/A')
@@ -464,18 +515,39 @@ class ExperimentResult:
                 for it in tr.iterations:
                     gd = it.gradient_decomposition
                     if gd:
-                        spatial_fracs.append(gd.spatial_fraction)
-                        causal_fracs.append(gd.causal_fraction)
-                        fidelity_fracs.append(gd.fidelity_fraction)
+                        spatial_fracs.append(gd.step_spatial_fraction)
+                        causal_fracs.append(gd.step_causal_fraction)
+                        fidelity_fracs.append(gd.step_fidelity_fraction)
                         alignments.append(gd.alignment_spatial_causal)
+
+            # Check if effective fractions are actually populated in the data
+            has_effective = any(
+                it.gradient_decomposition.effective_spatial_fraction is not None
+                for tr in self.trajectory_results
+                for it in tr.iterations
+                if it.gradient_decomposition is not None
+            )
+            is_normalized = cfg.get('normalize_term_gradients', False)
+            frac_label = "Effective fraction" if (is_normalized and has_effective) else "Fraction"
 
             lines.append("| Metric | Mean | Std |")
             lines.append("|--------|------|-----|")
-            lines.append(f"| Spatial fraction | {np.mean(spatial_fracs):.3f} | {np.std(spatial_fracs):.3f} |")
-            lines.append(f"| Causal fraction | {np.mean(causal_fracs):.3f} | {np.std(causal_fracs):.3f} |")
-            lines.append(f"| Fidelity fraction | {np.mean(fidelity_fracs):.3f} | {np.std(fidelity_fracs):.3f} |")
+            lines.append(f"| Spatial {frac_label.lower()} | {np.mean(spatial_fracs):.3f} | {np.std(spatial_fracs):.3f} |")
+            lines.append(f"| Causal {frac_label.lower()} | {np.mean(causal_fracs):.3f} | {np.std(causal_fracs):.3f} |")
+            lines.append(f"| Fidelity {frac_label.lower()} | {np.mean(fidelity_fracs):.3f} | {np.std(fidelity_fracs):.3f} |")
             lines.append(f"| Spatial-causal alignment | {np.mean(alignments):.3f} | {np.std(alignments):.3f} |")
             lines.append("")
+
+            if is_normalized and has_effective:
+                lines.append("*Gradient normalization active — fractions reflect effective "
+                             "contribution to step direction (alpha weights renormalized "
+                             "over terms with nonzero gradient signal).*")
+                lines.append("")
+            elif is_normalized and not has_effective:
+                lines.append("*Gradient normalization was active but effective fractions were "
+                             "not recorded (pre-reporting-fix run). Fractions shown are raw "
+                             "per-term gradient magnitudes, not the effective step contributions.*")
+                lines.append("")
 
             mean_align = np.mean(alignments)
             if mean_align > 0.5:

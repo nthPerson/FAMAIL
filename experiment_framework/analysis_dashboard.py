@@ -281,9 +281,9 @@ with tab_gradient:
             if gd:
                 decomp_data.append({
                     'iteration': it.iteration,
-                    'spatial': gd.spatial_fraction,
-                    'causal': gd.causal_fraction,
-                    'fidelity': gd.fidelity_fraction,
+                    'spatial': gd.step_spatial_fraction,
+                    'causal': gd.step_causal_fraction,
+                    'fidelity': gd.step_fidelity_fraction,
                     'alignment': gd.alignment_spatial_causal,
                 })
 
@@ -307,8 +307,18 @@ with tab_gradient:
                 mode='lines', name='Fidelity', stackgroup='one',
                 fillcolor='rgba(100, 100, 100, 0.6)', line=dict(color='#666'),
             ))
+            is_normalized = result.config.get('normalize_term_gradients', False)
+            has_effective = any(
+                gd.effective_spatial_fraction is not None
+                for tr_inner in result.trajectory_results
+                for it_inner in tr_inner.iterations
+                if (gd := it_inner.gradient_decomposition) is not None
+            )
+            chart_title = ('Effective Gradient Contribution by Term (normalized)'
+                           if (is_normalized and has_effective)
+                           else 'Gradient Contribution by Term')
             fig.update_layout(
-                title='Gradient Contribution by Term',
+                title=chart_title,
                 xaxis_title='Iteration', yaxis_title='Fraction',
                 yaxis_range=[0, 1], height=400,
             )
@@ -336,14 +346,24 @@ with tab_gradient:
             for it in tr.iterations:
                 gd = it.gradient_decomposition
                 if gd:
-                    all_spatial.append(gd.spatial_fraction)
-                    all_causal.append(gd.causal_fraction)
-                    all_fidelity.append(gd.fidelity_fraction)
+                    all_spatial.append(gd.step_spatial_fraction)
+                    all_causal.append(gd.step_causal_fraction)
+                    all_fidelity.append(gd.step_fidelity_fraction)
                     all_align.append(gd.alignment_spatial_causal)
 
         if all_spatial:
+            has_eff_agg = any(
+                gd_a.effective_spatial_fraction is not None
+                for tr_a in result.trajectory_results
+                for it_a in tr_a.iterations
+                if (gd_a := it_a.gradient_decomposition) is not None
+            )
+            frac_label = ("Effective fraction"
+                          if (result.config.get('normalize_term_gradients', False) and has_eff_agg)
+                          else "Fraction")
             stats_df = pd.DataFrame({
-                'Metric': ['Spatial fraction', 'Causal fraction', 'Fidelity fraction', 'Alignment'],
+                'Metric': [f'Spatial {frac_label.lower()}', f'Causal {frac_label.lower()}',
+                           f'Fidelity {frac_label.lower()}', 'Alignment'],
                 'Mean': [np.mean(all_spatial), np.mean(all_causal), np.mean(all_fidelity), np.mean(all_align)],
                 'Std': [np.std(all_spatial), np.std(all_causal), np.std(all_fidelity), np.std(all_align)],
             })

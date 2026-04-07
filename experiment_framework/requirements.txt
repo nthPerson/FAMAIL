@@ -1,0 +1,12 @@
+# FAMAIL Experiment Framework Requirements
+# ==========================================
+
+# Core computation
+numpy>=1.24.0
+torch>=2.0.0
+scipy>=1.7.0
+
+# Dashboard (analysis_dashboard.py)
+streamlit>=1.28.0
+pandas>=2.0.0
+plotly>=5.0.0

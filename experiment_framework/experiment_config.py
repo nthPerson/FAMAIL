@@ -35,6 +35,7 @@ class ExperimentConfig:
 
     # ---- Phase 1: Attribution ----
     top_k: int = 10
+    # selection_method: str = "diverse"        # "top_k" or "diverse"
     selection_method: str = "top_k"        # "top_k" or "diverse"
     lis_weight: float = 0.5
     dcd_weight: float = 0.5
@@ -71,11 +72,15 @@ class ExperimentConfig:
 
     # ---- Instrumentation ----
     record_gradient_decomposition: bool = False  # 3x backward cost per iter
+    normalize_term_gradients: bool = True       # unit-normalize per-term grads before weighting
     snapshot_every_n: int = 1                    # global snapshot interval
     record_debug_dicts: bool = True
 
     # ---- Output ----
     output_dir: str = "experiment_results"
+
+    # ---- Reproducibility ----
+    cli_command: str = ""  # the command used to launch this experiment
 
     # ---- Grid ----
     grid_dims: Tuple[int, int] = (48, 90)
@@ -109,6 +114,12 @@ class ExperimentConfig:
         assert self.snapshot_every_n >= 1, (
             f"snapshot_every_n must be >= 1, got {self.snapshot_every_n}"
         )
+
+        if self.normalize_term_gradients and not self.record_gradient_decomposition:
+            raise AssertionError(
+                "normalize_term_gradients requires record_gradient_decomposition=True "
+                "(per-term backward passes are needed to normalize gradients)"
+            )
 
     def normalize_weights(self) -> None:
         """Normalize objective weights to sum to 1.0."""

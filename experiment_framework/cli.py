@@ -14,6 +14,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import shlex
 import sys
 from pathlib import Path
 
@@ -70,17 +71,22 @@ def main():
         parser.print_help()
         sys.exit(1)
 
+    # Capture the full CLI command for reproducibility
+    cli_command = 'python -m experiment_framework ' + ' '.join(
+        shlex.quote(a) for a in sys.argv[1:]
+    )
+
     if args.command == 'run':
-        _cmd_run(args)
+        _cmd_run(args, cli_command)
     elif args.command == 'sweep':
-        _cmd_sweep(args)
+        _cmd_sweep(args, cli_command)
     elif args.command == 'dashboard':
         _cmd_dashboard(args)
     elif args.command == 'summarize':
         _cmd_summarize(args)
 
 
-def _cmd_run(args):
+def _cmd_run(args, cli_command: str = ""):
     """Execute a single experiment run."""
     from experiment_framework.experiment_config import ExperimentConfig
     from experiment_framework.experiment_runner import ExperimentRunner
@@ -98,6 +104,8 @@ def _cmd_run(args):
 
     # Apply CLI overrides
     overrides = {}
+    if cli_command:
+        overrides['cli_command'] = cli_command
     if args.name:
         overrides['experiment_name'] = args.name
     if args.description:
@@ -142,7 +150,7 @@ def _cmd_run(args):
     print(f"\nResults saved to: {run_dir}")
 
 
-def _cmd_sweep(args):
+def _cmd_sweep(args, cli_command: str = ""):
     """Execute a parameter sweep."""
     from experiment_framework.experiment_config import ExperimentConfig, SweepConfig
     from experiment_framework.experiment_runner import ExperimentRunner
@@ -153,7 +161,7 @@ def _cmd_sweep(args):
     )
 
     base = ExperimentConfig.from_json(args.base_config)
-    base = base.with_overrides(output_dir=args.output_dir)
+    base = base.with_overrides(output_dir=args.output_dir, cli_command=cli_command)
     sweep_params = json.loads(args.sweep)
 
     sweep = SweepConfig(base_config=base, sweep_params=sweep_params)
