@@ -1,7 +1,15 @@
 """Tests for data.aggregation."""
 import pytest
+import numpy as np
 
-from famail_temporal.data.aggregation import hour_to_block_index
+from famail_temporal.data.aggregation import (
+    hour_to_block_index,
+    aggregate_pickup_dropoff,
+    aggregate_active_taxis,
+    time_bucket_to_hour,
+    block_n_hours,
+    dataset_n_days,
+)
 
 
 @pytest.mark.parametrize("hour,expected", [
@@ -16,15 +24,6 @@ def test_hour_to_block_index(hour, expected):
 def test_invalid_hour_raises():
     with pytest.raises(ValueError):
         hour_to_block_index(24)
-
-
-import numpy as np
-from famail_temporal.data.aggregation import (
-    aggregate_pickup_dropoff,
-    aggregate_active_taxis,
-    time_bucket_to_hour,
-    block_n_hours,
-)
 
 
 def test_time_bucket_to_hour():
@@ -61,3 +60,29 @@ def test_aggregate_active_taxis_mean():
     assert taxis_3d.shape == (48, 90, 4)
     # mean hourly = (20 + 10) / (3 × 1) = 10.0
     assert np.isclose(taxis_3d[5, 10, 0], 10.0)
+
+
+def test_aggregate_pickup_dropoff_multi_day():
+    # 5 days × 6 pickups each in same (cell, block) should still produce mean=2.0/hour
+    raw = {(5 + 1, 10 + 1, 85, d): [6, 0] for d in range(1, 6)}
+    pickup, _ = aggregate_pickup_dropoff(raw, n_days=5)
+    # sum = 5 × 6 = 30; divisor = 3 hours × 5 days = 15; mean = 2.0
+    assert np.isclose(pickup[5, 10, 0], 2.0)
+
+
+def test_dataset_n_days():
+    from famail_temporal.data.aggregation import dataset_n_days
+    # 3 distinct day_index values
+    raw = {(1, 1, 1, 1): 0, (1, 1, 2, 1): 0, (1, 1, 1, 2): 0, (2, 2, 1, 5): 0}
+    assert dataset_n_days(raw) == 3
+    assert dataset_n_days({}) == 0
+
+
+def test_aggregate_active_taxis_supply_floor():
+    from famail_temporal import config
+    # Valid non-empty data but only one cell; all others should be floored to SUPPLY_FLOOR
+    raw = {(5 + 1, 10 + 1, 7, 1): 20}
+    taxis = aggregate_active_taxis(raw, n_days=1)
+    assert np.all(taxis >= config.SUPPLY_FLOOR)
+    # An untouched cell should be exactly SUPPLY_FLOOR
+    assert np.isclose(taxis[0, 0, 0], config.SUPPLY_FLOOR)

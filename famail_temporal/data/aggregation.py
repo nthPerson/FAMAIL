@@ -7,6 +7,7 @@ unified mean-hourly aggregation rule.
 """
 
 from __future__ import annotations
+import warnings
 from typing import Dict, Tuple
 import numpy as np
 from famail_temporal import config
@@ -53,31 +54,45 @@ def aggregate_pickup_dropoff(
     Aggregation: sum raw counts per (cell, block, day) combination, then
     divide by uniform n_obs = block_n_hours(t) × n_days.
     """
+    assert n_days > 0, f"n_days must be positive, got {n_days}"
+
     pickup_3d = np.zeros((*config.GRID_DIMS, config.T), dtype=np.float32)
     dropoff_3d = np.zeros((*config.GRID_DIMS, config.T), dtype=np.float32)
+    rejected_coords = 0
 
     for key, counts in raw_data.items():
         if len(key) < 4:
-            continue
+            raise ValueError(
+                f"Raw data key {key} has fewer than 4 elements "
+                f"(expected (x, y, time, day))"
+            )
         x_raw, y_raw, time_bucket, _day = key
         x, y = int(x_raw) - 1, int(y_raw) - 1
         if not (0 <= x < config.GRID_DIMS[0] and 0 <= y < config.GRID_DIMS[1]):
+            rejected_coords += 1
             continue
+        if not isinstance(counts, (list, tuple)) or len(counts) < 2:
+            raise ValueError(
+                f"Raw counts value {counts!r} must be a list/tuple of at least "
+                f"2 elements (pickup, dropoff)"
+            )
+        pickup = int(counts[0])
+        dropoff = int(counts[1])
         hour = time_bucket_to_hour(int(time_bucket))
         t_block = hour_to_block_index(hour)
-        if isinstance(counts, (list, tuple)):
-            pickup = counts[0] if len(counts) >= 1 else 0
-            dropoff = counts[1] if len(counts) >= 2 else 0
-        else:
-            pickup, dropoff = int(counts), 0
         pickup_3d[x, y, t_block] += pickup
         dropoff_3d[x, y, t_block] += dropoff
 
+    if rejected_coords > 0:
+        warnings.warn(
+            f"aggregate_pickup_dropoff: {rejected_coords} keys had "
+            f"out-of-bounds coordinates"
+        )
+
     for t in range(config.T):
         divisor = block_n_hours(t) * n_days
-        if divisor > 0:
-            pickup_3d[:, :, t] /= divisor
-            dropoff_3d[:, :, t] /= divisor
+        pickup_3d[:, :, t] /= divisor
+        dropoff_3d[:, :, t] /= divisor
 
     return pickup_3d, dropoff_3d
 
@@ -90,24 +105,34 @@ def aggregate_active_taxis(
 
     Raw keys use 1-indexed (x, y) and 0-indexed hour.
     """
+    assert n_days > 0, f"n_days must be positive, got {n_days}"
+
     active_3d = np.zeros((*config.GRID_DIMS, config.T), dtype=np.float32)
+    rejected_coords = 0
 
     for key, count in raw_data.items():
         if len(key) < 4:
-            continue
+            raise ValueError(
+                f"Raw data key {key} has fewer than 4 elements "
+                f"(expected (x, y, time, day))"
+            )
         x_raw, y_raw, hour, _day = key
         x, y = int(x_raw) - 1, int(y_raw) - 1
         if not (0 <= x < config.GRID_DIMS[0] and 0 <= y < config.GRID_DIMS[1]):
-            continue
-        if not (0 <= int(hour) < 24):
+            rejected_coords += 1
             continue
         t_block = hour_to_block_index(int(hour))
         active_3d[x, y, t_block] += count
 
+    if rejected_coords > 0:
+        warnings.warn(
+            f"aggregate_active_taxis: {rejected_coords} keys had "
+            f"out-of-bounds coordinates"
+        )
+
     for t in range(config.T):
         divisor = block_n_hours(t) * n_days
-        if divisor > 0:
-            active_3d[:, :, t] /= divisor
+        active_3d[:, :, t] /= divisor
 
     active_3d = np.maximum(active_3d, config.SUPPLY_FLOOR)
     return active_3d
