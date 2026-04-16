@@ -22,9 +22,16 @@ class UnitIndexMap:
 
     @classmethod
     def from_mask(cls, mask_3d: np.ndarray, grid_shape: Tuple[int, int]) -> "UnitIndexMap":
+        if mask_3d.ndim != 3:
+            raise ValueError(
+                f"mask_3d must be 3D (grid_x, grid_y, T); got shape {mask_3d.shape}"
+            )
         gx, gy = grid_shape
+        if mask_3d.shape[:2] != (gx, gy):
+            raise ValueError(
+                f"Expected mask grid dims {(gx, gy)}, got {mask_3d.shape[:2]}"
+            )
         t = mask_3d.shape[2]
-        assert mask_3d.shape == (gx, gy, t)
 
         cell_list, block_list = [], []
         for x in range(gx):
@@ -49,6 +56,10 @@ class UnitIndexMap:
 
         n_active_cells = len(set(cell_list))
 
+        # Make arrays read-only so the canonical ordering can't be silently corrupted
+        for arr in (cell_indices, time_block_indices, flat_lookup, units_per_block):
+            arr.setflags(write=False)
+
         return cls(
             cell_indices=cell_indices,
             time_block_indices=time_block_indices,
@@ -60,8 +71,11 @@ class UnitIndexMap:
 
     def from_cell_time(self, cell: int, t: int) -> int:
         n_blocks = len(self.units_per_block)
+        # Each coordinate must be in range (prevents negative-t aliasing)
+        if cell < 0 or t < 0 or t >= n_blocks:
+            return -1
         idx = cell * n_blocks + t
-        if idx < 0 or idx >= len(self.flat_lookup):
+        if idx >= len(self.flat_lookup):
             return -1
         return int(self.flat_lookup[idx])
 
