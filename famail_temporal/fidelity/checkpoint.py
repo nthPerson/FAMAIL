@@ -23,20 +23,27 @@ def load_discriminator(checkpoint_path: Path) -> MultiStreamSiameseDiscriminator
 
     The checkpoint should be a dict with:
       - 'model_state_dict': PyTorch state dict
-      - 'architecture_config': kwargs for MultiStreamSiameseDiscriminator.__init__
+      - 'architecture_config' OR 'model_config': kwargs for the constructor
 
-    If 'architecture_config' is missing, the default constructor is used; if
-    shapes mismatch, MissingArchitectureConfig is raised with remediation text.
+    The loader checks 'architecture_config' first (canonical), then falls back
+    to 'model_config' (the key used by the legacy training code). If neither
+    exists, the default constructor is tried as a last resort.
     """
     checkpoint = torch.load(
         str(checkpoint_path), map_location="cpu", weights_only=False,
     )
 
+    # Try 'architecture_config' (canonical), then 'model_config' (legacy training code)
     arch_config = checkpoint.get("architecture_config", None)
     if arch_config is None:
-        model = MultiStreamSiameseDiscriminator()
-    else:
+        arch_config = checkpoint.get("model_config", None)
+
+    if arch_config is not None:
+        # The constructor accepts **kwargs, so extra keys (e.g., 'model_version')
+        # from model_config are safely absorbed without error.
         model = MultiStreamSiameseDiscriminator(**arch_config)
+    else:
+        model = MultiStreamSiameseDiscriminator()
 
     try:
         model.load_state_dict(checkpoint["model_state_dict"])

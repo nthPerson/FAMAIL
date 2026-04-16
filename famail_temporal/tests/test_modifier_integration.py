@@ -228,10 +228,13 @@ def test_modifier_on_real_data():
         f"Displacement {displacement} exceeds epsilon={config.EPSILON_BALL}"
     )
 
-    # Mass balance
+    # Mass balance — use relative tolerance because float32 precision at
+    # production-scale sums (~10^4) limits absolute accuracy to ~10^-3.
     mass_after = modifier._base_pickup_3d.sum().item()
-    assert abs(mass_after - mass_before) < 1e-4, (
-        f"Mass imbalance on real data: {mass_before:.6f} -> {mass_after:.6f}"
+    rel_diff = abs(mass_after - mass_before) / (abs(mass_before) + 1e-10)
+    assert rel_diff < 1e-6, (
+        f"Mass imbalance on real data: {mass_before:.6f} -> {mass_after:.6f} "
+        f"(relative diff={rel_diff:.2e})"
     )
 
     print(f"  Final objective: {history.final_objective:.4f}")
