@@ -9,6 +9,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import numpy as np
+from sklearn.isotonic import IsotonicRegression
+from sklearn.linear_model import LinearRegression
+
+from famail_temporal import config
 
 _N_COEFFICIENTS = 4
 
@@ -90,3 +94,83 @@ class G0Function:
         d_clipped = np.clip(d_arr, self.d_min, self.d_max)
         X = build_power_basis_features(d_clipped, include_intercept=True)
         return X @ self.coefficients
+
+
+def fit(demands: np.ndarray, supplies_over_demands: np.ndarray) -> tuple[G0Function, dict]:
+    """Fit g_0(D) on (D, Y=S/D) pairs at block-mean scale.
+
+    Fits a power basis regression [1, 1/(D+1), 1/sqrt(D+1), sqrt(D+1)] via
+    LinearRegression and cross-checks with IsotonicRegression (monotone-
+    decreasing) for diagnostic comparison.
+
+    Parameters
+    ----------
+    demands:
+        1-D array of demand values (D). Values below ``config.DEMAND_FLOOR``
+        are clamped before fitting to avoid numerical instability.
+    supplies_over_demands:
+        1-D array of Y = S/D values corresponding to each demand entry.
+        Must have the same length as ``demands``.
+
+    Returns
+    -------
+    g0_func : G0Function
+        Fitted power-basis function with coefficients learned from data.
+    diagnostics : dict
+        Plain dict with keys:
+          - ``'n_points'``: number of (D, Y) pairs used.
+          - ``'power_r2'``: R² of power basis fit against Y.
+          - ``'isotonic_r2'``: R² of isotonic regression fit against Y.
+          - ``'agreement_max_abs_diff'``: max |g0(D) - iso(D)| over training points.
+
+    Raises
+    ------
+    ValueError
+        If ``demands`` or ``supplies_over_demands`` are not 1-D arrays of
+        equal length, or if fewer than 10 points are provided.
+    """
+    D_raw = np.asarray(demands, dtype=np.float64)
+    Y = np.asarray(supplies_over_demands, dtype=np.float64)
+
+    if D_raw.ndim != 1:
+        raise ValueError(
+            f"demands must be a 1-D array; got shape {D_raw.shape}"
+        )
+    if Y.ndim != 1:
+        raise ValueError(
+            f"supplies_over_demands must be a 1-D array; got shape {Y.shape}"
+        )
+    if D_raw.shape != Y.shape:
+        raise ValueError(
+            f"demands and supplies_over_demands must have the same length; "
+            f"got {D_raw.shape} vs {Y.shape}"
+        )
+    if len(D_raw) < 10:
+        raise ValueError(
+            f"At least 10 data points required for a meaningful fit; "
+            f"got {len(D_raw)}"
+        )
+
+    D = np.maximum(D_raw, config.DEMAND_FLOOR)
+
+    X = build_power_basis_features(D, include_intercept=True)
+    lr = LinearRegression(fit_intercept=False).fit(X, Y)
+    g0 = G0Function(
+        coefficients=lr.coef_,
+        d_min=float(D.min()),
+        d_max=float(D.max()),
+    )
+
+    iso = IsotonicRegression(increasing=False, out_of_bounds='clip').fit(D, Y)
+    y_power = g0(D)
+    y_iso = iso.predict(D)
+    max_abs_diff = float(np.max(np.abs(y_power - y_iso)))
+
+    y_var = float(np.var(Y)) + 1e-10
+    diagnostics = {
+        'n_points': int(len(D)),
+        'power_r2': float(1.0 - np.var(Y - y_power) / y_var),
+        'isotonic_r2': float(1.0 - np.var(Y - y_iso) / y_var),
+        'agreement_max_abs_diff': max_abs_diff,
+    }
+    return g0, diagnostics

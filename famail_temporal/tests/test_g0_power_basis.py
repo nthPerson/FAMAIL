@@ -102,3 +102,24 @@ def test_g0function_accepts_scalar():
     result = g0(3.0)
     assert result.shape == (1,)
     np.testing.assert_allclose(result, np.array([0.25]))  # 1/(3+1)
+
+
+from famail_temporal.fairness.g0_power_basis import fit as fit_g0
+
+
+def test_fit_recovers_hyperbolic():
+    rng = np.random.RandomState(42)
+    D = np.linspace(0.5, 10.0, 500)
+    Y = 2.0 / D + 0.05 * rng.randn(len(D))
+    g0, diag = fit_g0(D, Y)
+    assert diag['n_points'] == 500
+    assert diag['power_r2'] > 0.8
+
+
+def test_fit_diagnostics():
+    D = np.linspace(0.5, 10.0, 100)
+    Y = 1.0 / D + 0.01
+    _, diag = fit_g0(D, Y)
+    assert 'agreement_max_abs_diff' in diag
+    assert 'isotonic_r2' in diag
+    assert 'power_r2' in diag
