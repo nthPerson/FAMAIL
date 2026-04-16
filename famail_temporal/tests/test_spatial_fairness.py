@@ -83,6 +83,17 @@ def test_fspatial_gradient_flows():
     assert not torch.all(pickup.grad == 0), "all-zero gradient — no gradient flow"
 
 
+def test_gini_n_le_one_returns_zero():
+    """Single-element and empty tensors return 0 Gini."""
+    assert float(pairwise_gini(torch.tensor([3.0]))) == 0.0
+    assert float(pairwise_gini(torch.tensor([]))) == 0.0
+
+
+def test_gini_all_zeros_returns_zero():
+    """All-zero tensor returns ~0 Gini (mean clamp doesn't affect uniform zero case)."""
+    assert float(pairwise_gini(torch.zeros(10))) < 1e-6
+
+
 def test_debug_dict_has_keys():
     """compute_fspatial debug dict must contain gini_dsr and gini_asr."""
     N = 10

@@ -13,7 +13,14 @@ def pairwise_gini(values: torch.Tensor) -> torch.Tensor:
     n = values.numel()
     if n <= 1:
         return torch.tensor(0.0, device=values.device)
+    # Add EPS to the mean (not to the denominator) so Gini is scale-invariant
+    # for O(1) values. Safe for DSR/ASR (active-unit ratios are O(0.01) or larger,
+    # never in the sub-EPS regime where this trick would lose scale invariance).
     mean_val = values.mean() + config.EPS
+    # O(N^2) memory for diff matrix. For Shenzhen (N ~ 8000 active units),
+    # this is ~256 MB fp32. Sorted-cumsum variant G = sum_i (2i-n-1) x_(i) / (n^2 mu)
+    # is O(N log N) but breaks gradient flow through the sort indices, which ST-iFGSM
+    # needs preserved.
     diff = torch.abs(values.unsqueeze(0) - values.unsqueeze(1))
     gini = diff.sum() / (2 * n * n * mean_val)
     return torch.clamp(gini, 0.0, 1.0)
