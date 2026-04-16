@@ -27,6 +27,7 @@ This encoding lets multiple configurations coexist in the same cache directory w
 | `unit_index_map` | `UnitIndexMap` | Canonical ordering of active (cell, t) units |
 | `g0_power_basis` | `G0Function` | Fitted g_0(D) power-basis function |
 | `hat_matrices` | `dict` | `I_minus_H_demo`, `M`, scaler params, diagnostics (includes features suffix) |
+| `metadata` | `dict` | `n_days`, config snapshot (`config_T`, `config_GRID_DIMS`, `config_ACTIVE_SUPPLY_THRESHOLD`, `config_DEMAND_FLOOR`, `config_DEMOGRAPHIC_FEATURES`) |
 
 ## Regenerating
 
@@ -34,3 +35,14 @@ This encoding lets multiple configurations coexist in the same cache directory w
 python -m famail_temporal.preprocess          # skip existing artifacts
 python -m famail_temporal.preprocess --force   # overwrite all
 ```
+
+## Staleness warning
+
+Running `python -m famail_temporal.preprocess` (without `--force`) skips
+artifacts that already exist on disk. If you modify the raw data or change
+`config.py` values that affect the same suffix (e.g., threshold, features),
+use `--force` to regenerate all artifacts:
+
+    python -m famail_temporal.preprocess --force
+
+Without `--force`, you may get an inconsistent mix of old and new artifacts.

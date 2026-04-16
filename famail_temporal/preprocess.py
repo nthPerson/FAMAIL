@@ -47,6 +47,14 @@ def run(force: bool = False) -> None:
             return True
         return not cache_path(name, include_features).exists()
 
+    if not force:
+        print(
+            "[preprocess] NOTE: running without --force. Existing cache "
+            "artifacts will be kept even if raw data has changed. Use "
+            "--force to regenerate everything.",
+            flush=True,
+        )
+
     # ---------------------------------------------------------------------
     # Phase 1: Load raw data
     # ---------------------------------------------------------------------
@@ -77,6 +85,16 @@ def run(force: bool = False) -> None:
         dataset_n_days(active_taxis_raw),
     )
     print(f"[preprocess] n_days = {n_days}", flush=True)
+
+    if _should_write("metadata"):
+        save_artifact("metadata", {
+            'n_days': n_days,
+            'config_T': config.T,
+            'config_GRID_DIMS': config.GRID_DIMS,
+            'config_ACTIVE_SUPPLY_THRESHOLD': config.ACTIVE_SUPPLY_THRESHOLD,
+            'config_DEMAND_FLOOR': config.DEMAND_FLOOR,
+            'config_DEMOGRAPHIC_FEATURES': list(config.DEMOGRAPHIC_FEATURES),
+        })
 
     # ---------------------------------------------------------------------
     # Phase 2: Aggregate to (48, 90, T)

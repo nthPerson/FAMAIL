@@ -65,7 +65,7 @@ import pickle as _pkl
 import random as _random
 
 from famail_temporal.data.cache_io import load_artifact
-from famail_temporal.data.aggregation import block_n_hours, dataset_n_days
+from famail_temporal.data.aggregation import block_n_hours
 from famail_temporal.utils.trajectory import Trajectory, TrajectoryState
 
 
@@ -176,10 +176,8 @@ def _bundle_load(max_trajectories=None, max_drivers=None):
         [block_n_hours(t) for t in range(config.T)], dtype=np.int32,
     )
 
-    raw_pickup_path = config.RAW_DATA_DIR / "pickup_dropoff_counts.pkl"
-    with open(raw_pickup_path, "rb") as f:
-        raw_pickup = _pkl.load(f)
-    n_days = dataset_n_days(raw_pickup)
+    metadata = load_artifact("metadata")
+    n_days = metadata['n_days']
 
     trajectories = _load_trajectories(
         max_trajectories=max_trajectories, max_drivers=max_drivers,
@@ -215,7 +213,14 @@ def _bundle_load(max_trajectories=None, max_drivers=None):
     )
 
 
-DataBundle.load = classmethod(
-    lambda cls, max_trajectories=None, max_drivers=None:
-        _bundle_load(max_trajectories, max_drivers)
-)
+def _bundle_load_classmethod(cls, max_trajectories=None, max_drivers=None):
+    """Load cached artifacts + raw trajectories into a DataBundle.
+
+    Requires that preprocess.py has been run (python -m famail_temporal.preprocess).
+    Uses cache artifacts; falls back to nn.Identity() for the discriminator
+    if the checkpoint is not present.
+    """
+    return _bundle_load(max_trajectories, max_drivers)
+
+
+DataBundle.load = classmethod(_bundle_load_classmethod)
