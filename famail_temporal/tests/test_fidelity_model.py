@@ -1,7 +1,7 @@
 """Tests for fidelity.model components."""
 import torch
 
-from famail_temporal.fidelity.model import FeatureNormalizer
+from famail_temporal.fidelity.model import FeatureNormalizer, SiameseLSTMEncoder, ProfileEncoder
 
 
 def test_feature_normalizer_output_shape():
@@ -25,3 +25,20 @@ def test_feature_normalizer_has_params():
     assert norm.y_max == 89.0
     assert norm.time_buckets == 288
     assert norm.days_in_week == 5
+
+
+def test_siamese_lstm_encoder_forward_shape():
+    # Constructor: input_dim, lstm_hidden_dims=(200,100), dropout=0.2, bidirectional=True
+    enc = SiameseLSTMEncoder(input_dim=6, lstm_hidden_dims=(64,), dropout=0.0, bidirectional=False)
+    x = torch.randn(3, 15, 6)
+    out = enc(x)
+    assert out.shape[0] == 3
+    assert out.shape[-1] in (64, 128)  # uni- or bidirectional
+
+
+def test_profile_encoder_forward_shape():
+    # Constructor: input_dim=11, hidden_dims=(64,32), output_dim=8, dropout=0.2
+    enc = ProfileEncoder(input_dim=11, hidden_dims=(64, 32), output_dim=32, dropout=0.0)
+    x = torch.randn(3, 11)
+    out = enc(x)
+    assert out.shape == (3, 32)
