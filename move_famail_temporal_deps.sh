@@ -14,5 +14,3 @@ cp discriminator/multi_stream/extracted_data/driving_calendar_days.pkl  famail_t
 
 # Copy discriminator checkpoint
 cp discriminator/model/checkpoints/20260316_223817/best.pt famail_temporal/discriminator_checkpoints/default/best.pt
-
-exit 0
