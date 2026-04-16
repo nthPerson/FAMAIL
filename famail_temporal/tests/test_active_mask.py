@@ -89,3 +89,28 @@ def test_wrong_grid_shape_raises():
     with pytest.raises(ValueError, match="grid dims"):
         mask = np.zeros((4, 5, 2), dtype=bool)
         UnitIndexMap.from_mask(mask, grid_shape=(3, 2))
+
+
+from famail_temporal.data.active_mask import compute_active_mask
+
+
+def test_active_mask_supply_threshold():
+    active_3d = np.zeros((48, 90, 4), dtype=np.float32)
+    active_3d[5, 10, 0] = 1.0
+    active_3d[6, 11, 0] = 0.3
+    valid_mask = np.ones((48, 90), dtype=bool)
+    demographics = np.zeros((48, 90, 3), dtype=np.float32)
+    mask = compute_active_mask(active_3d, valid_mask, demographics)
+    assert mask.shape == (48, 90, 4)
+    assert mask[5, 10, 0]
+    assert not mask[6, 11, 0]
+
+
+def test_active_mask_rejects_nan_demographics():
+    active_3d = np.ones((48, 90, 4), dtype=np.float32) * 10.0
+    valid_mask = np.ones((48, 90), dtype=bool)
+    demographics = np.zeros((48, 90, 3), dtype=np.float32)
+    demographics[5, 10, 0] = np.nan
+    mask = compute_active_mask(active_3d, valid_mask, demographics)
+    assert not mask[5, 10, 0]
+    assert not mask[5, 10, 3]

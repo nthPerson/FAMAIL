@@ -87,3 +87,35 @@ class UnitIndexMap:
 
     def to_time_block(self, unit_idx: int) -> int:
         return int(self.time_block_indices[unit_idx])
+
+
+from famail_temporal import config
+
+
+def compute_active_mask(
+    active_taxis_3d: np.ndarray,
+    valid_mask: np.ndarray,
+    demographics: np.ndarray,
+) -> np.ndarray:
+    """A unit (c, t) is active iff:
+      1. active_taxis_3d[c, t] > ACTIVE_SUPPLY_THRESHOLD
+      2. valid_mask[c] is True
+      3. No NaN in any demographic feature for cell c
+    """
+    gx, gy = valid_mask.shape
+    t = active_taxis_3d.shape[2]
+    if active_taxis_3d.shape != (gx, gy, t):
+        raise ValueError(
+            f"active_taxis_3d shape {active_taxis_3d.shape} does not match "
+            f"valid_mask grid shape ({gx}, {gy}, T)"
+        )
+    if demographics.shape[:2] != (gx, gy):
+        raise ValueError(
+            f"demographics spatial dims {demographics.shape[:2]} do not match "
+            f"valid_mask grid shape ({gx}, {gy})"
+        )
+
+    cell_finite = np.isfinite(demographics).all(axis=-1)
+    cell_valid = valid_mask & cell_finite
+    supply_ok = active_taxis_3d > config.ACTIVE_SUPPLY_THRESHOLD
+    return supply_ok & cell_valid[:, :, None]
