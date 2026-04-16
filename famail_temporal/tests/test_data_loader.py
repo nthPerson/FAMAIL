@@ -46,3 +46,28 @@ def test_databundle_is_kw_only():
             np.zeros((2, 2, 4), dtype=np.float32),
             np.zeros((2, 2, 4), dtype=bool),
         )
+
+
+@pytest.mark.slow
+def test_databundle_load_real_data():
+    """End-to-end DataBundle.load() — skip if raw data missing."""
+    from famail_temporal import config
+
+    required = [
+        config.RAW_DATA_DIR / "pickup_dropoff_counts.pkl",
+        config.RAW_DATA_DIR / "active_taxis_5x5_hourly.pkl",
+        config.RAW_DATA_DIR / "cell_demographics.pkl",
+        config.RAW_DATA_DIR / "grid_to_district_mapping.pkl",
+    ]
+    for path in required:
+        if not path.exists():
+            pytest.skip(f"Raw data missing: {path}")
+
+    cache_files = list(config.CACHE_DIR.glob("*.pkl"))
+    if not cache_files:
+        pytest.skip("Cache empty — run preprocess first")
+
+    bundle = DataBundle.load(max_trajectories=10, max_drivers=2)
+    assert bundle.pickup_3d.shape == (*config.GRID_DIMS, config.T)
+    assert bundle.unit_map.n_units >= config.MIN_TOTAL_ACTIVE_UNITS
+    assert bundle.unit_map.n_units == bundle.hat_matrices['I_minus_H_demo'].shape[0]
