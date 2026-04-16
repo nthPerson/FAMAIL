@@ -133,6 +133,9 @@ def compute_fcausal_torch(
     constant R), returns 1.0 by convention — gradients flow through the
     non-degenerate branch in the typical case via ``torch.where``.
 
+    NaN in R propagates to F_causal; this is intentional — callers must
+    ensure R is finite.
+
     Parameters
     ----------
     R : torch.Tensor, shape (N,)
@@ -176,3 +179,28 @@ def compute_fcausal_torch(
         ss_res_demo / (ss_tot + eps),
     )
     return torch.clamp(f_causal, 0.0, 1.0)
+
+
+def hat_matrices_to_torch(
+    hat: Dict[str, np.ndarray],
+    dtype: torch.dtype = torch.float32,
+    device: str = "cpu",
+) -> Dict[str, torch.Tensor]:
+    """Convert the numpy hat-matrix dict to torch tensors for use in torch-based computations.
+
+    Internally calls `.copy()` on each array before conversion because the arrays
+    returned by `precompute_hat_matrices` are read-only (frozen via setflags), and
+    `torch.from_numpy()` emits UserWarning on non-writable arrays.
+
+    Args:
+        hat: Dict returned from precompute_hat_matrices()
+        dtype: Target torch dtype (default float32)
+        device: Target device string (default "cpu")
+
+    Returns:
+        Dict with 'I_minus_H_demo' and 'M' as torch tensors on the specified device.
+    """
+    return {
+        'I_minus_H_demo': torch.from_numpy(hat['I_minus_H_demo'].copy()).to(dtype=dtype, device=device),
+        'M': torch.from_numpy(hat['M'].copy()).to(dtype=dtype, device=device),
+    }

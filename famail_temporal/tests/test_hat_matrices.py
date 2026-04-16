@@ -1,4 +1,6 @@
 """Tests for fairness.hat_matrices."""
+import warnings
+
 import numpy as np
 import pytest
 import torch
@@ -159,3 +161,72 @@ def test_fcausal_gradient_flows():
     assert not torch.isinf(R.grad).any()
     # R is a random N-vector -> not in degenerate branch, gradient should be nonzero.
     assert (R.grad.abs() > 0).any()
+
+
+def test_fcausal_one_when_R_orthogonal_to_demographic_span():
+    """If R projects through (I-H), it lies in null space of H_demo → F_causal ≈ 1."""
+    N = 50
+    rng = np.random.RandomState(77)
+    hat = precompute_hat_matrices(
+        rng.uniform(0.5, 5.0, N), rng.randn(N, 3), ["a", "b", "c"]
+    )
+    IH = torch.from_numpy(hat['I_minus_H_demo'].copy()).float()
+    M = torch.from_numpy(hat['M'].copy()).float()
+    # Project a random vector through (I-H) — lands in null space of H_demo
+    v = rng.randn(N)
+    R_np = hat['I_minus_H_demo'] @ v
+    R = torch.from_numpy(R_np).float()
+    f = compute_fcausal_torch(R, IH, M)
+    assert float(f) > 1.0 - 1e-4, f"Expected F_causal ≈ 1 for orthogonal R, got {float(f)}"
+
+
+def test_fcausal_per_unit_decomposition_sums_to_complement():
+    """Pins the invariant Σᵢ attribution_i == 1 - F_causal for Task 14.
+
+    The decomposition:
+      attribution_i = ((MR)_i^2 - ((I-H)R)_i^2) / R'MR
+      Σᵢ attribution_i = (R'MR - R'(I-H)R) / R'MR = 1 - F_causal
+    """
+    N = 80
+    rng = np.random.RandomState(88)
+    hat = precompute_hat_matrices(
+        rng.uniform(0.5, 5.0, N), rng.randn(N, 3), ["a", "b", "c"]
+    )
+    IH = torch.from_numpy(hat['I_minus_H_demo'].copy()).float()
+    M = torch.from_numpy(hat['M'].copy()).float()
+    # Random R (not in either extreme)
+    R = torch.from_numpy(rng.randn(N) * 2.0).float()
+
+    # Compute F_causal
+    f_causal = compute_fcausal_torch(R, IH, M)
+
+    # Compute per-unit attribution manually
+    MR = M @ R
+    IHR = IH @ R
+    ss_tot = (MR ** 2).sum()
+    attribution_per_unit = (MR ** 2 - IHR ** 2) / ss_tot
+    attribution_sum = float(attribution_per_unit.sum())
+
+    # Invariant: Σᵢ attribution_i == 1 - F_causal (within float32 tolerance)
+    assert abs(attribution_sum - (1.0 - float(f_causal))) < 1e-4, (
+        f"Attribution sum {attribution_sum:.6f} != 1 - F_causal "
+        f"{1.0 - float(f_causal):.6f}"
+    )
+
+
+def test_hat_matrices_to_torch_no_warning():
+    """hat_matrices_to_torch converts frozen arrays without UserWarning."""
+    from famail_temporal.fairness.hat_matrices import hat_matrices_to_torch
+    rng = np.random.RandomState(99)
+    hat = precompute_hat_matrices(
+        rng.uniform(0.5, 5.0, 20), rng.randn(20, 3), ["a", "b", "c"]
+    )
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        tensors = hat_matrices_to_torch(hat)
+    assert not any("not writable" in str(w.message) for w in caught), (
+        "hat_matrices_to_torch should not produce 'not writable' warnings"
+    )
+    assert 'I_minus_H_demo' in tensors
+    assert 'M' in tensors
+    assert tensors['I_minus_H_demo'].dtype == torch.float32
