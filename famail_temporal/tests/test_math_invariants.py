@@ -265,3 +265,115 @@ def test_attribution_sum_holds_at_production_scale():
     # Loosen tolerance to account for float32 fp accumulation at this N
     diff = abs(float(attr.sum()) - (1.0 - float(f)))
     assert diff < 1e-3, f"Attribution invariant broken at N=1000: diff={diff:.2e}"
+
+
+def test_per_unit_attribution_can_be_negative_but_sum_is_nonnegative():
+    """Individual attribution values CAN be negative but the sum is always
+    in [0, 1] (= 1 - F_causal).
+
+    When ((I-H)R)_i^2 > (MR)_i^2 at a unit, demographics "actively misalign"
+    with R at that unit — the per-unit value is negative. This is mathematically
+    correct: negative values signal misalignment, positive values signal
+    alignment. The SUM is always non-negative because both (I-H) and M are
+    idempotent, so R'(I-H)R <= R'MR always.
+
+    This invariant is crucial: a naive implementation that clamps per-unit
+    values to [0, inf) would silently break the decomposition's meaning.
+    """
+    rng = np.random.RandomState(115)
+    N = 50
+    # Construct R = one-hot at unit 0 — guaranteed to produce mixed-sign
+    # per-unit values because the pointwise squared-difference is irregular.
+    demo = rng.randn(N, 3)
+    hat = precompute_hat_matrices(rng.uniform(0.5, 5.0, N), demo, ["a", "b", "c"])
+    tensors = hat_matrices_to_torch(hat)
+
+    # Try multiple R constructions designed to have mixed per-unit signs.
+    for trial_seed in range(5):
+        trial_rng = np.random.RandomState(trial_seed + 500)
+        R = torch.from_numpy(trial_rng.randn(N)).float()
+        attr = per_unit_attribution(R, tensors['I_minus_H_demo'], tensors['M'])
+        f_causal = compute_fcausal_torch(R, tensors['I_minus_H_demo'], tensors['M'])
+
+        # Sum is the primary invariant
+        attr_sum = float(attr.sum())
+        assert 0.0 <= attr_sum <= 1.0, (
+            f"At trial {trial_seed}: attribution sum {attr_sum} out of [0,1]"
+        )
+        # Sum matches 1 - F_causal
+        assert abs(attr_sum - (1.0 - float(f_causal))) < 1e-5, (
+            f"At trial {trial_seed}: sum {attr_sum} != 1 - F_causal "
+            f"{1.0 - float(f_causal)}"
+        )
+
+    # Now verify the mixed-sign property actually occurs in practice.
+    # With random R, at least ONE trial should produce at least one negative
+    # per-unit value. If this never happens, the per-unit decomposition is
+    # mathematically pathological.
+    seen_negative = False
+    for trial_seed in range(20):
+        trial_rng = np.random.RandomState(trial_seed + 600)
+        R = torch.from_numpy(trial_rng.randn(N)).float()
+        attr = per_unit_attribution(R, tensors['I_minus_H_demo'], tensors['M'])
+        if (attr < 0).any():
+            seen_negative = True
+            break
+    assert seen_negative, (
+        "No trial produced a negative per-unit attribution — the mathematical "
+        "property that values can be negative must be demonstrable in practice."
+    )
+
+
+def test_fcausal_handles_zero_residual_degenerate_case():
+    """F_causal for R = 0 must be finite and = 1.0 (degenerate branch).
+
+    When R = 0, there is no residual variance to explain. The `ss_tot < eps`
+    guard in compute_fcausal_torch returns 1.0 (perfectly fair by convention).
+    Without this guard, 0/0 would produce NaN and silently poison downstream
+    computations. This test locks the convention.
+    """
+    rng = np.random.RandomState(116)
+    N = 50
+    hat = precompute_hat_matrices(rng.uniform(0.5, 5.0, N), rng.randn(N, 3), ["a", "b", "c"])
+    tensors = hat_matrices_to_torch(hat)
+    R_zero = torch.zeros(N)
+    f = compute_fcausal_torch(R_zero, tensors['I_minus_H_demo'], tensors['M'])
+    assert torch.isfinite(f), f"F_causal(0) not finite: {float(f)}"
+    assert float(f) == 1.0, f"F_causal(0) != 1.0: {float(f)}"
+
+
+def test_per_unit_attribution_handles_zero_residual():
+    """per_unit_attribution for R = 0 must be finite (all zeros or near-zero).
+
+    Complementary to the F_causal degenerate test: when R = 0, per-unit
+    attribution values should all be finite, with the sum matching 1 - F_causal = 0.
+    """
+    rng = np.random.RandomState(117)
+    N = 50
+    hat = precompute_hat_matrices(rng.uniform(0.5, 5.0, N), rng.randn(N, 3), ["a", "b", "c"])
+    tensors = hat_matrices_to_torch(hat)
+    R_zero = torch.zeros(N)
+    attr = per_unit_attribution(R_zero, tensors['I_minus_H_demo'], tensors['M'])
+    assert torch.isfinite(attr).all(), f"attribution contains non-finite values"
+    # Sum should be ~0 (since 1 - F_causal = 1 - 1.0 = 0)
+    assert abs(float(attr.sum())) < 1e-6
+
+
+def test_precompute_hat_matrices_rejects_small_N():
+    """precompute_hat_matrices must reject N < max(10, p+1).
+
+    The pooled F_causal framework requires at least enough active units to
+    uniquely determine the linear projection onto demographics. Concretely:
+    - N must exceed the number of columns in the design matrix (p + 1 for
+      intercept + demographics).
+    - The enforced minimum is max(10, p+1) to ensure meaningful statistics.
+
+    This invariant is load-bearing: if it were weakened, rank-deficient hat
+    matrices could be constructed silently, leading to division-by-zero in
+    downstream F_causal.
+    """
+    import pytest
+    rng = np.random.RandomState(118)
+    # N=5 with 3 demographic features: too few even for rank check
+    with pytest.raises(ValueError):
+        precompute_hat_matrices(np.ones(5), rng.randn(5, 3), ["a", "b", "c"])
