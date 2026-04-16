@@ -10,16 +10,20 @@ import torch
 
 @dataclass
 class TrajectoryState:
+    """Single state in a trajectory: (x_grid, y_grid, time_bucket, day_index)."""
+
     x_grid: float
     y_grid: float
     time_bucket: int
     day_index: int
 
     def to_array(self) -> np.ndarray:
+        """Convert to [x, y, time, day] numpy array."""
         return np.array([self.x_grid, self.y_grid, self.time_bucket, self.day_index])
 
     @classmethod
     def from_array(cls, arr: np.ndarray) -> "TrajectoryState":
+        """Create from [x, y, time, day] numpy array."""
         return cls(
             x_grid=float(arr[0]), y_grid=float(arr[1]),
             time_bucket=int(arr[2]), day_index=int(arr[3]),
@@ -28,6 +32,8 @@ class TrajectoryState:
 
 @dataclass
 class Trajectory:
+    """A taxi trajectory. The pickup is the final state (states[-1])."""
+
     trajectory_id: Any
     driver_id: Any
     states: List[TrajectoryState]
@@ -35,24 +41,30 @@ class Trajectory:
 
     @property
     def pickup_state(self) -> TrajectoryState:
+        """The final state — the pickup event."""
         return self.states[-1]
 
     @property
     def pickup_cell(self) -> Tuple[int, int]:
+        """Pickup cell as integer (x, y)."""
         s = self.pickup_state
         return (int(s.x_grid), int(s.y_grid))
 
     @property
     def n_states(self) -> int:
+        """Number of states in this trajectory."""
         return len(self.states)
 
     def to_discriminator_format(self) -> np.ndarray:
+        """Return shape (seq_len, 4) numpy array: rows are [x, y, time, day]."""
         return np.array([s.to_array() for s in self.states])
 
     def to_tensor(self) -> torch.Tensor:
+        """Return shape (seq_len, 4) float32 torch tensor."""
         return torch.tensor(self.to_discriminator_format(), dtype=torch.float32)
 
     def clone(self) -> "Trajectory":
+        """Deep copy: states and metadata are new objects."""
         return Trajectory(
             trajectory_id=self.trajectory_id,
             driver_id=self.driver_id,
@@ -63,6 +75,7 @@ class Trajectory:
 
     def apply_perturbation(self, delta: np.ndarray,
                            grid_dims: Tuple[int, int] = (48, 90)) -> "Trajectory":
+        """Return a new trajectory with (delta_x, delta_y) applied to the pickup, clipped to grid bounds."""
         modified = self.clone()
         pickup = modified.states[-1]
         new_x = float(np.clip(pickup.x_grid + delta[0], 0, grid_dims[0] - 1))
