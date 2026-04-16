@@ -34,3 +34,15 @@ def test_databundle_is_frozen_dataclass():
     assert bundle.n_days == 65
     with pytest.raises(dataclasses.FrozenInstanceError):
         bundle.n_days = 100
+
+
+def test_databundle_is_kw_only():
+    """kw_only=True prevents positional construction, guarding against
+    12-field positional-argument footguns."""
+    with pytest.raises(TypeError):
+        DataBundle(
+            np.zeros((2, 2, 4), dtype=np.float32),  # positional pickup_3d
+            np.zeros((2, 2, 4), dtype=np.float32),
+            np.zeros((2, 2, 4), dtype=np.float32),
+            np.zeros((2, 2, 4), dtype=bool),
+        )
