@@ -98,3 +98,96 @@ def test_batch_independent():
     assert not torch.allclose(probs[0], probs[1]), (
         "Distributions for different locations should differ"
     )
+
+
+# === inject_soft_counts_into_3d tests ===
+
+from famail_temporal.algorithm.soft_cell_assignment import inject_soft_counts_into_3d
+
+
+def test_inject_only_modifies_t_block_slice():
+    base = torch.zeros(48, 90, 4)
+    base[:, :, 1] = 5.0
+    probs = torch.ones(5, 5) / 25.0
+    out = inject_soft_counts_into_3d(
+        base_counts_3d=base, probs_2d=probs,
+        cell_xy=(10, 20), t_block=0, k=2, pickup_mass=1.0,
+    )
+    assert torch.equal(out[:, :, 1], base[:, :, 1])
+    changed = (out[:, :, 0] != base[:, :, 0]).sum()
+    assert changed == 25
+
+
+def test_inject_mass_balance():
+    base = torch.zeros(48, 90, 4)
+    probs = torch.rand(5, 5)
+    probs = probs / probs.sum()
+    pickup_mass = 0.01
+    out = inject_soft_counts_into_3d(
+        base, probs, cell_xy=(10, 20), t_block=0, k=2, pickup_mass=pickup_mass,
+    )
+    total_injected = (out[:, :, 0] - base[:, :, 0]).sum()
+    assert torch.isclose(total_injected, torch.tensor(pickup_mass), atol=1e-5)
+
+
+def test_inject_preserves_gradient():
+    base = torch.zeros(48, 90, 4)
+    probs = torch.rand(5, 5, requires_grad=True)
+    out = inject_soft_counts_into_3d(
+        base, probs, cell_xy=(10, 20), t_block=0, k=2, pickup_mass=1.0,
+    )
+    out.sum().backward()
+    assert probs.grad is not None
+    assert not torch.isnan(probs.grad).any()
+
+
+# === inject_soft_counts_into_3d hardening tests ===
+
+
+def test_inject_edge_cell_boundary():
+    """Cell at (0, 0) with k=2 should clip neighborhood to valid cells only."""
+    base = torch.zeros(48, 90, 4)
+    probs = torch.ones(5, 5) / 25.0
+    out = inject_soft_counts_into_3d(
+        base, probs, cell_xy=(0, 0), t_block=0, k=2, pickup_mass=1.0,
+    )
+    # Only 3x3 cells in-bounds (rows 0-2, cols 0-2)
+    changed = (out[:, :, 0] != base[:, :, 0]).sum()
+    assert changed == 9
+    # Mass should be less than 1.0 since some cells are clipped
+    total = (out[:, :, 0] - base[:, :, 0]).sum()
+    assert total < 1.0
+
+
+def test_inject_edge_cell_top_right():
+    """Cell at (47, 89) with k=2 should clip at the upper grid boundary."""
+    base = torch.zeros(48, 90, 4)
+    probs = torch.ones(5, 5) / 25.0
+    out = inject_soft_counts_into_3d(
+        base, probs, cell_xy=(47, 89), t_block=0, k=2, pickup_mass=1.0,
+    )
+    # Only 3x3 cells in-bounds (rows 45-47, cols 87-89)
+    changed = (out[:, :, 0] != base[:, :, 0]).sum()
+    assert changed == 9
+
+
+def test_inject_t_block_out_of_range():
+    """t_block out of range should raise AssertionError."""
+    base = torch.zeros(48, 90, 4)
+    probs = torch.ones(5, 5) / 25.0
+    import pytest
+    with pytest.raises(AssertionError):
+        inject_soft_counts_into_3d(
+            base, probs, cell_xy=(10, 20), t_block=5, k=2, pickup_mass=1.0,
+        )
+
+
+def test_inject_zero_pickup_mass():
+    """Zero pickup_mass should produce no modification."""
+    base = torch.zeros(48, 90, 4)
+    probs = torch.rand(5, 5)
+    probs = probs / probs.sum()
+    out = inject_soft_counts_into_3d(
+        base, probs, cell_xy=(10, 20), t_block=0, k=2, pickup_mass=0.0,
+    )
+    assert torch.equal(out, base)

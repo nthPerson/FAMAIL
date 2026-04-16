@@ -85,3 +85,58 @@ class SoftCellAssignment(nn.Module):
             return tau_min
         progress = iteration / (total_iterations - 1)
         return tau_max * (tau_min / tau_max) ** progress
+
+
+def inject_soft_counts_into_3d(
+    base_counts_3d: torch.Tensor,
+    probs_2d: torch.Tensor,
+    cell_xy: Tuple[int, int],
+    t_block: int,
+    k: int,
+    pickup_mass: float,
+) -> torch.Tensor:
+    """Inject probs_2d * pickup_mass into base_counts_3d at slice t_block.
+
+    Uses the delta-tensor pattern for autograd-safe gradient flow:
+        delta = zeros_like(base)
+        delta[:, :, t_block] = scatter(probs * pickup_mass)
+        return base + delta
+
+    The delta-tensor pattern is preferred over clone-then-in-place because
+    it unambiguously preserves the computational graph from probs_2d through
+    to the returned tensor. In-place ops on a clone can subtly break autograd
+    under certain PyTorch versions.
+
+    Only cells in the (2k+1, 2k+1) neighborhood of cell_xy in slice t_block
+    are modified. Cells outside the grid bounds are silently skipped.
+
+    Args:
+        base_counts_3d: (grid_x, grid_y, T) float32 — the background counts
+            (without the current trajectory's contribution)
+        probs_2d: (2k+1, 2k+1) — soft assignment probabilities from SoftCellAssignment
+        cell_xy: (cx, cy) — the original pickup cell (center of the neighborhood)
+        t_block: time block index for this trajectory's pickup
+        k: neighborhood half-width (k from SoftCellAssignment)
+        pickup_mass: mass to inject (1 / (n_hours_per_block * n_days) for mean-hourly)
+
+    Returns:
+        (grid_x, grid_y, T) tensor = base_counts_3d + delta, where delta has
+        gradient flow through probs_2d * pickup_mass at the t_block slice.
+    """
+    gx, gy, t_total = base_counts_3d.shape
+    assert probs_2d.shape == (2 * k + 1, 2 * k + 1), (
+        f"probs_2d shape {probs_2d.shape} != expected ({2*k+1}, {2*k+1})"
+    )
+    assert 0 <= t_block < t_total, f"t_block {t_block} out of range [0, {t_total})"
+
+    delta = torch.zeros_like(base_counts_3d)
+    cx, cy = cell_xy
+    for di in range(-k, k + 1):
+        for dj in range(-k, k + 1):
+            ni, nj = cx + di, cy + dj
+            if 0 <= ni < gx and 0 <= nj < gy:
+                delta[ni, nj, t_block] = (
+                    delta[ni, nj, t_block]
+                    + probs_2d[di + k, dj + k] * pickup_mass
+                )
+    return base_counts_3d + delta
