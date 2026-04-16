@@ -104,6 +104,7 @@ def test_active_mask_supply_threshold():
     assert mask.shape == (48, 90, 4)
     assert mask[5, 10, 0]
     assert not mask[6, 11, 0]
+    assert mask.dtype == np.bool_
 
 
 def test_active_mask_rejects_nan_demographics():
@@ -114,3 +115,39 @@ def test_active_mask_rejects_nan_demographics():
     mask = compute_active_mask(active_3d, valid_mask, demographics)
     assert not mask[5, 10, 0]
     assert not mask[5, 10, 3]
+    # Positive control: adjacent cell with finite demographics stays active
+    assert mask[5, 11, 0]
+
+
+def test_active_mask_rejects_invalid_cell():
+    """A cell with active_taxis > threshold but valid_mask=False must be inactive."""
+    active_3d = np.ones((48, 90, 4), dtype=np.float32) * 10.0
+    valid_mask = np.ones((48, 90), dtype=bool)
+    valid_mask[5, 10] = False  # mark cell (5, 10) as outside Shenzhen
+    demographics = np.zeros((48, 90, 3), dtype=np.float32)
+    mask = compute_active_mask(active_3d, valid_mask, demographics)
+    # Cell is invalid → inactive across all blocks
+    assert not mask[5, 10, 0]
+    assert not mask[5, 10, 3]
+    # Adjacent cell still active (positive control)
+    assert mask[5, 11, 0]
+
+
+def test_active_mask_rejects_mismatched_shapes():
+    """Shape mismatches between inputs should raise ValueError."""
+    valid_mask = np.ones((48, 90), dtype=bool)
+    demographics = np.zeros((48, 90, 3), dtype=np.float32)
+    # active_taxis_3d grid_x mismatch (47 vs 48)
+    with pytest.raises(ValueError):
+        compute_active_mask(
+            np.zeros((47, 90, 4), dtype=np.float32),
+            valid_mask,
+            demographics,
+        )
+    # demographics grid_y mismatch (89 vs 90)
+    with pytest.raises(ValueError):
+        compute_active_mask(
+            np.zeros((48, 90, 4), dtype=np.float32),
+            valid_mask,
+            np.zeros((48, 89, 3), dtype=np.float32),
+        )

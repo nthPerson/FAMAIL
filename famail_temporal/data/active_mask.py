@@ -6,6 +6,8 @@ from typing import Tuple
 
 import numpy as np
 
+from famail_temporal import config
+
 
 @dataclass(frozen=True)
 class UnitIndexMap:
@@ -89,9 +91,6 @@ class UnitIndexMap:
         return int(self.time_block_indices[unit_idx])
 
 
-from famail_temporal import config
-
-
 def compute_active_mask(
     active_taxis_3d: np.ndarray,
     valid_mask: np.ndarray,
@@ -102,6 +101,18 @@ def compute_active_mask(
       2. valid_mask[c] is True
       3. No NaN in any demographic feature for cell c
     """
+    if active_taxis_3d.ndim != 3:
+        raise ValueError(
+            f"active_taxis_3d must be 3D (grid_x, grid_y, T); got shape {active_taxis_3d.shape}"
+        )
+    if valid_mask.ndim != 2:
+        raise ValueError(
+            f"valid_mask must be 2D (grid_x, grid_y); got shape {valid_mask.shape}"
+        )
+    if demographics.ndim != 3:
+        raise ValueError(
+            f"demographics must be 3D (grid_x, grid_y, n_features); got shape {demographics.shape}"
+        )
     gx, gy = valid_mask.shape
     t = active_taxis_3d.shape[2]
     if active_taxis_3d.shape != (gx, gy, t):
