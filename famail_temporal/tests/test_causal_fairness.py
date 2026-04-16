@@ -3,6 +3,7 @@ import numpy as np
 import pytest
 import torch
 
+from famail_temporal import config
 from famail_temporal.fairness.causal import (
     compute_fcausal,
     per_unit_attribution,
@@ -99,8 +100,6 @@ def test_compute_fcausal_debug_dict_keys():
 
 def test_compute_fcausal_demand_floor_clamp():
     """Zero demand should be clamped to DEMAND_FLOOR; Y must be finite."""
-    from famail_temporal import config
-
     N = 40
     _, _, IH, M = _make_hat(N, seed=24)
     # Some demand values at or below zero
@@ -151,7 +150,6 @@ def test_attribution_invariant_matches_manual_decomposition():
     # Manual computation
     MR = M @ R
     IHR = IH @ R
-    from famail_temporal import config
     ss_tot = (MR ** 2).sum() + config.EPS
     manual = (MR ** 2 - IHR ** 2) / ss_tot
 
@@ -234,3 +232,41 @@ def test_compute_fcausal_zero_residual_degenerate():
     g0_D = torch.full((N,), 0.5)
     f, _ = compute_fcausal(d_t, supply, g0_D, IH, M)
     assert float(f) == 1.0
+
+
+# ---------------------------------------------------------------------------
+# I3: NaN / Inf guard on g0_D_N
+# ---------------------------------------------------------------------------
+
+def test_compute_fcausal_rejects_nan_g0():
+    """NaN in g0_D_N must raise ValueError at entry, not propagate."""
+    N = 40
+    rng = np.random.RandomState(17)
+    hat = precompute_hat_matrices(
+        rng.uniform(0.5, 5.0, N), rng.randn(N, 3), ["a", "b", "c"]
+    )
+    IH = torch.from_numpy(hat['I_minus_H_demo'].copy()).float()
+    M = torch.from_numpy(hat['M'].copy()).float()
+    D = torch.from_numpy(rng.uniform(0.5, 5.0, N)).float()
+    S = torch.from_numpy(rng.uniform(1.0, 10.0, N)).float()
+    g0 = torch.full((N,), 0.5)
+    g0[0] = float('nan')
+    with pytest.raises(ValueError, match="non-finite"):
+        compute_fcausal(D, S, g0, IH, M)
+
+
+def test_compute_fcausal_rejects_inf_g0():
+    """Inf in g0_D_N must raise ValueError at entry."""
+    N = 40
+    rng = np.random.RandomState(18)
+    hat = precompute_hat_matrices(
+        rng.uniform(0.5, 5.0, N), rng.randn(N, 3), ["a", "b", "c"]
+    )
+    IH = torch.from_numpy(hat['I_minus_H_demo'].copy()).float()
+    M = torch.from_numpy(hat['M'].copy()).float()
+    D = torch.from_numpy(rng.uniform(0.5, 5.0, N)).float()
+    S = torch.from_numpy(rng.uniform(1.0, 10.0, N)).float()
+    g0 = torch.full((N,), 0.5)
+    g0[5] = float('inf')
+    with pytest.raises(ValueError, match="non-finite"):
+        compute_fcausal(D, S, g0, IH, M)
