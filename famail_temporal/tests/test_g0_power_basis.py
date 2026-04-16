@@ -1,9 +1,11 @@
 """Tests for fairness.g0_power_basis."""
 import numpy as np
+import pytest
 
 from famail_temporal.fairness.g0_power_basis import (
     build_power_basis_features,
     G0Function,
+    fit as fit_g0,
 )
 
 
@@ -104,9 +106,6 @@ def test_g0function_accepts_scalar():
     np.testing.assert_allclose(result, np.array([0.25]))  # 1/(3+1)
 
 
-from famail_temporal.fairness.g0_power_basis import fit as fit_g0
-
-
 def test_fit_recovers_hyperbolic():
     rng = np.random.RandomState(42)
     D = np.linspace(0.5, 10.0, 500)
@@ -123,3 +122,23 @@ def test_fit_diagnostics():
     assert 'agreement_max_abs_diff' in diag
     assert 'isotonic_r2' in diag
     assert 'power_r2' in diag
+
+
+def test_fit_rejects_2d_demands():
+    with pytest.raises(ValueError, match="1-D"):
+        fit_g0(np.ones((10, 1)), np.ones(10))
+
+
+def test_fit_rejects_2d_supplies():
+    with pytest.raises(ValueError, match="1-D"):
+        fit_g0(np.ones(10), np.ones((10, 1)))
+
+
+def test_fit_rejects_length_mismatch():
+    with pytest.raises(ValueError, match="same length"):
+        fit_g0(np.ones(10), np.ones(8))
+
+
+def test_fit_rejects_too_few_points():
+    with pytest.raises(ValueError, match="10"):
+        fit_g0(np.ones(9), np.ones(9))

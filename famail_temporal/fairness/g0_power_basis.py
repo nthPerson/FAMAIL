@@ -116,6 +116,9 @@ def fit(demands: np.ndarray, supplies_over_demands: np.ndarray) -> tuple[G0Funct
     -------
     g0_func : G0Function
         Fitted power-basis function with coefficients learned from data.
+        The returned G0Function wraps the power-basis coefficients; the
+        isotonic regression is used only to produce isotonic_r2 and
+        agreement_max_abs_diff diagnostics, and is not retained.
     diagnostics : dict
         Plain dict with keys:
           - ``'n_points'``: number of (D, Y) pairs used.
@@ -155,6 +158,11 @@ def fit(demands: np.ndarray, supplies_over_demands: np.ndarray) -> tuple[G0Funct
 
     X = build_power_basis_features(D, include_intercept=True)
     lr = LinearRegression(fit_intercept=False).fit(X, Y)
+    if not np.all(np.isfinite(lr.coef_)):
+        raise RuntimeError(
+            "LinearRegression produced non-finite coefficients; "
+            "check demand distribution for rank deficiency or collinearity."
+        )
     g0 = G0Function(
         coefficients=lr.coef_,
         d_min=float(D.min()),
@@ -166,11 +174,12 @@ def fit(demands: np.ndarray, supplies_over_demands: np.ndarray) -> tuple[G0Funct
     y_iso = iso.predict(D)
     max_abs_diff = float(np.max(np.abs(y_power - y_iso)))
 
-    y_var = float(np.var(Y)) + 1e-10
+    y_mean = Y.mean()
+    ss_tot = float(np.sum((Y - y_mean) ** 2)) + 1e-10
     diagnostics = {
         'n_points': int(len(D)),
-        'power_r2': float(1.0 - np.var(Y - y_power) / y_var),
-        'isotonic_r2': float(1.0 - np.var(Y - y_iso) / y_var),
+        'power_r2': float(1.0 - np.sum((Y - y_power) ** 2) / ss_tot),
+        'isotonic_r2': float(1.0 - np.sum((Y - y_iso) ** 2) / ss_tot),
         'agreement_max_abs_diff': max_abs_diff,
     }
     return g0, diagnostics
