@@ -9,7 +9,10 @@ from __future__ import annotations
 from typing import Dict, List
 
 import numpy as np
+import torch
 from sklearn.preprocessing import StandardScaler
+
+from famail_temporal import config
 
 
 def precompute_hat_matrices(
@@ -114,3 +117,62 @@ def precompute_hat_matrices(
         'feature_names': list(feature_names),
         'rank_H_demo': rank_H_demo,
     }
+
+
+def compute_fcausal_torch(
+    R: torch.Tensor,
+    I_minus_H_demo: torch.Tensor,
+    M: torch.Tensor,
+    eps: float = config.EPS,
+) -> torch.Tensor:
+    """Pooled Option B: F_causal = R'(I-H)R / R'MR, clamped to [0, 1].
+
+    Differentiable wrt R. The hat matrices are constants (frozen read-only
+    numpy arrays from precompute_hat_matrices, wrapped in torch tensors by
+    the caller). When ``R'MR < eps`` (no total variance to explain, e.g.,
+    constant R), returns 1.0 by convention — gradients flow through the
+    non-degenerate branch in the typical case via ``torch.where``.
+
+    Parameters
+    ----------
+    R : torch.Tensor, shape (N,)
+        Residual vector Y - g_0(D). Typically requires_grad=True during
+        optimization.
+    I_minus_H_demo : torch.Tensor, shape (N, N)
+        Residual-maker matrix, constant wrt R.
+    M : torch.Tensor, shape (N, N)
+        Centering matrix, constant wrt R.
+    eps : float, optional
+        Numerical guard for the degenerate ss_tot ~ 0 branch.
+
+    Returns
+    -------
+    torch.Tensor, scalar
+        F_causal in [0, 1], higher = fairer (residuals are well-explained
+        by demographics => service aligns with demand, not demographics).
+    """
+    # Shape / dim validation — fail loud rather than producing silent garbage
+    # from a broadcasting surprise.
+    if R.ndim != 1:
+        raise ValueError(f"R must be 1-D; got shape {tuple(R.shape)}")
+    if I_minus_H_demo.ndim != 2 or M.ndim != 2:
+        raise ValueError(
+            f"I_minus_H_demo and M must be 2-D; got shapes "
+            f"{tuple(I_minus_H_demo.shape)}, {tuple(M.shape)}"
+        )
+    N = R.shape[0]
+    if I_minus_H_demo.shape != (N, N) or M.shape != (N, N):
+        raise ValueError(
+            f"Matrix shapes inconsistent with R of length {N}: "
+            f"I_minus_H_demo={tuple(I_minus_H_demo.shape)}, "
+            f"M={tuple(M.shape)}"
+        )
+
+    ss_res_demo = R @ I_minus_H_demo @ R
+    ss_tot = R @ M @ R
+    f_causal = torch.where(
+        ss_tot < eps,
+        torch.ones_like(ss_tot),
+        ss_res_demo / (ss_tot + eps),
+    )
+    return torch.clamp(f_causal, 0.0, 1.0)

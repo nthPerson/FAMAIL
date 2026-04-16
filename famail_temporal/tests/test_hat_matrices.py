@@ -1,8 +1,13 @@
 """Tests for fairness.hat_matrices."""
 import numpy as np
 import pytest
+import torch
+from sklearn.preprocessing import StandardScaler
 
-from famail_temporal.fairness.hat_matrices import precompute_hat_matrices
+from famail_temporal.fairness.hat_matrices import (
+    compute_fcausal_torch,
+    precompute_hat_matrices,
+)
 
 
 def test_shapes():
@@ -102,3 +107,55 @@ def test_return_arrays_read_only():
     for key in ("I_minus_H_demo", "M", "scaler_mean", "scaler_std"):
         with pytest.raises(ValueError):
             hat[key].flat[0] = 99.0
+
+
+def test_fcausal_zero_when_R_in_demographic_span():
+    N = 50
+    rng = np.random.RandomState(4)
+    D = rng.uniform(0.5, 5.0, N)
+    demo = rng.randn(N, 3)
+    hat = precompute_hat_matrices(D, demo, ["f1", "f2", "f3"])
+    IH = torch.from_numpy(hat['I_minus_H_demo']).float()
+    M = torch.from_numpy(hat['M']).float()
+    X_scaled = StandardScaler().fit_transform(demo)
+    R = torch.from_numpy(2.0 + 1.5 * X_scaled[:, 0]).float()
+    f = compute_fcausal_torch(R, IH, M)
+    assert float(f) < 1e-4
+
+
+def test_fcausal_bounded():
+    N = 80
+    rng = np.random.RandomState(5)
+    hat = precompute_hat_matrices(rng.uniform(0.5, 5.0, N), rng.randn(N, 3), ["a", "b", "c"])
+    IH = torch.from_numpy(hat['I_minus_H_demo']).float()
+    M = torch.from_numpy(hat['M']).float()
+    R = torch.randn(N) * 3.0
+    f = compute_fcausal_torch(R, IH, M)
+    assert 0.0 <= float(f) <= 1.0
+
+
+def test_fcausal_degenerate_returns_one():
+    N = 30
+    rng = np.random.RandomState(6)
+    hat = precompute_hat_matrices(rng.uniform(0.5, 5.0, N), rng.randn(N, 3), ["a", "b", "c"])
+    IH = torch.from_numpy(hat['I_minus_H_demo']).float()
+    M = torch.from_numpy(hat['M']).float()
+    R = torch.full((N,), 0.5)
+    f = compute_fcausal_torch(R, IH, M)
+    assert float(f) == 1.0
+
+
+def test_fcausal_gradient_flows():
+    N = 30
+    rng = np.random.RandomState(7)
+    hat = precompute_hat_matrices(rng.uniform(0.5, 5.0, N), rng.randn(N, 3), ["a", "b", "c"])
+    IH = torch.from_numpy(hat['I_minus_H_demo']).float()
+    M = torch.from_numpy(hat['M']).float()
+    R = torch.randn(N, requires_grad=True)
+    f = compute_fcausal_torch(R, IH, M)
+    f.backward()
+    assert R.grad is not None
+    assert not torch.isnan(R.grad).any()
+    assert not torch.isinf(R.grad).any()
+    # R is a random N-vector -> not in degenerate branch, gradient should be nonzero.
+    assert (R.grad.abs() > 0).any()
