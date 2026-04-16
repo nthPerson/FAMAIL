@@ -1,5 +1,6 @@
 """Tests for algorithm.attribution."""
 import numpy as np
+import pytest
 import torch
 
 from famail_temporal import config
@@ -127,3 +128,64 @@ def test_signed_magnitude_equals_unsigned():
     unsigned, signed = compute_per_unit_attribution(bundle)
     np.testing.assert_allclose(np.abs(signed), np.abs(unsigned), atol=1e-7,
                                err_msg="|signed| != |unsigned| per element")
+
+
+# ── Slow real-data tests ───────────────────────────────────────────────
+
+
+@pytest.mark.slow
+def test_attribution_on_real_data():
+    """Compute per-unit attribution on real Shenzhen data — verify finite,
+    in-range, and the sum invariant holds at production scale."""
+    from famail_temporal import config
+    from famail_temporal.data.loader import DataBundle
+    from famail_temporal.fairness.hat_matrices import compute_fcausal_torch, hat_matrices_to_torch
+
+    required = [
+        config.RAW_DATA_DIR / "pickup_dropoff_counts.pkl",
+        config.RAW_DATA_DIR / "cell_demographics.pkl",
+    ]
+    for path in required:
+        if not path.exists():
+            pytest.skip(f"Raw data missing: {path}")
+    cache_files = list(config.CACHE_DIR.glob("*.pkl"))
+    if not cache_files:
+        pytest.skip("Cache empty — run preprocess first")
+
+    bundle = DataBundle.load(max_trajectories=50, max_drivers=5)
+    attribution, signed = compute_per_unit_attribution(bundle)
+
+    N = bundle.unit_map.n_units
+    assert attribution.shape == (N,)
+    assert signed.shape == (N,)
+
+    # All values finite
+    assert np.isfinite(attribution).all(), "attribution contains non-finite values"
+    assert np.isfinite(signed).all(), "signed attribution contains non-finite values"
+
+    # Sum invariant at production scale
+    D = torch.from_numpy(bundle.pickup_3d[bundle.mask_3d]).float()
+    S = torch.from_numpy(bundle.active_taxis_3d[bundle.mask_3d]).float()
+    D = torch.clamp(D, min=config.DEMAND_FLOOR)
+    Y = S / D
+    g0_D = torch.from_numpy(np.asarray(bundle.g0_func(D.numpy()), dtype=np.float32))
+    R = Y - g0_D
+    tensors = hat_matrices_to_torch(bundle.hat_matrices)
+    f_causal = compute_fcausal_torch(R, tensors['I_minus_H_demo'], tensors['M'])
+    attr_sum = float(attribution.sum())
+    expected = 1.0 - float(f_causal)
+    diff = abs(attr_sum - expected)
+    assert diff < 0.01, (
+        f"Attribution sum invariant broken at production scale: "
+        f"sum={attr_sum:.6f}, 1-F_causal={expected:.6f}, diff={diff:.2e}"
+    )
+
+    # Rank real trajectories
+    if len(bundle.trajectories) > 0:
+        ranked = rank_trajectories(bundle.trajectories, attribution, bundle.unit_map)
+        assert len(ranked) == len(bundle.trajectories)
+        # At least some trajectories should have non-zero scores
+        non_zero = [s for _, s in ranked if s > 0]
+        print(f"\n  Real data: {len(non_zero)}/{len(ranked)} trajectories have positive attribution")
+        print(f"  Top-5 scores: {[f'{s:.4f}' for _, s in ranked[:5]]}")
+        print(f"  Attribution sum invariant diff: {diff:.2e}")

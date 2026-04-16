@@ -208,3 +208,45 @@ def test_different_seeds_produce_different_bundles():
     b1 = _make_synthetic_bundle(seed=0)
     b2 = _make_synthetic_bundle(seed=42)
     assert not np.array_equal(b1.pickup_3d, b2.pickup_3d)
+
+
+# ── Slow real-data tests ───────────────────────────────────────────────
+
+
+@pytest.mark.slow
+def test_famailobjective_on_real_data():
+    """Run FAMAILObjective on real Shenzhen data — verify metrics are
+    finite and in [0, 1] at production scale."""
+    from famail_temporal import config
+    from famail_temporal.data.loader import DataBundle
+
+    required = [
+        config.RAW_DATA_DIR / "pickup_dropoff_counts.pkl",
+        config.RAW_DATA_DIR / "cell_demographics.pkl",
+    ]
+    for path in required:
+        if not path.exists():
+            pytest.skip(f"Raw data missing: {path}")
+    cache_files = list(config.CACHE_DIR.glob("*.pkl"))
+    if not cache_files:
+        pytest.skip("Cache empty — run preprocess first")
+
+    bundle = DataBundle.load(max_trajectories=10, max_drivers=2)
+    obj = FAMAILObjective(bundle, alpha_fidelity=0.0)
+    soft_3d = torch.from_numpy(bundle.pickup_3d).float()
+    total, terms = obj(soft_pickup_3d=soft_3d)
+
+    # All metrics finite and in [0, 1]
+    assert torch.isfinite(total), f"total is not finite: {float(total)}"
+    assert 0.0 <= float(terms['f_spatial']) <= 1.0, (
+        f"f_spatial out of range: {float(terms['f_spatial'])}"
+    )
+    assert 0.0 <= float(terms['f_causal']) <= 1.0, (
+        f"f_causal out of range: {float(terms['f_causal'])}"
+    )
+
+    # Print values for researcher inspection
+    print(f"\n  Real data F_spatial = {float(terms['f_spatial']):.4f}")
+    print(f"  Real data F_causal  = {float(terms['f_causal']):.4f}")
+    print(f"  Real data total     = {float(total):.4f}")
+    print(f"  N active units      = {bundle.unit_map.n_units}")

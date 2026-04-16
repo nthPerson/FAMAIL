@@ -71,3 +71,11 @@ def test_databundle_load_real_data():
     assert bundle.pickup_3d.shape == (*config.GRID_DIMS, config.T)
     assert bundle.unit_map.n_units >= config.MIN_TOTAL_ACTIVE_UNITS
     assert bundle.unit_map.n_units == bundle.hat_matrices['I_minus_H_demo'].shape[0]
+
+    # Print bundle statistics for researcher inspection
+    print(f"\n  Grid dims: {bundle.pickup_3d.shape}")
+    print(f"  N active units: {bundle.unit_map.n_units}")
+    print(f"  Units per block: {bundle.unit_map.units_per_block.tolist()}")
+    print(f"  N trajectories: {len(bundle.trajectories)}")
+    print(f"  N days: {bundle.n_days}")
+    print(f"  g0 range: [{bundle.g0_func.d_min:.2f}, {bundle.g0_func.d_max:.2f}]")
