@@ -48,3 +48,57 @@ def test_g0function_coefficients_wrong_length():
     import pytest
     with pytest.raises(ValueError, match="coefficients"):
         G0Function(coefficients=np.array([0.1, 0.5]), d_min=0.01, d_max=10.0)
+
+
+def test_g0function_coefficients_wrong_ndim():
+    """2-D coefficient shapes (4, 1) and (1, 4) should also be rejected."""
+    import pytest
+    with pytest.raises(ValueError, match="1-D"):
+        G0Function(
+            coefficients=np.ones((4, 1)),
+            d_min=0.01, d_max=10.0,
+        )
+    with pytest.raises(ValueError, match="1-D"):
+        G0Function(
+            coefficients=np.ones((1, 4)),
+            d_min=0.01, d_max=10.0,
+        )
+
+
+def test_power_basis_column_semantics():
+    """Pin down column ordering: [1, 1/(D+1), 1/sqrt(D+1), sqrt(D+1)]."""
+    D = np.array([3.0, 8.0])
+    X = build_power_basis_features(D, include_intercept=True)
+    np.testing.assert_allclose(X[:, 0], np.ones(2))
+    np.testing.assert_allclose(X[:, 1], 1.0 / (D + 1))
+    np.testing.assert_allclose(X[:, 2], 1.0 / np.sqrt(D + 1))
+    np.testing.assert_allclose(X[:, 3], np.sqrt(D + 1))
+
+
+def test_g0function_rejects_negative_d_min():
+    import pytest
+    with pytest.raises(ValueError, match="non-negative"):
+        G0Function(
+            coefficients=np.array([0.1, 0.2, 0.3, 0.4]),
+            d_min=-0.5, d_max=10.0,
+        )
+
+
+def test_g0function_rejects_inverted_bounds():
+    import pytest
+    with pytest.raises(ValueError, match="d_max"):
+        G0Function(
+            coefficients=np.array([0.1, 0.2, 0.3, 0.4]),
+            d_min=5.0, d_max=1.0,
+        )
+
+
+def test_g0function_accepts_scalar():
+    g0 = G0Function(
+        coefficients=np.array([0.0, 1.0, 0.0, 0.0]),  # g0(D) = 1/(D+1)
+        d_min=0.01, d_max=10.0,
+    )
+    # Scalar input should return a 1-element array
+    result = g0(3.0)
+    assert result.shape == (1,)
+    np.testing.assert_allclose(result, np.array([0.25]))  # 1/(3+1)
