@@ -42,3 +42,24 @@ def test_profile_encoder_forward_shape():
     x = torch.randn(3, 11)
     out = enc(x)
     assert out.shape == (3, 32)
+
+
+from famail_temporal.fidelity.model import MultiStreamSiameseDiscriminator
+
+
+def test_multistream_discriminator_shape():
+    model = MultiStreamSiameseDiscriminator()
+    model.train(False)   # inference mode
+    batch_size, n_trajs, seq_len = 2, 5, 20
+    x1 = torch.rand(batch_size, n_trajs, seq_len, 4) * 10.0
+    x2 = torch.rand(batch_size, n_trajs, seq_len, 4) * 10.0
+    driving_1 = torch.rand(batch_size, n_trajs, seq_len, 4) * 10.0
+    driving_2 = driving_1.clone()
+    profile_1 = torch.randn(batch_size, 11)
+    profile_2 = profile_1.clone()
+
+    with torch.no_grad():
+        out = model(x1, x2,
+                    driving_1=driving_1, driving_2=driving_2,
+                    profile_1=profile_1, profile_2=profile_2)
+    assert out.shape[0] == batch_size
