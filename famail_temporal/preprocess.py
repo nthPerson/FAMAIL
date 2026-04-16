@@ -33,6 +33,7 @@ from famail_temporal.data.aggregation import (
     dataset_n_days,
 )
 from famail_temporal.data.cache_io import cache_path, load_raw, save_artifact
+from famail_temporal.data.demographics import enrich_demographics
 from famail_temporal.fairness.g0_power_basis import fit as fit_g0
 from famail_temporal.fairness.hat_matrices import precompute_hat_matrices
 from famail_temporal.utils.seeding import set_all_seeds
@@ -68,10 +69,22 @@ def run(force: bool = False) -> None:
     demo_feature_names = list(demographics_raw['feature_names'])
     valid_mask = district_raw['valid_mask']
 
+    # Derive per-capita and log features from raw demographic columns.
+    # config.DEMOGRAPHIC_FEATURES may reference derived features (e.g.,
+    # GDPperCapita, CompPerCapita) that don't exist in the raw data.
+    demographics_grid, demo_feature_names = enrich_demographics(
+        demographics_grid, demo_feature_names,
+    )
+    print(
+        f"[preprocess] Demographics enriched: {len(demo_feature_names)} features "
+        f"(raw + derived)",
+        flush=True,
+    )
+
     for feat in config.DEMOGRAPHIC_FEATURES:
         if feat not in demo_feature_names:
             raise ValueError(
-                f"Demographic feature '{feat}' not found in raw: "
+                f"Demographic feature '{feat}' not found in enriched demographics: "
                 f"{demo_feature_names}"
             )
 
