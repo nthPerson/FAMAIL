@@ -40,3 +40,65 @@ def test_rank_deficient_raises():
     demo = np.column_stack([col1, col1, rng.randn(N)])
     with pytest.raises(AssertionError, match="rank"):
         precompute_hat_matrices(rng.uniform(0.5, 5.0, N), demo, ["a", "b", "c"])
+
+
+def test_demands_must_be_1d():
+    with pytest.raises(ValueError, match="1-D"):
+        precompute_hat_matrices(np.zeros((10, 2)), np.zeros((10, 2)), ["a", "b"])
+
+
+def test_demo_must_be_2d():
+    with pytest.raises(ValueError, match="2-D"):
+        precompute_hat_matrices(np.zeros(10), np.zeros(10), ["a"])
+
+
+def test_shape_mismatch_raises():
+    with pytest.raises(ValueError):
+        # demands has length 10, demo has length 12
+        precompute_hat_matrices(np.zeros(10), np.zeros((12, 2)), ["a", "b"])
+
+
+def test_empty_feature_names_raises():
+    with pytest.raises(ValueError):
+        precompute_hat_matrices(np.zeros(10), np.zeros((10, 0)), [])
+
+
+def test_small_N_raises():
+    with pytest.raises(ValueError):
+        precompute_hat_matrices(np.zeros(5), np.zeros((5, 2)), ["a", "b"])
+
+
+def test_nan_demands_raises():
+    rng = np.random.RandomState(0)
+    D = np.ones(20)
+    D[0] = np.nan
+    with pytest.raises(ValueError):
+        precompute_hat_matrices(D, rng.randn(20, 2), ["a", "b"])
+
+
+def test_nan_demo_raises():
+    rng = np.random.RandomState(1)
+    demo = rng.randn(20, 2)
+    demo[0, 0] = np.nan
+    with pytest.raises(ValueError):
+        precompute_hat_matrices(np.ones(20), demo, ["a", "b"])
+
+
+def test_zero_variance_demo_raises():
+    rng = np.random.RandomState(2)
+    N = 20
+    demo = np.column_stack([rng.randn(N), np.ones(N)])  # second column is constant
+    with pytest.raises(ValueError, match="zero-variance"):
+        precompute_hat_matrices(rng.uniform(0.5, 5.0, N), demo, ["real", "constant"])
+
+
+def test_return_arrays_read_only():
+    rng = np.random.RandomState(3)
+    hat = precompute_hat_matrices(
+        rng.uniform(0.5, 5.0, 30),
+        rng.randn(30, 3),
+        ["a", "b", "c"],
+    )
+    for key in ("I_minus_H_demo", "M", "scaler_mean", "scaler_std"):
+        with pytest.raises(ValueError):
+            hat[key].flat[0] = 99.0

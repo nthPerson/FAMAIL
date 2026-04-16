@@ -57,17 +57,35 @@ def precompute_hat_matrices(
             "would silently poison hat matrix downstream"
         )
 
+    # Zero-variance preflight: StandardScaler silently replaces std=0 with
+    # std=1, producing an all-zero scaled column that triggers the rank check
+    # with a misleading "collinearity" message when the real cause is different.
+    col_std = demo.std(axis=0)
+    zero_var_cols = np.where(col_std < 1e-12)[0]
+    if len(zero_var_cols) > 0:
+        bad = [feature_names[i] for i in zero_var_cols]
+        raise ValueError(
+            f"demographic_features has zero-variance columns: {bad}. "
+            f"StandardScaler would silently replace std=0 with std=1, producing "
+            f"an all-zero scaled column that fails the rank check."
+        )
+
     scaler = StandardScaler()
     X_demo_scaled = scaler.fit_transform(demo)
     X = np.column_stack([np.ones(N), X_demo_scaled])
 
-    H = X @ np.linalg.pinv(X)
-    rank_H = int(np.linalg.matrix_rank(H))
+    # rank(H) == rank(X) always (H inherits X's column space). rank(X) on
+    # (N, p+1) is O(N * p^2) vs rank(H) on (N, N) which is O(N^3) — critical
+    # at the N=~8000 preprocessing scale.
+    rank_X = int(np.linalg.matrix_rank(X))
     expected_rank = X.shape[1]
-    assert rank_H == expected_rank, (
-        f"H_demo rank {rank_H}, expected {expected_rank}. "
-        "Demographic collinearity — check feature set."
+    assert rank_X == expected_rank, (
+        f"X has rank {rank_X}, expected {expected_rank}. "
+        "Demographic collinearity or zero-variance column — check feature set."
     )
+    H = X @ np.linalg.pinv(X)
+    # Preserve the 'rank_H_demo' key in the return dict for back-compat
+    rank_H_demo = rank_X  # rank(H) == rank(X)
 
     I_minus_H_demo = np.eye(N) - H
     M = np.eye(N) - np.ones((N, N)) / N
@@ -93,6 +111,6 @@ def precompute_hat_matrices(
         'scaler_std': scaler_std,
         'n_units': N,
         'n_demo_features': len(feature_names),
-        'feature_names': feature_names,
-        'rank_H_demo': rank_H,
+        'feature_names': list(feature_names),
+        'rank_H_demo': rank_H_demo,
     }
