@@ -5,6 +5,34 @@ and non-trivial edits. Minor bugfixes and UI tweaks are omitted.
 
 ---
 
+## 2026-04-16 - FAMAIL Temporal Evaluation Framework
+
+**Files**: `famail_temporal/evaluation/*`, `famail_temporal/fairness/spatial.py`,
+`famail_temporal/algorithm/modifier.py`, `famail_temporal/config.py`,
+`famail_temporal/tests/test_*`
+
+**Why**: The `famail_temporal/` algorithm was complete (178 tests) but lacked
+reproducible end-to-end experiment orchestration. A downstream team member also
+needed a fairness-augmented version of `passenger_seeking_trajs_45-800.pkl` and
+a `(48, 90, T, 4)` fairness-aware state-space grid for dashboard and analysis
+work. The framework bundles both priority artifacts, the orchestration to
+produce them, and gradient-level diagnostics for investigating whether the new
+cell-level fairness formulation is actually driving optimization.
+
+**What**: Added `famail_temporal.evaluation` with seven modules - `grid`,
+`augment`, `diagnostics`, `runner`, `persistence`, `report`, `__init__`. Added
+`per_unit_gini_decomposition` and `compute_spatial_attribution` to
+`fairness/spatial.py` (refactored `pairwise_gini` to route through the
+decomposition primitive). Added public `TrajectoryModifier.current_pickup_3d()`.
+Extended `ModificationResult` with Tier A gradient-decomposition fields gated
+by `config.DIAGNOSTICS_ENABLED` and a `--no-diagnostics` CLI opt-out. Runner
+produces a timestamped output directory with provenance-stamped `metrics.json`,
+two grid pickles, two augmented-trajectory pickles (gzipped automatically above
+500 MB), two CSVs, a sidecar JSON of modified IDs, a histories pickle, and a
+tables-only `report.md`.
+
+---
+
 ## 2026-03-24 — Per-Term Gradient Normalization
 
 **Files**: `experiment_framework/experiment_config.py`, `experiment_framework/gradient_decomposition.py`, `experiment_framework/experiment_result.py`
