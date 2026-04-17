@@ -17,6 +17,7 @@ import datetime as _dt
 import gzip
 import json
 import pickle
+import shlex
 import subprocess
 import sys
 from pathlib import Path
@@ -49,7 +50,7 @@ def _git_dirty() -> bool:
 
 
 def _command_line() -> str:
-    return " ".join(sys.argv)
+    return shlex.join(sys.argv)
 
 
 def _gzip_threshold_bytes() -> int:
@@ -215,14 +216,38 @@ def _write_per_unit_attribution_csv(result: ExperimentResult, path: Path, mask_3
 
 
 def _coerce_json(v: Any) -> Any:
+    """Recursively coerce values to JSON-native types.
+
+    Lists and tuples both become JSON arrays (lossy for tuple-vs-list; acceptable
+    since this dict is for human inspection, not round-tripping). Dicts recurse
+    through values (keys are stringified by json.dumps itself). Any other type
+    falls back to str(v) as a last resort. This is the single source of JSON
+    coercion for the metrics.json payload — json.dumps is called WITHOUT default=.
+    """
+    if v is None or isinstance(v, (int, float, str, bool)):
+        return v
     if isinstance(v, (list, tuple)):
         return [_coerce_json(x) for x in v]
-    if isinstance(v, (int, float, str, bool)) or v is None:
-        return v
+    if isinstance(v, dict):
+        return {str(k): _coerce_json(val) for k, val in v.items()}
     return str(v)
 
 
 def write(result: ExperimentResult, output_root: Path, bundle=None) -> Path:
+    """Serialize an ExperimentResult to {output_root}/{experiment_id}/ and return that path.
+
+    Write ordering: all other artifacts first, then metrics.json LAST. This means
+    readers (e.g. Phase 8's report generator) can treat metrics.json as a
+    completion sentinel — a run directory is considered complete iff metrics.json
+    exists. Partial directories (due to crash mid-write) lack metrics.json and
+    should be skipped or re-generated.
+
+    The active_mask used in artifact payloads is taken from bundle.mask_3d when
+    bundle is provided; otherwise it is reconstructed from NaN pattern of
+    grid_before[..., 0]. Both paths produce equivalent masks under the current
+    build_fairness_grid invariant (inactive cells are NaN, active cells are
+    finite) but the bundle path is preferred when available.
+    """
     output_root = Path(output_root)
     out_dir = output_root / result.experiment_id
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -324,5 +349,7 @@ def write(result: ExperimentResult, output_root: Path, bundle=None) -> Path:
         "artifact_paths": artifact_paths,
         "file_sizes_bytes": file_sizes,
     }
-    (out_dir / "metrics.json").write_text(json.dumps(metrics, indent=2, default=str))
+    (out_dir / "metrics.json").write_text(
+        json.dumps(_coerce_json(metrics), indent=2)
+    )
     return out_dir
