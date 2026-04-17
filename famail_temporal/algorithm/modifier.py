@@ -95,6 +95,14 @@ class TrajectoryModifier:
         # Clone so we don't mutate the original bundle array
         self._base_pickup_3d = torch.from_numpy(bundle.pickup_3d).float().clone()
 
+    def current_pickup_3d(self) -> np.ndarray:
+        """Return the post-modification pickup tensor as a numpy ndarray.
+
+        Shape (grid_x, grid_y, T), float32. Returns a copy so callers
+        cannot mutate modifier state.
+        """
+        return self._base_pickup_3d.detach().cpu().numpy().copy().astype(np.float32)
+
     def _get_annealed_temperature(self, iteration: int) -> float:
         """Exponential temperature annealing: tau_max * (tau_min/tau_max)^(t/T)."""
         if not config.ANNEAL_TEMPERATURE or self.max_iterations <= 1:

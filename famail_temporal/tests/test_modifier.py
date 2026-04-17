@@ -74,3 +74,26 @@ def test_modify_single_respects_epsilon_ball():
         f"Final pickup {final} strayed {diff} from original {orig}, "
         f"exceeding epsilon={config.EPSILON_BALL}"
     )
+
+
+def test_current_pickup_3d_reflects_modifications():
+    """current_pickup_3d() must return the post-modification pickup tensor as a
+    numpy ndarray matching bundle.pickup_3d's shape."""
+    import numpy as np
+    from famail_temporal.algorithm.modifier import TrajectoryModifier
+    from famail_temporal.algorithm.objective import FAMAILObjective
+
+    bundle = _make_synthetic_bundle(N_cells_per_block=10, seed=0)
+    objective = FAMAILObjective(bundle, alpha_spatial=1.0, alpha_causal=0.0, alpha_fidelity=0.0)
+    modifier = TrajectoryModifier(
+        objective=objective, bundle=bundle, max_iterations=2,
+    )
+    before = modifier.current_pickup_3d()
+    assert isinstance(before, np.ndarray)
+    assert before.shape == bundle.pickup_3d.shape
+    assert before.dtype == np.float32
+    assert np.allclose(before, bundle.pickup_3d)
+
+    snapshot = before.copy()
+    before[0, 0, 0] = 999.0
+    assert np.allclose(modifier.current_pickup_3d(), snapshot)
