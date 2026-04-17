@@ -249,7 +249,11 @@ def main(argv: Optional[list[str]] = None) -> int:
         k=args.k,
         diagnostics_enabled=not args.no_diagnostics,
     )
+    from famail_temporal.evaluation.persistence import write
+    output_root = Path(config.PACKAGE_ROOT) / "results"
+    out_dir = write(result, output_root=output_root)
     print(f"[runner] experiment_id = {result.experiment_id}")
+    print(f"[runner] results_dir  = {out_dir}")
     print(f"[runner]   F_spatial: {result.f_spatial_before:.4f} -> {result.f_spatial_after:.4f}")
     print(f"[runner]   F_causal:  {result.f_causal_before:.4f} -> {result.f_causal_after:.4f}")
     return 0
