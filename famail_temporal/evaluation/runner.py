@@ -135,6 +135,11 @@ def run_experiment(
         bundle = _load_bundle(max_trajectories=max_trajectories, max_drivers=max_drivers)
 
         grid_before = build_fairness_grid(bundle)
+        if diagnostics_enabled:
+            from famail_temporal.evaluation.diagnostics import compute_gradient_sensitivity
+            sensitivity_before = compute_gradient_sensitivity(bundle, bundle.pickup_3d)
+        else:
+            sensitivity_before = None
         metrics_before = _scalar_metrics_from_grid(grid_before)
         augmented_before = augment_trajectories(bundle.trajectories, grid_before)
         attr_unsigned, attr_signed = compute_per_unit_attribution(bundle)
@@ -174,6 +179,10 @@ def run_experiment(
 
         pickup_after = modifier.current_pickup_3d()
         grid_after = build_fairness_grid(bundle, pickup_3d=pickup_after)
+        if diagnostics_enabled:
+            sensitivity_after = compute_gradient_sensitivity(bundle, pickup_after)
+        else:
+            sensitivity_after = None
         metrics_after = _scalar_metrics_from_grid(grid_after)
 
         modified_by_tid = {h.original.trajectory_id: h.modified for h in histories}
@@ -204,8 +213,8 @@ def run_experiment(
             grid_after=grid_after,
             per_unit_attribution_before=attr_unsigned,
             per_unit_attribution_signed_before=attr_signed,
-            gradient_sensitivity_before=None,
-            gradient_sensitivity_after=None,
+            gradient_sensitivity_before=sensitivity_before,
+            gradient_sensitivity_after=sensitivity_after,
             modified_trajectory_ids=[h.original.trajectory_id for h in histories],
             histories=histories,
             top_k_scores=top_k_scores,
