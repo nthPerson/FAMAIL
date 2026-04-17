@@ -57,6 +57,40 @@ def test_report_marks_overridden_config_values_bold(tmp_path):
 
 
 def test_report_reads_only_from_disk(tmp_path):
-    result = _fake_result()
+    """render() takes exactly one parameter (output_dir) — no ExperimentResult
+    or any other data argument. This locks the disk-only contract structurally,
+    not just by parameter name."""
+    import inspect
+    sig = inspect.signature(render)
+    params = list(sig.parameters.values())
+    assert len(params) == 1, (
+        f"render() must have exactly one parameter (output_dir); "
+        f"got {[p.name for p in params]}"
+    )
+    assert params[0].name == "output_dir"
+
+
+def test_report_key_findings_reflect_deltas(tmp_path):
+    """Key findings section must accurately reflect the sign and magnitude of
+    fairness deltas, not just whether fields exist."""
+    # Fake result: f_spatial improved by +0.1, f_causal regressed by -0.05
+    from dataclasses import replace
+    result = replace(
+        _fake_result(),
+        f_spatial_before=0.3, f_spatial_after=0.4,
+        f_causal_before=0.55, f_causal_after=0.50,
+    )
     out_dir = write(result, output_root=tmp_path)
-    assert render.__code__.co_varnames[0] == "output_dir"
+    report = render(out_dir).read_text()
+    assert "F_spatial improved by +0.1000" in report
+    assert "F_causal regressed by -0.0500" in report
+
+
+def test_diagnostics_section_absent_when_disabled(tmp_path):
+    """When diagnostics_enabled is False, the 'Gradient diagnostics' header
+    must not appear in the report."""
+    from dataclasses import replace
+    result = replace(_fake_result(), diagnostics_enabled=False)
+    out_dir = write(result, output_root=tmp_path)
+    report = render(out_dir).read_text()
+    assert "Gradient diagnostics" not in report

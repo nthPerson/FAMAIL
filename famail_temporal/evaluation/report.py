@@ -84,8 +84,11 @@ def _convergence_summary(lines, m):
 
 
 def _diagnostics_summary(lines, m):
-    ds = m.get("diagnostics_summary") or {}
+    ds = m.get("diagnostics_summary")
     lines.append("## Gradient diagnostics\n")
+    if ds is None:
+        lines.append("_No diagnostics captured (top-k was empty or histories produced no iterations)._\n")
+        return
     lines.append("| Metric | Value |")
     lines.append("|---|---:|")
     for k in ("mean_grad_spatial_norm", "mean_grad_causal_norm", "mean_grad_fidelity_norm",
@@ -135,13 +138,17 @@ def _key_findings(lines, m):
         findings.append("ASR Gini unchanged - only pickups are modified by the framework.")
     if m.get("diagnostics_enabled") and m.get("diagnostics_summary"):
         ds = m["diagnostics_summary"]
-        dom = max(
-            [("spatial", ds.get("frac_iters_spatial_dominant") or 0.0),
-             ("causal",  ds.get("frac_iters_causal_dominant")  or 0.0),
-             ("fidelity",ds.get("frac_iters_fidelity_dominant")or 0.0)],
-            key=lambda kv: kv[1],
-        )
-        findings.append(f"Dominant gradient term: `{dom[0]}` in {dom[1]:.1%} of iterations.")
+        fracs = [
+            ("spatial", ds.get("frac_iters_spatial_dominant") or 0.0),
+            ("causal",  ds.get("frac_iters_causal_dominant")  or 0.0),
+            ("fidelity",ds.get("frac_iters_fidelity_dominant")or 0.0),
+        ]
+        # Skip the dominance finding when every fraction is effectively zero —
+        # this happens at convergence or with fully-zero gradients, and a
+        # "dominant at 0.0%" bullet is misleading.
+        if max(f for _, f in fracs) >= 1e-4:
+            dom = max(fracs, key=lambda kv: kv[1])
+            findings.append(f"Dominant gradient term: `{dom[0]}` in {dom[1]:.1%} of iterations.")
     lines.append("## Key findings\n")
     if not findings:
         lines.append("_No notable findings._\n")
