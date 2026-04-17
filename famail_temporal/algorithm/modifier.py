@@ -51,6 +51,14 @@ class ModificationResult:
     f_fidelity: float
     gradient_norm: float
     cumulative_delta: np.ndarray
+    # Tier A diagnostics - None when diagnostics_enabled=False.
+    grad_spatial_norm: float | None = None
+    grad_causal_norm: float | None = None
+    grad_fidelity_norm: float | None = None
+    grad_cosine_spatial_causal: float | None = None
+    grad_cosine_fairness_fidelity: float | None = None
+    sign_flipped: bool | None = None
+    dominant_term: str | None = None
 
 
 @dataclass
@@ -82,6 +90,7 @@ class TrajectoryModifier:
         epsilon: float = config.EPSILON_BALL,
         max_iterations: int = config.MAX_ITERATIONS,
         convergence_tol: float = config.CONVERGENCE_TOL,
+        diagnostics_enabled: bool | None = None,
     ):
         self.objective = objective
         self.bundle = bundle
@@ -90,6 +99,10 @@ class TrajectoryModifier:
         self.epsilon = epsilon
         self.max_iterations = max_iterations
         self.convergence_tol = convergence_tol
+        self.diagnostics_enabled = (
+            config.DIAGNOSTICS_ENABLED if diagnostics_enabled is None
+            else diagnostics_enabled
+        )
 
         self.soft_assign = SoftCellAssignment()
         # Clone so we don't mutate the original bundle array
@@ -125,6 +138,64 @@ class TrajectoryModifier:
                         return True
         return False
 
+    def _compute_decomposed_gradient(
+        self,
+        f_spatial: torch.Tensor,
+        f_causal: torch.Tensor,
+        f_fidelity: torch.Tensor,
+        pickup_tensor: torch.Tensor,
+    ):
+        """Return (grad_combined_ndarray, diagnostics_dict)."""
+        grad_spatial = torch.autograd.grad(
+            f_spatial, pickup_tensor, retain_graph=True,
+        )[0].detach().cpu().numpy()
+        grad_causal = torch.autograd.grad(
+            f_causal, pickup_tensor, retain_graph=True,
+        )[0].detach().cpu().numpy()
+        alpha_sp = self.objective.alpha_spatial
+        alpha_ca = self.objective.alpha_causal
+        alpha_fi = self.objective.alpha_fidelity
+
+        if alpha_fi > 0:
+            grad_fidelity = torch.autograd.grad(
+                f_fidelity, pickup_tensor, retain_graph=True,
+            )[0].detach().cpu().numpy()
+        else:
+            grad_fidelity = np.zeros_like(grad_spatial)
+
+        grad_combined = (
+            alpha_sp * grad_spatial
+            + alpha_ca * grad_causal
+            + alpha_fi * grad_fidelity
+        )
+
+        def _cos(a, b):
+            na, nb = np.linalg.norm(a), np.linalg.norm(b)
+            return float(np.dot(a, b) / (na * nb)) if na > 1e-8 and nb > 1e-8 else 0.0
+
+        norms = {
+            "spatial":  float(np.linalg.norm(grad_spatial)),
+            "causal":   float(np.linalg.norm(grad_causal)),
+            "fidelity": float(np.linalg.norm(grad_fidelity)),
+        }
+        weighted = {
+            "spatial":  alpha_sp * norms["spatial"],
+            "causal":   alpha_ca * norms["causal"],
+            "fidelity": alpha_fi * norms["fidelity"],
+        }
+        dominant = max(weighted, key=weighted.get)
+
+        fairness_grad = alpha_sp * grad_spatial + alpha_ca * grad_causal
+        diagnostics = {
+            "grad_spatial_norm":              norms["spatial"],
+            "grad_causal_norm":               norms["causal"],
+            "grad_fidelity_norm":             norms["fidelity"],
+            "grad_cosine_spatial_causal":     _cos(grad_spatial, grad_causal),
+            "grad_cosine_fairness_fidelity":  _cos(fairness_grad, grad_fidelity),
+            "dominant_term":                  dominant,
+        }
+        return grad_combined, diagnostics
+
     def modify_single(self, trajectory: Trajectory) -> ModificationHistory:
         """Run the ST-iFGSM loop on a single trajectory.
 
@@ -134,6 +205,7 @@ class TrajectoryModifier:
         3. Iteratively perturb the pickup location using signed gradients
         4. Persist the final change to the shared _base_pickup_3d
         """
+        self._prev_grad_sign = None
         pickup_state = trajectory.states[-1]
         orig_cx = int(pickup_state.x_grid)
         orig_cy = int(pickup_state.y_grid)
@@ -222,14 +294,20 @@ class TrajectoryModifier:
                 multi_stream_kwargs=ms_kwargs,
             )
 
-            # (e) Backward — zero_grad before backward to clear accumulated gradients
+            # (e) Backward - decomposed if diagnostics_enabled, else single-backward
             self.objective.zero_grad()
-            total.backward(retain_graph=True)
-
-            if pickup_tensor.grad is None:
-                grad = np.zeros(2)
+            tier_a_metrics = None
+            if self.diagnostics_enabled:
+                grad, tier_a_metrics = self._compute_decomposed_gradient(
+                    terms["f_spatial"], terms["f_causal"], terms["f_fidelity"],
+                    pickup_tensor,
+                )
             else:
-                grad = pickup_tensor.grad.detach().cpu().numpy()
+                total.backward(retain_graph=True)
+                if pickup_tensor.grad is None:
+                    grad = np.zeros(2)
+                else:
+                    grad = pickup_tensor.grad.detach().cpu().numpy()
             grad_norm = float(np.linalg.norm(grad))
 
             # (f) ST-iFGSM: delta = clip(alpha * sign(grad), -epsilon, epsilon)
@@ -248,6 +326,15 @@ class TrajectoryModifier:
             # Re-sync cumulative_delta after grid-clip
             cumulative_delta = new_pickup - original_pickup
 
+            prev_sign = self._prev_grad_sign
+            cur_sign = np.sign(grad)
+            sign_flipped = (
+                bool(np.any(prev_sign != cur_sign))
+                if (self.diagnostics_enabled and prev_sign is not None)
+                else (False if self.diagnostics_enabled else None)
+            )
+            self._prev_grad_sign = cur_sign
+
             result = ModificationResult(
                 iteration=it,
                 objective_value=float(total.detach()),
@@ -256,6 +343,13 @@ class TrajectoryModifier:
                 f_fidelity=float(terms["f_fidelity"].detach()),
                 gradient_norm=grad_norm,
                 cumulative_delta=cumulative_delta.copy(),
+                grad_spatial_norm=(tier_a_metrics or {}).get("grad_spatial_norm"),
+                grad_causal_norm=(tier_a_metrics or {}).get("grad_causal_norm"),
+                grad_fidelity_norm=(tier_a_metrics or {}).get("grad_fidelity_norm"),
+                grad_cosine_spatial_causal=(tier_a_metrics or {}).get("grad_cosine_spatial_causal"),
+                grad_cosine_fairness_fidelity=(tier_a_metrics or {}).get("grad_cosine_fairness_fidelity"),
+                sign_flipped=sign_flipped,
+                dominant_term=(tier_a_metrics or {}).get("dominant_term"),
             )
             iterations.append(result)
 

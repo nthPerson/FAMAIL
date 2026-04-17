@@ -52,6 +52,9 @@ EPSILON_BALL: float = 2.0
 MAX_ITERATIONS: int = 50
 CONVERGENCE_TOL: float = 1e-6
 
+# Gradient diagnostics
+DIAGNOSTICS_ENABLED: bool = True
+
 # Soft cell assignment
 SOFT_NEIGHBORHOOD_SIZE: int = 5
 TAU_MAX: float = 1.0
