@@ -47,6 +47,12 @@ def build_fairness_grid(
             f"{bundle.pickup_3d.shape}"
         )
 
+    if not bundle.mask_3d.any():
+        raise ValueError(
+            "bundle.mask_3d has no active units — cannot build a fairness grid "
+            "with zero units. Check the preprocess cache and active-mask thresholds."
+        )
+
     mask = bundle.mask_3d
 
     # Project 3D -> N in canonical order (numpy boolean indexing iterates
@@ -73,9 +79,10 @@ def build_fairness_grid(
         R, tensors["I_minus_H_demo"], tensors["M"],
     ).detach().numpy()
 
-    # Scatter back to (gx, gy, T, 4) with NaN on inactive cells.
-    gx, gy = bundle.pickup_3d.shape[:2]
-    grid = np.full((gx, gy, config.T, 4), np.nan, dtype=np.float32)
+    # Scatter back with NaN on inactive cells. Shape is derived from the
+    # bundle directly so we don't depend on a separately-sourced config.T —
+    # pickup_3d.shape is the single authority for the artifact's geometry.
+    grid = np.full(bundle.pickup_3d.shape + (4,), np.nan, dtype=np.float32)
     ix_x, ix_y, ix_t = np.where(mask)
     grid[ix_x, ix_y, ix_t, 0] = spatial_attr
     grid[ix_x, ix_y, ix_t, 1] = causal_attr

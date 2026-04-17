@@ -101,3 +101,30 @@ def test_pickup_override_changes_grid():
         grid_default[..., 0][bundle.mask_3d],
         grid_mod[..., 0][bundle.mask_3d],
     ), "Channel 0 should change when pickup_3d changes"
+
+
+def test_pickup_mask_indexing_matches_unit_map_canonical_order():
+    """Load-bearing invariant: numpy boolean indexing via bundle.mask_3d
+    iterates in the same (cell-major, time-within-cell) order that
+    UnitIndexMap.from_mask uses. build_fairness_grid's channel 1 (causal_attr)
+    relies on this — otherwise per_unit_attribution would be scattered into
+    cells with a different ordering than the hat matrices were built against.
+    """
+    bundle = _make_synthetic_bundle(N_cells_per_block=10, seed=12)
+    gy = bundle.pickup_3d.shape[1]
+    ix_x, ix_y, ix_t = np.where(bundle.mask_3d)
+    actual_cells = ix_x * gy + ix_y
+    assert np.array_equal(actual_cells, bundle.unit_map.cell_indices)
+    assert np.array_equal(ix_t.astype(np.int8), bundle.unit_map.time_block_indices)
+
+
+def test_all_false_mask_raises_valueerror():
+    """Fail-loud: an all-False active mask is a degenerate input; returning
+    an all-NaN grid would mask a serious upstream problem silently.
+    """
+    import dataclasses
+    bundle = _make_synthetic_bundle(N_cells_per_block=10, seed=14)
+    false_mask = np.zeros_like(bundle.mask_3d)
+    bundle_bad = dataclasses.replace(bundle, mask_3d=false_mask)
+    with pytest.raises(ValueError, match="no active units"):
+        build_fairness_grid(bundle_bad)
