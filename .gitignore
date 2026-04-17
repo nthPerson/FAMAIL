@@ -54,3 +54,7 @@ famail_temporal/discriminator_checkpoints/*
 !famail_temporal/discriminator_checkpoints/README.md
 !famail_temporal/discriminator_checkpoints/default/
 famail_temporal/discriminator_checkpoints/default/*.pt
+
+# Evaluation framework output (per-experiment directories)
+famail_temporal/results/*
+!famail_temporal/results/.gitkeep
