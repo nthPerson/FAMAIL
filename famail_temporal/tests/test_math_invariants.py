@@ -377,3 +377,20 @@ def test_precompute_hat_matrices_rejects_small_N():
     # N=5 with 3 demographic features: too few even for rank check
     with pytest.raises(ValueError):
         precompute_hat_matrices(np.ones(5), rng.randn(5, 3), ["a", "b", "c"])
+
+
+def test_spatial_gini_decomposition_sums_to_gini():
+    """sum(per_unit_gini_decomposition(x)) == pairwise_gini(x) for random x."""
+    import torch
+    from famail_temporal.fairness.spatial import (
+        per_unit_gini_decomposition, pairwise_gini,
+    )
+    torch.manual_seed(17)
+    for _ in range(5):
+        n = int(torch.randint(2, 100, (1,)).item())
+        values = torch.rand(n) * 10.0 + 0.01
+        assert torch.isclose(
+            per_unit_gini_decomposition(values).sum(),
+            pairwise_gini(values),
+            atol=1e-6,
+        )
