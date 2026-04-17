@@ -164,10 +164,7 @@ def run_experiment(
             objective = FAMAILObjective(bundle, alpha_fidelity=0.0)
         else:
             objective = FAMAILObjective(bundle)
-        try:
-            ms_builder = MultiStreamContextBuilder(bundle.multi_stream)
-        except Exception:
-            ms_builder = None
+        ms_builder = MultiStreamContextBuilder(bundle.multi_stream)
         modifier = TrajectoryModifier(
             objective=objective, bundle=bundle,
             multi_stream_builder=ms_builder,

@@ -78,13 +78,17 @@ def test_run_experiment_unknown_override_raises(tiny_bundle):
         run_experiment(k=2, config_overrides={"NOT_REAL": 7})
 
 
-def test_run_experiment_no_diagnostics_produces_none_fields(tiny_bundle):
+def test_run_experiment_no_diagnostics_disables_history_grad_norms(tiny_bundle):
+    """When diagnostics_enabled=False, per-iteration gradient-decomposition
+    fields on ModificationHistory iterations should be None. (Tier C sensitivity
+    grids are checked in a separate Phase 9 test.)"""
     result = run_experiment(k=2, max_trajectories=6, diagnostics_enabled=False)
-    assert result.gradient_sensitivity_before is None
-    assert result.gradient_sensitivity_after is None
     for hist in result.histories:
         for r in hist.iterations:
             assert r.grad_spatial_norm is None
+            assert r.grad_causal_norm is None
+            assert r.grad_fidelity_norm is None
+            assert r.dominant_term is None
 
 
 def test_experiment_id_format_with_name(tiny_bundle):
