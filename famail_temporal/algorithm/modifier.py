@@ -107,6 +107,7 @@ class TrajectoryModifier:
         self.soft_assign = SoftCellAssignment()
         # Clone so we don't mutate the original bundle array
         self._base_pickup_3d = torch.from_numpy(bundle.pickup_3d).float().clone()
+        self._prev_grad_sign = None
 
     def current_pickup_3d(self) -> np.ndarray:
         """Return the post-modification pickup tensor as a numpy ndarray.
@@ -146,22 +147,35 @@ class TrajectoryModifier:
         pickup_tensor: torch.Tensor,
     ):
         """Return (grad_combined_ndarray, diagnostics_dict)."""
-        grad_spatial = torch.autograd.grad(
-            f_spatial, pickup_tensor, retain_graph=True,
-        )[0].detach().cpu().numpy()
-        grad_causal = torch.autograd.grad(
-            f_causal, pickup_tensor, retain_graph=True,
-        )[0].detach().cpu().numpy()
         alpha_sp = self.objective.alpha_spatial
         alpha_ca = self.objective.alpha_causal
         alpha_fi = self.objective.alpha_fidelity
+        zero_grad = np.zeros(2, dtype=np.float32)
+
+        # Skip backwards when a term's alpha is zero — its contribution to the
+        # combined gradient is identically zero, and running the backward would
+        # be wasted compute (or fail, in the fidelity case where f_fidelity
+        # is an unconnected constant when alpha_fidelity == 0).
+        if alpha_sp > 0:
+            grad_spatial = torch.autograd.grad(
+                f_spatial, pickup_tensor, retain_graph=True,
+            )[0].detach().cpu().numpy()
+        else:
+            grad_spatial = zero_grad
+
+        if alpha_ca > 0:
+            grad_causal = torch.autograd.grad(
+                f_causal, pickup_tensor, retain_graph=True,
+            )[0].detach().cpu().numpy()
+        else:
+            grad_causal = zero_grad
 
         if alpha_fi > 0:
             grad_fidelity = torch.autograd.grad(
                 f_fidelity, pickup_tensor, retain_graph=True,
             )[0].detach().cpu().numpy()
         else:
-            grad_fidelity = np.zeros_like(grad_spatial)
+            grad_fidelity = zero_grad
 
         grad_combined = (
             alpha_sp * grad_spatial
@@ -183,7 +197,16 @@ class TrajectoryModifier:
             "causal":   alpha_ca * norms["causal"],
             "fidelity": alpha_fi * norms["fidelity"],
         }
-        dominant = max(weighted, key=weighted.get)
+        # When all weighted norms are ~zero (e.g., at convergence or when
+        # all alphas happen to give zero-norm gradients simultaneously),
+        # there is no meaningful dominant term. Return None rather than
+        # silently picking one via dict-insertion-order tiebreak — otherwise
+        # aggregate metrics like frac_iters_spatial_dominant get biased.
+        max_weighted = max(weighted.values())
+        if max_weighted < 1e-8:
+            dominant = None
+        else:
+            dominant = max(weighted, key=weighted.get)
 
         fairness_grad = alpha_sp * grad_spatial + alpha_ca * grad_causal
         diagnostics = {

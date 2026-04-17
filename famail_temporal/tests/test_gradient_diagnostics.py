@@ -36,7 +36,7 @@ def test_modification_result_has_diagnostic_fields_when_enabled():
         assert r.grad_causal_norm is not None
         assert r.grad_fidelity_norm is not None
         assert r.grad_cosine_spatial_causal is not None
-        assert r.dominant_term in {"spatial", "causal", "fidelity"}
+        assert r.dominant_term in {"spatial", "causal", "fidelity", None}
         assert isinstance(r.sign_flipped, bool)
 
 
@@ -92,3 +92,43 @@ def test_diagnostics_default_from_config():
     obj = FAMAILObjective(bundle, alpha_spatial=0.5, alpha_causal=0.5, alpha_fidelity=0.0)
     modifier = TrajectoryModifier(objective=obj, bundle=bundle, max_iterations=1)
     assert modifier.diagnostics_enabled is True
+
+
+def test_dominant_term_none_when_all_gradients_zero():
+    """At convergence or in degenerate configurations, dominant_term should
+    be None rather than silently picking via dict-insertion-order tiebreak."""
+    bundle = _make_synthetic_bundle(N_cells_per_block=10, seed=17)
+    # All three alphas zero → all gradients zero; dominant term undefined.
+    obj = FAMAILObjective(bundle, alpha_spatial=0.0, alpha_causal=0.0, alpha_fidelity=0.0)
+    modifier = TrajectoryModifier(
+        objective=obj, bundle=bundle, max_iterations=1, diagnostics_enabled=True,
+    )
+    traj = _first_active_traj(bundle)
+    hist = modifier.modify_single(traj)
+    # At least one iteration should have a None dominant_term since all
+    # weighted norms are below the 1e-8 threshold.
+    assert hist.iterations[0].dominant_term is None
+
+
+def test_zero_alpha_spatial_skips_spatial_backward():
+    """alpha_spatial=0 should skip the spatial backward and report zero norm."""
+    bundle = _make_synthetic_bundle(N_cells_per_block=10, seed=19)
+    obj = FAMAILObjective(bundle, alpha_spatial=0.0, alpha_causal=1.0, alpha_fidelity=0.0)
+    modifier = TrajectoryModifier(
+        objective=obj, bundle=bundle, max_iterations=1, diagnostics_enabled=True,
+    )
+    traj = _first_active_traj(bundle)
+    hist = modifier.modify_single(traj)
+    assert hist.iterations[0].grad_spatial_norm == 0.0
+
+
+def test_zero_alpha_causal_skips_causal_backward():
+    """alpha_causal=0 should skip the causal backward and report zero norm."""
+    bundle = _make_synthetic_bundle(N_cells_per_block=10, seed=21)
+    obj = FAMAILObjective(bundle, alpha_spatial=1.0, alpha_causal=0.0, alpha_fidelity=0.0)
+    modifier = TrajectoryModifier(
+        objective=obj, bundle=bundle, max_iterations=1, diagnostics_enabled=True,
+    )
+    traj = _first_active_traj(bundle)
+    hist = modifier.modify_single(traj)
+    assert hist.iterations[0].grad_causal_norm == 0.0
