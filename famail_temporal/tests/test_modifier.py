@@ -97,3 +97,26 @@ def test_current_pickup_3d_reflects_modifications():
     snapshot = before.copy()
     before[0, 0, 0] = 999.0
     assert np.allclose(modifier.current_pickup_3d(), snapshot)
+
+
+def test_modifier_resolves_config_at_init_not_at_import():
+    """Regression: config overrides applied AFTER module import must still be
+    picked up when the modifier is constructed without explicit kwargs.
+    Previously, default args like `max_iterations: int = config.MAX_ITERATIONS`
+    froze the value at import time."""
+    from famail_temporal import config
+    from famail_temporal.algorithm.modifier import TrajectoryModifier
+    from famail_temporal.algorithm.objective import FAMAILObjective
+    bundle = _make_synthetic_bundle(N_cells_per_block=10, seed=0)
+    objective = FAMAILObjective(bundle, alpha_spatial=1.0, alpha_causal=0.0, alpha_fidelity=0.0)
+
+    original = config.MAX_ITERATIONS
+    try:
+        config.MAX_ITERATIONS = 7
+        modifier = TrajectoryModifier(objective=objective, bundle=bundle)
+        assert modifier.max_iterations == 7, (
+            f"Expected max_iterations=7 (from config mutation), got "
+            f"{modifier.max_iterations} — default arg bug may have returned"
+        )
+    finally:
+        config.MAX_ITERATIONS = original

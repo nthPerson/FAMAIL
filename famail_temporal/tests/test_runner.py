@@ -136,3 +136,48 @@ def test_augmented_trajs_after_reflects_modified_pickup_cells(tiny_bundle):
                 f"{orig_cell} to {mod_cell} but no trajectory in "
                 f"augmented_trajs_after[{did}] has pickup at {mod_cell}"
             )
+
+
+def test_max_iterations_override_actually_reaches_modifier(tiny_bundle, monkeypatch):
+    """Regression test: --override MAX_ITERATIONS=X must be respected by the
+    modifier. Before the default-arg fix, the modifier's __init__ captured
+    config.MAX_ITERATIONS at module import time and ignored runtime overrides
+    from _apply_config_overrides.
+
+    We spy on TrajectoryModifier.__init__ to capture the modifier's
+    max_iterations attribute as seen at construction time — that is the point
+    where the bug manifests, regardless of whether the synthetic bundle happens
+    to converge before hitting the cap."""
+    from famail_temporal.algorithm import modifier as modifier_mod
+    captured = {}
+    orig_init = modifier_mod.TrajectoryModifier.__init__
+
+    def spy_init(self, *args, **kwargs):
+        orig_init(self, *args, **kwargs)
+        captured["max_iterations"] = self.max_iterations
+
+    monkeypatch.setattr(modifier_mod.TrajectoryModifier, "__init__", spy_init)
+
+    run_experiment(
+        k=2, max_trajectories=6,
+        config_overrides={"MAX_ITERATIONS": 3},
+    )
+    assert captured.get("max_iterations") == 3, (
+        f"modifier was constructed with max_iterations="
+        f"{captured.get('max_iterations')}; override MAX_ITERATIONS=3 "
+        f"was not respected at modifier construction time"
+    )
+
+
+def test_alpha_overrides_actually_reach_objective(tiny_bundle):
+    """Regression test: --override ALPHA_* must be respected by FAMAILObjective.
+    Tests alpha_spatial (alpha_fidelity is special-cased by the Identity-
+    discriminator sentinel, so we probe alpha_spatial which has no such branch)."""
+    result = run_experiment(
+        k=2, max_trajectories=6,
+        config_overrides={"ALPHA_SPATIAL": 0.77},
+    )
+    assert result.effective_alpha_spatial == 0.77, (
+        f"expected effective_alpha_spatial=0.77, got "
+        f"{result.effective_alpha_spatial}"
+    )

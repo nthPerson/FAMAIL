@@ -47,14 +47,18 @@ class FAMAILObjective(nn.Module):
     def __init__(
         self,
         bundle: DataBundle,
-        alpha_spatial: float = config.ALPHA_SPATIAL,
-        alpha_causal: float = config.ALPHA_CAUSAL,
-        alpha_fidelity: float = config.ALPHA_FIDELITY,
+        alpha_spatial: float | None = None,
+        alpha_causal: float | None = None,
+        alpha_fidelity: float | None = None,
     ):
         super().__init__()
-        self.alpha_spatial = alpha_spatial
-        self.alpha_causal = alpha_causal
-        self.alpha_fidelity = alpha_fidelity
+        # Resolve alpha defaults at __init__ time (NOT at function-definition
+        # time) so runtime config overrides (e.g. --override ALPHA_FIDELITY=0.1)
+        # are respected. Default-arg evaluation happens once at module import,
+        # which would silently freeze the values from that moment.
+        self.alpha_spatial = config.ALPHA_SPATIAL if alpha_spatial is None else alpha_spatial
+        self.alpha_causal = config.ALPHA_CAUSAL if alpha_causal is None else alpha_causal
+        self.alpha_fidelity = config.ALPHA_FIDELITY if alpha_fidelity is None else alpha_fidelity
 
         # Pre-materialize constant tensors as registered buffers
         self.register_buffer("mask_3d", torch.from_numpy(bundle.mask_3d))

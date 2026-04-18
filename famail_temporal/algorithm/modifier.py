@@ -86,19 +86,28 @@ class TrajectoryModifier:
         objective: FAMAILObjective,
         bundle: DataBundle,
         multi_stream_builder=None,
-        alpha: float = config.STEP_SIZE_ALPHA,
-        epsilon: float = config.EPSILON_BALL,
-        max_iterations: int = config.MAX_ITERATIONS,
-        convergence_tol: float = config.CONVERGENCE_TOL,
+        alpha: float | None = None,
+        epsilon: float | None = None,
+        max_iterations: int | None = None,
+        convergence_tol: float | None = None,
         diagnostics_enabled: bool | None = None,
     ):
+        # Resolve each config-backed default at __init__ time (NOT at
+        # function-definition time) so config-override mutations applied
+        # after module import — e.g. by run_experiment's _apply_config_overrides —
+        # are picked up correctly. Default-arg evaluation happens once at
+        # import, which would silently ignore runtime overrides.
         self.objective = objective
         self.bundle = bundle
         self.multi_stream_builder = multi_stream_builder
-        self.alpha = alpha
-        self.epsilon = epsilon
-        self.max_iterations = max_iterations
-        self.convergence_tol = convergence_tol
+        self.alpha = config.STEP_SIZE_ALPHA if alpha is None else alpha
+        self.epsilon = config.EPSILON_BALL if epsilon is None else epsilon
+        self.max_iterations = (
+            config.MAX_ITERATIONS if max_iterations is None else max_iterations
+        )
+        self.convergence_tol = (
+            config.CONVERGENCE_TOL if convergence_tol is None else convergence_tol
+        )
         self.diagnostics_enabled = (
             config.DIAGNOSTICS_ENABLED if diagnostics_enabled is None
             else diagnostics_enabled
