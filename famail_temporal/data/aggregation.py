@@ -35,7 +35,20 @@ def time_bucket_to_hour(time_bucket: int) -> int:
     states with time_bucket=0 — treated as hour 0 (first 5 minutes of day)
     so downstream pipelines don't raise on real-data inputs. All valid
     1-indexed inputs are unchanged.
+
+    Values outside [0, 288] emit a warning (once per process) and are clamped
+    to hour 0 to prevent downstream crashes. If this warning fires, inspect
+    the raw trajectory file — either a schema drift or a parser bug upstream.
     """
+    if time_bucket < 0 or time_bucket > 288:
+        import warnings
+        warnings.warn(
+            f"time_bucket={time_bucket} outside expected range [0, 288]; "
+            f"clamping to hour 0. This likely indicates a data-quality "
+            f"issue in the raw trajectory file.",
+            stacklevel=2,
+        )
+        return 0
     return max(0, (time_bucket - 1) // 12)
 
 

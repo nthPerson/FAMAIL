@@ -95,3 +95,44 @@ def test_experiment_id_format_with_name(tiny_bundle):
     result = run_experiment(k=2, max_trajectories=6, name="my-run")
     assert "my-run" in result.experiment_id
     assert result.experiment_id.startswith("2")
+
+
+def test_run_experiment_records_effective_alphas_when_identity_discriminator(tiny_bundle):
+    """When nn.Identity is the discriminator stub, alpha_fidelity is silently
+    forced to 0.0 at objective-construction time. metrics.json must record the
+    effective value so researchers can't mistake a stub run for a real one."""
+    result = run_experiment(k=2, max_trajectories=6)
+    # Synthetic bundle has nn.Identity discriminator -> alpha_fidelity forced to 0
+    assert result.effective_alpha_fidelity == 0.0
+    assert result.effective_alpha_spatial  == config.ALPHA_SPATIAL
+    assert result.effective_alpha_causal   == config.ALPHA_CAUSAL
+
+
+def test_augmented_trajs_after_reflects_modified_pickup_cells(tiny_bundle):
+    """The augmented_trajs_after artifact must contain the modified pickup cell
+    for top-k trajectories, not the original. A regression that swapped
+    h.original for h.modified would silently produce identical before/after."""
+    result = run_experiment(k=2, max_trajectories=6)
+    if not result.histories:
+        pytest.skip("no top-k modifications produced (all-zero attribution)")
+    for h in result.histories:
+        # Find this trajectory in augmented_trajs_after
+        did = h.original.driver_id
+        # The original pickup state is the last one in the trajectory
+        orig_cell = h.original.pickup_cell
+        mod_cell = h.modified.pickup_cell
+        # If the modification actually moved the cell, the after-artifact must reflect it
+        if orig_cell != mod_cell:
+            # Search the after dict for this trajectory_id via last-state coords
+            found_modified = False
+            for traj_states in result.augmented_trajs_after.get(did, []):
+                last = traj_states[-1]
+                # Coords are 1-indexed on disk
+                if (last[0] - 1, last[1] - 1) == mod_cell:
+                    found_modified = True
+                    break
+            assert found_modified, (
+                f"trajectory {h.original.trajectory_id} moved from "
+                f"{orig_cell} to {mod_cell} but no trajectory in "
+                f"augmented_trajs_after[{did}] has pickup at {mod_cell}"
+            )

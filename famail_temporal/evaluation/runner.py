@@ -30,6 +30,12 @@ class ExperimentResult:
     config_overrides: dict
     diagnostics_enabled: bool
 
+    # Effective alpha values used at runtime (may differ from config.ALPHA_*
+    # when a discriminator stub forces alpha_fidelity=0.0 at construction time).
+    effective_alpha_spatial: float
+    effective_alpha_causal: float
+    effective_alpha_fidelity: float
+
     f_spatial_before: float
     f_spatial_after: float
     f_causal_before: float
@@ -41,8 +47,8 @@ class ExperimentResult:
 
     grid_before: np.ndarray
     grid_after: np.ndarray
-    per_unit_attribution_before: np.ndarray
-    per_unit_attribution_signed_before: np.ndarray
+    per_unit_attribution: np.ndarray
+    per_unit_attribution_signed: np.ndarray
 
     gradient_sensitivity_before: Optional[np.ndarray]
     gradient_sensitivity_after: Optional[np.ndarray]
@@ -154,7 +160,7 @@ def run_experiment(
         if not top_k_indices:
             raise ValueError(
                 "Top-k is empty - no trajectories with strictly positive "
-                "attribution were found. Inspect per_unit_attribution_before; "
+                "attribution were found. Inspect per_unit_attribution; "
                 "if all zeros, demographics carry no signal on this bundle."
             )
         top_k_scores = [scored[i][1] for i in range(len(top_k_indices))]
@@ -169,6 +175,11 @@ def run_experiment(
             objective = FAMAILObjective(bundle, alpha_fidelity=0.0)
         else:
             objective = FAMAILObjective(bundle)
+        effective_alphas = (
+            objective.alpha_spatial,
+            objective.alpha_causal,
+            objective.alpha_fidelity,
+        )
         ms_builder = MultiStreamContextBuilder(bundle.multi_stream)
         modifier = TrajectoryModifier(
             objective=objective, bundle=bundle,
@@ -201,6 +212,9 @@ def run_experiment(
             config_snapshot=snapshot,
             config_overrides=dict(config_overrides or {}),
             diagnostics_enabled=diagnostics_enabled,
+            effective_alpha_spatial=effective_alphas[0],
+            effective_alpha_causal=effective_alphas[1],
+            effective_alpha_fidelity=effective_alphas[2],
             f_spatial_before=metrics_before["f_spatial"],
             f_spatial_after=metrics_after["f_spatial"],
             f_causal_before=metrics_before["f_causal"],
@@ -211,8 +225,8 @@ def run_experiment(
             gini_asr_after=metrics_after["gini_asr"],
             grid_before=grid_before,
             grid_after=grid_after,
-            per_unit_attribution_before=attr_unsigned,
-            per_unit_attribution_signed_before=attr_signed,
+            per_unit_attribution=attr_unsigned,
+            per_unit_attribution_signed=attr_signed,
             gradient_sensitivity_before=sensitivity_before,
             gradient_sensitivity_after=sensitivity_after,
             modified_trajectory_ids=[h.original.trajectory_id for h in histories],

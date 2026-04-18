@@ -33,6 +33,18 @@ def _header(lines, m):
     lines.append(f"- **Git SHA:** `{m['git_sha']}`"
                  + ("  **(dirty)**" if m.get("git_dirty") else ""))
     lines.append(f"- **Command line:** `{m['command_line']}`")
+    ea = m.get("effective_alphas")
+    if ea is not None:
+        cs = m.get("config_snapshot", {})
+        warns = []
+        if ea.get("alpha_spatial")  != cs.get("ALPHA_SPATIAL"):
+            warns.append(f"spatial {cs.get('ALPHA_SPATIAL')} -> {ea['alpha_spatial']}")
+        if ea.get("alpha_causal")   != cs.get("ALPHA_CAUSAL"):
+            warns.append(f"causal {cs.get('ALPHA_CAUSAL')} -> {ea['alpha_causal']}")
+        if ea.get("alpha_fidelity") != cs.get("ALPHA_FIDELITY"):
+            warns.append(f"fidelity {cs.get('ALPHA_FIDELITY')} -> {ea['alpha_fidelity']}")
+        if warns:
+            lines.append(f"- **Effective-alpha override:** {', '.join(warns)}")
     lines.append("")
 
 

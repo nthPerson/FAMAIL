@@ -188,7 +188,7 @@ def _write_trajectories_csv(result: ExperimentResult, path: Path) -> None:
 
 def _write_per_unit_attribution_csv(result: ExperimentResult, path: Path, mask_3d: np.ndarray) -> None:
     ix_x, ix_y, ix_t = np.where(mask_3d)
-    signed = result.per_unit_attribution_signed_before
+    signed = result.per_unit_attribution_signed
     with open(path, "w", newline="") as f:
         writer = csv.writer(f)
         writer.writerow([
@@ -324,6 +324,11 @@ def write(result: ExperimentResult, output_root: Path, bundle=None) -> Path:
         "config_snapshot": {k: _coerce_json(v) for k, v in result.config_snapshot.items()},
         "config_overrides": {k: _coerce_json(v) for k, v in result.config_overrides.items()},
         "diagnostics_enabled": result.diagnostics_enabled,
+        "effective_alphas": {
+            "alpha_spatial":  result.effective_alpha_spatial,
+            "alpha_causal":   result.effective_alpha_causal,
+            "alpha_fidelity": result.effective_alpha_fidelity,
+        },
         "dataset": {
             "n_trajectories": sum(len(v) for v in result.augmented_trajs_before.values()),
             "n_drivers": len(result.augmented_trajs_before),

@@ -115,6 +115,25 @@ def test_time_bucket_zero_maps_to_hour_zero():
     hour_to_block_index(time_bucket_to_hour(0))
 
 
+def test_time_bucket_out_of_range_warns_and_clamps():
+    """Values outside [0, 288] should warn (once) and clamp to 0 rather than
+    returning nonsense hours like -9 or 28."""
+    import warnings
+    from famail_temporal.data.aggregation import time_bucket_to_hour
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        h = time_bucket_to_hour(-5)
+    assert h == 0
+    assert len(w) == 1
+    assert "outside expected range" in str(w[0].message)
+
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        h = time_bucket_to_hour(999)
+    assert h == 0  # clamped
+    assert len(w) == 1
+
+
 def test_time_bucket_boundary_values_unchanged():
     """Ensure the fix for tb=0 does not alter behavior for any valid 1..288
     input. All existing call sites rely on this mapping, so behavior must be
