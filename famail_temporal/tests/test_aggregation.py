@@ -33,6 +33,22 @@ def test_time_bucket_to_hour():
     assert time_bucket_to_hour(288) == 23
 
 
+def test_time_bucket_to_hour_accepts_zero():
+    """Real-data trajectories contain some states with time_bucket=0. The
+    mapping must treat this as hour 0 (first bucket of the day) rather than
+    raising via a downstream hour_to_block_index(-1) crash. Documented
+    1-indexed inputs [1..288] behave unchanged.
+    """
+    from famail_temporal.data.aggregation import time_bucket_to_hour
+    # The regression case: tb=0 used to give hour=-1 (invalid).
+    assert time_bucket_to_hour(0) == 0
+    # Backward-compatible: existing 1-indexed values unchanged.
+    assert time_bucket_to_hour(1) == 0
+    assert time_bucket_to_hour(12) == 0
+    assert time_bucket_to_hour(13) == 1
+    assert time_bucket_to_hour(288) == 23
+
+
 def test_block_n_hours():
     assert block_n_hours(0) == 3   # morning_peak (7-10)
     assert block_n_hours(1) == 6   # midday (10-16)
@@ -86,3 +102,31 @@ def test_aggregate_active_taxis_supply_floor():
     assert np.all(taxis >= config.SUPPLY_FLOOR)
     # An untouched cell should be exactly SUPPLY_FLOOR
     assert np.isclose(taxis[0, 0, 0], config.SUPPLY_FLOOR)
+
+
+def test_time_bucket_zero_maps_to_hour_zero():
+    """Real trajectory data contains some states with time_bucket=0 despite the
+    docstring claiming 1-indexed 1..288. Treat tb=0 as hour 0 (first 5 minutes
+    of day) rather than raising downstream in hour_to_block_index.
+    """
+    from famail_temporal.data.aggregation import time_bucket_to_hour, hour_to_block_index
+    assert time_bucket_to_hour(0) == 0
+    # Downstream chain must not raise:
+    hour_to_block_index(time_bucket_to_hour(0))
+
+
+def test_time_bucket_boundary_values_unchanged():
+    """Ensure the fix for tb=0 does not alter behavior for any valid 1..288
+    input. All existing call sites rely on this mapping, so behavior must be
+    preserved for the entire documented range."""
+    from famail_temporal.data.aggregation import time_bucket_to_hour
+    # tb=1 -> hour 0 (first bucket of day)
+    assert time_bucket_to_hour(1) == 0
+    # tb=12 -> hour 0 (last bucket of hour 0)
+    assert time_bucket_to_hour(12) == 0
+    # tb=13 -> hour 1
+    assert time_bucket_to_hour(13) == 1
+    # tb=288 -> hour 23 (last bucket of day)
+    assert time_bucket_to_hour(288) == 23
+    # tb=276 -> hour 22 (first bucket of hour 22 in 1-indexed scheme: (276-1)//12 == 22)
+    assert time_bucket_to_hour(276) == 22

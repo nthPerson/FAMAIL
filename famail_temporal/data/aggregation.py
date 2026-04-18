@@ -28,8 +28,15 @@ def hour_to_block_index(hour: int) -> int:
 
 
 def time_bucket_to_hour(time_bucket: int) -> int:
-    """Map 1-indexed time_bucket (1..288, 5-min) to 0-indexed hour (0..23)."""
-    return (time_bucket - 1) // 12
+    """Map time_bucket to 0-indexed hour (0..23).
+
+    Primary convention is 1-indexed (1..288, 5-min buckets) per the raw data
+    schema. Real passenger_seeking_trajs data was also found to contain some
+    states with time_bucket=0 — treated as hour 0 (first 5 minutes of day)
+    so downstream pipelines don't raise on real-data inputs. All valid
+    1-indexed inputs are unchanged.
+    """
+    return max(0, (time_bucket - 1) // 12)
 
 
 def block_n_hours(block_idx: int) -> int:
