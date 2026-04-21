@@ -10,6 +10,7 @@ RemovalCategory = Literal[
     "no_matching_count",
     "temporal_order",
     "implausibly_long",
+    "action_space_violation",
 ]
 
 
