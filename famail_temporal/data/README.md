@@ -7,8 +7,8 @@ Two distinct responsibilities live side by side:
 
 | Side | What it does | Input | Output |
 |---|---|---|---|
-| **Producer** (`source_generation/`) | Takes raw GPS pickle files and generates the 8 source datasets that land in `raw_data/` | `raw_data/taxi_record_*.pkl` (monthly GPS records) | `raw_data/*.pkl` (pickup_dropoff, active_taxis, trajectories, multi-stream, profile, calendars, driver mapping) + `processing_metadata.json` |
-| **Consumer** (the rest of this directory) | Aggregates the 8 source datasets into the canonical `(48, 90, T)` tensors and the active-unit index, then exposes them via `DataBundle` | `raw_data/*.pkl` (the producer's outputs) | `DataBundle` instance; writes intermediate tensors to `cache/` |
+| **Producer** (`source_generation/`) | Takes raw GPS pickle files and generates the 8 source datasets that land in `famail_temporal/source_data/` | `raw_data/taxi_record_*.pkl` (monthly GPS records) | `famail_temporal/source_data/*.pkl` (pickup_dropoff, active_taxis, trajectories, multi-stream, profile, calendars, driver mapping) + `processing_metadata.json` |
+| **Consumer** (the rest of this directory) | Aggregates the 8 source datasets into the canonical `(48, 90, T)` tensors and the active-unit index, then exposes them via `DataBundle` | `famail_temporal/source_data/*.pkl` (the producer's outputs) | `DataBundle` instance; writes intermediate tensors to `cache/` |
 
 The producer and consumer are intentionally decoupled:
 
@@ -59,7 +59,7 @@ famail_temporal/data/
 | File | Role |
 |---|---|
 | `loader.py` | `DataBundle` dataclass and `.load()` class method — the single entry point for the rest of the system |
-| `aggregation.py` | `raw_data/*.pkl` → `(48, 90, T)` tensors; `hour_to_block_index()` helper |
+| `aggregation.py` | `source_data/*.pkl` → `(48, 90, T)` tensors; `hour_to_block_index()` helper |
 | `active_mask.py` | `UnitIndexMap` dataclass; `compute_active_mask()` which applies the two-rule filter |
 | `cache_io.py` | Typed save/load helpers that encode config parameters into filenames |
 | `demographics.py` | Loads `cell_demographics.pkl`; validates that every active cell has finite demographic values |
@@ -184,7 +184,7 @@ t_block = hour_to_block_index(time_bucket_index)  # int in [0, T)
 # CLI — regenerate all 8 source datasets from raw GPS
 python -m famail_temporal.data.source_generation \
     --input-dir raw_data/ \
-    --output-dir famail_temporal/raw_data/
+    --output-dir famail_temporal/source_data/
 ```
 
 ```python
@@ -194,7 +194,7 @@ from famail_temporal.data.source_generation.cli import run_generation
 
 result = run_generation(
     input_dir=Path("raw_data/"),
-    output_dir=Path("famail_temporal/raw_data/"),
+    output_dir=Path("famail_temporal/source_data/"),
 )
 print(f"Kept: {result.n_seeking_kept} seeking + {result.n_driving_kept} driving")
 print(f"Removed: {result.n_removals} trajectories (see processing_metadata.json)")

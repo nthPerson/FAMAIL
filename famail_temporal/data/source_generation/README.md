@@ -182,7 +182,7 @@ CLI emits a loud warning but does NOT abort — the removals are transparent in
 # CLI (what you'll use 95% of the time)
 python -m famail_temporal.data.source_generation \
     --input-dir raw_data/ \
-    --output-dir famail_temporal/raw_data/ \
+    --output-dir famail_temporal/source_data/ \
     --verbose
 
 # --help:
@@ -196,7 +196,7 @@ from famail_temporal.data.source_generation.cli import run_generation
 
 result = run_generation(
     input_dir=Path("raw_data/"),
-    output_dir=Path("famail_temporal/raw_data/"),
+    output_dir=Path("famail_temporal/source_data/"),
     expect_n_drivers=50,     # override to 2 for synthetic fixtures; default 50
 )
 

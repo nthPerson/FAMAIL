@@ -30,7 +30,7 @@ see [`docs/superpowers/specs/2026-04-20-unified-source-data-generation-design.md
 - You're setting up a fresh checkout and need to regenerate source data from scratch.
 
 **Do NOT run it** before every experiment. This is a one-shot tool whose outputs land in
-`famail_temporal/raw_data/` and stay there. The evaluation runner does not invoke it.
+`famail_temporal/source_data/` and stay there. The evaluation runner does not invoke it.
 
 ---
 
@@ -41,7 +41,7 @@ Before your first regeneration run, confirm:
 | Requirement | How to check |
 |---|---|
 | Raw GPS files present | `ls raw_data/taxi_record_{07,08,09}_50drivers.pkl` — all 3 exist. These are not committed to the repo (binary, large); obtain from the project's source. |
-| `famail_temporal/raw_data/` exists (output directory) | `ls famail_temporal/raw_data/` — directory is present (may be empty except for `.gitkeep`). |
+| `famail_temporal/source_data/` exists (output directory) | `ls famail_temporal/source_data/` — directory is present (may be empty except for `.gitkeep`). |
 | `.venv` active with pandas + numpy + pytest | `.venv/bin/python -c "import pandas, numpy"` — both import cleanly. |
 | Tests pass | `.venv/bin/pytest famail_temporal/data/source_generation/tests/ -q` — expect 64 passed, 1-2 real-data-gated skips. |
 
@@ -56,7 +56,7 @@ with a clear error.
 ```bash
 python -m famail_temporal.data.source_generation \
     --input-dir raw_data/ \
-    --output-dir famail_temporal/raw_data/ \
+    --output-dir famail_temporal/source_data/ \
     --verbose
 ```
 
@@ -69,8 +69,8 @@ What to expect (approximate timings on a modern workstation):
 2026-04-20 18:33:12,610 INFO Applying per-trajectory invariants...
 2026-04-20 18:33:21,883 INFO Computing profile features...
 2026-04-20 18:33:23,904 INFO Checking systemic invariants...
-2026-04-20 18:33:23,907 INFO Writing outputs to famail_temporal/raw_data
-2026-04-20 18:33:25,412 INFO Done: 38914 seeking + 38864 driving kept; 0 removals; outputs at famail_temporal/raw_data
+2026-04-20 18:33:23,907 INFO Writing outputs to famail_temporal/source_data
+2026-04-20 18:33:25,412 INFO Done: 38914 seeking + 38864 driving kept; 0 removals; outputs at famail_temporal/source_data
 ```
 
 Total runtime: typically 30–90 seconds on the full 3-month dataset.
@@ -184,9 +184,9 @@ the research team and the entire reason this tool exists. A one-line check:
 ```python
 import pickle
 
-with open("famail_temporal/raw_data/passenger_seeking_trajs.pkl", "rb") as f:
+with open("famail_temporal/source_data/passenger_seeking_trajs.pkl", "rb") as f:
     trajs = pickle.load(f)
-with open("famail_temporal/raw_data/pickup_dropoff_counts.pkl", "rb") as f:
+with open("famail_temporal/source_data/pickup_dropoff_counts.pkl", "rb") as f:
     pd_counts = pickle.load(f)
 
 ghosts = [
