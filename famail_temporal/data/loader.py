@@ -89,19 +89,71 @@ def _parse_trajectory(traj_data, trajectory_id, driver_id):
     )
 
 
+def _load_driver_index_mapping() -> dict:
+    """Load the plate_id ↔ int driver_idx sidecar produced by source_generation.
+
+    Returns a dict with keys 'plate_to_idx' and 'idx_to_plate'. If the sidecar
+    isn't present (e.g., tests or legacy source data), returns {} and callers
+    pass plate_id through unchanged.
+    """
+    from famail_temporal import config
+    path = config.SOURCE_DATA_DIR / "driver_index_mapping.pkl"
+    if not path.exists():
+        return {}
+    with open(path, "rb") as f:
+        return _pkl.load(f)
+
+
+def _resolve_driver_id(raw_key, plate_to_idx: dict):
+    """Convert a raw plate_id (string) to the integer driver_idx.
+
+    The downstream `ms_*` dicts are keyed by int driver_idx (0..49), and two
+    consumers (`evaluation/augment.py`, `fidelity/context.py`) expect every
+    `Trajectory.driver_id` to be convertible to int so those lookups succeed.
+    Source data from the new source_generation tool is keyed by raw plate_id
+    strings; we convert at load time using the sidecar mapping.
+
+    Falls back to returning the raw key unchanged if it's already an int or
+    if no mapping is available (tests, legacy). A plate_id that's present in
+    the data but missing from the mapping raises with a clear message — that
+    indicates a regeneration/mapping drift, not a silent data issue.
+    """
+    if isinstance(raw_key, int):
+        return raw_key
+    if not plate_to_idx:
+        return raw_key
+    if raw_key not in plate_to_idx:
+        raise KeyError(
+            f"plate_id {raw_key!r} is in passenger_seeking_trajs.pkl but "
+            f"missing from driver_index_mapping.pkl. Re-run the source-"
+            f"generation tool to regenerate both files together."
+        )
+    return plate_to_idx[raw_key]
+
+
 def _load_trajectories(max_trajectories=None, max_drivers=None):
-    """Load passenger-seeking trajectories from source_data."""
+    """Load passenger-seeking trajectories from source_data.
+
+    Converts raw plate_id keys (strings from raw GPS) into integer driver_idx
+    values using driver_index_mapping.pkl, so every `Trajectory.driver_id` is
+    an int in [0, 49] — matching the int-keyed multi-stream context dicts
+    consumed by `fidelity/context.py` and the int-keyed output dict produced
+    by `evaluation/augment.py`.
+    """
     from famail_temporal import config
     path = config.SOURCE_DATA_DIR / "passenger_seeking_trajs.pkl"
     with open(path, "rb") as f:
         data = _pkl.load(f)
+    mapping = _load_driver_index_mapping()
+    plate_to_idx = mapping.get("plate_to_idx", {})
     driver_keys = list(data.keys())
     if max_drivers:
         driver_keys = driver_keys[:max_drivers]
     all_trajs = []
     for did in driver_keys:
+        resolved_id = _resolve_driver_id(did, plate_to_idx)
         for td in data[did]:
-            all_trajs.append((did, td))
+            all_trajs.append((resolved_id, td))
     if max_trajectories and len(all_trajs) > max_trajectories:
         _random.seed(config.DEFAULT_SEED)
         all_trajs = _random.sample(all_trajs, max_trajectories)
