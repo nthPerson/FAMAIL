@@ -92,7 +92,7 @@ def _parse_trajectory(traj_data, trajectory_id, driver_id):
 def _load_trajectories(max_trajectories=None, max_drivers=None):
     """Load passenger-seeking trajectories from raw_data."""
     from famail_temporal import config
-    path = config.RAW_DATA_DIR / "passenger_seeking_trajs_45-800.pkl"
+    path = config.RAW_DATA_DIR / "passenger_seeking_trajs.pkl"
     with open(path, "rb") as f:
         data = _pkl.load(f)
     driver_keys = list(data.keys())
