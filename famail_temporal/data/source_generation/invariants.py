@@ -22,10 +22,54 @@ def _validate_single_trajectory(
 ) -> tuple[bool, int, str, dict]:
     if len(traj) < 2:
         return False, 3, "degenerate_length", {"n_states": len(traj)}
-    tbs = [s[2] for s in traj]
-    for a, b in zip(tbs, tbs[1:]):
-        if b < a:
-            return False, 4, "temporal_order", {"time_buckets": tbs}
+    # Temporal-order check (design spec §6, invariant #4).
+    # Catches the one structural violation the upstream sort can't mask:
+    # same-day, backward-time_bucket transitions.
+    for a, b in zip(traj, traj[1:]):
+        ta, da = a[2], a[3]
+        tb_, db = b[2], b[3]
+        if da == db and tb_ < ta:
+            return False, 4, "temporal_order", {
+                "day_time_buckets": [(s[3], s[2]) for s in traj],
+            }
+    # Plausibility-of-duration check (design spec §6, invariant #5, research-
+    # grounded). A seeking or driving trajectory is a single episode of
+    # cruising-between-trips (seeking) or carrying-a-passenger (driving). In
+    # urban taxi data these are typically minutes; anything longer than a
+    # single shift (MAX_TRAJECTORY_DURATION_BUCKETS, default 120 buckets =
+    # 10 hours) is almost certainly an extraction artifact — a segment that
+    # got "stitched" across off-duty time because no passenger-indicator
+    # transition occurred in between (e.g., a Friday-evening segment that
+    # continues into Monday because Sat+Sun records were filtered out).
+    #
+    # Rejecting these catches weekend-spanning trajectories by construction
+    # (they accumulate ≥48 hours of elapsed time) and any other long-gap
+    # artifact, without needing to special-case day-of-week values.
+    start_day, start_tb = traj[0][3], traj[0][2]
+    end_day, end_tb = traj[-1][3], traj[-1][2]
+    if end_day < start_day:
+        # Day wrapped backward — must involve ≥1 weekend, so elapsed time is
+        # at minimum 2 days. Always implausible for a single episode.
+        return False, 5, "implausibly_long", {
+            "start": (start_day, start_tb),
+            "end": (end_day, end_tb),
+            "reason": "day_index wrapped backward (weekend or multi-week gap)",
+        }
+    if end_day == start_day:
+        duration_buckets = end_tb - start_tb
+    else:
+        days_gap = end_day - start_day
+        duration_buckets = (config.TIME_BUCKET_MAX - start_tb) + \
+                           (days_gap - 1) * config.TIME_BUCKET_MAX + \
+                           end_tb
+    if duration_buckets > config.MAX_TRAJECTORY_DURATION_BUCKETS:
+        return False, 5, "implausibly_long", {
+            "start": (start_day, start_tb),
+            "end": (end_day, end_tb),
+            "duration_buckets": duration_buckets,
+            "duration_minutes": duration_buckets * 5,
+            "threshold_buckets": config.MAX_TRAJECTORY_DURATION_BUCKETS,
+        }
     for s in traj:
         x, y, tb, day = s
         if not (1 <= x <= config.X_GRID_MAX):

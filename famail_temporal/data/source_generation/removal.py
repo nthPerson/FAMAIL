@@ -9,6 +9,7 @@ RemovalCategory = Literal[
     "degenerate_length",
     "no_matching_count",
     "temporal_order",
+    "implausibly_long",
 ]
 
 
