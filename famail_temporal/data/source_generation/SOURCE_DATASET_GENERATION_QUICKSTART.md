@@ -43,7 +43,7 @@ Before your first regeneration run, confirm:
 | Raw GPS files present | `ls raw_data/taxi_record_{07,08,09}_50drivers.pkl` — all 3 exist. These are not committed to the repo (binary, large); obtain from the project's source. |
 | `famail_temporal/source_data/` exists (output directory) | `ls famail_temporal/source_data/` — directory is present (may be empty except for `.gitkeep`). |
 | `.venv` active with pandas + numpy + pytest | `.venv/bin/python -c "import pandas, numpy"` — both import cleanly. |
-| Tests pass | `.venv/bin/pytest famail_temporal/data/source_generation/tests/ -q` — expect 64 passed, 1-2 real-data-gated skips. |
+| Tests pass | `.venv/bin/pytest famail_temporal/data/source_generation/tests/ -q` — expect 81 passed, 1-2 real-data-gated skips. |
 
 If any of the 3 raw GPS files is missing, the tool will raise `FileNotFoundError` immediately.
 If all 3 are present but empty (e.g., a placeholder), the run fails at `compute_global_bounds`
