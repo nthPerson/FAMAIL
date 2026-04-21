@@ -151,8 +151,19 @@ def compute_fcausal_torch(
     Returns
     -------
     torch.Tensor, scalar
-        F_causal in [0, 1], higher = fairer (residuals are well-explained
-        by demographics => service aligns with demand, not demographics).
+        F_causal in [0, 1], higher = fairer. Algebraically
+            F_causal = R'(I - H_demo)R / R'MR
+                     = SSR_demo / SST
+                     = 1 - r²_demo
+        where r²_demo is the coefficient of determination from regressing R
+        on [1, standardized_demographics]. Orientation:
+        - High F_causal (near 1) ⇔ low r²_demo ⇔ demographics explain LITTLE
+          of R ⇔ service deviations from the demand baseline are not driven
+          by demographics ⇔ FAIR.
+        - Low F_causal (near 0) ⇔ high r²_demo ⇔ demographics explain MOST
+          of R ⇔ service deviations are predicted by demographics ⇔ UNFAIR.
+        Per the design spec: R ∈ span(X_demo) → F_causal = 0 (fully unfair);
+        R ⊥ X_demo → F_causal = 1 (fully fair).
     """
     # Shape / dim validation — fail loud rather than producing silent garbage
     # from a broadcasting surprise.
