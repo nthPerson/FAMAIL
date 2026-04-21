@@ -1,4 +1,4 @@
-"""Write all tool outputs: 8 output files + driver mapping + metadata JSON."""
+"""Write all tool outputs: 9 output files + driver mapping + metadata JSON."""
 from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
@@ -20,6 +20,7 @@ class OutputPaths:
     ms_profile: Path
     ms_seeking_days: Path
     ms_driving_days: Path
+    calendar_day_map: Path
     driver_mapping: Path
     metadata: Path
 
@@ -43,16 +44,32 @@ def write_active_taxis_bundle(
 
 
 def write_profile_bundle(
-    path: Path, normalized, mean, std, feature_names: list[str],
+    path: Path, *, raw, normalized, mean, std, feature_names: list[str],
     n_features: int, drivers_mapping: dict,
 ) -> None:
-    features = {
+    """Store RAW features in ``features`` and NORMALIZED in
+    ``features_normalized``.
+
+    Downstream consumers split along this seam:
+      - ``famail_temporal/data/loader.py`` reads ``features_normalized``
+        (it wants ready-to-use z-scored vectors).
+      - ``discriminator/multi_stream/dataset_generation/generation.py``
+        reads ``features`` and applies z-score normalization itself using
+        the stored ``mean`` / ``std``. If ``features`` held already-normalized
+        values, that step would double-normalize and produce garbage training
+        data — see the design spec for the regression test that catches this.
+    """
+    raw_dict = {
+        int(idx): raw[int(idx)].astype(float)
+        for idx in drivers_mapping["idx_to_plate"].keys()
+    }
+    normalized_dict = {
         int(idx): normalized[int(idx)].astype(float)
         for idx in drivers_mapping["idx_to_plate"].keys()
     }
     bundle = {
-        "features": features,
-        "features_normalized": features,
+        "features": raw_dict,
+        "features_normalized": normalized_dict,
         "feature_names": feature_names,
         "normalization": {"mean": mean.astype(float), "std": std.astype(float)},
         "n_features": n_features,
@@ -103,6 +120,7 @@ def write_all_outputs(
         ms_profile=out_dir / config.OUT_MS_PROFILE,
         ms_seeking_days=out_dir / config.OUT_MS_SEEKING_DAYS,
         ms_driving_days=out_dir / config.OUT_MS_DRIVING_DAYS,
+        calendar_day_map=out_dir / config.OUT_CALENDAR_DAY_MAP,
         driver_mapping=out_dir / config.OUT_DRIVER_MAPPING,
         metadata=out_dir / config.OUT_METADATA,
     )
@@ -120,11 +138,16 @@ def write_all_outputs(
     _pickle_write(paths.ms_driving, ms_driving)
     write_profile_bundle(
         paths.ms_profile,
-        ms_profile["normalized"], ms_profile["mean"], ms_profile["std"],
-        ms_profile["feature_names"], config.N_PROFILE_FEATURES, driver_mapping,
+        raw=ms_profile["raw"],
+        normalized=ms_profile["normalized"],
+        mean=ms_profile["mean"], std=ms_profile["std"],
+        feature_names=ms_profile["feature_names"],
+        n_features=config.N_PROFILE_FEATURES,
+        drivers_mapping=driver_mapping,
     )
     _pickle_write(paths.ms_seeking_days, ms_calendars["seeking"])
     _pickle_write(paths.ms_driving_days, ms_calendars["driving"])
+    _pickle_write(paths.calendar_day_map, ms_calendars["calendar_day_map"])
     _pickle_write(paths.driver_mapping, driver_mapping)
     write_metadata_json(paths.metadata, removal_summary, metadata_extras)
     return paths

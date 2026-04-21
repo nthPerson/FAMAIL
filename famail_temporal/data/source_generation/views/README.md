@@ -43,7 +43,7 @@ dict (or dataclass) and the CLI threads that into `write_all_outputs`.
 ## Consumer expectations (what the rest of `famail_temporal/` needs)
 
 - [`famail_temporal/preprocess.py`](../../../preprocess.py) unwraps `active_taxis_raw['data']` from the active_taxis bundle → `write_active_taxis_bundle` emits that shape.
-- [`famail_temporal/data/loader.py`](../../loader.py) reads `profile_raw.get("features_normalized", profile_raw)` → `write_profile_bundle` emits both `features` and `features_normalized` aliases.
+- [`famail_temporal/data/loader.py`](../../loader.py) reads `profile_raw["features_normalized"]` (already z-scored) and [`discriminator/multi_stream/dataset_generation/generation.py`](../../../../discriminator/multi_stream/dataset_generation/generation.py) reads `profile_raw["features"]` (raw, then applies z-score itself using the stored `mean` / `std`) → `write_profile_bundle` emits `features` as RAW vectors and `features_normalized` as NORMALIZED vectors. The two are **not aliases**; conflating them causes double-normalization.
 - [`famail_temporal/data/loader.py::_load_multi_stream`](../../loader.py) casts multi-stream dict keys to `int(k)` → `trajectories.py` produces `ms_seeking_trajs` and `ms_driving_trajs` with int driver_idx keys directly.
 - [`famail_temporal/data/loader.py`](../../loader.py) reads `passenger_seeking_trajs.pkl` → `trajectories.py` produces this file with plate_id string keys.
 

@@ -71,6 +71,7 @@ OUT_MS_DRIVING: str = "ms_driving_trajs.pkl"
 OUT_MS_PROFILE: str = "ms_profile_features.pkl"
 OUT_MS_SEEKING_DAYS: str = "ms_seeking_calendar_days.pkl"
 OUT_MS_DRIVING_DAYS: str = "ms_driving_calendar_days.pkl"
+OUT_CALENDAR_DAY_MAP: str = "calendar_day_map.pkl"
 OUT_DRIVER_MAPPING: str = "driver_index_mapping.pkl"
 OUT_METADATA: str = "processing_metadata.json"
 

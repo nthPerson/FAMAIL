@@ -48,6 +48,7 @@ def test_cli_runs_end_to_end(tmp_path):
         "ms_profile_features.pkl",
         "ms_seeking_calendar_days.pkl",
         "ms_driving_calendar_days.pkl",
+        "calendar_day_map.pkl",
         "driver_index_mapping.pkl",
         "processing_metadata.json",
     ]

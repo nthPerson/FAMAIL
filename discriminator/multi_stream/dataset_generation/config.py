@@ -18,8 +18,13 @@ class MultiStreamGenerationConfig:
     """
 
     # Input/output paths
+    # extracted_data_dir now defaults to famail_temporal/source_data — the
+    # single source of truth for discriminator training + famail_temporal
+    # trajectory-modification. Training on the same distribution we score at
+    # inference time prevents the distribution shift that motivated building
+    # the unified source_generation tool (see CHANGELOG 2026-04-20).
     extracted_data_dir: Path = field(
-        default_factory=lambda: _project_root() / "discriminator" / "multi_stream" / "extracted_data"
+        default_factory=lambda: _project_root() / "famail_temporal" / "source_data"
     )
     output_dir: Path = field(
         default_factory=lambda: _project_root() / "discriminator" / "multi_stream" / "datasets" / "default"

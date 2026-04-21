@@ -5,6 +5,17 @@ state[-1] convention:
   - Driving trajectory: last state is the dropoff-transition record (passenger=0).
 
 Only complete segments (ending in a transition row) with length >= 2 are emitted.
+
+Per-trajectory calendar_date sidecar
+------------------------------------
+`TrajectoriesResult` carries `seeking_dates_by_plate` and
+`driving_dates_by_plate` as lists *parallel* to `seeking_by_plate` /
+`driving_by_plate` — element ``i`` is the calendar date (``"YYYY-MM-DD"``) of
+trajectory ``i``. This is required by the discriminator's Ren-style pair
+sampling, which pairs *"same driver, 2 different calendar dates"* — it needs
+a per-trajectory date, not just the set of weekdays the driver operated on.
+The date is taken from the segment's first row (matches the legacy
+extraction tool's convention).
 """
 from __future__ import annotations
 from dataclasses import dataclass, field
@@ -19,6 +30,8 @@ Trajectory = list[list[int]]
 class TrajectoriesResult:
     seeking_by_plate: dict[str, list[Trajectory]] = field(default_factory=dict)
     driving_by_plate: dict[str, list[Trajectory]] = field(default_factory=dict)
+    seeking_dates_by_plate: dict[str, list[str]] = field(default_factory=dict)
+    driving_dates_by_plate: dict[str, list[str]] = field(default_factory=dict)
 
 
 def build_driver_index_mapping(df: pd.DataFrame) -> dict:
@@ -43,20 +56,32 @@ def _segment_to_trajectory(segment: pd.DataFrame) -> Trajectory:
     ]
 
 
+def _segment_calendar_date(segment: pd.DataFrame) -> str:
+    return str(segment.iloc[0]["calendar_date"])
+
+
 def build_trajectories(df: pd.DataFrame) -> TrajectoriesResult:
     result = TrajectoriesResult()
+    has_dates = "calendar_date" in df.columns
     for plate, driver_df in df.groupby("plate_id", sort=False):
         seeking: list[Trajectory] = []
         driving: list[Trajectory] = []
+        seeking_dates: list[str] = []
+        driving_dates: list[str] = []
         for _, seg in driver_df.groupby("segment_id", sort=True):
             if len(seg) < 2:
                 continue
+            date = _segment_calendar_date(seg) if has_dates else ""
             if _segment_is_seeking(seg):
                 seeking.append(_segment_to_trajectory(seg))
+                seeking_dates.append(date)
             elif _segment_is_driving(seg):
                 driving.append(_segment_to_trajectory(seg))
+                driving_dates.append(date)
         if seeking:
             result.seeking_by_plate[plate] = seeking
+            result.seeking_dates_by_plate[plate] = seeking_dates
         if driving:
             result.driving_by_plate[plate] = driving
+            result.driving_dates_by_plate[plate] = driving_dates
     return result

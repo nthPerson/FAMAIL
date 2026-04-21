@@ -29,11 +29,16 @@ def test_writer_creates_all_files(tmp_path):
     ms_seeking = {0: trajs.seeking_by_plate["A"]}
     ms_driving = {0: trajs.driving_by_plate["A"]}
     profile = {
-        "normalized": np.zeros((1, 11), dtype=float),
-        "mean": np.zeros(11), "std": np.ones(11),
+        "raw": np.ones((1, 11), dtype=float) * 42.0,     # obviously un-normalized
+        "normalized": np.zeros((1, 11), dtype=float),    # z-score output
+        "mean": np.ones(11) * 42.0, "std": np.ones(11),
         "feature_names": list(config.PROFILE_FEATURE_NAMES),
     }
-    calendars = {"seeking": {0: [1]}, "driving": {0: [1]}}
+    calendars = {
+        "seeking": {0: [0]},
+        "driving": {0: [0]},
+        "calendar_day_map": {0: "2016-07-04"},
+    }
 
     paths = write_all_outputs(
         out_dir=tmp_path,
@@ -56,8 +61,77 @@ def test_writer_creates_all_files(tmp_path):
     for p in [paths.pickup_dropoff, paths.active_taxis, paths.passenger_seeking,
               paths.ms_seeking, paths.ms_driving, paths.ms_profile,
               paths.ms_seeking_days, paths.ms_driving_days,
+              paths.calendar_day_map,
               paths.driver_mapping, paths.metadata]:
         assert p.exists(), f"missing file {p}"
+
+
+def test_profile_bundle_separates_raw_from_normalized(tmp_path):
+    """Writer must store RAW features in 'features' and NORMALIZED in
+    'features_normalized'. Consumers (discriminator dataset_generation) rely
+    on this distinction; storing normalized in both leads to double-normalization
+    at consumption time."""
+    from famail_temporal.data.source_generation.writer import write_profile_bundle
+
+    raw = np.array([[10.0, 20.0, 30.0]], dtype=float)
+    normalized = np.array([[0.0, 0.0, 0.0]], dtype=float)
+    mean = np.array([10.0, 20.0, 30.0])
+    std = np.array([1.0, 1.0, 1.0])
+    mapping = {"plate_to_idx": {"A": 0}, "idx_to_plate": {0: "A"}}
+
+    path = tmp_path / "ms_profile_features.pkl"
+    write_profile_bundle(
+        path, raw=raw, normalized=normalized, mean=mean, std=std,
+        feature_names=["a", "b", "c"], n_features=3,
+        drivers_mapping=mapping,
+    )
+    with open(path, "rb") as f:
+        bundle = pickle.load(f)
+
+    assert np.allclose(bundle["features"][0], [10.0, 20.0, 30.0]), \
+        "'features' must hold RAW feature vectors"
+    assert np.allclose(bundle["features_normalized"][0], [0.0, 0.0, 0.0]), \
+        "'features_normalized' must hold NORMALIZED feature vectors"
+    assert not np.allclose(
+        bundle["features"][0], bundle["features_normalized"][0]
+    ), "'features' and 'features_normalized' must be distinct"
+
+
+def test_calendar_day_map_is_pickled(tmp_path):
+    from famail_temporal.data.source_generation.writer import (
+        write_all_outputs,
+    )
+    trajs = TrajectoriesResult(
+        seeking_by_plate={"A": [[[1, 1, 1, 1], [1, 1, 1, 1]]]},
+        driving_by_plate={"A": [[[1, 1, 2, 1], [1, 1, 2, 1]]]},
+    )
+    mapping = {"plate_to_idx": {"A": 0}, "idx_to_plate": {0: "A"}}
+    calendars = {
+        "seeking": {0: [0]},
+        "driving": {0: [0]},
+        "calendar_day_map": {0: "2016-07-04"},
+    }
+    paths = write_all_outputs(
+        out_dir=tmp_path,
+        pickup_dropoff={(1, 1, 1, 1): (1, 0), (1, 1, 2, 1): (0, 1)},
+        active_taxis={},
+        passenger_seeking_trajs=trajs.seeking_by_plate,
+        ms_seeking={0: trajs.seeking_by_plate["A"]},
+        ms_driving={0: trajs.driving_by_plate["A"]},
+        ms_profile={
+            "raw": np.zeros((1, 11)),
+            "normalized": np.zeros((1, 11)),
+            "mean": np.zeros(11), "std": np.ones(11),
+            "feature_names": list(config.PROFILE_FEATURE_NAMES),
+        },
+        ms_calendars=calendars,
+        driver_mapping=mapping,
+        removal_summary=RemovalSummary(),
+        metadata_extras={"n_days": 1, "bounds": {}, "git_sha": "x", "config_snapshot": {}},
+    )
+    with open(paths.calendar_day_map, "rb") as f:
+        cal_map = pickle.load(f)
+    assert cal_map == {0: "2016-07-04"}
 
 
 def test_active_taxis_bundle_format(tmp_path):

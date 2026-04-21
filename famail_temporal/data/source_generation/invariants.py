@@ -104,15 +104,23 @@ def apply_per_trajectory_invariants(
     kept = TrajectoriesResult()
     removals: list[RemovalRecord] = []
 
-    def process(by_plate: dict[str, list[Trajectory]], kind: str):
+    def process(
+        by_plate: dict[str, list[Trajectory]],
+        dates_by_plate: dict[str, list[str]],
+        kind: str,
+    ):
         for plate, traj_list in by_plate.items():
+            dates_list = dates_by_plate.get(plate, [])
             keep_list: list[Trajectory] = []
+            keep_dates: list[str] = []
             for idx, traj in enumerate(traj_list):
                 ok, inv_num, category, fv = _validate_single_trajectory(
                     traj, kind, pickup_counts, dropoff_counts,
                 )
                 if ok:
                     keep_list.append(traj)
+                    if idx < len(dates_list):
+                        keep_dates.append(dates_list[idx])
                 else:
                     removals.append(RemovalRecord(
                         driver_id=plate,
@@ -127,11 +135,15 @@ def apply_per_trajectory_invariants(
             if keep_list:
                 if kind == "seeking":
                     kept.seeking_by_plate[plate] = keep_list
+                    if keep_dates:
+                        kept.seeking_dates_by_plate[plate] = keep_dates
                 else:
                     kept.driving_by_plate[plate] = keep_list
+                    if keep_dates:
+                        kept.driving_dates_by_plate[plate] = keep_dates
 
-    process(trajs.seeking_by_plate, "seeking")
-    process(trajs.driving_by_plate, "driving")
+    process(trajs.seeking_by_plate, trajs.seeking_dates_by_plate, "seeking")
+    process(trajs.driving_by_plate, trajs.driving_dates_by_plate, "driving")
     return kept, removals
 
 

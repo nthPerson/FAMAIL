@@ -71,6 +71,7 @@ def test_smoke_on_real_raw_if_present(tmp_path):
         "passenger_seeking_trajs.pkl", "ms_seeking_trajs.pkl",
         "ms_driving_trajs.pkl", "ms_profile_features.pkl",
         "ms_seeking_calendar_days.pkl", "ms_driving_calendar_days.pkl",
+        "calendar_day_map.pkl",
         "driver_index_mapping.pkl", "processing_metadata.json",
     ]:
         assert (out / name).exists()

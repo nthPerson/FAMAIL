@@ -19,7 +19,7 @@ from famail_temporal.data.source_generation.views.active_taxis import (
     build_active_taxis_counts,
 )
 from famail_temporal.data.source_generation.views.calendars import (
-    build_calendar_days_per_driver,
+    build_per_trajectory_calendar_days,
 )
 from famail_temporal.data.source_generation.views.pickup_dropoff import (
     build_pickup_dropoff_counts,
@@ -145,8 +145,9 @@ def run_generation(
         mapping["plate_to_idx"][p]: kept_trajs.driving_by_plate.get(p, [])
         for p in mapping["plate_to_idx"].keys()
     }
-    ms_calendars = build_calendar_days_per_driver(kept_trajs, mapping)
+    ms_calendars = build_per_trajectory_calendar_days(kept_trajs, mapping)
     ms_profile_payload = {
+        "raw": raw_matrix,
         "normalized": normalized,
         "mean": mean,
         "std": std,

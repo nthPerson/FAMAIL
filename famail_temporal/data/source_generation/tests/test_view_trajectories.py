@@ -70,6 +70,33 @@ def test_driving_state_minus_one_is_dropoff_cell():
     assert A_drv0[-1] == [6, 11, 1, 1]
 
 
+def test_seeking_dates_sidecar_is_parallel_to_trajectories():
+    """Per-trajectory calendar dates must be emitted alongside trajectories,
+    parallel in order and length — discriminator pair-sampling depends on this."""
+    df = _event_df()
+    df = df.copy()
+    # event_stream would normally populate calendar_date; build_trajectories
+    # has to honor whatever's already on the DataFrame.
+    df["calendar_date"] = df["timestamp"].str[:10]
+    result = build_trajectories(df)
+    assert len(result.seeking_dates_by_plate["A"]) == len(
+        result.seeking_by_plate["A"]
+    )
+    assert result.seeking_dates_by_plate["A"][0] == "2016-07-04"
+
+
+def test_driving_dates_sidecar_is_parallel_to_trajectories():
+    df = _event_df()
+    df = df.copy()
+    df["calendar_date"] = df["timestamp"].str[:10]
+    result = build_trajectories(df)
+    assert len(result.driving_dates_by_plate["A"]) == len(
+        result.driving_by_plate["A"]
+    )
+    # Both driving trajectories are from 2016-07-04.
+    assert result.driving_dates_by_plate["A"] == ["2016-07-04", "2016-07-04"]
+
+
 def test_min_length_filter_drops_length_1_segments():
     df = pd.DataFrame([{
         "plate_id": "A", "x_grid": 5, "y_grid": 10, "time_bucket": 1, "day_index": 1,

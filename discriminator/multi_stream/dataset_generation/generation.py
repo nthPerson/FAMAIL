@@ -46,44 +46,56 @@ def load_multi_stream_data(
     """
     d = Path(extracted_data_dir)
 
-    with open(d / "seeking_trajs.pkl", "rb") as f:
+    with open(d / "ms_seeking_trajs.pkl", "rb") as f:
         seeking_trajs = pickle.load(f)  # {driver_idx: [traj, ...]}
-    with open(d / "driving_trajs.pkl", "rb") as f:
+    with open(d / "ms_driving_trajs.pkl", "rb") as f:
         driving_trajs = pickle.load(f)
-    with open(d / "seeking_calendar_days.pkl", "rb") as f:
-        seeking_cal = pickle.load(f)    # {driver_idx: [cal_day_idx, ...]}
-    with open(d / "driving_calendar_days.pkl", "rb") as f:
+    with open(d / "ms_seeking_calendar_days.pkl", "rb") as f:
+        seeking_cal = pickle.load(f)    # {driver_idx: [cal_day_idx_per_traj, ...]}
+    with open(d / "ms_driving_calendar_days.pkl", "rb") as f:
         driving_cal = pickle.load(f)
     with open(d / "calendar_day_map.pkl", "rb") as f:
         cal_day_map = pickle.load(f)    # {cal_day_idx: "YYYY-MM-DD"}
-    with open(d / "profile_features.pkl", "rb") as f:
-        profile_data = pickle.load(f)   # dict with 'features', 'normalization', etc.
+    with open(d / "ms_profile_features.pkl", "rb") as f:
+        profile_data = pickle.load(f)   # dict with 'features' (raw), 'normalization', etc.
 
-    # Load metadata for driver mapping
-    with open(d / "extraction_metadata.json", "r") as f:
-        metadata = json.load(f)
-    index_to_plate = {int(k): v for k, v in metadata["driver_mapping"].items()}
+    # Load the driver_index_mapping sidecar from source_generation.
+    with open(d / "driver_index_mapping.pkl", "rb") as f:
+        driver_mapping = pickle.load(f)
+    index_to_plate = {int(k): v for k, v in driver_mapping["idx_to_plate"].items()}
 
-    # Group trajectories by (driver, calendar_day)
+    # Group trajectories by (driver, calendar_day). Per-trajectory calendar-
+    # day indices are parallel to trajectory lists — source_generation
+    # guarantees len(seeking_cal[d]) == len(seeking_trajs[d]).
     seeking_by_day: Dict[int, Dict[int, List]] = defaultdict(lambda: defaultdict(list))
     for driver_idx, trajs in seeking_trajs.items():
-        days = seeking_cal[driver_idx]
+        days = seeking_cal.get(driver_idx, [])
+        if len(days) != len(trajs):
+            raise ValueError(
+                f"driver {driver_idx}: len(seeking_cal)={len(days)} != "
+                f"len(seeking_trajs)={len(trajs)} — source_data is inconsistent"
+            )
         for traj, day_idx in zip(trajs, days):
             seeking_by_day[driver_idx][day_idx].append(traj)
 
     driving_by_day: Dict[int, Dict[int, List]] = defaultdict(lambda: defaultdict(list))
     for driver_idx, trajs in driving_trajs.items():
-        days = driving_cal[driver_idx]
+        days = driving_cal.get(driver_idx, [])
+        if len(days) != len(trajs):
+            raise ValueError(
+                f"driver {driver_idx}: len(driving_cal)={len(days)} != "
+                f"len(driving_trajs)={len(trajs)} — source_data is inconsistent"
+            )
         for traj, day_idx in zip(trajs, days):
             driving_by_day[driver_idx][day_idx].append(traj)
 
-    # Extract normalized profile features
+    # Z-score normalize RAW profile vectors using stored mean/std. Reading
+    # `features_normalized` instead would double-normalize.
     profile_features = {}
     norm = profile_data["normalization"]
-    mean, std = norm["mean"], norm["std"]
+    mean, std = np.asarray(norm["mean"]), np.asarray(norm["std"])
     for driver_idx, feat_vec in profile_data["features"].items():
-        # Z-score normalize using pre-computed parameters
-        profile_features[driver_idx] = (np.array(feat_vec) - mean) / (std + 1e-8)
+        profile_features[int(driver_idx)] = (np.array(feat_vec) - mean) / (std + 1e-8)
 
     # Convert defaultdicts to regular dicts
     seeking_by_day = {k: dict(v) for k, v in seeking_by_day.items()}

@@ -161,6 +161,30 @@ def test_per_trajectory_drops_over_threshold_duration_within_week():
     assert removals[0].removal_reason_category == "implausibly_long"
 
 
+def test_per_trajectory_filtering_preserves_dates_parallelism():
+    """When a trajectory is removed, its calendar_date entry must be removed
+    from the sidecar too — downstream consumers rely on len(dates) == len(trajs)."""
+    trajs = TrajectoriesResult(
+        seeking_by_plate={
+            "A": [
+                _valid_seeking_traj(),                           # keep
+                [[5, 10, 1, 1], [999, 999, 1, 1], [6, 11, 2, 1]],  # drop: oob
+                _valid_seeking_traj(),                           # keep
+            ],
+        },
+        seeking_dates_by_plate={
+            "A": ["2016-07-04", "2016-07-05", "2016-07-06"],
+        },
+    )
+    pickup_counts = {(6, 11, 2, 1): (2, 0)}
+    kept, removals = apply_per_trajectory_invariants(
+        trajs, pickup_counts, {},
+    )
+    assert len(kept.seeking_by_plate["A"]) == 2
+    assert kept.seeking_dates_by_plate["A"] == ["2016-07-04", "2016-07-06"]
+    assert len(removals) == 1
+
+
 def test_systemic_count_mismatch_raises():
     trajs = TrajectoriesResult(seeking_by_plate={
         "A": [_valid_seeking_traj()],
