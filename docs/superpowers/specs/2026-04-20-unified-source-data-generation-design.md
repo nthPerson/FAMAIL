@@ -124,7 +124,7 @@ Preserve the 11 feature semantics from the existing `ms_profile_features.pkl`:
 | 4 | `shift_end` | **95th percentile** of active time_buckets. |
 | 5 | `freq_grid_x` | Mode of pickup-cell `x` across the driver's seeking trajectories (`state[-1]`). |
 | 6 | `freq_grid_y` | Mode of pickup-cell `y`. |
-| 7 | `avg_seeking_dist` | Mean `sum(|Δx|+|Δy|)` across consecutive states within each seeking trajectory (Manhattan cells traversed). |
+| 7 | `avg_seeking_dist` | Mean `sum(\|Δx\|+\|Δy\|)` across consecutive states within each seeking trajectory (Manhattan cells traversed). |
 | 8 | `avg_seeking_time` | Mean `(state[-1].timestamp − state[0].timestamp)` per seeking trajectory, in minutes. |
 | 9 | `avg_driving_dist` | Same as #7 but for driving trajectories. |
 | 10 | `avg_driving_time` | Same as #8 but for driving trajectories. |
@@ -251,16 +251,41 @@ Each view file is small (50–150 LOC) and can be understood and tested in isola
 - **`n_days`** is a scalar computed once from the shared event stream, passed to every writer.
 
 ### Asserted before writing (defense in depth)
-1. For every seeking-trajectory `state[-1]` at `(x, y, tb, day)`, the pickup count at that key is `≥ 1`.
-2. `sum(pickup_counts) == len(seeking_trajectories) == len(driving_trajectories)`.
-3. For every driving-trajectory `state[-1]`, the dropoff count at that key is `≥ 1`.
-4. All days ∈ `{1..5}`; all `x` ∈ `[1..48]`; all `y` ∈ `[1..90]`; all `time_bucket` ∈ `[1..288]`; all `hour` ∈ `[0..23]`.
-5. Exactly 50 unique drivers in every file. Driver-index mapping is bijective.
-6. Profile features: exactly `50 × 11`, no NaN, normalized mean ≈ 0 and std ≈ 1 per feature.
-7. The multiset of seeking-trajectory `state[-1]` cells equals the pickup-count distribution.
-8. Active-taxis sanity: for every cell-hour-day with a pickup, at least one driver is counted as active (since that driver was by definition empty just before the pickup).
 
-On any failed invariant, the tool aborts with a concrete diagnostic (which rows / cells / drivers violated), not just "invariant X failed".
+Invariants are split into two classes based on what kind of failure they can indicate:
+
+**Per-trajectory invariants** (a failure indicates one abnormal trajectory → **drop the trajectory, record the removal in `processing_metadata.json`, continue processing**):
+
+1. Every trajectory's `state[-1]` at `(x, y, tb, day)` has the corresponding pickup (seeking) or dropoff (driving) count at that key `≥ 1`.
+2. Every state in a trajectory has valid quantized coordinates: `x ∈ [1..48]`, `y ∈ [1..90]`, `time_bucket ∈ [1..288]`, `day ∈ {1..5}`.
+3. Every trajectory has `≥ 2` states after quantization and filtering.
+4. Every trajectory's states are chronologically non-decreasing in timestamp.
+
+**Systemic invariants** (a failure indicates a pipeline bug that cannot be attributed to one trajectory → **abort with concrete diagnostic**):
+
+5. After per-trajectory removals: `sum(pickup_counts) == len(seeking_trajectories)` AND `sum(dropoff_counts) == len(driving_trajectories)`. (Pickup/dropoff counts must be recomputed from the surviving trajectories, so this invariant holds by construction unless there's an extraction bug.)
+6. Exactly 50 unique drivers present across all files. Driver-index mapping is bijective.
+7. Profile features: exactly `50 × 11`, no NaN, normalized mean ≈ 0 and std ≈ 1 per feature.
+8. The multiset of seeking-trajectory `state[-1]` cells equals the pickup-count distribution after any per-trajectory removals.
+9. Active-taxis sanity: for every cell-hour-day with a pickup, at least one driver is counted as active (since that driver was by definition empty just before the pickup).
+10. All records surviving the weekday filter have `day ∈ {1..5}` and `hour ∈ [0..23]`.
+
+### Removal reporting
+
+For every trajectory dropped under per-trajectory invariants, `processing_metadata.json` records:
+
+- `driver_id` (plate_id) and `driver_idx` (integer index, if already assigned)
+- `trajectory_index_within_driver` (ordinal among that driver's extracted trajectories)
+- `which_invariant` (the numbered rule that failed)
+- `failing_values` (e.g., the out-of-bounds `x_grid`, the `state[-1]` cell that lacked a matching pickup count, the length that fell below 2)
+- `n_states_before_removal`
+- `removal_reason_category` (one of: `"out_of_bounds"`, `"degenerate_length"`, `"no_matching_count"`, `"temporal_order"`)
+
+A summary block also aggregates total counts per removal category, so the researcher can see at a glance whether removals are a handful of edge cases or a systemic signal about upstream data quality.
+
+If the number of per-trajectory removals exceeds a configurable threshold (default: **5%** of total extracted trajectories), the tool emits a **loud warning** but does not abort — real-world GPS data routinely has some noise; this is a signal for the researcher to inspect the metadata, not an automatic failure.
+
+On any systemic invariant failure (#5-#10), the tool aborts with a concrete diagnostic (which rows / cells / drivers violated), not just "invariant X failed".
 
 ---
 
