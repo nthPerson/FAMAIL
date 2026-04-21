@@ -1,15 +1,60 @@
-# `data/` — Ingestion and canonical active-unit representation
+# `data/` — Data pipeline: producer (raw GPS → source datasets) and consumer (source → cache tensors)
 
 ## Purpose
 
-Load raw pickle files from `raw_data/`, aggregate them to the `(48, 90, T)` spatiotemporal grid,
-determine which `(cell, t)` units are active, fix a canonical ordering over those units, and expose
-everything through the `DataBundle` dataclass. All downstream modules receive their inputs from
-`DataBundle.load()` — nothing reads raw files directly.
+Everything the rest of `famail_temporal/` needs in order to load data sits under this directory.
+Two distinct responsibilities live side by side:
+
+| Side | What it does | Input | Output |
+|---|---|---|---|
+| **Producer** (`source_generation/`) | Takes raw GPS pickle files and generates the 8 source datasets that land in `raw_data/` | `raw_data/taxi_record_*.pkl` (monthly GPS records) | `raw_data/*.pkl` (pickup_dropoff, active_taxis, trajectories, multi-stream, profile, calendars, driver mapping) + `processing_metadata.json` |
+| **Consumer** (the rest of this directory) | Aggregates the 8 source datasets into the canonical `(48, 90, T)` tensors and the active-unit index, then exposes them via `DataBundle` | `raw_data/*.pkl` (the producer's outputs) | `DataBundle` instance; writes intermediate tensors to `cache/` |
+
+The producer and consumer are intentionally decoupled:
+
+- The producer is one-shot and offline — regenerate only when raw GPS or convention changes.
+- The consumer is load-time and online — called at the start of every experiment via `DataBundle.load()`.
+- **Nothing downstream reads raw GPS directly.** All of `algorithm/`, `fairness/`, `evaluation/` see their inputs through `DataBundle`.
+
+> **Serialization note.** Both sides use Python `.pkl` files, since this is the format already consumed and produced by the project's trusted tooling. All `.pkl` I/O in this directory is against project-internal paths only; no code here deserializes files from external or untrusted sources.
 
 ---
 
-## Files
+## Directory layout
+
+```
+famail_temporal/data/
+├── README.md                        # this file
+├── __init__.py
+│
+│   ── CONSUMER SIDE ────────────────────────────────────────────────
+├── loader.py                        # DataBundle dataclass + .load() entry point
+├── aggregation.py                   # raw .pkl → (48, 90, T) tensors; hour↔block mapping
+├── active_mask.py                   # UnitIndexMap; compute_active_mask() filter
+├── cache_io.py                      # typed save/load helpers with config-encoded names
+├── demographics.py                  # demographic feature loading + validation
+│
+│   ── PRODUCER SIDE ────────────────────────────────────────────────
+└── source_generation/               # unified raw-GPS → source-dataset tool
+    ├── README.md                    # producer-side architecture
+    ├── SOURCE_DATASET_GENERATION_QUICKSTART.md   # researcher-facing guide
+    ├── __main__.py                  # `python -m famail_temporal.data.source_generation`
+    ├── cli.py                       # run_generation + argparse entry
+    ├── config.py                    # constants (grid, time, neighborhood, day filter)
+    ├── raw_loader.py                # load + concat taxi_record_*.pkl → DataFrame
+    ├── quantization.py              # gps_to_grid, seconds_to_time_bucket, timestamp_to_day
+    ├── transitions.py               # per-driver passenger-indicator transition detection
+    ├── event_stream.py              # build the single enriched event-stream DataFrame
+    ├── views/                       # per-output-file view modules (see views/README.md)
+    ├── removal.py                   # RemovalRecord + RemovalSummary dataclasses
+    ├── invariants.py                # per-trajectory + systemic invariant enforcement
+    ├── writer.py                    # serialize the 10 output artifacts
+    └── tests/                       # TDD unit + golden end-to-end tests
+```
+
+---
+
+## Consumer-side files
 
 | File | Role |
 |---|---|
@@ -17,10 +62,11 @@ everything through the `DataBundle` dataclass. All downstream modules receive th
 | `aggregation.py` | `raw_data/*.pkl` → `(48, 90, T)` tensors; `hour_to_block_index()` helper |
 | `active_mask.py` | `UnitIndexMap` dataclass; `compute_active_mask()` which applies the two-rule filter |
 | `cache_io.py` | Typed save/load helpers that encode config parameters into filenames |
+| `demographics.py` | Loads `cell_demographics.pkl`; validates that every active cell has finite demographic values |
 
 ---
 
-## Key design choices
+## Consumer-side key design choices
 
 ### 1. Canonical active-unit ordering (cell-major, block-within-cell)
 
@@ -80,7 +126,22 @@ linear parameters compatible with the hat-matrix algebra in `fairness/`.
 
 ---
 
-## API surface
+## Producer-side overview
+
+`source_generation/` is the one tool that turns raw taxi GPS pickles (`raw_data/taxi_record_07_50drivers.pkl`, `_08_`, `_09_`) into all 8 source datasets + driver-index mapping + processing metadata. It replaces three legacy tools (`pickup_dropoff_counts/`, `active_taxis/`, `new_all_trajs/`) with a single pipeline whose cross-file consistency holds by construction: every output derives from one enriched event-stream DataFrame produced in one pass.
+
+The full design rationale lives in [`docs/superpowers/specs/2026-04-20-unified-source-data-generation-design.md`](../../docs/superpowers/specs/2026-04-20-unified-source-data-generation-design.md). The producer-side architecture (single event stream → deterministic views) is documented in [`source_generation/README.md`](source_generation/README.md). For running the tool and interpreting its outputs, see [`source_generation/SOURCE_DATASET_GENERATION_QUICKSTART.md`](source_generation/SOURCE_DATASET_GENERATION_QUICKSTART.md).
+
+**When do you regenerate?** Only when one of:
+- Raw GPS data is replaced or updated.
+- A convention decision changes (e.g., day filter, active-taxi semantic, trajectory endpoint).
+- An upstream bug is discovered and fixed.
+
+Regeneration triggers a required follow-up: re-run `python -m famail_temporal.preprocess --force` so the cache is rebuilt from the new source files, and retrain the v3 discriminator on the new multi-stream files before running any F_fidelity experiments.
+
+---
+
+## Consumer API surface
 
 ```python
 from famail_temporal.data.loader import DataBundle, UnitIndexMap
@@ -117,8 +178,33 @@ t_block = hour_to_block_index(time_bucket_index)  # int in [0, T)
 
 ---
 
+## Producer API surface
+
+```bash
+# CLI — regenerate all 8 source datasets from raw GPS
+python -m famail_temporal.data.source_generation \
+    --input-dir raw_data/ \
+    --output-dir famail_temporal/raw_data/
+```
+
+```python
+# Programmatic
+from pathlib import Path
+from famail_temporal.data.source_generation.cli import run_generation
+
+result = run_generation(
+    input_dir=Path("raw_data/"),
+    output_dir=Path("famail_temporal/raw_data/"),
+)
+print(f"Kept: {result.n_seeking_kept} seeking + {result.n_driving_kept} driving")
+print(f"Removed: {result.n_removals} trajectories (see processing_metadata.json)")
+```
+
+---
+
 ## Dependencies
 
+**Consumer side:**
 - `config.py` — grid dims, time blocks, thresholds
 - `fairness/g0_power_basis.py` — `fit_g0` (called during preprocess)
 - `fairness/hat_matrices.py` — `precompute_hat_matrices` (called during preprocess)
@@ -127,6 +213,10 @@ t_block = hour_to_block_index(time_bucket_index)  # int in [0, T)
 - Standard library: `pickle`, `pathlib`
 - Third-party: `numpy`, `torch`
 
+**Producer side** (see [`source_generation/README.md`](source_generation/README.md) for full list):
+- Standard library: `pickle`, `pathlib`, `json`, `subprocess`
+- Third-party: `pandas`, `numpy`
+
 No imports from outside `famail_temporal/`.
 
 ---
@@ -134,6 +224,10 @@ No imports from outside `famail_temporal/`.
 ## Paper-section hook
 
 This module corresponds to the **"Data Preparation"** subsection of the Methods section. The
-unified mean-hourly aggregation rule and the active-unit filter definition are the two subsections
-most likely to need prose explanation for reviewers. The `UnitIndexMap` canonical ordering is an
+unified mean-hourly aggregation rule and the active-unit filter definition are the two
+consumer-side subsections most likely to need prose explanation for reviewers. The producer side
+(source-dataset generation) is an appendix-worthy methodological contribution in its own right:
+unifying three legacy tools into one consistent pipeline, enforcing a dataset-level invariant
+(every trajectory's pickup cell has a non-zero pickup count) by construction, and removing known
+indexing inconsistencies between files. The `UnitIndexMap` canonical ordering is an
 implementation detail, but may warrant a sentence in the supplementary about reproducibility.
