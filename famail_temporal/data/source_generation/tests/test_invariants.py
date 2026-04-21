@@ -150,6 +150,37 @@ def test_per_trajectory_drops_multi_cell_jump_as_action_space_violation():
     assert removals[0].failing_values["transition_index"] == 0
 
 
+def test_per_trajectory_accepts_all_nine_actions():
+    """All nine agent actions (8 compass moves + stay) must produce
+    max_axis_delta <= 1 and be kept. This pins the action-space boundary
+    against accidental off-by-one in the comparison (>= vs >)."""
+    all_nine_deltas = [
+        (dx, dy) for dx in (-1, 0, 1) for dy in (-1, 0, 1)
+    ]
+    assert len(all_nine_deltas) == 9
+
+    trajs = TrajectoriesResult(seeking_by_plate={}, driving_by_plate={})
+    pickup_counts: dict = {}
+    for i, (dx, dy) in enumerate(all_nine_deltas):
+        plate = f"A{i}"
+        start = (10, 20, 1, 1)
+        # When dx=dy=0 (stay), bump time_bucket so the transition is a
+        # same-cell state change at a later time; temporal_order still
+        # passes because time_bucket increases.
+        end = (10 + dx, 20 + dy, 2, 1)
+        trajs.seeking_by_plate[plate] = [[list(start), list(end)]]
+        pickup_counts[end] = (1, 0)
+
+    kept, removals = apply_per_trajectory_invariants(
+        trajs, pickup_counts, {},
+    )
+    assert len(removals) == 0, (
+        f"Expected 0 removals, got {len(removals)}: "
+        f"{[r.removal_reason_category for r in removals]}"
+    )
+    assert len(kept.seeking_by_plate) == 9
+
+
 def test_per_trajectory_drops_friday_to_midweek_as_implausibly_long():
     """A Fri→Tue trajectory (driver took additional days off) is also
     implausibly long for a single episode."""
