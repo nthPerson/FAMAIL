@@ -4,7 +4,7 @@
 
 TDD-style tests for every module in `source_generation/`. Each production module
 in Phase 1-4 of the implementation plan has its own test file; Phase 5 adds the
-end-to-end golden test and the slow real-data smoke test. A full run is **64 tests,
+end-to-end golden test and the slow real-data smoke test. A full run is **81 tests,
 2 real-data-gated skips**, typically under 2 seconds.
 
 The test suite is where cross-file contracts get locked in: the golden test exercises
@@ -30,7 +30,7 @@ and the systemic-invariant check on a 2-driver synthetic fixture with relaxed
 | `test_view_profile.py` | `views/profile.py` | Home from `time_bucket == 1` mode; 5th/95th percentile shift bounds; `zscore_normalize` shape/mean/std for a 50×11 matrix; `num_trips_per_day` = pickups / distinct calendar dates |
 | `test_profile_fallbacks.py` | `views/profile.py::compute_home_xy_with_fallback` | Primary (`tb==1` mode); fallback 1 (first-hour mode); fallback 2 (all-records mode); empty driver raises |
 | `test_view_calendars.py` | `views/calendars.py` | Sorted unique day extraction with dedup across multiple trajectories; missing driver produces empty list |
-| `test_invariants.py` | `invariants.py` | Per-trajectory: drops out-of-bounds, degenerate length, no-matching-count. Systemic: count mismatch raises, wrong driver count raises. |
+| `test_invariants.py` | `invariants.py` | Per-trajectory: drops out-of-bounds, degenerate length, no-matching-count, temporal-order (within-day backward), implausibly-long (Fri→Mon, Fri→mid-week, >120-bucket same-week), action-space-violation (multi-cell jump + first-violation short-circuit), plus accept-cases for short midnight crossing, long overnight shift within threshold, and all 9 agent actions. Systemic: count mismatch raises, wrong driver count raises. |
 | `test_writer.py` | `writer.py` | All 10 files produced by `write_all_outputs`; active_taxis bundle has `{data, stats, config, version}`; metadata JSON records removals with category counts |
 | `test_cli.py` | `cli.py` | End-to-end `run_generation` with 50 synthetic drivers produces all 10 expected output files; `n_seeking_kept` / `n_driving_kept` populated |
 
@@ -47,7 +47,7 @@ and the systemic-invariant check on a 2-driver synthetic fixture with relaxed
 ## How to run
 
 ```bash
-# Full suite (64 tests, 2 real-data-gated skips, < 2 seconds)
+# Full suite (81 tests, 2 real-data-gated skips, < 2 seconds)
 .venv/bin/pytest famail_temporal/data/source_generation/tests/ -v
 
 # Single module
@@ -79,7 +79,6 @@ This discipline is documented per task in [`docs/superpowers/plans/2026-04-20-un
 ## Known test-coverage gaps (non-blocking)
 
 The whole-diff code review at the end of the implementation flagged these as follow-up work:
-- No test explicitly exercising the `temporal_order` (invariant #4) drop branch.
 - No test for a `driving` kind `no_matching_count` drop (only `seeking` kind is exercised).
 - No test for `zscore_normalize` on a mixed constant/varying column matrix (currently only all-varying and all-constant cases are covered transitively).
 

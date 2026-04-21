@@ -165,10 +165,12 @@ Sort plate_ids lexicographically, assign 0..49. Emitted as `driver_index_mapping
 | 2 | Every state has valid coords (`x∈[1,48]`, `y∈[1,90]`, `tb∈[1,288]`, `day∈{1..5}`) | per-trajectory | drop + `category="out_of_bounds"` |
 | 3 | Every trajectory has ≥ 2 states | per-trajectory | drop + `category="degenerate_length"` |
 | 4 | Temporal order within a trajectory is non-decreasing in `time_bucket` | per-trajectory | drop + `category="temporal_order"` |
-| 5 | `sum(pickup_counts) == n_seeking_trajectories` and `sum(dropoff_counts) == n_driving_trajectories` | systemic | `SystemicInvariantError` |
-| 6 | Exactly 50 unique drivers | systemic | `SystemicInvariantError` |
-| 7 | Profile matrix is `50×11`, no NaN, column mean ≈ 0, column std ≈ 1 (constant columns excepted) | systemic | `SystemicInvariantError` |
-| 8 | For every cell/hour/day with a pickup, at least one driver is counted as active | systemic | `SystemicInvariantError` |
+| 5 | A trajectory's elapsed duration exceeds `MAX_TRAJECTORY_DURATION_BUCKETS` (120 buckets ≈ 10 hours). Catches extraction artifacts where a seeking/driving segment was stitched across off-duty time (e.g., Friday→Monday with weekend records filtered out) and any other multi-day GPS gap. | per-trajectory | drop + `category="implausibly_long"` |
+| 6 | A consecutive-state transition has `max(|dx|, |dy|) > 1`, meaning the trajectory jumped more than one grid cell in a single time step. This can't be a rollout of the 9-action agent (8 compass moves + stay) that the downstream models assume. Typically caused by GPS dropouts or high-speed movement between ~15-30 second GPS samples on a ~1km grid. | per-trajectory | drop + `category="action_space_violation"` |
+| 7 | `sum(pickup_counts) == n_seeking_trajectories` and `sum(dropoff_counts) == n_driving_trajectories` | systemic | `SystemicInvariantError` |
+| 8 | Exactly 50 unique drivers | systemic | `SystemicInvariantError` |
+| 9 | Profile matrix is `50×11`, no NaN, column mean ≈ 0, column std ≈ 1 (constant columns excepted) | systemic | `SystemicInvariantError` |
+| 10 | For every cell/hour/day with a pickup, at least one driver is counted as active | systemic | `SystemicInvariantError` |
 
 If per-trajectory removal rate exceeds `config.REMOVAL_RATE_WARN_THRESHOLD` (default 5%), the
 CLI emits a loud warning but does NOT abort — the removals are transparent in
