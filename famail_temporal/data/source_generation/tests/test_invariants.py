@@ -128,6 +128,28 @@ def test_per_trajectory_drops_friday_to_monday_as_implausibly_long():
     assert removals[0].removal_reason_category == "implausibly_long"
 
 
+def test_per_trajectory_drops_multi_cell_jump_as_action_space_violation():
+    """A trajectory containing a consecutive-state transition with
+    max(|dx|, |dy|) > 1 cannot be a rollout of a 9-action agent and must
+    be rejected. The first violating transition is recorded on the
+    RemovalRecord's failing_values dict."""
+    trajs = TrajectoriesResult(seeking_by_plate={
+        "A": [[
+            [5, 10, 1, 1],
+            [7, 10, 2, 1],  # max_axis_delta = 2: non-adjacent, rejected
+            [6, 11, 3, 1],
+        ]],
+    })
+    pickup_counts = {(6, 11, 3, 1): (1, 0)}
+    kept, removals = apply_per_trajectory_invariants(trajs, pickup_counts, {})
+    assert kept.seeking_by_plate.get("A", []) == []
+    assert len(removals) == 1
+    assert removals[0].removal_reason_category == "action_space_violation"
+    assert removals[0].which_invariant == 6
+    assert removals[0].failing_values["max_axis_delta"] == 2
+    assert removals[0].failing_values["transition_index"] == 0
+
+
 def test_per_trajectory_drops_friday_to_midweek_as_implausibly_long():
     """A Fri→Tue trajectory (driver took additional days off) is also
     implausibly long for a single episode."""
@@ -171,7 +193,7 @@ def test_per_trajectory_filtering_preserves_dates_parallelism():
         seeking_by_plate={
             "A": [
                 _valid_seeking_traj(),                           # keep
-                [[5, 10, 1, 1], [999, 999, 1, 1], [6, 11, 2, 1]],  # drop: oob
+                [[5, 10, 1, 1], [999, 999, 1, 1], [6, 11, 2, 1]],  # drop: action_space_violation
                 _valid_seeking_traj(),                           # keep
             ],
         },

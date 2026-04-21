@@ -32,6 +32,21 @@ def _validate_single_trajectory(
             return False, 4, "temporal_order", {
                 "day_time_buckets": [(s[3], s[2]) for s in traj],
             }
+    # Action-space-violation check (design spec §6, invariant #6). Enforces
+    # physical consistency with the 9 possible actions of the original
+    # all_trajs.pkl state vector: each consecutive-state transition must
+    # satisfy max(|dx|, |dy|) <= 1 (8 compass moves + stay). Trajectories
+    # with GPS-dropout or high-speed-movement jumps cannot be rollouts of
+    # a 9-action agent and are rejected whole. First violation wins.
+    for i, (a, b) in enumerate(zip(traj, traj[1:])):
+        max_axis_delta = max(abs(b[0] - a[0]), abs(b[1] - a[1]))
+        if max_axis_delta > 1:
+            return False, 6, "action_space_violation", {
+                "from": tuple(a),
+                "to": tuple(b),
+                "max_axis_delta": max_axis_delta,
+                "transition_index": i,
+            }
     # Plausibility-of-duration check (design spec §6, invariant #5, research-
     # grounded). A seeking or driving trajectory is a single episode of
     # cruising-between-trips (seeking) or carrying-a-passenger (driving). In
