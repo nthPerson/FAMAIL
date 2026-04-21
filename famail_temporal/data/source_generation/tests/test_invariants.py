@@ -181,6 +181,32 @@ def test_per_trajectory_accepts_all_nine_actions():
     assert len(kept.seeking_by_plate) == 9
 
 
+def test_action_space_failing_values_records_first_violation():
+    """When a trajectory has multiple non-adjacent transitions, the
+    RemovalRecord records the FIRST one (short-circuit behavior matching
+    temporal_order). The failing_values dict carries from/to states,
+    max_axis_delta, and transition_index."""
+    trajs = TrajectoriesResult(seeking_by_plate={
+        "A": [[
+            [5, 10, 1, 1],
+            [5, 10, 2, 1],
+            [8, 10, 3, 1],   # transition 1: max_axis_delta = 3
+            [8, 10, 4, 1],
+            [20, 10, 5, 1],  # transition 3: max_axis_delta = 12
+            [21, 11, 6, 1],
+        ]],
+    })
+    pickup_counts = {(21, 11, 6, 1): (1, 0)}
+    kept, removals = apply_per_trajectory_invariants(trajs, pickup_counts, {})
+    assert len(removals) == 1
+    r = removals[0]
+    assert r.removal_reason_category == "action_space_violation"
+    assert r.failing_values["transition_index"] == 1
+    assert r.failing_values["max_axis_delta"] == 3
+    assert r.failing_values["from"] == (5, 10, 2, 1)
+    assert r.failing_values["to"] == (8, 10, 3, 1)
+
+
 def test_per_trajectory_drops_friday_to_midweek_as_implausibly_long():
     """A Fri→Tue trajectory (driver took additional days off) is also
     implausibly long for a single episode."""
