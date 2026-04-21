@@ -19,10 +19,13 @@ def test_per_trajectory_drops_out_of_bounds():
     trajs = TrajectoriesResult(seeking_by_plate={
         "A": [
             _valid_seeking_traj(),
-            [[5, 10, 1, 1], [999, 999, 1, 1], [6, 11, 2, 1]],
+            # x=0 is out of bounds (1 <= x <= X_GRID_MAX); every consecutive
+            # transition has max_axis_delta <= 1 so out_of_bounds fires
+            # rather than action_space_violation.
+            [[0, 10, 1, 1], [1, 10, 1, 1], [1, 11, 2, 1]],
         ],
     })
-    pickup_counts = {(6, 11, 2, 1): (1, 0)}
+    pickup_counts = {(6, 11, 2, 1): (1, 0), (1, 11, 2, 1): (1, 0)}
     dropoff_counts: dict = {}
     kept, removals = apply_per_trajectory_invariants(
         trajs, pickup_counts, dropoff_counts,
