@@ -1,5 +1,5 @@
 """
-Preprocess raw_data/ → cache/.
+Preprocess source_data/ → cache/.
 
 Run:    python -m famail_temporal.preprocess
 Force:  python -m famail_temporal.preprocess --force

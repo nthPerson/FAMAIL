@@ -11,7 +11,7 @@ from typing import List, Tuple
 
 # Paths
 PACKAGE_ROOT = Path(__file__).resolve().parent
-RAW_DATA_DIR = PACKAGE_ROOT / "raw_data"
+SOURCE_DATA_DIR = PACKAGE_ROOT / "source_data"
 CACHE_DIR = PACKAGE_ROOT / "cache"
 DISCRIMINATOR_CHECKPOINT_DIR = PACKAGE_ROOT / "discriminator_checkpoints"
 DISCRIMINATOR_CHECKPOINT_FILENAME = "default/best.pt"

@@ -90,9 +90,9 @@ def _parse_trajectory(traj_data, trajectory_id, driver_id):
 
 
 def _load_trajectories(max_trajectories=None, max_drivers=None):
-    """Load passenger-seeking trajectories from raw_data."""
+    """Load passenger-seeking trajectories from source_data."""
     from famail_temporal import config
-    path = config.RAW_DATA_DIR / "passenger_seeking_trajs.pkl"
+    path = config.SOURCE_DATA_DIR / "passenger_seeking_trajs.pkl"
     with open(path, "rb") as f:
         data = _pkl.load(f)
     driver_keys = list(data.keys())
@@ -114,11 +114,11 @@ def _load_trajectories(max_trajectories=None, max_drivers=None):
 
 
 def _load_multi_stream():
-    """Load the five multi-stream context dicts from raw_data."""
+    """Load the five multi-stream context dicts from source_data."""
     from famail_temporal import config
 
     def _load(filename):
-        path = config.RAW_DATA_DIR / filename
+        path = config.SOURCE_DATA_DIR / filename
         with open(path, "rb") as f:
             return _pkl.load(f)
 

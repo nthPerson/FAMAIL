@@ -54,10 +54,10 @@ def test_databundle_load_real_data():
     from famail_temporal import config
 
     required = [
-        config.RAW_DATA_DIR / "pickup_dropoff_counts.pkl",
-        config.RAW_DATA_DIR / "active_taxis_5x5_hourly.pkl",
-        config.RAW_DATA_DIR / "cell_demographics.pkl",
-        config.RAW_DATA_DIR / "grid_to_district_mapping.pkl",
+        config.SOURCE_DATA_DIR / "pickup_dropoff_counts.pkl",
+        config.SOURCE_DATA_DIR / "active_taxis_5x5_hourly.pkl",
+        config.SOURCE_DATA_DIR / "cell_demographics.pkl",
+        config.SOURCE_DATA_DIR / "grid_to_district_mapping.pkl",
     ]
     for path in required:
         if not path.exists():

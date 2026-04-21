@@ -170,8 +170,8 @@ def test_modifier_on_real_data():
     )
 
     required = [
-        config.RAW_DATA_DIR / "pickup_dropoff_counts.pkl",
-        config.RAW_DATA_DIR / "cell_demographics.pkl",
+        config.SOURCE_DATA_DIR / "pickup_dropoff_counts.pkl",
+        config.SOURCE_DATA_DIR / "cell_demographics.pkl",
     ]
     for path in required:
         if not path.exists():

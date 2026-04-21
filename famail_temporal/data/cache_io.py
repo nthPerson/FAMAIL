@@ -36,11 +36,11 @@ def load_artifact(artifact_name: str, include_features: bool = False) -> Any:
 
 
 def load_raw(filename: str) -> Any:
-    """Load a raw .pkl from the raw_data directory."""
-    path = config.RAW_DATA_DIR / filename
+    """Load a source-data .pkl from the source_data directory."""
+    path = config.SOURCE_DATA_DIR / filename
     if not path.exists():
         raise FileNotFoundError(
-            f"Raw data missing: {path}. See raw_data/README.md."
+            f"Source data missing: {path}. See source_data/README.md."
         )
     with open(path, "rb") as f:
         return _pkl.load(f)

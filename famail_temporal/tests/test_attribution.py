@@ -142,8 +142,8 @@ def test_attribution_on_real_data():
     from famail_temporal.fairness.hat_matrices import compute_fcausal_torch, hat_matrices_to_torch
 
     required = [
-        config.RAW_DATA_DIR / "pickup_dropoff_counts.pkl",
-        config.RAW_DATA_DIR / "cell_demographics.pkl",
+        config.SOURCE_DATA_DIR / "pickup_dropoff_counts.pkl",
+        config.SOURCE_DATA_DIR / "cell_demographics.pkl",
     ]
     for path in required:
         if not path.exists():

@@ -221,8 +221,8 @@ def test_famailobjective_on_real_data():
     from famail_temporal.data.loader import DataBundle
 
     required = [
-        config.RAW_DATA_DIR / "pickup_dropoff_counts.pkl",
-        config.RAW_DATA_DIR / "cell_demographics.pkl",
+        config.SOURCE_DATA_DIR / "pickup_dropoff_counts.pkl",
+        config.SOURCE_DATA_DIR / "cell_demographics.pkl",
     ]
     for path in required:
         if not path.exists():

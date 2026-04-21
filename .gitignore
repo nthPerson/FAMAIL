@@ -43,9 +43,9 @@ CLAUDE.md
 /site/
 
 # famail_temporal data/cache/checkpoints
-famail_temporal/raw_data/*
-!famail_temporal/raw_data/.gitkeep
-!famail_temporal/raw_data/README.md
+famail_temporal/source_data/*
+!famail_temporal/source_data/.gitkeep
+!famail_temporal/source_data/README.md
 famail_temporal/cache/*
 !famail_temporal/cache/.gitkeep
 !famail_temporal/cache/README.md

@@ -46,7 +46,7 @@ EXPECTED_N_DRIVERS: int = 50
 
 # I/O defaults
 DEFAULT_RAW_INPUT_DIR: Path = Path("raw_data")
-DEFAULT_OUTPUT_DIR: Path = Path("famail_temporal/raw_data")
+DEFAULT_OUTPUT_DIR: Path = Path("famail_temporal/source_data")
 
 RAW_INPUT_FILENAMES: tuple[str, ...] = (
     "taxi_record_07_50drivers.pkl",
