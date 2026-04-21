@@ -130,7 +130,14 @@ def check_systemic_invariants(
             raise SystemicInvariantError(
                 f"#7: profile column means not ~0: {col_mean}"
             )
-        if not np.allclose(col_std, 1.0, atol=1e-5):
+        # zscore_normalize preserves constant raw columns at 0 (std_safe=1
+        # when raw std < 1e-12), so post-normalization std is either ~0
+        # (constant column) or ~1 (varying column). The invariant checks
+        # only that non-constant columns normalized correctly.
+        varying_cols = col_std > 0.5
+        if varying_cols.any() and not np.allclose(
+            col_std[varying_cols], 1.0, atol=1e-5,
+        ):
             raise SystemicInvariantError(
                 f"#7: profile column stds not ~1: {col_std}"
             )
