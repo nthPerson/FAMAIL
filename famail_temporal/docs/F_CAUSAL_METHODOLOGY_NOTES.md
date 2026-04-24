@@ -376,6 +376,24 @@ hyperbolic Y ≈ c/D relationship. The power basis captures this via its
    `DEMAND_FLOOR ∈ {0.1, 0.25, 0.5, 1.0}` would be a robustness check
    for the final paper if space allows.
 
+6. **Per-day fairness analysis (research direction).** The current
+   pipeline pools across days — the fairness metrics (F_spatial,
+   F_causal) and per-cell attributions are computed on (cell, time_block)
+   aggregates that average over all `n_days` calendar days. Weekday-to-
+   weekday variation in fairness is observable in principle but not
+   exposed. Breaking the computation out per-day would allow:
+   - Investigating whether unfairness concentrates on specific weekdays
+     (e.g., surge-pricing effects on Mondays vs. Fridays).
+   - Giving a downstream RL agent a richer fairness signal that varies
+     across the week.
+   - Testing whether per-day attributions are more informative training
+     targets for imitation-learning agents (like the baseline GAN
+     planned for the trajectory-modification evaluation framework).
+
+   This direction is out of scope for the current pipeline; noted here
+   because the `FAIRNESS_ATTRIBUTION_EXPORT_DESIGN.md` document (sibling
+   in this directory) carries a cross-reference back to this item.
+
 ---
 
 ## Change log
