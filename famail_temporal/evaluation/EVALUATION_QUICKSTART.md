@@ -131,10 +131,8 @@ Each is a dict (deserialized via standard pickle loading):
     "grid": np.ndarray,                        # (48, 90, T, 4) float32
     "channel_names": ["spatial_attr", "causal_attr",
                       "gini_decomp_dsr", "gini_decomp_asr"],
-    "time_blocks": [("morning_peak", 7, 10),
-                    ("midday", 10, 16),
-                    ("evening_peak", 16, 20),
-                    ("night", 20, 31)],
+    "time_blocks": [(f"hour_{h:02d}", h, h + 1) for h in range(24)],
+    # 24 hourly blocks as of 2026-04-24 (previously 4 named blocks).
     "active_mask": np.ndarray,                 # (48, 90, T) bool
 }
 ```

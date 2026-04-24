@@ -6,12 +6,10 @@ primarily Manuel's GAN/GAIL agent (separate project) and a parallel
 baseline-GAN the current project will train for evaluating the
 trajectory-modification framework.
 
-**Status.** **Design frozen, implementation held.** Do not generate the
-dataset until `config.T` is changed from 4 to 24 (hourly time-block
-resolution) and the new `TIME_BLOCKS` tuple is defined. Current T=4
-is a framework-validation configuration and will be superseded. This
-document captures the agreed design so nothing is re-litigated when
-we unblock.
+**Status.** **Unblocked 2026-04-24.** `config.T` transitioned from 4 to 24
+on 2026-04-24 — TIME_BLOCKS now covers 24 hourly blocks (`hour_00` through
+`hour_23`). Implementation of the export tool is ready to proceed; design
+below is the agreed spec.
 
 ---
 
@@ -42,9 +40,9 @@ RL simulator steps at that cadence. Broadcasting is semantically honest
 (the value literally is constant across buckets within a block) and
 removes a mapping step on the consumer side.
 
-**Note.** When `config.T` moves from 4 to 24 (planned), each time_block
-will be one hour, so each will cover 12 time_buckets. The broadcast
-semantics remain identical.
+**Note.** `config.T = 24` as of 2026-04-24. Each time_block is one hour
+and covers 12 time_buckets. Broadcast semantics remain identical and
+T-agnostic by design.
 
 ### 2. Day aggregation — pooled across days, broadcast to all day indices
 
@@ -220,12 +218,10 @@ The export directory includes a README that covers:
 
 ## Known constraints and future considerations
 
-### Waiting on T=24
+### T=24 transition complete (2026-04-24)
 
-Current `T=4` is a framework-validation choice. When `config.T` changes
-to 24 (hourly time blocks), the export tool must work unchanged —
-this is why we chose broadcasting semantics that don't depend on the
-specific T value.
+`config.T` moved from 4 to 24 on 2026-04-24. Export tool can now be
+implemented; broadcasting semantics are T-agnostic by design.
 
 ### Sign-convention consistency with upstream
 
@@ -259,5 +255,7 @@ trained against.
 
 ## Change log
 
-- **2026-04-24** — Initial design. Blocked on `T=4` → `T=24` configuration
-  transition before implementation.
+- **2026-04-24 (initial)** — Initial design. Blocked on `T=4` → `T=24`
+  configuration transition before implementation.
+- **2026-04-24 (unblocked)** — `config.T` moved from 4 to 24 same day.
+  Design approved; implementation can proceed.

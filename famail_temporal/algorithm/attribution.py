@@ -18,7 +18,10 @@ from famail_temporal import config
 from famail_temporal.data.active_mask import UnitIndexMap
 from famail_temporal.data.aggregation import hour_to_block_index, time_bucket_to_hour
 from famail_temporal.data.loader import DataBundle
-from famail_temporal.fairness.causal import per_unit_attribution, per_unit_attribution_signed
+from famail_temporal.fairness.causal import (
+    per_unit_attribution_from_compact,
+    per_unit_attribution_signed_from_compact,
+)
 from famail_temporal.fairness.hat_matrices import hat_matrices_to_torch
 from famail_temporal.utils.trajectory import Trajectory
 
@@ -42,10 +45,10 @@ def compute_per_unit_attribution(
     R = Y - g0_D
 
     tensors = hat_matrices_to_torch(bundle.hat_matrices)
-    IH = tensors['I_minus_H_demo']
-    M = tensors['M']
-    unsigned = per_unit_attribution(R, IH, M).numpy()
-    signed = per_unit_attribution_signed(R, IH, M).numpy()
+    X_demo = tensors['X_demo']
+    XtX_inv = tensors['XtX_inv']
+    unsigned = per_unit_attribution_from_compact(R, X_demo, XtX_inv).numpy()
+    signed = per_unit_attribution_signed_from_compact(R, X_demo, XtX_inv).numpy()
     return unsigned, signed
 
 

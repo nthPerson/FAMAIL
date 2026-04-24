@@ -13,11 +13,12 @@ from famail_temporal.data.aggregation import (
 
 
 @pytest.mark.parametrize("hour,expected", [
-    (7, 0), (9, 0), (10, 1), (15, 1),
-    (16, 2), (19, 2), (20, 3), (23, 3),
-    (0, 3), (6, 3),
+    (0, 0), (7, 7), (10, 10), (15, 15),
+    (16, 16), (20, 20), (23, 23),
 ])
 def test_hour_to_block_index(hour, expected):
+    """At T=24, hour h maps to block h (identity). Pins the mapping
+    against accidental off-by-one regressions."""
     assert hour_to_block_index(hour) == expected
 
 
@@ -50,40 +51,47 @@ def test_time_bucket_to_hour_accepts_zero():
 
 
 def test_block_n_hours():
-    assert block_n_hours(0) == 3   # morning_peak (7-10)
-    assert block_n_hours(1) == 6   # midday (10-16)
-    assert block_n_hours(2) == 4   # evening_peak (16-20)
-    assert block_n_hours(3) == 11  # night (20-31, wraparound)
+    """Each hourly block covers exactly 1 hour at T=24."""
+    from famail_temporal import config
+    for t in range(config.T):
+        assert block_n_hours(t) == 1, f"block {t} should cover 1 hour at T=24"
 
 
 def test_aggregate_pickup_dropoff_mean_scale():
-    # cell (5, 10) at hour 7 (block 0, 3 hours), day 1: 6 pickups
+    # cell (5, 10) at hour 7 (block 7 at T=24, 1 hour), day 1: 6 pickups
+    # time_bucket 85 = (85-1)//12 = hour 7
     raw_data = {(5 + 1, 10 + 1, 85, 1): [6, 0]}
     n_days = 1
     pickup_3d, dropoff_3d = aggregate_pickup_dropoff(raw_data, n_days=n_days)
-    assert pickup_3d.shape == (48, 90, 4)
-    # mean hourly = 6 / (3 × 1) = 2.0
-    assert np.isclose(pickup_3d[5, 10, 0], 2.0)
-    assert pickup_3d.sum() == pickup_3d[5, 10, 0]
+    assert pickup_3d.shape == (48, 90, 24)
+    # mean hourly = 6 / (1 × 1) = 6.0 — block is 1 hour at T=24
+    assert np.isclose(pickup_3d[5, 10, 7], 6.0)
+    assert pickup_3d.sum() == pickup_3d[5, 10, 7]
 
 
 def test_aggregate_active_taxis_mean():
+    """At T=24, hour 7 and hour 8 are separate blocks. Each block is 1 hour,
+    so the block-mean is the raw count (no averaging across hours)."""
     raw_data = {
         (5 + 1, 10 + 1, 7, 1): 20,
         (5 + 1, 10 + 1, 8, 1): 10,
     }
     taxis_3d = aggregate_active_taxis(raw_data, n_days=1)
-    assert taxis_3d.shape == (48, 90, 4)
-    # mean hourly = (20 + 10) / (3 × 1) = 10.0
-    assert np.isclose(taxis_3d[5, 10, 0], 10.0)
+    assert taxis_3d.shape == (48, 90, 24)
+    # block 7 gets 20 / (1 × 1) = 20.0
+    assert np.isclose(taxis_3d[5, 10, 7], 20.0)
+    # block 8 gets 10 / (1 × 1) = 10.0
+    assert np.isclose(taxis_3d[5, 10, 8], 10.0)
 
 
 def test_aggregate_pickup_dropoff_multi_day():
-    # 5 days × 6 pickups each in same (cell, block) should still produce mean=2.0/hour
+    """5 days × 6 pickups in the same (cell, hour-block) averages to 6.0/hour
+    (each block is 1 hour at T=24, so divisor = 1 × 5 days = 5)."""
     raw = {(5 + 1, 10 + 1, 85, d): [6, 0] for d in range(1, 6)}
     pickup, _ = aggregate_pickup_dropoff(raw, n_days=5)
-    # sum = 5 × 6 = 30; divisor = 3 hours × 5 days = 15; mean = 2.0
-    assert np.isclose(pickup[5, 10, 0], 2.0)
+    # sum = 5 × 6 = 30; divisor = 1 hour × 5 days = 5; mean = 6.0
+    # time_bucket 85 maps to hour 7 at T=24 -> block 7
+    assert np.isclose(pickup[5, 10, 7], 6.0)
 
 
 def test_dataset_n_days():
@@ -100,7 +108,8 @@ def test_aggregate_active_taxis_supply_floor():
     raw = {(5 + 1, 10 + 1, 7, 1): 20}
     taxis = aggregate_active_taxis(raw, n_days=1)
     assert np.all(taxis >= config.SUPPLY_FLOOR)
-    # An untouched cell should be exactly SUPPLY_FLOOR
+    # An untouched cell should be exactly SUPPLY_FLOOR — block 0 (hour 0)
+    # wasn't touched; the single entry was at hour 7.
     assert np.isclose(taxis[0, 0, 0], config.SUPPLY_FLOOR)
 
 

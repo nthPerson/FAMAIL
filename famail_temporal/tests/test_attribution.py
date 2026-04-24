@@ -139,7 +139,9 @@ def test_attribution_on_real_data():
     in-range, and the sum invariant holds at production scale."""
     from famail_temporal import config
     from famail_temporal.data.loader import DataBundle
-    from famail_temporal.fairness.hat_matrices import compute_fcausal_torch, hat_matrices_to_torch
+    from famail_temporal.fairness.hat_matrices import (
+        compute_fcausal_compact, hat_matrices_to_torch,
+    )
 
     required = [
         config.SOURCE_DATA_DIR / "pickup_dropoff_counts.pkl",
@@ -163,7 +165,8 @@ def test_attribution_on_real_data():
     assert np.isfinite(attribution).all(), "attribution contains non-finite values"
     assert np.isfinite(signed).all(), "signed attribution contains non-finite values"
 
-    # Sum invariant at production scale
+    # Sum invariant at production scale (compact FWL form — dense I_minus_H_demo
+    # is not materialized at production N).
     D = torch.from_numpy(bundle.pickup_3d[bundle.mask_3d]).float()
     S = torch.from_numpy(bundle.active_taxis_3d[bundle.mask_3d]).float()
     D = torch.clamp(D, min=config.DEMAND_FLOOR)
@@ -171,7 +174,7 @@ def test_attribution_on_real_data():
     g0_D = torch.from_numpy(np.asarray(bundle.g0_func(D.numpy()), dtype=np.float32))
     R = Y - g0_D
     tensors = hat_matrices_to_torch(bundle.hat_matrices)
-    f_causal = compute_fcausal_torch(R, tensors['I_minus_H_demo'], tensors['M'])
+    f_causal = compute_fcausal_compact(R, tensors['X_demo'], tensors['XtX_inv'])
     attr_sum = float(attribution.sum())
     expected = 1.0 - float(f_causal)
     diff = abs(attr_sum - expected)

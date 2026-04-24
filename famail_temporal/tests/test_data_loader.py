@@ -122,7 +122,7 @@ def test_databundle_load_real_data():
     bundle = DataBundle.load(max_trajectories=10, max_drivers=2)
     assert bundle.pickup_3d.shape == (*config.GRID_DIMS, config.T)
     assert bundle.unit_map.n_units >= config.MIN_TOTAL_ACTIVE_UNITS
-    assert bundle.unit_map.n_units == bundle.hat_matrices['I_minus_H_demo'].shape[0]
+    assert bundle.unit_map.n_units == bundle.hat_matrices['X_demo'].shape[0]
 
     # Print bundle statistics for researcher inspection
     print(f"\n  Grid dims: {bundle.pickup_3d.shape}")

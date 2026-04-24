@@ -24,8 +24,10 @@ class DataBundle:
     Invariants:
     - pickup_3d, dropoff_3d, active_taxis_3d, and mask_3d all share the same
       (grid_x, grid_y, T) shape.
-    - unit_map.n_units == hat_matrices['I_minus_H_demo'].shape[0] (Task 11
-      enforces this at precompute time).
+    - unit_map.n_units == hat_matrices['X_demo'].shape[0] (precompute
+      enforces this). At small N the dense I_minus_H_demo/M are also
+      present for back-compat; at production scale only the compact form
+      (X_demo, XtX_inv) is emitted to keep memory O(Np) rather than O(N²).
     - len(n_hours_per_block) == T (the block axis of the 3D tensors).
     - Fields are rebinding-frozen; contained numpy arrays and dicts may still
       be mutated by reference. Task 11's setflags ensures hat matrices are
@@ -48,7 +50,7 @@ class DataBundle:
     # Derived artifacts
     unit_map: UnitIndexMap         # canonical ordering of active (cell, t) units
     g0_func: G0Function            # fitted g_0(D) power-basis function
-    hat_matrices: Dict[str, np.ndarray]  # keys: 'I_minus_H_demo', 'M' (and optionally 'scaler_*')
+    hat_matrices: Dict[str, np.ndarray]  # keys: 'X_demo', 'XtX_inv', 'scaler_*'; dense 'I_minus_H_demo', 'M' present only at small N
 
     # Trajectories + multi-stream context
     trajectories: List[Trajectory]
@@ -207,10 +209,10 @@ def _bundle_load(max_trajectories=None, max_drivers=None):
     hat_matrices = load_artifact("hat_matrices", include_features=True)
 
     # Shape consistency — fail loud with actionable error messages.
-    if unit_map.n_units != hat_matrices['I_minus_H_demo'].shape[0]:
+    if unit_map.n_units != hat_matrices['X_demo'].shape[0]:
         raise ValueError(
             f"unit_map.n_units ({unit_map.n_units}) != hat matrix "
-            f"shape[0] ({hat_matrices['I_minus_H_demo'].shape[0]}). "
+            f"shape[0] ({hat_matrices['X_demo'].shape[0]}). "
             f"Regenerate cache with: python -m famail_temporal.preprocess --force"
         )
     if pickup_3d.shape != dropoff_3d.shape or pickup_3d.shape != active_taxis_3d.shape:

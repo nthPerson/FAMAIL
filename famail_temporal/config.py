@@ -20,12 +20,13 @@ DISCRIMINATOR_CHECKPOINT_FILENAME = "default/best.pt"
 GRID_DIMS: Tuple[int, int] = (48, 90)
 N_TIME_BUCKETS: int = 288
 
-# Time blocks — end > 24 encodes wraparound
+# Time blocks — each hourly block spans (h, h+1). No wraparound needed at
+# hourly resolution. Names are zero-padded (hour_00 .. hour_23) for stable
+# lexicographic ordering. The prior 4-block configuration (morning_peak,
+# midday, evening_peak, night) was retained during framework validation
+# and superseded at T=24 on 2026-04-24.
 TIME_BLOCKS: List[Tuple[str, int, int]] = [
-    ("morning_peak", 7, 10),
-    ("midday",       10, 16),
-    ("evening_peak", 16, 20),
-    ("night",        20, 31),  # 20 to 07 next day
+    (f"hour_{h:02d}", h, h + 1) for h in range(24)
 ]
 T: int = len(TIME_BLOCKS)
 

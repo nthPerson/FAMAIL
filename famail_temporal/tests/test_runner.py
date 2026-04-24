@@ -11,10 +11,27 @@ from famail_temporal.evaluation.runner import (
 @pytest.fixture
 def tiny_bundle(monkeypatch):
     from famail_temporal.tests.test_objective import _make_synthetic_bundle
+    from famail_temporal.algorithm.attribution import compute_per_unit_attribution
     bundle = _make_synthetic_bundle(N_cells_per_block=8, seed=0)
     from famail_temporal.utils.trajectory import Trajectory, TrajectoryState
+    # Find a cell with strictly positive attribution — needed so the
+    # run_experiment's top-k selection has something to pick. The RNG state
+    # of the synthetic bundle varies with config.T (more active cells at T=24),
+    # so "first active cell" is not guaranteed to have positive attribution.
+    unsigned, _ = compute_per_unit_attribution(bundle)
     ix_x, ix_y, ix_t = np.where(bundle.mask_3d)
-    x, y, t_block = int(ix_x[0]), int(ix_y[0]), int(ix_t[0])
+    chosen = None
+    for i in range(len(ix_x)):
+        if unsigned[bundle.unit_map.from_cell_time(
+            int(ix_x[i]) * bundle.pickup_3d.shape[1] + int(ix_y[i]),
+            int(ix_t[i]),
+        )] > 1e-6:
+            chosen = i
+            break
+    assert chosen is not None, (
+        "synthetic bundle has no cells with positive attribution — seed unstable"
+    )
+    x, y, t_block = int(ix_x[chosen]), int(ix_y[chosen]), int(ix_t[chosen])
     start_hour = config.TIME_BLOCKS[t_block][1]
     tb = start_hour * 12 + 1
     trajs = []

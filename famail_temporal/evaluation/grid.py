@@ -18,7 +18,7 @@ import torch
 from famail_temporal import config
 from famail_temporal.data.loader import DataBundle
 from famail_temporal.fairness.spatial import compute_spatial_attribution
-from famail_temporal.fairness.causal import per_unit_attribution
+from famail_temporal.fairness.causal import per_unit_attribution_from_compact
 from famail_temporal.fairness.hat_matrices import hat_matrices_to_torch
 
 
@@ -75,8 +75,8 @@ def build_fairness_grid(
     )
     R = Y - g0_D
     tensors = hat_matrices_to_torch(bundle.hat_matrices)
-    causal_attr = per_unit_attribution(
-        R, tensors["I_minus_H_demo"], tensors["M"],
+    causal_attr = per_unit_attribution_from_compact(
+        R, tensors["X_demo"], tensors["XtX_inv"],
     ).detach().numpy()
 
     # Scatter back with NaN on inactive cells. Shape is derived from the
