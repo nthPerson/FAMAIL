@@ -31,7 +31,13 @@ T: int = len(TIME_BLOCKS)
 
 # Active-unit filter
 ACTIVE_SUPPLY_THRESHOLD: float = 0.5
-DEMAND_FLOOR: float = 0.01
+# DEMAND_FLOOR is a CLAMP, not an activity filter: cells with observed D <
+# DEMAND_FLOOR have their D substituted with DEMAND_FLOOR before computing
+# Y = S/D. Keeping them in the active set (rather than filtering them out)
+# preserves the ability of F_causal to detect unfairness in reachable-but-
+# low-demand areas. See docs/F_CAUSAL_METHODOLOGY_NOTES.md §4 for the
+# 0.5-value rationale (residual-scale balance against signal-regime Y).
+DEMAND_FLOOR: float = 0.5
 SUPPLY_FLOOR: float = 0.1
 
 # Demographics

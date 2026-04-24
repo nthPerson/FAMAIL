@@ -193,9 +193,36 @@ def run(force: bool = False) -> None:
     D_clamped = np.maximum(D_vec, config.DEMAND_FLOOR)
     Y_vec = S_vec / D_clamped
     g0_func, g0_diag = fit_g0(D_clamped, Y_vec)
-    print(f"[preprocess] g0 diagnostics: {g0_diag}", flush=True)
+    print(f"[preprocess] g0 diagnostics (all active cells): {g0_diag}", flush=True)
     if _should_write("g0_power_basis"):
         save_artifact("g0_power_basis", g0_func)
+
+    # Signal-regime diagnostic: refit g0 on cells with D_raw >= DEMAND_FLOOR
+    # (i.e., cells NOT clamped). This separates "is the power basis a good
+    # model for the demand-service law where it's identifiable?" (signal-
+    # regime R²) from "how well does the fit explain the full active set?"
+    # (all-cells R²). The all-cells fit is what's saved as g0_power_basis
+    # and used in F_causal; signal-regime R² is reported as a diagnostic
+    # only. See docs/F_CAUSAL_METHODOLOGY_NOTES.md §3 for rationale.
+    signal_mask = D_vec >= config.DEMAND_FLOOR
+    n_signal = int(signal_mask.sum())
+    if n_signal >= 10:
+        D_signal = D_vec[signal_mask]
+        Y_signal = S_vec[signal_mask] / D_signal
+        _, g0_signal_diag = fit_g0(D_signal, Y_signal)
+        frac_signal = n_signal / len(D_vec)
+        print(
+            f"[preprocess] g0 diagnostics (signal regime, D >= "
+            f"{config.DEMAND_FLOOR:.2f}, n={n_signal} / {len(D_vec)} "
+            f"[{100*frac_signal:.1f}%]): {g0_signal_diag}",
+            flush=True,
+        )
+    else:
+        print(
+            f"[preprocess] g0 signal-regime diagnostic skipped: only "
+            f"{n_signal} cells above DEMAND_FLOOR={config.DEMAND_FLOOR:.2f}",
+            flush=True,
+        )
 
     # ---------------------------------------------------------------------
     # Phase 7: Precompute hat matrices

@@ -109,8 +109,10 @@ A unit `(c, t)` is active iff all three conditions hold:
    `source_data/grid_to_district_mapping.pkl`)
 3. No `NaN` in any selected demographic feature for cell `c`
 
-The `DEMAND_FLOOR = 0.01` is applied inside `Y = S/D` computation (not as an activity
-criterion), so near-zero demand in an active unit does not cause Y to explode.
+The `DEMAND_FLOOR = 0.5` is applied inside `Y = S/D` computation (not as an activity
+criterion), so near-zero demand in an active unit does not cause Y to explode. See
+[`../docs/F_CAUSAL_METHODOLOGY_NOTES.md`](../docs/F_CAUSAL_METHODOLOGY_NOTES.md) §4 for
+the rationale of this specific value.
 
 This is a temporal generalization of the current 2D filter: a cell that has taxis only during
 morning peak will have morning-peak units active and other-block units inactive — the fairness
