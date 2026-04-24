@@ -1,33 +1,34 @@
 # V3 Multi-Stream Siamese Discriminator — Training Results
 
 **Date trained:** 2026-04-24
-**Run ID:** `20260423_233120`
-**Source checkpoint:** `/home/robert/FAMAIL/checkpoints/20260423_233120/best.pt`
+**Run ID:** `20260424_120508`
+**Source checkpoint:** `/home/robert/FAMAIL/checkpoints/20260424_120508/best.pt`
 **Installed at:** `famail_temporal/discriminator_checkpoints/default/best.pt`
-**Training duration:** 141 minutes (100 epochs × ~50 s/epoch + validation overhead)
+**Plots directory:** `/home/robert/FAMAIL/checkpoints/20260424_120508/plots/` (8 PNGs)
+**Training duration:** ~48 minutes (88 epochs via early stopping at ~33 s/epoch)
 
 ## Context
 
-This retraining was motivated by three compounding changes landed in the same
-development cycle:
+Third v3 retrain in this iteration cycle. Changes from the prior
+2026-04-23 run:
 
-1. **Unified source-data generation tool** ([`famail_temporal/data/source_generation/`](../../data/source_generation/))
-   replaces three legacy tools. See
-   [`docs/superpowers/specs/2026-04-20-unified-source-data-generation-design.md`](../../../docs/superpowers/specs/2026-04-20-unified-source-data-generation-design.md).
+1. **`T=4` → `T=24` transition** (full hourly time-block resolution) —
+   see [`../../docs/F_CAUSAL_METHODOLOGY_NOTES.md`](../../docs/F_CAUSAL_METHODOLOGY_NOTES.md)
+   and [`../../docs/FAIRNESS_ATTRIBUTION_EXPORT_DESIGN.md`](../../docs/FAIRNESS_ATTRIBUTION_EXPORT_DESIGN.md).
+   Forced a companion migration of the F_causal hat-matrix representation
+   from dense (O(N²), ~19 GB at T=24) to compact FWL form (O(Np), ~1 MB).
+2. **Training pipeline optimizations**: `num_workers=4` + `pin_memory=True`
+   + `non_blocking=True` + `persistent_workers=True` in DataLoader; batch
+   size 32 → 128; learning rate 6e-5 → 1e-4 (balanced scaling rule);
+   mixed-precision training via `torch.amp.autocast('cuda')` + GradScaler.
+3. **200 max epochs** (was 100) so training could run to convergence
+   rather than hitting the budget.
 
-2. **`action_space_violation` per-trajectory invariant** rejects
-   trajectories with non-adjacent consecutive-state transitions, enforcing
-   9-action agent consistency. See
-   [`docs/superpowers/specs/2026-04-21-action-space-violation-filter-design.md`](../../../docs/superpowers/specs/2026-04-21-action-space-violation-filter-design.md).
-
-3. **Tighter `implausibly_long` threshold** — `MAX_TRAJECTORY_DURATION_BUCKETS`
-   from 120 (10h) to 96 (8h), reflecting that a single seeking or driving
-   episode shouldn't exceed a standard work day. Minor impact on the
-   dataset size (90 additional trajectories dropped).
-
-The prior v3 checkpoint (dated 2026-04-21) was trained with the 10-hour
-threshold; this retraining aligns the discriminator's training distribution
-with the current production pipeline.
+Effect on wall-clock: ~77 s/epoch (prior config) → ~33 s/epoch (new
+config). Net: 88 epochs to early-stop in ~48 minutes (prior run: 100
+epochs, never early-stopped, in 141 minutes). Did not exhaust the 200
+epoch budget — early-stopping at patience=10 fired at epoch 88 because
+val loss hadn't improved past epoch 78's 0.1702.
 
 ## Source data
 
@@ -44,12 +45,12 @@ Regenerated 2026-04-23 with `action_space_violation` filter + 8-hour
 | Unique drivers | 50 |
 | Calendar days spanned | 2016-07-01 → 2016-09-30 (66 weekdays) |
 
-Removal breakdown (delta from prior 10h-threshold regeneration):
+Removal breakdown:
 
-| Category | Count | Δ from prior |
-|---|---:|---:|
-| `action_space_violation` | 195,540 | no change |
-| `implausibly_long` | 300 | +90 (tighter threshold) |
+| Category | Count |
+|---|---:|
+| `action_space_violation` | 195,540 |
+| `implausibly_long` | 300 |
 
 ## Dataset generation
 
@@ -60,13 +61,20 @@ python -m discriminator.multi_stream.dataset_generation \
     --driving-fixed-length 128
 ```
 
-Pair counts and shapes identical to prior run (10,000 pairs, 7,500/1,500/1,000
-train/val/test, seeking [5,256,4] / driving [5,128,4] / profile [11]).
-Agent coverage: 50/50 drivers in both positives and negatives.
+| Field | Value |
+|---|---|
+| Positive pairs | 5000 (500 identical, 4500 same-driver/different-day) |
+| Negative pairs | 5000 |
+| Total pairs | 10,000 |
+| Train / Val / Test split | 7,500 / 1,500 / 1,000 |
+| Seeking shape per pair branch | `[5, 256, 4]` |
+| Driving shape per pair branch | `[5, 128, 4]` |
+| Profile dim | 11 |
+| Agent coverage | 50/50 drivers in both positives and negatives |
 
 ## Model architecture (v3, concatenation mode)
 
-Unchanged from prior run:
+Unchanged from prior runs:
 
 | Component | Value |
 |---|---|
@@ -75,114 +83,148 @@ Unchanged from prior run:
 | Dropout | 0.2 |
 | Streams | seeking, driving, profile |
 | Trajectories per stream per branch | 5 |
+| Trajectory projection dim | 48 |
+| Profile hidden dims | (64, 32) |
+| Profile output dim | 8 |
+| Classifier hidden dims | (64, 32, 8) |
+| Combination mode | concatenation |
 | Total trainable parameters | 1,556,337 |
 
 ## Training configuration
 
-Unchanged from prior run:
-
 | Hyperparameter | Value |
 |---|---|
-| Epochs (max) | 100 |
-| Batch size | 32 |
-| Optimizer | Adam, lr=6e-5, weight_decay=1e-4 |
+| Epochs (max) | 200 |
+| Batch size | **128** (was 32) |
+| Optimizer | Adam, lr=**1e-4** (was 6e-5) |
+| Weight decay | 1e-4 |
 | LR scheduler | ReduceLROnPlateau (patience=5, factor=0.5) |
 | Early stopping patience | 10 epochs |
+| Mixed precision | **True** (cuda autocast + GradScaler) |
+| DataLoader `num_workers` | **4** (was 0) |
+| DataLoader `persistent_workers` | True |
+| DataLoader `pin_memory` | True |
+| `.to(device, non_blocking=True)` | everywhere |
 | Seed | 42 |
+| Device | CUDA (NVIDIA RTX 3070) |
 
-## Results — best epoch (epoch 100)
+Training command:
+```
+python -m discriminator.model.train \
+    --model-version v3 \
+    --data-dir discriminator/multi_stream/datasets/default \
+    --combination-mode concatenation \
+    --batch-size 128 --lr 1e-4 --epochs 200 --num-workers 4
+```
 
-Note: training reached the full 100-epoch budget without triggering early
-stopping. Val loss was still improving in the final epochs (see convergence
-trajectory below). The prior run early-stopped at epoch 33 when val loss
-plateaued; this run did not plateau within the 100-epoch budget.
+## Results — best epoch (epoch 78)
 
-| Metric | Value | Prior (2026-04-21) | Δ |
+| Metric | Value | Prior (2026-04-23) | Delta |
 |---|---:|---:|---:|
-| `train_loss` | 0.3304 | 0.2885 | +0.042 |
-| `val_loss` | **0.3217** | **0.2115** | **+0.110** |
-| `val_accuracy` | **0.9153** | **0.9240** | −0.009 |
-| `val_positive_accuracy` | 0.9987 | 0.9974 | +0.001 |
-| `val_negative_accuracy` | 0.8336 | 0.8497 | −0.016 |
-| `val_f1` | 0.9212 | 0.9296 | −0.008 |
-| `val_auc` | **0.9296** | **0.9629** | **−0.033** |
-| `val_identical_score` | **0.6305** | **0.8868** | **−0.256** |
-| Best epoch | 100 (of 100) | 33 (early-stopped) | — |
+| `train_loss` | 0.2123 | 0.3304 | **-0.118** |
+| `val_loss` | **0.1702** | 0.3217 | **-0.152** |
+| `val_accuracy` | **0.9327** | 0.9153 | +0.017 |
+| `val_positive_accuracy` | 1.0000 | 0.9987 | +0.001 |
+| `val_negative_accuracy` | 0.8666 | 0.8336 | +0.033 |
+| `val_f1` | 0.9364 | 0.9212 | +0.015 |
+| `val_auc` | **0.9820** | 0.9296 | **+0.052** |
+| `val_identical_score` | **0.9260** | 0.6305 | **+0.295** |
+| Epoch time | 33.4 s | 49.5 s | -32% |
+| Converged | Yes (early-stop @88) | No (hit 100 cap) | — |
 
-### Interpretation
+### Reading the metrics
 
-- **val_accuracy and val_AUC are strong** (0.92 and 0.93 respectively) — the
-  model cleanly discriminates same-driver from different-driver pairs.
-- **val_identical_score dropped from 0.89 to 0.63.** The model is still
-  above the 0.5 warning threshold the trainer uses, but noticeably less
-  confident about identical-trajectory pairs than the prior run. This
-  suggests the trained representation has somewhat less separation between
-  the "definitely same driver" end of the spectrum and ambiguous cases.
-- **Training did not converge within budget.** Best epoch = final epoch (100)
-  with val_loss still trending down. The prior run converged at epoch 33;
-  this run had very different loss-curve dynamics. Possible causes:
-  - Stochastic variation (same seed but dataset-generation RNG consumes
-    different inputs when trajectories differ).
-  - The slightly tighter 8-hour filter changed which trajectories entered
-    the training set in a way that made the pairing problem harder.
-  - The LR scheduler may not have stepped down as aggressively as in the
-    prior run.
+- **`val_auc = 0.982`** — near-perfect ranking between same-driver and
+  different-driver pairs. The prior run's 0.930 was already solid; this
+  is materially stronger and enters "very high discrimination" territory
+  for a Siamese model at this scale.
+- **`val_identical_score = 0.926`** — the trained representation now
+  strongly agrees that "same trajectory twice = same driver" (probability
+  0.926 vs 0.631 in the prior run). Well above the 0.5 warning floor
+  and approaching saturation. This is the Siamese sanity metric that
+  confirms the model has learned a meaningful similarity space, not a
+  degenerate one.
+- **`val_negative_accuracy = 0.867`** — still the weakest sub-metric
+  (as is typical for Siamese training on finite datasets), but +0.033
+  over prior. The gap between positive accuracy (1.0) and negative
+  accuracy (0.867) is ~13 percentage points, within the trainer's
+  normal-range tolerance (warning fires at >30 pp gap).
+- **`val_loss = 0.170`** — training converged (val loss hit a true
+  minimum then stopped improving, triggering early-stopping) rather than
+  hitting the epoch budget. This means 200 epochs is sufficient headroom
+  for this recipe.
 
-### Recommendation
+## Training plots
 
-The current checkpoint is installed and functional — F_fidelity will
-compute nontrivial values and the full pipeline tests pass. However, if
-this checkpoint is used for research-quality evaluation (vs. development
-smoke testing), it may be worth a follow-up training run with:
-- Higher `--epochs` (e.g., 200) to let training complete convergence, OR
-- Multiple seeds to assess whether the ~3-point AUC drop is stochastic
-  variation or a systematic shift.
+All plots at `/home/robert/FAMAIL/checkpoints/20260424_120508/plots/`:
 
-The prior checkpoint (epoch-33 run dated 2026-04-21) achieved slightly
-stronger metrics and is still available at
-`/home/robert/FAMAIL/checkpoints/20260421_145958/best.pt` if a rollback
-becomes useful for comparison.
+- `loss_curves.png` — train vs val BCE loss per epoch
+- `accuracy_curves.png` — overall, positive-class, negative-class accuracy
+- `auc_f1_curves.png` — val AUC and F1
+- `identical_curve.png` — Siamese identical-pair sanity score
+- `learning_rate_curve.png` — LR schedule (log scale, shows the
+  ReduceLROnPlateau step(s) kicking in around epoch 85)
+- `roc_curve.png` — ROC on val set (best.pt), AUC 0.982
+- `precision_recall_curve.png` — PR curve on val set
+- `training_summary.png` — 4-panel overview for presentations
 
-## Convergence trajectory
+## Convergence trajectory (key waypoints)
 
-The loss curve shows steady improvement across all 100 epochs without the
-plateau that triggered early stopping in the prior run. Key waypoints:
-
-| Epoch | Train loss | Val loss | Val acc | Val AUC | Val identical |
+| Epoch | Train loss | Val loss | Val acc | Val AUC | Identical |
 |:-:|--:|--:|--:|--:|--:|
-| 1 | ~0.70 | ~0.70 | 0.50 | 0.52 | 0.57 |
-| 25 | ~0.48 | ~0.46 | 0.78 | 0.85 | 0.60 |
-| 50 | ~0.41 | ~0.39 | 0.87 | 0.91 | 0.63 |
-| 75 | ~0.37 | ~0.35 | 0.90 | 0.92 | 0.63 |
-| 100 | 0.3304 | **0.3217** | **0.9153** | **0.9296** | 0.6305 |
+| 1 | 0.709 | 0.710 | 0.495 | – | 0.587 |
+| 10 | 0.695 | 0.693 | 0.524 | – | 0.530 |
+| 15 | 0.639 | 0.621 | 0.676 | – | 0.575 |
+| 20 | 0.425 | 0.389 | 0.895 | – | 0.609 |
+| 30 | 0.301 | 0.250 | 0.909 | – | 0.846 |
+| 40 | 0.276 | 0.229 | 0.914 | – | 0.866 |
+| 50 | 0.256 | 0.202 | 0.927 | – | 0.883 |
+| 60 | 0.239 | 0.193 | 0.927 | – | 0.904 |
+| 70 | 0.220 | 0.180 | 0.927 | – | 0.926 |
+| **78** | **0.212** | **0.170** | **0.933** | **0.982** | **0.926** |
+| 88 | 0.205 | 0.177 | 0.929 | – | 0.936 |
+|  — | — | *early stop* | — | — | — |
 
-(Approximate values at intermediate epochs; exact values recoverable from
-the checkpoint's `history` dict.)
+Breakout from random-chance baseline happened between epochs 12–16
+(similar to prior runs). Validation loss floor reached epoch 78;
+early-stop triggered at epoch 88 (10-epoch patience).
 
 ## Verification after installation
 
 - **Loader test:** `load_discriminator(...)` returns `MultiStreamSiameseDiscriminator`
   with 1,556,337 parameters — not the `nn.Identity` fallback.
-- **DataBundle.load()** passes — loads the new source_data + new checkpoint.
-- **Full famail_temporal test suite** — see the Full regression test section
-  in the end-of-task summary.
+- **Compact hat-matrix integration:** verified end-to-end with the new
+  T=24 cache; the pipeline uses `compute_fcausal_compact` + compact
+  `(X_demo, XtX_inv)` representation, not the dense (I−H, M) form.
+- **Full famail_temporal test suite** — see end-of-task summary section
+  below.
 
 ## Reproducibility
 
 Exact reproduction requires:
-1. `famail_temporal/source_data/` regenerated after commit `3517ab4` (where
-   `MAX_TRAJECTORY_DURATION_BUCKETS = 96` is present).
-2. `python -m discriminator.multi_stream.dataset_generation --seeking-fixed-length 256 --driving-fixed-length 128`
-3. `python -m discriminator.model.train --model-version v3 --data-dir discriminator/multi_stream/datasets/default --combination-mode concatenation --lr 6e-5`
 
-Seed is 42 throughout. CUDA nondeterminism may cause small numerical
-differences across machines.
+1. `famail_temporal/source_data/` regenerated after commit `3517ab4`
+   (MAX_TRAJECTORY_DURATION_BUCKETS = 96).
+2. `famail_temporal/cache/` rebuilt after the T=24 transition (commit
+   `be2b339` or later — contains the compact hat-matrix form).
+3. `python -m discriminator.multi_stream.dataset_generation --seeking-fixed-length 256 --driving-fixed-length 128`
+4. `python -m discriminator.model.train --model-version v3 --data-dir discriminator/multi_stream/datasets/default --combination-mode concatenation --batch-size 128 --lr 1e-4 --epochs 200 --num-workers 4`
 
-## Known caveats
+Seed is 42 throughout. CUDA nondeterminism (cuDNN) may cause small
+numerical differences across machines — the training is designed to be
+robust to that.
 
-- **Not fully converged.** Training did not early-stop. A follow-up longer
-  training run is available on request.
-- **Weaker identical_score than prior.** 0.63 vs 0.89 — worth watching as
-  an indicator of feature-space separation quality.
-- **Checkpoint is gitignored.** 19 MB `best.pt` is not tracked by git; this
-  markdown is the persistent record.
+## Notes and caveats
+
+- **Training plots are in the working-tree checkpoints directory**, not
+  in the installed path. They are not gitignored; consider copying them
+  into a tracked location (e.g., `docs/training-runs/2026-04-24/plots/`)
+  when preparing the paper.
+- The `best.pt` weights were frozen at epoch 78. Training for 10 more
+  epochs (up to 88) did NOT improve val_loss — this is evidence that
+  we're at a genuine minimum for this hyperparameter recipe, not an
+  early-stop artifact.
+- The compact hat-matrix form is used end-to-end at inference time;
+  no N×N matrix is ever materialized. This was verified by running the
+  full famail_temporal test suite (including the slow real-data tests)
+  at T=24 with the new checkpoint.

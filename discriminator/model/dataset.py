@@ -329,37 +329,54 @@ def create_data_loaders(
     train_dataset: Dataset,
     val_dataset: Dataset,
     batch_size: int = 32,
-    num_workers: int = 0,
-    pin_memory: bool = True
+    num_workers: int = 4,
+    pin_memory: bool = True,
+    persistent_workers: bool = True,
 ) -> Tuple[DataLoader, DataLoader]:
     """Create DataLoaders for training and validation.
-    
+
+    Defaults are tuned to keep a CUDA GPU saturated on the Siamese
+    discriminator workload. ``num_workers=4`` + ``persistent_workers=True``
+    overlap data prep with GPU compute across epochs; ``pin_memory=True``
+    allows the per-batch CPU→GPU transfer to use DMA when paired with
+    ``non_blocking=True`` on ``.to()`` calls in the trainer.
+
     Args:
         train_dataset: Training dataset
         val_dataset: Validation dataset
         batch_size: Batch size
-        num_workers: Number of worker processes
-        pin_memory: Whether to pin memory for GPU transfer
-        
+        num_workers: Number of worker processes (default 4; set 0 to disable
+            parallel loading — only needed for debugging, since num_workers=0
+            starves the GPU on most workloads)
+        pin_memory: Whether to pin memory for GPU transfer (default True)
+        persistent_workers: Keep workers alive across epochs (default True).
+            Ignored when num_workers=0.
+
     Returns:
         Tuple of (train_loader, val_loader)
     """
+    # persistent_workers requires num_workers > 0 — silently fall through
+    # to False when workers are disabled, to avoid PyTorch's ValueError.
+    pw = persistent_workers and num_workers > 0
+
     train_loader = DataLoader(
         train_dataset,
         batch_size=batch_size,
         shuffle=True,
         num_workers=num_workers,
-        pin_memory=pin_memory
+        pin_memory=pin_memory,
+        persistent_workers=pw,
     )
-    
+
     val_loader = DataLoader(
         val_dataset,
         batch_size=batch_size,
         shuffle=False,
         num_workers=num_workers,
-        pin_memory=pin_memory
+        pin_memory=pin_memory,
+        persistent_workers=pw,
     )
-    
+
     return train_loader, val_loader
 
 

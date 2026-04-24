@@ -75,7 +75,18 @@ class TrainingConfig:
     
     # Misc
     device: str = "auto"  # "auto", "cuda", "cpu"
-    num_workers: int = 0
+    # num_workers=4 + pin_memory=True (in dataset.py) + non_blocking=True on
+    # .to() calls (in this file) together keep the GPU saturated on the
+    # Siamese workload. The prior default of 0 produced ~0% GPU utilization
+    # even with cuda device because the data loader ran synchronously in
+    # the main thread between batches.
+    num_workers: int = 4
+    # Mixed-precision training — wraps forward pass in autocast() and uses
+    # GradScaler for the backward pass. Gives ~1.5-2x speedup on Ampere+
+    # GPUs via Tensor Cores. Automatically disabled on CPU. The BCELoss
+    # final step is forced to FP32 to avoid the sigmoid→log(0) failure
+    # mode that FP16 precision limits can trigger.
+    amp: bool = True
     seed: int = 42
     
     def to_dict(self) -> Dict:
@@ -193,7 +204,7 @@ class Trainer:
         else:
             self.device = torch.device(config.device)
             
-        self.model = model.to(self.device)
+        self.model = model.to(self.device, non_blocking=True)
         
         # Loss function
         self.criterion = nn.BCELoss()
@@ -207,6 +218,13 @@ class Trainer:
         
         # Learning rate scheduler
         self.scheduler = self._create_scheduler()
+
+        # Mixed-precision scaler. Active only on CUDA + config.amp=True.
+        # On CPU, GradScaler is a no-op (its .scale/.step methods pass
+        # through). We pre-check the device type here so the training loop
+        # branches cleanly without per-batch cost.
+        self.amp_enabled = bool(getattr(config, "amp", True)) and self.device.type == "cuda"
+        self.scaler = torch.amp.GradScaler('cuda', enabled=self.amp_enabled)
         
         # Early stopping
         self.early_stopping = EarlyStopping(
@@ -259,13 +277,13 @@ class Trainer:
         """
         kwargs = {}
         if 'driving_1' in batch:
-            kwargs['driving_1'] = batch['driving_1'].to(self.device)
-            kwargs['driving_2'] = batch['driving_2'].to(self.device)
-            kwargs['mask_d1'] = batch['mask_d1'].to(self.device)
-            kwargs['mask_d2'] = batch['mask_d2'].to(self.device)
+            kwargs['driving_1'] = batch['driving_1'].to(self.device, non_blocking=True)
+            kwargs['driving_2'] = batch['driving_2'].to(self.device, non_blocking=True)
+            kwargs['mask_d1'] = batch['mask_d1'].to(self.device, non_blocking=True)
+            kwargs['mask_d2'] = batch['mask_d2'].to(self.device, non_blocking=True)
         if 'profile_1' in batch:
-            kwargs['profile_1'] = batch['profile_1'].to(self.device)
-            kwargs['profile_2'] = batch['profile_2'].to(self.device)
+            kwargs['profile_1'] = batch['profile_1'].to(self.device, non_blocking=True)
+            kwargs['profile_2'] = batch['profile_2'].to(self.device, non_blocking=True)
         return kwargs
 
     def _train_epoch(self) -> float:
@@ -279,32 +297,38 @@ class Trainer:
         n_batches = 0
 
         for batch in self.train_loader:
-            x1 = batch['x1'].to(self.device)
-            x2 = batch['x2'].to(self.device)
-            mask1 = batch['mask1'].to(self.device)
-            mask2 = batch['mask2'].to(self.device)
-            labels = batch['label'].to(self.device)
+            x1 = batch['x1'].to(self.device, non_blocking=True)
+            x2 = batch['x2'].to(self.device, non_blocking=True)
+            mask1 = batch['mask1'].to(self.device, non_blocking=True)
+            mask2 = batch['mask2'].to(self.device, non_blocking=True)
+            labels = batch['label'].to(self.device, non_blocking=True)
             kwargs = self._extract_multi_stream_kwargs(batch)
 
-            self.optimizer.zero_grad()
+            self.optimizer.zero_grad(set_to_none=True)
 
-            # Forward pass
-            outputs = self.model(x1, x2, mask1, mask2, **kwargs).squeeze(-1)
-            
-            # Compute loss
+            # Forward pass under autocast when AMP is enabled. The output
+            # is cast back to FP32 before BCELoss because FP16 sigmoid can
+            # produce exactly 0 or 1, which BCELoss evaluates as log(0).
+            with torch.amp.autocast('cuda', enabled=self.amp_enabled):
+                outputs = self.model(x1, x2, mask1, mask2, **kwargs).squeeze(-1)
+            outputs = outputs.float()
             loss = self.criterion(outputs, labels)
-            
-            # Backward pass
-            loss.backward()
-            
-            # Gradient clipping
+
+            # Backward pass via GradScaler. On CPU (scaler disabled) this
+            # reduces to plain loss.backward() — no behavioural difference.
+            self.scaler.scale(loss).backward()
+
+            # Gradient clipping — must unscale first so max_norm is applied
+            # in the unscaled gradient space that downstream code expects.
+            self.scaler.unscale_(self.optimizer)
             torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
-            
-            self.optimizer.step()
-            
+
+            self.scaler.step(self.optimizer)
+            self.scaler.update()
+
             total_loss += loss.item()
             n_batches += 1
-            
+
         return total_loss / n_batches
     
     @torch.no_grad()
@@ -321,15 +345,17 @@ class Trainer:
         all_labels = []
         
         for batch in self.val_loader:
-            x1 = batch['x1'].to(self.device)
-            x2 = batch['x2'].to(self.device)
-            mask1 = batch['mask1'].to(self.device)
-            mask2 = batch['mask2'].to(self.device)
-            labels = batch['label'].to(self.device)
+            x1 = batch['x1'].to(self.device, non_blocking=True)
+            x2 = batch['x2'].to(self.device, non_blocking=True)
+            mask1 = batch['mask1'].to(self.device, non_blocking=True)
+            mask2 = batch['mask2'].to(self.device, non_blocking=True)
+            labels = batch['label'].to(self.device, non_blocking=True)
             kwargs = self._extract_multi_stream_kwargs(batch)
 
-            # Forward pass
-            outputs = self.model(x1, x2, mask1, mask2, **kwargs).squeeze(-1)
+            # Forward pass — autocast for speed, FP32 cast before BCELoss
+            with torch.amp.autocast('cuda', enabled=self.amp_enabled):
+                outputs = self.model(x1, x2, mask1, mask2, **kwargs).squeeze(-1)
+            outputs = outputs.float()
 
             # Compute loss
             loss = self.criterion(outputs, labels)
@@ -404,16 +430,16 @@ class Trainer:
         
         samples_tested = 0
         for batch in self.val_loader:
-            x1 = batch['x1'].to(self.device)
-            mask1 = batch['mask1'].to(self.device)
+            x1 = batch['x1'].to(self.device, non_blocking=True)
+            mask1 = batch['mask1'].to(self.device, non_blocking=True)
 
             # Build identical-pair kwargs for multi-stream
             id_kwargs = {}
             if 'driving_1' in batch:
-                d1 = batch['driving_1'].to(self.device)
-                md1 = batch['mask_d1'].to(self.device)
+                d1 = batch['driving_1'].to(self.device, non_blocking=True)
+                md1 = batch['mask_d1'].to(self.device, non_blocking=True)
             if 'profile_1' in batch:
-                p1 = batch['profile_1'].to(self.device)
+                p1 = batch['profile_1'].to(self.device, non_blocking=True)
 
             # Test each trajectory against itself
             for i in range(min(len(x1), n_samples - samples_tested)):
@@ -875,7 +901,7 @@ class Trainer:
         plt.close(fig)
 
         fig, ax = plt.subplots(figsize=(8, 5))
-        ax.plot(epochs, h.val_identical_score, color='tab:teal')
+        ax.plot(epochs, h.val_identical_score, color='teal')
         ax.axhline(0.5, linestyle=':', color='red',
                    label='warning threshold (0.5)')
         ax.set_xlabel('Epoch')
@@ -920,7 +946,7 @@ class Trainer:
         axes[0, 1].set_xlabel('Epoch')
         axes[0, 1].legend()
         axes[0, 1].grid(alpha=0.3)
-        axes[1, 0].plot(epochs, h.val_identical_score, color='tab:teal')
+        axes[1, 0].plot(epochs, h.val_identical_score, color='teal')
         axes[1, 0].axhline(0.5, linestyle=':', color='red')
         axes[1, 0].set_title('Identical-pair score')
         axes[1, 0].set_xlabel('Epoch')
@@ -950,20 +976,20 @@ class Trainer:
         all_probs: List[float] = []
         all_labels: List[float] = []
         for batch in self.val_loader:
-            x1 = batch['x1'].to(self.device)
-            x2 = batch['x2'].to(self.device)
-            mask1 = batch['mask1'].to(self.device)
-            mask2 = batch['mask2'].to(self.device)
+            x1 = batch['x1'].to(self.device, non_blocking=True)
+            x2 = batch['x2'].to(self.device, non_blocking=True)
+            mask1 = batch['mask1'].to(self.device, non_blocking=True)
+            mask2 = batch['mask2'].to(self.device, non_blocking=True)
             labels = batch['label']
             if 'driving_1' in batch:
                 outputs = self.model(
                     x1=x1, x2=x2, mask1=mask1, mask2=mask2,
-                    driving_1=batch['driving_1'].to(self.device),
-                    driving_2=batch['driving_2'].to(self.device),
-                    mask_d1=batch['mask_d1'].to(self.device),
-                    mask_d2=batch['mask_d2'].to(self.device),
-                    profile_1=batch['profile_1'].to(self.device),
-                    profile_2=batch['profile_2'].to(self.device),
+                    driving_1=batch['driving_1'].to(self.device, non_blocking=True),
+                    driving_2=batch['driving_2'].to(self.device, non_blocking=True),
+                    mask_d1=batch['mask_d1'].to(self.device, non_blocking=True),
+                    mask_d2=batch['mask_d2'].to(self.device, non_blocking=True),
+                    profile_1=batch['profile_1'].to(self.device, non_blocking=True),
+                    profile_2=batch['profile_2'].to(self.device, non_blocking=True),
                 )
             else:
                 outputs = self.model(x1, x2, mask1, mask2)
@@ -1015,10 +1041,10 @@ class Trainer:
         all_labels = []
         
         for batch in test_loader:
-            x1 = batch['x1'].to(self.device)
-            x2 = batch['x2'].to(self.device)
-            mask1 = batch['mask1'].to(self.device)
-            mask2 = batch['mask2'].to(self.device)
+            x1 = batch['x1'].to(self.device, non_blocking=True)
+            x2 = batch['x2'].to(self.device, non_blocking=True)
+            mask1 = batch['mask1'].to(self.device, non_blocking=True)
+            mask2 = batch['mask2'].to(self.device, non_blocking=True)
             labels = batch['label']
             
             outputs = self.model(x1, x2, mask1, mask2).squeeze(-1)

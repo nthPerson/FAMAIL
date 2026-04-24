@@ -58,3 +58,7 @@ famail_temporal/discriminator_checkpoints/default/*.pt
 # Evaluation framework output (per-experiment directories)
 famail_temporal/results/*
 !famail_temporal/results/.gitkeep
+logs/
+
+# Discriminator training outputs (per-run timestamped dirs)
+checkpoints/
