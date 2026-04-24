@@ -28,11 +28,21 @@ from torch.utils.data import DataLoader
 try:
     from sklearn.metrics import (
         accuracy_score, f1_score, precision_score, recall_score,
-        roc_auc_score, confusion_matrix
+        roc_auc_score, confusion_matrix, roc_curve, precision_recall_curve,
     )
     SKLEARN_AVAILABLE = True
 except ImportError:
     SKLEARN_AVAILABLE = False
+
+
+# Plot generation — optional, degrades gracefully if matplotlib is missing.
+try:
+    import matplotlib
+    matplotlib.use("Agg")  # non-interactive backend; safe in training jobs
+    import matplotlib.pyplot as plt
+    MATPLOTLIB_AVAILABLE = True
+except ImportError:
+    MATPLOTLIB_AVAILABLE = False
 
 
 @dataclass
@@ -783,13 +793,210 @@ class Trainer:
         
         # Save comprehensive results summary
         self.save_results_json(training_start_time=training_start_time)
-            
+
+        # Generate paper-ready training plots. Errors are caught non-fatally
+        # because plot failures shouldn't lose the trained model.
+        try:
+            self.generate_training_plots(verbose=verbose)
+        except Exception as e:
+            if verbose:
+                print(f"[warn] plot generation failed: {e}")
+
         if verbose:
             print("-" * 60)
             print(f"Training complete!")
             print(f"Best validation loss: {self.history.best_val_loss:.4f} at epoch {self.history.best_epoch}")
-            
+            if MATPLOTLIB_AVAILABLE:
+                print(f"Training plots: {self.checkpoint_dir / 'plots'}")
+
         return self.history
+
+    def generate_training_plots(self, verbose: bool = True):
+        """Render PNG plots of training metrics to ``<checkpoint_dir>/plots/``.
+
+        Generates loss curves, accuracy curves, AUC/F1 curves, identical-
+        pair sanity curve, learning-rate schedule, ROC curve, precision-
+        recall curve, and a four-panel training summary. ROC and PR
+        curves use the final-epoch model predictions over the val set.
+        """
+        if not MATPLOTLIB_AVAILABLE:
+            if verbose:
+                print("[info] matplotlib not available; skipping training plots")
+            return None
+
+        plots_dir = self.checkpoint_dir / "plots"
+        plots_dir.mkdir(parents=True, exist_ok=True)
+
+        h = self.history
+        epochs = list(range(1, len(h.train_loss) + 1))
+
+        fig, ax = plt.subplots(figsize=(8, 5))
+        ax.plot(epochs, h.train_loss, label='train', color='tab:blue', alpha=0.85)
+        ax.plot(epochs, h.val_loss, label='val', color='tab:orange', alpha=0.85)
+        if h.best_epoch:
+            ax.axvline(h.best_epoch, linestyle=':', color='gray',
+                       label=f'best epoch ({h.best_epoch})')
+        ax.set_xlabel('Epoch')
+        ax.set_ylabel('BCE loss')
+        ax.set_title('Training & validation loss')
+        ax.legend()
+        ax.grid(alpha=0.3)
+        fig.tight_layout()
+        fig.savefig(plots_dir / "loss_curves.png", dpi=150)
+        plt.close(fig)
+
+        fig, ax = plt.subplots(figsize=(8, 5))
+        ax.plot(epochs, h.val_accuracy, label='overall', color='tab:blue')
+        ax.plot(epochs, h.val_positive_accuracy, label='positive (same driver)',
+                color='tab:green', alpha=0.7)
+        ax.plot(epochs, h.val_negative_accuracy, label='negative (diff driver)',
+                color='tab:red', alpha=0.7)
+        ax.set_xlabel('Epoch')
+        ax.set_ylabel('Accuracy')
+        ax.set_title('Validation accuracy per epoch')
+        ax.legend()
+        ax.grid(alpha=0.3)
+        ax.set_ylim(0.4, 1.01)
+        fig.tight_layout()
+        fig.savefig(plots_dir / "accuracy_curves.png", dpi=150)
+        plt.close(fig)
+
+        fig, ax = plt.subplots(figsize=(8, 5))
+        ax.plot(epochs, h.val_auc, label='AUC', color='tab:purple')
+        ax.plot(epochs, h.val_f1, label='F1', color='tab:brown')
+        ax.set_xlabel('Epoch')
+        ax.set_ylabel('Score')
+        ax.set_title('Validation AUC and F1 per epoch')
+        ax.legend()
+        ax.grid(alpha=0.3)
+        ax.set_ylim(0.4, 1.01)
+        fig.tight_layout()
+        fig.savefig(plots_dir / "auc_f1_curves.png", dpi=150)
+        plt.close(fig)
+
+        fig, ax = plt.subplots(figsize=(8, 5))
+        ax.plot(epochs, h.val_identical_score, color='tab:teal')
+        ax.axhline(0.5, linestyle=':', color='red',
+                   label='warning threshold (0.5)')
+        ax.set_xlabel('Epoch')
+        ax.set_ylabel('Mean identical-pair score')
+        ax.set_title('Identical-trajectory probability (Siamese sanity)')
+        ax.legend()
+        ax.grid(alpha=0.3)
+        ax.set_ylim(0.0, 1.01)
+        fig.tight_layout()
+        fig.savefig(plots_dir / "identical_curve.png", dpi=150)
+        plt.close(fig)
+
+        fig, ax = plt.subplots(figsize=(8, 5))
+        ax.plot(epochs, h.learning_rates, color='tab:olive')
+        ax.set_xlabel('Epoch')
+        ax.set_ylabel('Learning rate')
+        ax.set_title('Learning-rate schedule')
+        ax.set_yscale('log')
+        ax.grid(alpha=0.3)
+        fig.tight_layout()
+        fig.savefig(plots_dir / "learning_rate_curve.png", dpi=150)
+        plt.close(fig)
+
+        if SKLEARN_AVAILABLE:
+            try:
+                self._generate_roc_and_pr_plots(plots_dir)
+            except Exception as e:
+                if verbose:
+                    print(f"[warn] ROC/PR curve generation failed: {e}")
+
+        fig, axes = plt.subplots(2, 2, figsize=(12, 8))
+        axes[0, 0].plot(epochs, h.train_loss, label='train')
+        axes[0, 0].plot(epochs, h.val_loss, label='val')
+        axes[0, 0].set_title('Loss')
+        axes[0, 0].set_xlabel('Epoch')
+        axes[0, 0].legend()
+        axes[0, 0].grid(alpha=0.3)
+        axes[0, 1].plot(epochs, h.val_accuracy, label='acc', color='tab:blue')
+        axes[0, 1].plot(epochs, h.val_auc, label='AUC', color='tab:purple')
+        axes[0, 1].plot(epochs, h.val_f1, label='F1', color='tab:brown')
+        axes[0, 1].set_title('Validation metrics')
+        axes[0, 1].set_xlabel('Epoch')
+        axes[0, 1].legend()
+        axes[0, 1].grid(alpha=0.3)
+        axes[1, 0].plot(epochs, h.val_identical_score, color='tab:teal')
+        axes[1, 0].axhline(0.5, linestyle=':', color='red')
+        axes[1, 0].set_title('Identical-pair score')
+        axes[1, 0].set_xlabel('Epoch')
+        axes[1, 0].set_ylim(0, 1.01)
+        axes[1, 0].grid(alpha=0.3)
+        axes[1, 1].plot(epochs, h.learning_rates, color='tab:olive')
+        axes[1, 1].set_yscale('log')
+        axes[1, 1].set_title('Learning rate')
+        axes[1, 1].set_xlabel('Epoch')
+        axes[1, 1].grid(alpha=0.3)
+        fig.suptitle(
+            f'Training summary — best val_loss {h.best_val_loss:.4f} at '
+            f'epoch {h.best_epoch}/{len(h.train_loss)}'
+        )
+        fig.tight_layout()
+        fig.savefig(plots_dir / "training_summary.png", dpi=150)
+        plt.close(fig)
+
+        if verbose:
+            print(f"[info] training plots written to {plots_dir}")
+        return plots_dir
+
+    @torch.no_grad()
+    def _generate_roc_and_pr_plots(self, plots_dir: Path) -> None:
+        """Collect val-set predictions and render ROC + PR plots."""
+        self.model.train(mode=False)  # switch to inference mode
+        all_probs: List[float] = []
+        all_labels: List[float] = []
+        for batch in self.val_loader:
+            x1 = batch['x1'].to(self.device)
+            x2 = batch['x2'].to(self.device)
+            mask1 = batch['mask1'].to(self.device)
+            mask2 = batch['mask2'].to(self.device)
+            labels = batch['label']
+            if 'driving_1' in batch:
+                outputs = self.model(
+                    x1=x1, x2=x2, mask1=mask1, mask2=mask2,
+                    driving_1=batch['driving_1'].to(self.device),
+                    driving_2=batch['driving_2'].to(self.device),
+                    mask_d1=batch['mask_d1'].to(self.device),
+                    mask_d2=batch['mask_d2'].to(self.device),
+                    profile_1=batch['profile_1'].to(self.device),
+                    profile_2=batch['profile_2'].to(self.device),
+                )
+            else:
+                outputs = self.model(x1, x2, mask1, mask2)
+            all_probs.extend(outputs.squeeze(-1).cpu().numpy().tolist())
+            all_labels.extend(labels.numpy().tolist())
+
+        labels_np = np.asarray(all_labels)
+        probs_np = np.asarray(all_probs)
+
+        fpr, tpr, _ = roc_curve(labels_np, probs_np)
+        auc = roc_auc_score(labels_np, probs_np)
+        fig, ax = plt.subplots(figsize=(6, 6))
+        ax.plot(fpr, tpr, color='tab:purple', label=f'ROC (AUC = {auc:.3f})')
+        ax.plot([0, 1], [0, 1], linestyle=':', color='gray', label='chance')
+        ax.set_xlabel('False Positive Rate')
+        ax.set_ylabel('True Positive Rate')
+        ax.set_title('ROC curve — validation set')
+        ax.legend()
+        ax.grid(alpha=0.3)
+        fig.tight_layout()
+        fig.savefig(plots_dir / "roc_curve.png", dpi=150)
+        plt.close(fig)
+
+        prec, rec, _ = precision_recall_curve(labels_np, probs_np)
+        fig, ax = plt.subplots(figsize=(6, 6))
+        ax.plot(rec, prec, color='tab:green')
+        ax.set_xlabel('Recall')
+        ax.set_ylabel('Precision')
+        ax.set_title('Precision–Recall curve — validation set')
+        ax.grid(alpha=0.3)
+        fig.tight_layout()
+        fig.savefig(plots_dir / "precision_recall_curve.png", dpi=150)
+        plt.close(fig)
     
     @torch.no_grad()
     def evaluate(self, test_loader: DataLoader, verbose: bool = True) -> Dict[str, Any]:
