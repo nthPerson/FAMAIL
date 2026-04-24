@@ -51,8 +51,8 @@ def _validate_single_trajectory(
     # grounded). A seeking or driving trajectory is a single episode of
     # cruising-between-trips (seeking) or carrying-a-passenger (driving). In
     # urban taxi data these are typically minutes; anything longer than a
-    # single shift (MAX_TRAJECTORY_DURATION_BUCKETS, default 120 buckets =
-    # 10 hours) is almost certainly an extraction artifact — a segment that
+    # standard work day (MAX_TRAJECTORY_DURATION_BUCKETS, default 96 buckets
+    # = 8 hours) is almost certainly an extraction artifact — a segment that
     # got "stitched" across off-duty time because no passenger-indicator
     # transition occurred in between (e.g., a Friday-evening segment that
     # continues into Monday because Sat+Sun records were filtered out).

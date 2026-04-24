@@ -165,8 +165,8 @@ Sort plate_ids lexicographically, assign 0..49. Emitted as `driver_index_mapping
 | 2 | Every state has valid coords (`x∈[1,48]`, `y∈[1,90]`, `tb∈[1,288]`, `day∈{1..5}`) | per-trajectory | drop + `category="out_of_bounds"` |
 | 3 | Every trajectory has ≥ 2 states | per-trajectory | drop + `category="degenerate_length"` |
 | 4 | Temporal order within a trajectory is non-decreasing in `time_bucket` | per-trajectory | drop + `category="temporal_order"` |
-| 5 | A trajectory's elapsed duration exceeds `MAX_TRAJECTORY_DURATION_BUCKETS` (120 buckets ≈ 10 hours). Catches extraction artifacts where a seeking/driving segment was stitched across off-duty time (e.g., Friday→Monday with weekend records filtered out) and any other multi-day GPS gap. | per-trajectory | drop + `category="implausibly_long"` |
-| 6 | A consecutive-state transition has `max(|dx|, |dy|) > 1`, meaning the trajectory jumped more than one grid cell in a single time step. This can't be a rollout of the 9-action agent (8 compass moves + stay) that the downstream models assume. Typically caused by GPS dropouts or high-speed movement between ~15-30 second GPS samples on a ~1km grid. | per-trajectory | drop + `category="action_space_violation"` |
+| 5 | A trajectory's elapsed duration exceeds `MAX_TRAJECTORY_DURATION_BUCKETS` (96 buckets = 8 hours, i.e., a standard work day). Catches extraction artifacts where a seeking/driving segment was stitched across off-duty time (e.g., Friday→Monday with weekend records filtered out) and any other multi-day GPS gap. | per-trajectory | drop + `category="implausibly_long"` |
+| 6 | A consecutive-state transition has `max(\|dx\|, \|dy\|) > 1`, meaning the trajectory jumped more than one grid cell in a single time step. This can't be a rollout of the 9-action agent (8 compass moves + stay) that the downstream models assume. Typically caused by GPS dropouts or high-speed movement between ~15-30 second GPS samples on a ~1km grid. | per-trajectory | drop + `category="action_space_violation"` |
 | 7 | `sum(pickup_counts) == n_seeking_trajectories` and `sum(dropoff_counts) == n_driving_trajectories` | systemic | `SystemicInvariantError` |
 | 8 | Exactly 50 unique drivers | systemic | `SystemicInvariantError` |
 | 9 | Profile matrix is `50×11`, no NaN, column mean ≈ 0, column std ≈ 1 (constant columns excepted) | systemic | `SystemicInvariantError` |
@@ -175,6 +175,15 @@ Sort plate_ids lexicographically, assign 0..49. Emitted as `driver_index_mapping
 If per-trajectory removal rate exceeds `config.REMOVAL_RATE_WARN_THRESHOLD` (default 5%), the
 CLI emits a loud warning but does NOT abort — the removals are transparent in
 `processing_metadata.json` for researcher audit.
+
+> On the current real Shenzhen GPS this warning fires every run (~50% removal rate), because
+> invariant #6 (`action_space_violation`) rejects ~49% of raw trajectories by design — most raw
+> segments contain at least one GPS-dropout or high-speed transition that cannot be a rollout
+> of the 9-action agent. The warning is informational in that regime; the audit signal is
+> `counts_by_category` in `processing_metadata.json`. Dominant `action_space_violation` plus a
+> trickle of `implausibly_long` is the healthy shape. See the
+> [`SOURCE_DATASET_GENERATION_QUICKSTART.md`](SOURCE_DATASET_GENERATION_QUICKSTART.md)
+> "Unexpected removal-category distribution" pitfall for how to interpret other distributions.
 
 ---
 
@@ -242,5 +251,6 @@ This package corresponds to the **"Source-Data Generation"** appendix subsection
 2. The per-trajectory vs systemic invariant split makes the pipeline robust to real-world data noise without hiding it — removals are auditable per-driver in `processing_metadata.json`.
 3. The "available-only" active-taxis definition is a deliberate semantic choice; the fairness metric's DSR denominator now represents service capacity, not traffic presence.
 4. The pickup-transition endpoint semantic is the load-bearing invariant that makes the modifier's mass-balance bookkeeping correct for every trajectory.
+5. The `action_space_violation` per-trajectory filter (invariant #6, `max(|dx|, |dy|) ≤ 1` on every consecutive-state transition) enforces physical consistency with the 9 actions of the original `all_trajs.pkl` state vector (8 compass moves + stay). The surviving trajectory set is the action-space-consistent subset the downstream RL modifier and multi-stream discriminator can both assume — without this filter, ~49% of raw trajectories contain GPS-dropout or high-speed jumps that no 9-action agent could produce, and training/inference would see systematically different distributions.
 
 For operator and researcher instructions, see [`SOURCE_DATASET_GENERATION_QUICKSTART.md`](SOURCE_DATASET_GENERATION_QUICKSTART.md).

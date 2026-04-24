@@ -45,10 +45,10 @@ REMOVAL_RATE_WARN_THRESHOLD: float = 0.05
 # as a count of 5-minute time_buckets. A seeking or driving episode is typically
 # minutes to at most a few hours; anything longer is treated as an artifact of
 # segment extraction (e.g., a segment "stitched" across a weekend or off-duty
-# period because no passenger-indicator transition happened). 120 buckets ≈ 10
-# hours — at the upper end of a reasonable single shift. Trajectories whose
-# elapsed duration exceeds this are dropped as `implausibly_long`.
-MAX_TRAJECTORY_DURATION_BUCKETS: int = 120
+# period because no passenger-indicator transition happened). 96 buckets = 8
+# hours — the length of a standard work day. Trajectories whose elapsed duration
+# exceeds this are dropped as `implausibly_long`.
+MAX_TRAJECTORY_DURATION_BUCKETS: int = 96
 
 # Required driver count
 EXPECTED_N_DRIVERS: int = 50

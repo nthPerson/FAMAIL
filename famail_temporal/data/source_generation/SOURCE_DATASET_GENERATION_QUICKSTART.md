@@ -63,20 +63,27 @@ python -m famail_temporal.data.source_generation \
 What to expect (approximate timings on a modern workstation):
 
 ```
-2026-04-20 18:32:14,021 INFO Building event stream from raw_data
-2026-04-20 18:32:47,118 INFO Building views...
-2026-04-20 18:33:12,550 INFO Extracted 38914 seeking + 38864 driving trajectories
-2026-04-20 18:33:12,610 INFO Applying per-trajectory invariants...
-2026-04-20 18:33:21,883 INFO Computing profile features...
-2026-04-20 18:33:23,904 INFO Checking systemic invariants...
-2026-04-20 18:33:23,907 INFO Writing outputs to famail_temporal/source_data
-2026-04-20 18:33:25,412 INFO Done: 38914 seeking + 38864 driving kept; 0 removals; outputs at famail_temporal/source_data
+2026-04-21 00:13:02 INFO Building event stream from raw_data
+2026-04-21 00:13:05 INFO Building views…
+2026-04-21 00:16:26 INFO Extracted 214286 seeking + 179384 driving trajectories
+2026-04-21 00:16:26 INFO Applying per-trajectory invariants…
+2026-04-21 00:16:27 INFO Computing profile features…
+2026-04-21 00:24:17 WARNING Per-trajectory removal rate 49.73% exceeds threshold 5.00%
+2026-04-21 00:24:17 INFO Checking systemic invariants…
+2026-04-21 00:24:17 INFO Writing outputs to famail_temporal/source_data
+2026-04-21 00:24:21 INFO Done: 105488 seeking + 92432 driving kept; 195750 removals; outputs at famail_temporal/source_data
 ```
 
-Total runtime: typically 30–90 seconds on the full 3-month dataset.
+Total runtime: typically 10–12 minutes on the full 3-month dataset (50 drivers × 3 months of
+1–30 s-resolution GPS pings). The profile-features stage is the dominant cost.
 
-If you see the line `Per-trajectory removal rate X.XX% exceeds threshold 5.00%`, stop and read
-`processing_metadata.json` before trusting the output — see "Understanding removals" below.
+**The `Per-trajectory removal rate 49.73% exceeds threshold 5.00%` warning is expected** under
+the current pipeline — the `action_space_violation` invariant rejects ~50% of raw trajectories
+(GPS-dropout artifacts and high-speed transitions that can't be rollouts of the 9-action agent
+the downstream RL/discriminator models assume). The 5% threshold is a historical default that
+predates the action-space filter; the warning is informational, not a failure signal. Read
+`processing_metadata.json` — if `action_space_violation` dominates `counts_by_category`, the
+run is healthy. If any other category is large, investigate via "Understanding removals" below.
 
 ---
 
@@ -122,9 +129,9 @@ Open the file and look at the `removal_summary` block:
 
 ```json
 {
-  "n_days": 65,
+  "n_days": 66,
   "bounds": {"lat_min": 22.4425, "lat_max": 22.87, "lon_min": 113.7501, "lon_max": 114.5582},
-  "git_sha": "c7e50bb",
+  "git_sha": "af7636d",
   "config_snapshot": {
     "GRID_SIZE_DEG": 0.01,
     "NEIGHBORHOOD_SIZE": 5,
@@ -132,19 +139,29 @@ Open the file and look at the `removal_summary` block:
     "WEEKDAY_DAYS": [1, 2, 3, 4, 5]
   },
   "removal_summary": {
-    "total_seeking_extracted": 38914,
-    "total_driving_extracted": 38864,
-    "total_extracted": 77778,
-    "n_removed": 0,
-    "removal_rate": 0.0,
-    "counts_by_category": {},
-    "removals": []
+    "total_seeking_extracted": 214286,
+    "total_driving_extracted": 179384,
+    "total_extracted": 393670,
+    "n_removed": 195750,
+    "removal_rate": 0.4973,
+    "counts_by_category": {
+      "action_space_violation": 195540,
+      "implausibly_long": 210
+    },
+    "removals": [...]
   }
 }
 ```
 
-`n_removed = 0` is the happy path — every extracted trajectory survived all per-trajectory
-invariants. If you see non-zero removals:
+**The healthy shape on real Shenzhen data: `action_space_violation` dominates
+(`counts_by_category`), all other categories are near zero, and `removal_rate` is around 0.50.**
+The rate warning fires every run under this shape — see the Your First Run section above. What
+you're looking for in the audit is the category distribution, not the rate itself: if
+`out_of_bounds`, `degenerate_length`, `no_matching_count`, or `temporal_order` is non-trivial,
+something unusual is happening upstream. If `action_space_violation` is near zero, either the
+filter isn't running (older build?) or your raw data has already been filtered.
+
+For the field-level breakdown of each category:
 
 | `removal_reason_category` | What it means | What to do |
 |---|---|---|
@@ -152,7 +169,7 @@ invariants. If you see non-zero removals:
 | `degenerate_length` | The surviving trajectory has <2 states after filtering. | Usually a very short seeking/driving segment at a day boundary. Safe to ignore unless the count is large. |
 | `no_matching_count` | The trajectory's `state[-1]` endpoint had no matching pickup (seeking) or dropoff (driving) count. | **Should never happen under the new pipeline** — pickup/dropoff counts are re-derived from surviving trajectory endpoints, so this invariant now holds by construction. If you see it, something subtle is wrong upstream. |
 | `temporal_order` | A trajectory had a non-monotonic `time_bucket` sequence (went backward). | Typically an artifact of mixing GPS pings from two trips that got assigned the same segment_id. Rare — check `failing_values.time_buckets`. |
-| `implausibly_long` | The trajectory's elapsed duration exceeded the `MAX_TRAJECTORY_DURATION_BUCKETS` threshold (default: 120 buckets = 10 hours). A single seeking or driving episode shouldn't last this long — these are extraction artifacts where a segment was stitched across off-duty time (e.g., a Friday→Monday segment spanning the weekend because weekend records were filtered out). | A handful per 100K trajectories on clean data. Higher counts suggest upstream GPS data has long-gap segments that the extractor didn't split. Inspect `failing_values.duration_buckets` (the actual duration) and `failing_values.start` / `failing_values.end` (day/time_bucket endpoints). |
+| `implausibly_long` | The trajectory's elapsed duration exceeded the `MAX_TRAJECTORY_DURATION_BUCKETS` threshold (default: 96 buckets = 8 hours, i.e., a standard work day). A single seeking or driving episode shouldn't last this long — these are extraction artifacts where a segment was stitched across off-duty time (e.g., a Friday→Monday segment spanning the weekend because weekend records were filtered out). | A handful per 100K trajectories on clean data. Higher counts suggest upstream GPS data has long-gap segments that the extractor didn't split. Inspect `failing_values.duration_buckets` (the actual duration) and `failing_values.start` / `failing_values.end` (day/time_bucket endpoints). |
 | `action_space_violation` | A consecutive-state transition exceeded `max(|dx|, |dy|) = 1`, i.e., the trajectory jumped more than one grid cell in a single 5-minute time bucket. The surviving trajectories are physically consistent with rollouts of a 9-action agent (8 compass moves + stay), which the downstream discriminator and RL models assume. | Expected at roughly 49% on raw Shenzhen GPS data — these are high-speed-movement segments and GPS-dropout artifacts. The surviving trajectories are the action-space-consistent subset. Inspect `failing_values.from`, `failing_values.to` (the two consecutive states), `failing_values.max_axis_delta` (the jump magnitude), `failing_values.transition_index` (the 0-indexed position of the first violating pair). |
 
 The `removals` array contains one full `RemovalRecord` per dropped trajectory:
@@ -299,13 +316,24 @@ Cause: One or more of the 3 `taxi_record_*.pkl` files is missing or was replaced
 
 Fix: Verify all 3 files are present and non-empty. The tool requires all 3 months (07, 08, 09) to establish the global GPS bounding box correctly.
 
-### 3. High removal rate
+### 3. Unexpected removal-category distribution
 
-Symptom: `Per-trajectory removal rate 12.34% exceeds threshold 5.00%` in the CLI log.
+The `Per-trajectory removal rate ~50% exceeds threshold 5.00%` warning is the **expected**
+steady state on real Shenzhen GPS (see "Your first run" for why). What to worry about is the
+*distribution* of removals, not the rate.
 
-Cause: Varies — see the `removal_summary.counts_by_category` in `processing_metadata.json`.
+Symptom: `counts_by_category` shows a large count in any category other than
+`action_space_violation` or `implausibly_long` (a small trickle of `implausibly_long` is normal;
+everything else should be near zero).
 
-Fix: Inspect the `removals` array. If most removals are `out_of_bounds` with extreme `x`/`y` values, you likely have a raw-data issue (GPS coordinates far outside Shenzhen). If most are `degenerate_length`, the upstream transition detection may be fragmenting trips at day boundaries — rare but possible.
+| If the dominant category is... | Likely cause | Fix |
+|---|---|---|
+| `out_of_bounds` | Raw GPS contains coordinates far outside the Shenzhen bounding box, or bogus timestamps | Inspect `failing_values.state` + `axis`; audit the raw files |
+| `degenerate_length` | Upstream transition detection is fragmenting trips (e.g., at day boundaries) | Inspect the `assign_segment_ids` stage; rare but possible |
+| `no_matching_count` | Pipeline regression — this should hold by construction (counts are re-derived from survivors) | Open an issue; a count-rebuild step is broken |
+| `temporal_order` | GPS pings from two trips got assigned the same segment_id | Inspect `failing_values.day_time_buckets`; rare |
+| `implausibly_long` in the hundreds+ | Upstream GPS data has long-gap segments the extractor didn't split | Inspect `failing_values.duration_buckets` and `.start`/`.end` |
+| `action_space_violation` below ~40% of total | The input data is already-filtered or sampled differently than standard | Verify you're running on the standard 3-month raw GPS files |
 
 ### 4. Systemic invariant raised
 

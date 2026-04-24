@@ -74,18 +74,19 @@ def test_per_trajectory_accepts_short_midnight_crossing():
 
 
 def test_per_trajectory_accepts_long_overnight_shift_within_threshold():
-    """An overnight seeking episode up to ~8 hours is within the 10-hour
-    threshold and must be kept. Night-shift drivers do this regularly."""
+    """An overnight seeking episode just under the 8-hour threshold is kept.
+    Night-shift drivers do this regularly — pin the accept-case boundary."""
     trajs = TrajectoriesResult(seeking_by_plate={
         "A": [[
-            [5, 10, 264, 1],   # Mon 22:00
+            [5, 10, 266, 1],   # Mon 22:10
             [5, 10, 288, 1],   # Mon 23:55
             [5, 10, 1,   2],   # Tue 00:00
             [5, 10, 72,  2],   # Tue 05:55
-            [6, 11, 73,  2],   # Tue 06:00 — pickup
+            [6, 11, 73,  2],   # Tue 06:05 — pickup
         ]],
     })
-    # Duration: (288-264) + 0*288 + 73 = 24 + 73 = 97 buckets = 485 min ≈ 8h 5m.
+    # Duration: (288-266) + 0*288 + 73 = 22 + 73 = 95 buckets = 475 min
+    # ≈ 7h 55m. Just under the 96-bucket (8-hour) implausibly_long threshold.
     pickup_counts = {(6, 11, 73, 2): (1, 0)}
     kept, removals = apply_per_trajectory_invariants(trajs, pickup_counts, {})
     assert len(kept.seeking_by_plate.get("A", [])) == 1
