@@ -188,9 +188,12 @@ The export directory includes a README that covers:
 1. Load a `DataBundle` via `DataBundle.load()`.
 2. Compute `F_spatial` and `F_causal` on the cached active units using
    the existing fairness modules.
-3. Extract per-unit attributions via the existing attribution functions
-   (`per_unit_attribution` for causal; spatial-fairness decomposition
-   for spatial).
+3. Extract per-cell attributions via the canonical functions
+   `per_cell_fairness_attribution_spatial` and
+   `per_cell_fairness_attribution_causal` — the same single canonical
+   decompositions that the trajectory-modification algorithm uses.
+   Both sum to their respective F-metric (1/N-shifted decomposition; see
+   [`FAIRNESS_DECOMPOSITION_FORMULATION.md`](FAIRNESS_DECOMPOSITION_FORMULATION.md)).
 4. Use the `UnitIndexMap` to map active-unit indices back to
    (x, y, time_block) coordinates.
 5. Broadcast attributions along the time_bucket axis (all 5-min
