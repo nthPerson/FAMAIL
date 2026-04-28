@@ -47,8 +47,10 @@ class ExperimentResult:
 
     grid_before: np.ndarray
     grid_after: np.ndarray
-    per_unit_attribution: np.ndarray
-    per_unit_attribution_signed: np.ndarray
+    # Canonical per-cell fairness attribution (sums to F_causal). Sign:
+    # positive = above-baseline fairness contribution; negative = drags below.
+    # See docs/FAIRNESS_DECOMPOSITION_FORMULATION.md for the formulation.
+    per_cell_fairness_attribution: np.ndarray
 
     gradient_sensitivity_before: Optional[np.ndarray]
     gradient_sensitivity_after: Optional[np.ndarray]
@@ -148,9 +150,9 @@ def run_experiment(
             sensitivity_before = None
         metrics_before = _scalar_metrics_from_grid(grid_before)
         augmented_before = augment_trajectories(bundle.trajectories, grid_before)
-        attr_unsigned, attr_signed = compute_per_unit_attribution(bundle)
+        attribution = compute_per_unit_attribution(bundle)
 
-        scored = rank_trajectories(bundle.trajectories, attr_unsigned, bundle.unit_map)
+        scored = rank_trajectories(bundle.trajectories, attribution, bundle.unit_map)
         if k > len(scored):
             raise ValueError(
                 f"k={k} exceeds ranked trajectory count {len(scored)}. "
@@ -159,9 +161,12 @@ def run_experiment(
         top_k_indices = select_top_k(scored, k=k)
         if not top_k_indices:
             raise ValueError(
-                "Top-k is empty - no trajectories with strictly positive "
-                "attribution were found. Inspect per_unit_attribution; "
-                "if all zeros, demographics carry no signal on this bundle."
+                "Top-k is empty - no trajectories with strictly negative "
+                "attribution were found. Under the F-decomposition convention, "
+                "negative αᵢ marks cells dragging fairness below baseline. "
+                "If no such cells exist, the audit set is uniformly fair "
+                "(unusual; check that the active mask is populated and "
+                "demographics carry signal)."
             )
         top_k_scores = [scored[i][1] for i in range(len(top_k_indices))]
         top_k_trajs = [bundle.trajectories[i] for i in top_k_indices]
@@ -225,8 +230,7 @@ def run_experiment(
             gini_asr_after=metrics_after["gini_asr"],
             grid_before=grid_before,
             grid_after=grid_after,
-            per_unit_attribution=attr_unsigned,
-            per_unit_attribution_signed=attr_signed,
+            per_cell_fairness_attribution=attribution,
             gradient_sensitivity_before=sensitivity_before,
             gradient_sensitivity_after=sensitivity_after,
             modified_trajectory_ids=[h.original.trajectory_id for h in histories],

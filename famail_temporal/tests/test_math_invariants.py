@@ -3,6 +3,13 @@
 These guard properties that a reviewer could verify by hand from the
 equations in the Methods section. Failure of any of these tests means
 the paper's mathematical claims no longer hold.
+
+Sign convention (1/N-shifted decomposition, see
+``docs/FAIRNESS_DECOMPOSITION_FORMULATION.md``):
+
+    Σᵢ per_cell_fairness_attribution_*ᵢ == F  (not 1 - F)
+    αᵢ > 0 → cell contributes more than 1/N baseline to fairness
+    αᵢ < 0 → cell drags fairness below baseline (priority for modification)
 """
 import numpy as np
 import torch
@@ -10,7 +17,7 @@ from sklearn.preprocessing import StandardScaler
 
 from famail_temporal.fairness import (
     compute_fcausal_torch,
-    per_unit_attribution,
+    per_cell_fairness_attribution_causal,
     precompute_hat_matrices,
     pairwise_gini,
     compute_fspatial,
@@ -43,12 +50,12 @@ def test_M_idempotent_and_centers_ones():
 
 
 def test_attribution_sum_property_multiple_seeds():
-    """Sum_i per_unit_attribution_i == 1 - F_causal across many random R.
+    """Σᵢ per_cell_fairness_attribution_causalᵢ == F_causal across many random R.
 
-    This is the load-bearing decomposition identity: the per-unit attribution
-    vector sums EXACTLY to the pooled r^2_demo = 1 - F_causal. It holds because
-    both (I - H) and M are idempotent (see tests above). The paper's attribution
-    heatmaps and trajectory-ranking pipeline depend on this property.
+    This is the load-bearing decomposition identity under the 1/N-shifted
+    formulation: αᵢ = 1/N − ((MR)ᵢ² − ((I−H)R)ᵢ²) / R'MR sums to F_causal
+    because (a) the 1/N terms sum to 1 and (b) the explained-variance ratio
+    sums to 1 − F_causal.
     """
     rng = np.random.RandomState(102)
     N = 100
@@ -59,8 +66,8 @@ def test_attribution_sum_property_multiple_seeds():
     for seed in range(5):
         R = torch.from_numpy(np.random.RandomState(seed + 200).randn(N) * 3.0).float()
         f = compute_fcausal_torch(R, IH, M)
-        attr = per_unit_attribution(R, IH, M)
-        diff = abs(float(attr.sum()) - (1.0 - float(f)))
+        attr = per_cell_fairness_attribution_causal(R, tensors['X_demo'], tensors['XtX_inv'])
+        diff = abs(float(attr.sum()) - float(f))
         assert diff < 1e-5, (
             f"Attribution sum invariant broken at seed={seed}: "
             f"diff={diff:.2e}"
@@ -80,7 +87,6 @@ def test_fcausal_zero_when_R_in_demographic_span():
     hat = precompute_hat_matrices(rng.uniform(0.5, 5.0, N), demo, ["a", "b", "c"])
     tensors = hat_matrices_to_torch(hat)
     X_scaled = StandardScaler().fit_transform(demo)
-    # R = intercept + weighted combination of scaled demographics -> lies in span([1, X_scaled])
     R = torch.from_numpy(1.0 + 0.5 * X_scaled[:, 0] + 0.2 * X_scaled[:, 1]).float()
     f = compute_fcausal_torch(R, tensors['I_minus_H_demo'], tensors['M'])
     assert float(f) < 1e-4
@@ -98,7 +104,6 @@ def test_fcausal_one_when_R_orthogonal_to_demographic_span():
     demo = rng.randn(N, 3)
     hat = precompute_hat_matrices(rng.uniform(0.5, 5.0, N), demo, ["a", "b", "c"])
     tensors = hat_matrices_to_torch(hat)
-    # Project a random vector through (I - H) — result is orthogonal to span([1, X_demo])
     v = rng.randn(N)
     R_np = hat['I_minus_H_demo'] @ v
     R = torch.from_numpy(R_np).float()
@@ -199,7 +204,6 @@ def test_fspatial_one_when_service_equal():
 
 def test_fspatial_bounded_in_unit_interval():
     """F_spatial is in [0, 1] for any non-negative inputs."""
-    rng = np.random.RandomState(108)
     for seed in range(5):
         r = np.random.RandomState(seed + 400)
         N = 80
@@ -225,7 +229,7 @@ def test_fcausal_and_fspatial_both_increase_toward_fairness():
 
     # F_spatial: unequal -> equal should INCREASE F_spatial
     pickup_unequal = torch.ones(N)
-    pickup_unequal[0] = 10.0  # one unit dominates
+    pickup_unequal[0] = 10.0
     dropoff = torch.ones(N)
     active = torch.ones(N) * 2.0
     f_unequal, _ = compute_fspatial(pickup_unequal, dropoff, active)
@@ -249,11 +253,11 @@ def test_fcausal_and_fspatial_both_increase_toward_fairness():
 
 
 def test_attribution_sum_holds_at_production_scale():
-    """Attribution invariant must hold at realistic production scale (N=1000).
+    """Sum invariant must hold at realistic production scale (N=1000).
 
     Float32 matmul accumulation at large N introduces precision loss; this
-    test verifies that the invariant still holds within an acceptable tolerance
-    at the scale the pipeline will actually use.
+    test verifies the 1/N-shifted decomposition still sums to F_causal
+    within an acceptable tolerance at the scale the pipeline will actually use.
     """
     rng = np.random.RandomState(110)
     N = 1000
@@ -261,66 +265,56 @@ def test_attribution_sum_holds_at_production_scale():
     tensors = hat_matrices_to_torch(hat)
     R = torch.from_numpy(rng.randn(N) * 2.0).float()
     f = compute_fcausal_torch(R, tensors['I_minus_H_demo'], tensors['M'])
-    attr = per_unit_attribution(R, tensors['I_minus_H_demo'], tensors['M'])
-    # Loosen tolerance to account for float32 fp accumulation at this N
-    diff = abs(float(attr.sum()) - (1.0 - float(f)))
+    attr = per_cell_fairness_attribution_causal(R, tensors['X_demo'], tensors['XtX_inv'])
+    diff = abs(float(attr.sum()) - float(f))
     assert diff < 1e-3, f"Attribution invariant broken at N=1000: diff={diff:.2e}"
 
 
-def test_per_unit_attribution_can_be_negative_but_sum_is_nonnegative():
-    """Individual attribution values CAN be negative but the sum is always
-    in [0, 1] (= 1 - F_causal).
+def test_per_cell_attribution_can_be_negative():
+    """Individual αᵢ_causal CAN be negative — the sign is informative.
 
-    When ((I-H)R)_i^2 > (MR)_i^2 at a unit, demographics "actively misalign"
-    with R at that unit — the per-unit value is negative. This is mathematically
-    correct: negative values signal misalignment, positive values signal
-    alignment. The SUM is always non-negative because both (I-H) and M are
-    idempotent, so R'(I-H)R <= R'MR always.
+    Under the 1/N-shifted decomposition, αᵢ < 0 means demographics explain
+    MORE than the 1/N baseline of the cell's residual variance — i.e. the
+    cell drags F_causal below the uniform-fairness baseline. This is a
+    priority signal for the trajectory-modification algorithm.
 
-    This invariant is crucial: a naive implementation that clamps per-unit
-    values to [0, inf) would silently break the decomposition's meaning.
+    The full sum stays bounded in [0, 1] (= F_causal) because the
+    1/N terms sum to 1 and the explained-variance terms sum to (1 - F_causal).
     """
     rng = np.random.RandomState(115)
     N = 50
-    # Construct R = one-hot at unit 0 — guaranteed to produce mixed-sign
-    # per-unit values because the pointwise squared-difference is irregular.
     demo = rng.randn(N, 3)
     hat = precompute_hat_matrices(rng.uniform(0.5, 5.0, N), demo, ["a", "b", "c"])
     tensors = hat_matrices_to_torch(hat)
 
-    # Try multiple R constructions designed to have mixed per-unit signs.
     for trial_seed in range(5):
         trial_rng = np.random.RandomState(trial_seed + 500)
         R = torch.from_numpy(trial_rng.randn(N)).float()
-        attr = per_unit_attribution(R, tensors['I_minus_H_demo'], tensors['M'])
+        attr = per_cell_fairness_attribution_causal(R, tensors['X_demo'], tensors['XtX_inv'])
         f_causal = compute_fcausal_torch(R, tensors['I_minus_H_demo'], tensors['M'])
 
-        # Sum is the primary invariant
         attr_sum = float(attr.sum())
-        assert 0.0 <= attr_sum <= 1.0, (
+        assert 0.0 <= attr_sum <= 1.0 + 1e-5, (
             f"At trial {trial_seed}: attribution sum {attr_sum} out of [0,1]"
         )
-        # Sum matches 1 - F_causal
-        assert abs(attr_sum - (1.0 - float(f_causal))) < 1e-5, (
-            f"At trial {trial_seed}: sum {attr_sum} != 1 - F_causal "
-            f"{1.0 - float(f_causal)}"
+        assert abs(attr_sum - float(f_causal)) < 1e-5, (
+            f"At trial {trial_seed}: sum {attr_sum} != F_causal {float(f_causal)}"
         )
 
-    # Now verify the mixed-sign property actually occurs in practice.
-    # With random R, at least ONE trial should produce at least one negative
-    # per-unit value. If this never happens, the per-unit decomposition is
-    # mathematically pathological.
+    # At least one trial should produce an αᵢ < 0 (drag cell). With random R,
+    # some cells inevitably have higher explained-variance contribution than
+    # the 1/N baseline.
     seen_negative = False
     for trial_seed in range(20):
         trial_rng = np.random.RandomState(trial_seed + 600)
         R = torch.from_numpy(trial_rng.randn(N)).float()
-        attr = per_unit_attribution(R, tensors['I_minus_H_demo'], tensors['M'])
+        attr = per_cell_fairness_attribution_causal(R, tensors['X_demo'], tensors['XtX_inv'])
         if (attr < 0).any():
             seen_negative = True
             break
     assert seen_negative, (
-        "No trial produced a negative per-unit attribution — the mathematical "
-        "property that values can be negative must be demonstrable in practice."
+        "No trial produced a negative per-cell attribution — the property "
+        "that αᵢ can flag drag cells must be demonstrable in practice."
     )
 
 
@@ -342,21 +336,23 @@ def test_fcausal_handles_zero_residual_degenerate_case():
     assert float(f) == 1.0, f"F_causal(0) != 1.0: {float(f)}"
 
 
-def test_per_unit_attribution_handles_zero_residual():
-    """per_unit_attribution for R = 0 must be finite (all zeros or near-zero).
+def test_per_cell_attribution_handles_zero_residual():
+    """per_cell_fairness_attribution_causal for R = 0 must be finite (≈ 1/N each).
 
-    Complementary to the F_causal degenerate test: when R = 0, per-unit
-    attribution values should all be finite, with the sum matching 1 - F_causal = 0.
+    Complementary to the F_causal degenerate test: when R = 0, every cell
+    sits at the 1/N baseline because the explained-variance term is 0.
+    Sum ≈ 1.0 = F_causal in the degenerate case.
     """
     rng = np.random.RandomState(117)
     N = 50
     hat = precompute_hat_matrices(rng.uniform(0.5, 5.0, N), rng.randn(N, 3), ["a", "b", "c"])
     tensors = hat_matrices_to_torch(hat)
     R_zero = torch.zeros(N)
-    attr = per_unit_attribution(R_zero, tensors['I_minus_H_demo'], tensors['M'])
-    assert torch.isfinite(attr).all(), f"attribution contains non-finite values"
-    # Sum should be ~0 (since 1 - F_causal = 1 - 1.0 = 0)
-    assert abs(float(attr.sum())) < 1e-6
+    attr = per_cell_fairness_attribution_causal(R_zero, tensors['X_demo'], tensors['XtX_inv'])
+    assert torch.isfinite(attr).all(), "attribution contains non-finite values"
+    # Each cell sits at 1/N baseline; sum ≈ 1.0 (degenerate F_causal = 1.0).
+    assert abs(float(attr.sum()) - 1.0) < 1e-4
+    assert torch.allclose(attr, torch.full_like(attr, 1.0 / N), atol=1e-5)
 
 
 def test_precompute_hat_matrices_rejects_small_N():
@@ -374,14 +370,12 @@ def test_precompute_hat_matrices_rejects_small_N():
     """
     import pytest
     rng = np.random.RandomState(118)
-    # N=5 with 3 demographic features: too few even for rank check
     with pytest.raises(ValueError):
         precompute_hat_matrices(np.ones(5), rng.randn(5, 3), ["a", "b", "c"])
 
 
 def test_spatial_gini_decomposition_sums_to_gini():
     """sum(per_unit_gini_decomposition(x)) == pairwise_gini(x) for random x."""
-    import torch
     from famail_temporal.fairness.spatial import (
         per_unit_gini_decomposition, pairwise_gini,
     )

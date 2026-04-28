@@ -7,7 +7,7 @@ from famail_temporal import config
 from famail_temporal.evaluation.grid import build_fairness_grid
 from famail_temporal.fairness.spatial import compute_fspatial
 from famail_temporal.fairness.hat_matrices import hat_matrices_to_torch
-from famail_temporal.fairness.causal import per_unit_attribution
+from famail_temporal.fairness.causal import per_cell_fairness_attribution_causal
 from famail_temporal.tests.test_objective import _make_synthetic_bundle
 
 
@@ -34,17 +34,19 @@ def test_active_cells_are_finite():
         assert np.isfinite(grid[active, c]).all(), f"channel {c} has NaN on active cells"
 
 
-def test_spatial_attr_channel_sums_to_one_minus_fspatial():
+def test_spatial_attr_channel_sums_to_fspatial():
+    """Channel 0 sums to F_spatial under the 1/N-shifted decomposition."""
     bundle = _make_synthetic_bundle(N_cells_per_block=10, seed=1)
     grid = build_fairness_grid(bundle)
     pickup_N = torch.from_numpy(bundle.pickup_3d[bundle.mask_3d]).float()
     dropoff_N = torch.from_numpy(bundle.dropoff_3d[bundle.mask_3d]).float()
     active_N = torch.from_numpy(bundle.active_taxis_3d[bundle.mask_3d]).float()
     f_spatial, _ = compute_fspatial(pickup_N, dropoff_N, active_N)
-    assert np.isclose(np.nansum(grid[..., 0]), 1.0 - float(f_spatial), atol=1e-5)
+    assert np.isclose(np.nansum(grid[..., 0]), float(f_spatial), atol=1e-5)
 
 
-def test_causal_attr_channel_sums_to_one_minus_fcausal():
+def test_causal_attr_channel_sums_to_fcausal():
+    """Channel 1 sums to F_causal under the 1/N-shifted decomposition."""
     bundle = _make_synthetic_bundle(N_cells_per_block=10, seed=2)
     grid = build_fairness_grid(bundle)
     D = torch.from_numpy(bundle.pickup_3d[bundle.mask_3d]).float()
@@ -54,7 +56,11 @@ def test_causal_attr_channel_sums_to_one_minus_fcausal():
     g0_D = torch.from_numpy(np.asarray(bundle.g0_func(D_clamped.numpy()), dtype=np.float32))
     R = Y - g0_D
     tensors = hat_matrices_to_torch(bundle.hat_matrices)
-    expected = float(per_unit_attribution(R, tensors["I_minus_H_demo"], tensors["M"]).sum())
+    expected = float(
+        per_cell_fairness_attribution_causal(
+            R, tensors["X_demo"], tensors["XtX_inv"]
+        ).sum()
+    )
     assert np.isclose(np.nansum(grid[..., 1]), expected, atol=1e-5)
 
 
@@ -78,12 +84,14 @@ def test_gini_asr_channel_sums_to_asr_gini():
     assert np.isclose(np.nansum(grid[..., 3]), float(pairwise_gini(asr)), atol=1e-6)
 
 
-def test_channel_0_equals_half_sum_of_channels_2_3_on_active():
+def test_channel_0_equals_one_over_n_minus_half_sum_of_channels_2_3_on_active():
+    """1/N-shifted spatial attribution: αᵢ = 1/N - 0.5·(gini_dsr_i + gini_asr_i)."""
     bundle = _make_synthetic_bundle(N_cells_per_block=10, seed=8)
     grid = build_fairness_grid(bundle)
     active = bundle.mask_3d
+    n = int(active.sum())
     lhs = grid[..., 0][active]
-    rhs = 0.5 * (grid[..., 2][active] + grid[..., 3][active])
+    rhs = (1.0 / n) - 0.5 * (grid[..., 2][active] + grid[..., 3][active])
     assert np.allclose(lhs, rhs, atol=1e-6)
 
 
@@ -106,9 +114,10 @@ def test_pickup_override_changes_grid():
 def test_pickup_mask_indexing_matches_unit_map_canonical_order():
     """Load-bearing invariant: numpy boolean indexing via bundle.mask_3d
     iterates in the same (cell-major, time-within-cell) order that
-    UnitIndexMap.from_mask uses. build_fairness_grid's channel 1 (causal_attr)
-    relies on this — otherwise per_unit_attribution would be scattered into
-    cells with a different ordering than the hat matrices were built against.
+    UnitIndexMap.from_mask uses. build_fairness_grid's channel 1
+    (per_cell_fairness_attribution_causal) relies on this — otherwise the
+    per-cell vector would be scattered into cells with a different
+    ordering than the hat matrices were built against.
     """
     bundle = _make_synthetic_bundle(N_cells_per_block=10, seed=12)
     gy = bundle.pickup_3d.shape[1]

@@ -193,12 +193,12 @@ def test_modifier_on_real_data():
           f"median={sorted(lengths)[len(lengths)//2]}, n={len(lengths)}")
 
     # Attribution + ranking
-    attribution, _ = compute_per_unit_attribution(bundle)
+    attribution = compute_per_unit_attribution(bundle)
     ranked = rank_trajectories(valid_trajs, attribution, bundle.unit_map)
     top_indices = select_top_k(ranked, k=3)
 
     if len(top_indices) == 0:
-        pytest.skip("No trajectories with positive attribution found")
+        pytest.skip("No trajectories with strictly negative attribution found")
 
     # Modify top-ranked trajectory
     obj = FAMAILObjective(bundle, alpha_fidelity=0.0)

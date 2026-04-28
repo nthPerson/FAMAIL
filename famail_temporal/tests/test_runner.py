@@ -12,24 +12,30 @@ from famail_temporal.evaluation.runner import (
 def tiny_bundle(monkeypatch):
     from famail_temporal.tests.test_objective import _make_synthetic_bundle
     from famail_temporal.algorithm.attribution import compute_per_unit_attribution
-    bundle = _make_synthetic_bundle(N_cells_per_block=8, seed=0)
+    # seed=5 chosen because it produces a synthetic bundle with at least one
+    # cell whose αᵢ < 0 (drag cell). Seeds 0-4 happen to give a uniformly
+    # above-baseline distribution at this size, which would leave the top-k
+    # selector with nothing to pick.
+    bundle = _make_synthetic_bundle(N_cells_per_block=8, seed=5)
     from famail_temporal.utils.trajectory import Trajectory, TrajectoryState
-    # Find a cell with strictly positive attribution — needed so the
-    # run_experiment's top-k selection has something to pick. The RNG state
-    # of the synthetic bundle varies with config.T (more active cells at T=24),
-    # so "first active cell" is not guaranteed to have positive attribution.
-    unsigned, _ = compute_per_unit_attribution(bundle)
+    # Find a cell with strictly NEGATIVE attribution — under the 1/N-shifted
+    # decomposition αᵢ < 0 marks cells dragging fairness below baseline, and
+    # those are what select_top_k picks. The RNG state of the synthetic bundle
+    # varies with config.T (more active cells at T=24), so "first active cell"
+    # is not guaranteed to have negative attribution.
+    attribution = compute_per_unit_attribution(bundle)
+    gy = bundle.unit_map.grid_shape[1]
     ix_x, ix_y, ix_t = np.where(bundle.mask_3d)
     chosen = None
     for i in range(len(ix_x)):
-        if unsigned[bundle.unit_map.from_cell_time(
-            int(ix_x[i]) * bundle.pickup_3d.shape[1] + int(ix_y[i]),
+        if attribution[bundle.unit_map.from_cell_time(
+            int(ix_x[i]) * gy + int(ix_y[i]),
             int(ix_t[i]),
-        )] > 1e-6:
+        )] < -1e-6:
             chosen = i
             break
     assert chosen is not None, (
-        "synthetic bundle has no cells with positive attribution — seed unstable"
+        "synthetic bundle has no cells with negative attribution — seed unstable"
     )
     x, y, t_block = int(ix_x[chosen]), int(ix_y[chosen]), int(ix_t[chosen])
     start_hour = config.TIME_BLOCKS[t_block][1]

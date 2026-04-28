@@ -187,27 +187,31 @@ def _write_trajectories_csv(result: ExperimentResult, path: Path) -> None:
 
 
 def _write_per_unit_attribution_csv(result: ExperimentResult, path: Path, mask_3d: np.ndarray) -> None:
+    """Per-cell attribution CSV.
+
+    Columns are the four channels of the fairness grid (spatial αᵢ, causal
+    αᵢ, gini_dsr_contrib, gini_asr_contrib) before and after modification.
+    αᵢ values sum to F (the fairness metric); positive = above-baseline
+    fairness contribution, negative = drags fairness down. See
+    ``famail_temporal/docs/FAIRNESS_DECOMPOSITION_FORMULATION.md``.
+    """
     ix_x, ix_y, ix_t = np.where(mask_3d)
-    signed = result.per_unit_attribution_signed
     with open(path, "w", newline="") as f:
         writer = csv.writer(f)
         writer.writerow([
             "unit_idx", "cell_x", "cell_y", "t_block", "flat_cell_id",
             "spatial_attr_before", "spatial_attr_after",
             "causal_attr_before",  "causal_attr_after",
-            "causal_attr_signed_before",
             "gini_dsr_contrib_before", "gini_dsr_contrib_after",
             "gini_asr_contrib_before", "gini_asr_contrib_after",
         ])
         for i, (x, y, t) in enumerate(zip(ix_x, ix_y, ix_t)):
-            signed_val = float(signed[i]) if i < len(signed) else 0.0
             writer.writerow([
                 i, int(x), int(y), int(t), int(x) * config.GRID_DIMS[1] + int(y),
                 float(result.grid_before[x, y, t, 0]),
                 float(result.grid_after [x, y, t, 0]),
                 float(result.grid_before[x, y, t, 1]),
                 float(result.grid_after [x, y, t, 1]),
-                signed_val,
                 float(result.grid_before[x, y, t, 2]),
                 float(result.grid_after [x, y, t, 2]),
                 float(result.grid_before[x, y, t, 3]),

@@ -89,37 +89,63 @@ def compute_fspatial(
     return f_spatial, debug
 
 
-def compute_spatial_attribution(
+def per_cell_fairness_attribution_spatial(
     pickup_N: torch.Tensor,
     dropoff_N: torch.Tensor,
     active_taxis_N: torch.Tensor,
-) -> dict:
-    """Per-unit spatial attribution (3 N-vector channels).
+) -> torch.Tensor:
+    """Canonical per-cell decomposition of F_spatial.
+
+    Returns a 1-D tensor of length N (active cells) where
+    ``Σᵢ result_i = F_spatial`` and the sign convention is
+
+        positive  → cell contributes more than 1/N baseline to fairness
+        ≈ 0       → cell at the negative-fair / anti-fair boundary
+        negative  → cell drags fairness below baseline (priority for modification)
+
+    Formulation (1/N-shifted Gini decomposition):
+
+        αᵢ = 1/N − 0.5·(gini_decomp_DSR_i + gini_decomp_ASR_i)
+
+    where each ``gini_decomp_*_i`` is the cell's contribution to the Gini
+    coefficient on the corresponding ratio (DSR = pickups/active_taxis,
+    ASR = dropoffs/active_taxis). The 1/N baseline is the uniform
+    "fairness mass per cell" prior — see
+    ``famail_temporal/docs/FAIRNESS_DECOMPOSITION_FORMULATION.md``.
+
+    This is the single canonical spatial-fairness attribution function in
+    the codebase. The trajectory-modification algorithm and the
+    fairness-attribution export tool both call it — there is no parallel
+    "unfairness" variant.
+
+    Args:
+        pickup_N: 1-D tensor of pickup counts per active (cell, t).
+        dropoff_N: 1-D tensor of dropoff counts per active (cell, t).
+        active_taxis_N: 1-D tensor of active taxi supply per active (cell, t).
 
     Returns:
-        dict with keys 'gini_decomp_dsr', 'gini_decomp_asr', 'spatial_attr'.
-        spatial_attr = 0.5 * (gini_decomp_dsr + gini_decomp_asr), so that
-        sum(spatial_attr) == 1 - F_spatial (same canonical decomposition
-        consumed by the fairness-aware grid).
+        1-D tensor of length N. Sum equals F_spatial.
 
-    Input validation mirrors compute_fspatial (1-D, matching shapes, non-negative).
+    Raises:
+        ValueError: on shape / dimension / negative-value violations.
     """
     if pickup_N.dim() != 1 or dropoff_N.dim() != 1 or active_taxis_N.dim() != 1:
         raise ValueError(
             "pickup_N, dropoff_N, and active_taxis_N must be 1-D tensors."
         )
     if not (pickup_N.shape == dropoff_N.shape == active_taxis_N.shape):
-        raise ValueError("pickup_N, dropoff_N, and active_taxis_N must have the same shape.")
+        raise ValueError(
+            "pickup_N, dropoff_N, and active_taxis_N must have the same shape."
+        )
     if (pickup_N < 0).any() or (dropoff_N < 0).any() or (active_taxis_N < 0).any():
-        raise ValueError("pickup_N, dropoff_N, and active_taxis_N must not contain negatives.")
+        raise ValueError(
+            "pickup_N, dropoff_N, and active_taxis_N must not contain negatives."
+        )
 
+    n = pickup_N.numel()
     dsr = pickup_N / (active_taxis_N + config.EPS)
     asr = dropoff_N / (active_taxis_N + config.EPS)
     gini_decomp_dsr = per_unit_gini_decomposition(dsr)
     gini_decomp_asr = per_unit_gini_decomposition(asr)
-    spatial_attr = 0.5 * (gini_decomp_dsr + gini_decomp_asr)
-    return {
-        "gini_decomp_dsr": gini_decomp_dsr,
-        "gini_decomp_asr": gini_decomp_asr,
-        "spatial_attr": spatial_attr,
-    }
+    unfairness_contrib = 0.5 * (gini_decomp_dsr + gini_decomp_asr)
+    return (1.0 / n) - unfairness_contrib

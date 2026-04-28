@@ -1,18 +1,28 @@
-"""Pooled (cell, t) fairness metrics."""
+"""Pooled (cell, t) fairness metrics + canonical attribution functions.
+
+The two ``per_cell_fairness_attribution_*`` functions are the SINGLE
+canonical decomposition for each metric — used by both the trajectory-
+modification algorithm and the fairness-attribution export tool. See
+``famail_temporal/docs/FAIRNESS_DECOMPOSITION_FORMULATION.md`` for the
+formulation, sign convention, and sum invariants (each sums to its F).
+"""
 
 from famail_temporal.fairness.spatial import (
     pairwise_gini,
     compute_fspatial,
+    per_cell_fairness_attribution_spatial,
 )
 from famail_temporal.fairness.causal import (
     compute_fcausal,
-    per_unit_attribution,
-    per_unit_attribution_signed,
+    compute_fcausal_from_compact,
+    per_cell_fairness_attribution_causal,
 )
 from famail_temporal.fairness.hat_matrices import (
     precompute_hat_matrices,
     compute_fcausal_torch,
+    compute_fcausal_compact,
     hat_matrices_to_torch,
+    apply_i_minus_h,
 )
 from famail_temporal.fairness.g0_power_basis import (
     G0Function,
@@ -22,7 +32,10 @@ from famail_temporal.fairness.g0_power_basis import (
 
 __all__ = [
     "pairwise_gini", "compute_fspatial",
-    "compute_fcausal", "per_unit_attribution", "per_unit_attribution_signed",
-    "precompute_hat_matrices", "compute_fcausal_torch", "hat_matrices_to_torch",
+    "per_cell_fairness_attribution_spatial",
+    "compute_fcausal", "compute_fcausal_from_compact",
+    "per_cell_fairness_attribution_causal",
+    "precompute_hat_matrices", "compute_fcausal_torch",
+    "compute_fcausal_compact", "hat_matrices_to_torch", "apply_i_minus_h",
     "G0Function", "build_power_basis_features", "fit_g0",
 ]
