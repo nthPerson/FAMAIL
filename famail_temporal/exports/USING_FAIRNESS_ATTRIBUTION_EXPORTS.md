@@ -187,3 +187,29 @@ generator_input = concat(spatial_features, α_channel, axis=channel_dim)
 **Active-mask and broadcast notes.** Option C is the one place this how-to recommends replacing NaN with zero, because tensor inputs cannot carry NaN; the replacement is a conditioning artifact, not a semantic claim about α at inactive cells. Options A and B preserve NaN via `nansum`. The 48 × 90 grid alignment between your generator's spatial output and α_grid is a precondition for all three options; mismatched grids require resampling and break the per-cell semantics.
 
 **Relevant pitfalls:** §3 items 1, 2, 6, 7.
+
+### §2.3 Recipe: Generic offline RL (Q-learning, CQL, BCQ, IQL)
+
+**Where α enters:** as a per-state reward bonus on top of whatever extrinsic reward your offline-RL setup uses. Mechanically identical to the GAIL recipe (§2.1) minus the imitation-discriminator structure.
+
+**Pseudocode for reward augmentation:**
+
+```text
+# Pre-load once before training
+load fairness_attribution_dense.pkl as dense
+α_grid = dense["spatial"]                    # or dense["causal"]
+mask   = dense["active_mask"]
+λ      = a scalar weight you choose
+
+# When constructing the offline replay buffer (or relabeling its rewards):
+for transition (s, a, r, s') in dataset:
+    if mask[s.cell_x, s.cell_y, s.time_block]:
+        r_augmented = r + λ * α_grid[s.cell_x, s.cell_y, s.time_block]
+    else:
+        r_augmented = r + OFF_SUPPORT_PENALTY
+    store (s, a, r_augmented, s') in replay buffer
+```
+
+**Active-mask and broadcast notes.** The key precondition is **state-granularity alignment**. The dataset is per-(cell, hour-block); if your RL state is finer than that — for example, per-(cell, 5-minute-bucket) — then per §1.3 you are looking up the same α 12 times across the buckets in the block. That is correct behavior and matches the audit's measurement granularity, not a bug. If your RL state is coarser (e.g., per-cell across all blocks), you must aggregate α across blocks; this aggregation is your design choice and is not prescribed here.
+
+**Relevant pitfalls:** §3 items 1, 2, 4.
