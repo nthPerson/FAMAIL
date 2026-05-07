@@ -219,3 +219,23 @@ for transition (s, a, r, s') in dataset:
 **Active-mask and broadcast notes.** The key precondition is **state-granularity alignment**. The dataset is per-(cell, hour-block); if your RL state is finer than that — for example, per-(cell, 5-minute-bucket) — then per §1.3 you are looking up the same α 12 times across the buckets in the block. That is correct behavior and matches the audit's measurement granularity, not a bug. If your RL state is coarser (e.g., per-cell across all blocks), you must aggregate α across blocks; this aggregation is your design choice and is not prescribed here.
 
 **Relevant pitfalls:** §3 items 1, 2, 4.
+
+---
+
+## §3. Pitfalls catalogue
+
+Numbered for reference from the recipes.
+
+1. **Treating broadcast axes as independent samples.** Per-bucket and per-day axes carry duplicated values, not independent observations. IID sampling along them inflates effective sample size by up to `12 × n_days` per (cell, block) and corrupts variance estimates. See §1.3.
+
+2. **Clamping per-cell α to [0, 1].** Per-cell α is signed and unbounded; only the overall metric F is in [0, 1]. Clamping silently discards the negative-fair signal and turns a signed reward into a one-sided one. If your loss requires bounded scalars, normalize on your side — pick a transform that respects the sign. See §1.2.
+
+3. **Mistaking the F_spatial / F_causal magnitude imbalance for a bug.** A representative export (the manuel-handoff snapshot) shows `F_spatial ≈ 0.08` and `F_causal ≈ 0.80`. The two metrics measure different things on different scales — Gini-based exposure equity vs demographic explanatory power of the demand-adjusted residual — and are not expected to agree. An order-of-magnitude gap is normal.
+
+4. **Treating attribution as per-trajectory.** Attribution is per-(cell, hour-block); two trajectories whose pickups land in the same cell-block share the same α. Per-driver fairness attribution is explicitly out of scope (see [`../docs/FAIRNESS_ATTRIBUTION_EXPORT_DESIGN.md`](../docs/FAIRNESS_ATTRIBUTION_EXPORT_DESIGN.md) §8). If you build a model that conditions on driver identity, α is still the per-cell quantity — not a per-driver one.
+
+5. **Uniform sampling over the long format without stratifying on `is_active`.** The long-format DataFrame has roughly `48 × 90 × 288 × n_days` rows, and only ~15% of them are active in a typical export. Uniform sampling trains on a lot of NaN. Filter on `is_active` first, or use the dense format and apply a mask.
+
+6. **Treating `demand_D` and `supply_S` as per-bucket counts.** They are mean-hourly rates at the block level, not raw counts at the bucket level. Downstream features that assume bucket-level counts are off by a factor of 12 (or more, depending on aggregation).
+
+7. **Combining attributions across exports without re-checking `n_days` and `famail_git_sha`.** Attribution magnitudes scale with the active-set size and depend on the source-data SHA. Cross-export aggregation requires explicit reconciliation against both `metadata["famail_git_sha"]` and `metadata["source_data_processing_metadata"]["git_sha"]`; merging exports from different commits silently mixes fairness audits computed under different rules.
