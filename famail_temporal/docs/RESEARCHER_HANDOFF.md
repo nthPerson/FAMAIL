@@ -132,3 +132,49 @@ This form is differentiable with respect to `x` everywhere except at measure-zer
 **Load-bearing claims.** Three claims that a reviewer could push back on: (1) supply `S_u` is the right denominator — using raw counts rather than a rate would make high-supply cells structurally advantaged, but the choice that `S_u` correctly normalizes for taxi availability rather than demand is an assumption about what "fair exposure" means; (2) the measure-zero differentiability guarantee holds in practice during optimization — empirically, ties are rare across N = 5,834 units, but a gradient blackout at a tie is not theoretically impossible; (3) equal weighting of DSR and ASR is normatively neutral — it encodes the judgment that origin equity and destination equity matter equally, which may not hold in all city contexts.
 
 F_spatial enters the objective in §3 as the first term and is decomposed per cell in §7.
+
+---
+
+## §5. F_causal — demographic-projection R²
+
+F_causal asks whether demographics — not demand — explain the service rate, via a double regression.
+
+**Stage 1: power-basis fit g_0(D).** The service rate for each active unit is `Y_u = S_u / max(D_u, DEMAND_FLOOR)`. A four-term power basis is fitted via OLS across all N active units:
+
+```
+g_0(D) = β₀ + β₁/(D+1) + β₂/√(D+1) + β₃√(D+1)
+```
+
+This produces a baseline prediction of service rate from demand alone. The `(D+1)` offsets prevent singularity at `D = 0`, independently of the `DEMAND_FLOOR` clamp that stabilizes `Y`. The resulting coefficient vector `[β₀, β₁, β₂, β₃]` is fixed after preprocessing; it is not re-estimated during the ST-iFGSM loop.
+
+**Stage 2: demographic projection on residuals.** The residual `R_u = Y_u − g_0(D_u)` strips demand-explained variation; `R` (length N) carries only the service-rate component that demand cannot account for. The demographic hat matrix is formed from z-scored features with a prepended intercept column, `X̃` (N × p+1):
+
+```
+H_demo = X̃(X̃'X̃)⁻¹X̃'
+```
+
+`H_demo` projects any N-vector onto the column space of the z-scored demographics plus intercept. Three district-level features enter `X̃` — housing price per square metre, GDP per capita, and compensation per employed person — each standardized via `StandardScaler` across the active set.
+
+**Final form and sign convention.** Let `M = I − 11'/N` be the centering matrix. The causal fairness scalar is:
+
+```
+F_causal = R'(I − H_demo)R / R'MR = 1 − r²_demo
+```
+
+where `r²_demo = R'H_demo R / R'MR` is introduced here as the demographic-explained variance fraction of the demand-adjusted residual. The sign convention is deliberate: `r²_demo` high means demographics explain a large share of the residual — the service rate still tracks neighborhood wealth after demand is removed — which is the unfair outcome. `F_causal` high means demographics explain little residual variance, i.e., the service distribution is not systematically aligned with socioeconomic composition. Boundary cases: `R ∈ span(X̃)` gives `F_causal = 0` (fully unfair); `R ⊥ X̃` gives `F_causal = 1` (fully fair).
+
+**Design choices.**
+
+1. **Power basis for g_0.** The form `[1, 1/(D+1), 1/√(D+1), √(D+1)]` is linear in parameters, so OLS produces a closed-form solution and the hat-matrix algebra for F_causal remains exact. The four terms together capture hyperbolic saturation at low demand (dominant `1/(D+1)` and `1/√(D+1)` behavior where `D ≈ 0`) plus a sub-linear growth term (`√(D+1)`) at high demand — a shape confirmed by the Pearson correlation `log(D)·log(Y) = −0.89` on signal-regime cells.
+
+2. **DEMAND_FLOOR = 0.5 as a clamp, not a filter.** Cells with `D_raw < 0.5` retain their identity in the active set; only their demand value is replaced by 0.5 inside `Y = S/D` — filtering would remove them, rendering unfairness in underserved regions invisible. The value 0.5 is chosen for residual-scale balance: at the prior value of 0.01, clamped cells produced `Y` up to 2,947 (two to three orders of magnitude above signal-regime scale), causing `R'MR` to be dominated by floor-regime variance; at 0.5 the clamped-cell `Y` max is 63.5, placing both regimes on comparable scale for the pooled regression.
+
+3. **Two-R² diagnostic.** The all-cells fit yields `R² ≈ 0.04`; the signal-regime fit (cells with `D_u ≥ 0.5`, n = 899) yields `R² ≈ 0.69`. Reporting both separates model-class adequacy (the signal-regime R² confirms the power basis captures the hyperbolic demand-service law where demand is identifiable) from audit-set composition (the all-cells R² is low because ~85% of active cells have near-zero demand, not because the basis is misspecified). The all-cells coefficients define `g_0` downstream; the signal-regime R² is a diagnostic only.
+
+4. **g_0 evaluated under `torch.no_grad()` in the modifier loop.** During ST-iFGSM, `g_0(D)` is pre-computed and detached from the autograd graph before `F_causal` is evaluated. If `g_0(D)` were inside the gradient tape, perturbing pickups to change `D` would simultaneously shift the baseline and the residual, double-counting the demand effect. The `no_grad` boundary ensures the modifier improves `F_causal` only by moving service relative to the fixed baseline, not by adjusting the baseline itself.
+
+**Pointer-outs.** Full methodology rationale — including the two-R² diagnostic, DEMAND_FLOOR sensitivity table, and paper-ready text — is in `F_CAUSAL_METHODOLOGY_NOTES.md` (sibling in this directory). The power-basis fitting routine is in `../fairness/g0_power_basis.py`; hat-matrix precomputation (H_demo and M) is in `../fairness/hat_matrices.py`.
+
+**Load-bearing claims.** Six claims a reviewer could contest: (1) demand is the correct first-stage control — the Frisch-Waugh-Lovell theorem grounds this; partial regression on `R` isolates the demographic effect after demand is partialled out; (2) the power basis suits the demand-service relationship — signal-regime R² of 0.69 and log-log Pearson correlation −0.89 are the empirical anchors; (3) `DEMAND_FLOOR = 0.5` produces a well-scaled residual — the sensitivity table in `F_CAUSAL_METHODOLOGY_NOTES.md` §6 shows values ≤ 0.1 fail the scale-balance criterion; (4) three demographic features span socioeconomic variation adequately — parsimonious by design, not a completeness claim; (5) all-cells OLS coefficients are the correct source for `g_0` — signal-regime coefficients would misspecify the baseline for floor-regime cells, breaking per-cell attribution consistency in §7; (6) `r²_demo` supports a causal interpretation — this rests on demand being exogenous to cell demographics, plausible under the supply-based mask (§2) but not tested instrumentally.
+
+F_causal enters the objective in §3 as the second term and is decomposed per cell in §7. DEMAND_FLOOR's empirical justification is reprised in §9 as a sensitivity-study opportunity.
