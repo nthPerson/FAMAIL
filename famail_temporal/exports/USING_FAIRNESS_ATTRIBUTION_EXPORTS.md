@@ -152,3 +152,38 @@ The natural framing — drawn directly from [`../docs/FAIRNESS_DECOMPOSITION_FOR
 **Active-mask and broadcast notes.** `OFF_SUPPORT_PENALTY` is your call — pick a value that pushes the policy back onto the active set without dominating the discriminator term. Per §1.3, an agent that steps at 5-minute resolution and reads `α_grid[x, y, t_block]` is reading the same per-block value 12 times within an hour; that is intentional, not a bug.
 
 **Relevant pitfalls:** §3 items 1, 2, 4, 5.
+
+### §2.2 Recipe: GAN training
+
+**Where α enters:** three options, in order of increasing intrusiveness on the existing pipeline. Pick the lightest fit.
+
+**Option A — α as an evaluation diagnostic (no training change).** Score generated trajectories' pickup distribution against α offline.
+
+```text
+# After generating a batch of trajectories
+gen_pickup_grid = histogram_2d_per_block(generated_trajectories)   # (gx, gy, T)
+gen_alpha_mass  = nansum(gen_pickup_grid * α_grid)                 # NaN at inactive cells
+real_alpha_mass = nansum(real_pickup_grid * α_grid)
+report(gen_alpha_mass / real_alpha_mass)                           # closer to 1 = generator matches real fairness profile
+```
+
+**Option B — α as an auxiliary loss (no architectural change).** Penalize generated trajectories whose pickup distribution under-weights positive-α cells.
+
+```text
+# Inside the generator's loss
+gen_pickup_soft = differentiable_pickup_grid(generator_output)     # (gx, gy, T)
+fairness_term   = − nansum(gen_pickup_soft * α_grid)               # negate so minimizing loss raises α-mass
+total_loss      = adversarial_loss + λ * fairness_term
+```
+
+**Option C — α as a conditioning input (architectural change).** Broadcast α as an extra input channel into the generator's spatial features.
+
+```text
+# At generator input assembly
+α_channel = where(isnan(α_grid), 0, α_grid)                        # explicit replacement; required for tensor input
+generator_input = concat(spatial_features, α_channel, axis=channel_dim)
+```
+
+**Active-mask and broadcast notes.** Option C is the one place this how-to recommends replacing NaN with zero, because tensor inputs cannot carry NaN; the replacement is a conditioning artifact, not a semantic claim about α at inactive cells. Options A and B preserve NaN via `nansum`. The 48 × 90 grid alignment between your generator's spatial output and α_grid is a precondition for all three options; mismatched grids require resampling and break the per-cell semantics.
+
+**Relevant pitfalls:** §3 items 1, 2, 6, 7.
