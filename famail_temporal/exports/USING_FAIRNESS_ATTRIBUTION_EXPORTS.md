@@ -65,3 +65,18 @@ Two anti-patterns to avoid:
 - **Do not treat per-cell magnitudes as probabilities.** They are signed contributions to a sum, not weights. Anything that requires a [0, 1] or simplex constraint needs explicit normalization on your side; this document does not prescribe one.
 
 The full derivation of the 1/N-shifted decomposition lives in [`../docs/FAIRNESS_DECOMPOSITION_FORMULATION.md`](../docs/FAIRNESS_DECOMPOSITION_FORMULATION.md).
+
+### §1.3 Axis semantics: the broadcast trap
+
+The export's row schema looks four-dimensional: `(x_grid, y_grid, time_bucket, day)`. It is not. Two of those axes are **broadcast duplicates**, not independent samples:
+
+- **`time_bucket` within an hour-block.** Fairness is computed at `(x, y, time_block)` granularity (24 hourly blocks). Each block contains 12 five-minute `time_bucket` values. The same per-block α is duplicated across all 12 buckets in the block.
+- **`day`.** Fairness is computed pooled across the dataset's `n_days` days, not per-day. The same pooled α is duplicated across every value of the `day` index.
+
+Three concrete consequences:
+
+- **IID sampling along broadcast axes inflates effective sample size.** Drawing N rows uniformly from `df` and treating them as independent observations gives you up to `12 × n_days =` 60 duplicates per (cell, block) in the manuel-handoff export. Variance estimates and standard errors computed against that count are wrong by an order of magnitude or more.
+- **"Per-bucket" or "per-day" features are pass-throughs.** Any feature you compute by picking a single (bucket, day) value is identical to its sibling values in the same block; there is no per-bucket or per-day signal to extract.
+- **Aggregations along broadcast axes are pass-throughs of the per-block / pooled value.** `mean` and `std` over a broadcast axis return the per-block / pooled value with zero spread.
+
+If your training loop needs a per-state reward at finer granularity than `(cell, hour-block)`, you are looking up a duplicated value, not a finer signal. That is fine — it just means your model is being trained on the same target that the audit measured. Decisions to break the broadcast (e.g., per-day fairness) require recomputing the audit, which is out of scope for this export.
