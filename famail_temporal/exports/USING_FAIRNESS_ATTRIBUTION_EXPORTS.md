@@ -123,3 +123,32 @@ Full derivation in [`../docs/FAIRNESS_DECOMPOSITION_FORMULATION.md`](../docs/FAI
 ## §2. Recipes
 
 Each recipe is self-contained; pick the one that matches your training method. All three assume you have read §1 (sign convention, broadcast trap, NaN handling) and use the loading patterns from §1.1.
+
+### §2.1 Recipe: GAIL / imitation learning reward shaping
+
+**Where α enters:** as a per-state additive bonus on top of the discriminator-derived reward. The agent is trained to prefer cells with positive α and avoid cells with negative α.
+
+**Pseudocode for the per-step reward computation:**
+
+```text
+# Pre-load once before the training loop
+load fairness_attribution_dense.pkl as dense
+α_grid = dense["spatial"]                    # or dense["causal"]; pick one (see §1.5)
+mask   = dense["active_mask"]
+λ      = a scalar weight you choose          # not prescribed here
+
+# Inside the training loop, for each visited state s = (x, y, time_block):
+def fairness_bonus(state):
+    x, y, t_block = state.cell_x, state.cell_y, state.time_block
+    if not mask[x, y, t_block]:
+        return OFF_SUPPORT_PENALTY           # explicit; do not silently zero
+    return λ * α_grid[x, y, t_block]
+
+reward(state, action) = discriminator_reward(state, action) + fairness_bonus(state)
+```
+
+The natural framing — drawn directly from [`../docs/FAIRNESS_DECOMPOSITION_FORMULATION.md`](../docs/FAIRNESS_DECOMPOSITION_FORMULATION.md) §3 — is: "agents that randomly visit any cell average a fairness bonus of λ · F/N; only agents that preferentially visit positive-α cells beat that." This makes α a meaningful gradient signal without further engineering.
+
+**Active-mask and broadcast notes.** `OFF_SUPPORT_PENALTY` is your call — pick a value that pushes the policy back onto the active set without dominating the discriminator term. Per §1.3, an agent that steps at 5-minute resolution and reads `α_grid[x, y, t_block]` is reading the same per-block value 12 times within an hour; that is intentional, not a bug.
+
+**Relevant pitfalls:** §3 items 1, 2, 4, 5.
