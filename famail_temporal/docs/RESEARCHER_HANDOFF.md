@@ -178,3 +178,27 @@ where `r²_demo = R'H_demo R / R'MR` is introduced here as the demographic-expla
 **Load-bearing claims.** Six claims a reviewer could contest: (1) demand is the correct first-stage control — the Frisch-Waugh-Lovell theorem grounds this; partial regression on `R` isolates the demographic effect after demand is partialled out; (2) the power basis suits the demand-service relationship — signal-regime R² of 0.69 and log-log Pearson correlation −0.89 are the empirical anchors; (3) `DEMAND_FLOOR = 0.5` produces a well-scaled residual — the sensitivity table in `F_CAUSAL_METHODOLOGY_NOTES.md` §6 shows values ≤ 0.1 fail the scale-balance criterion; (4) three demographic features span socioeconomic variation adequately — parsimonious by design, not a completeness claim; (5) all-cells OLS coefficients are the correct source for `g_0` — signal-regime coefficients would misspecify the baseline for floor-regime cells, breaking per-cell attribution consistency in §7; (6) `r²_demo` supports a causal interpretation — this rests on demand being exogenous to cell demographics, plausible under the supply-based mask (§2) but not tested instrumentally.
 
 F_causal enters the objective in §3 as the second term and is decomposed per cell in §7. DEMAND_FLOOR's empirical justification is reprised in §9 as a sensitivity-study opportunity.
+
+---
+
+## §6. F_fidelity — discriminator-based realism
+
+F_fidelity is a similarity score from a pre-trained discriminator that constrains modified trajectories to remain realistic.
+
+**Discriminator.** The realism check is carried out by the Multi-Stream Siamese discriminator, ported from the parent codebase as an opaque inference-only module in `famail_temporal/fidelity/`. Four classes are ported: `FeatureNormalizer`, `SiameseLSTMEncoder`, `ProfileEncoder`, and `MultiStreamSiameseDiscriminator`. No training code or deprecated architectures are included.
+
+**Inputs and output.** Each call takes two trajectories — an anchor from the real-trace distribution and the modified trajectory — each rendered as a multi-stream context: driving stream, seeking stream, and profile features. The discriminator returns a similarity score in [0, 1]; F_fidelity = 1 means the modified trajectory is indistinguishable from an authentic expert trace.
+
+**Design choices.**
+
+1. **Opaque inference-only port.** The parent codebase contains 1,297 lines across eight classes including training loops and five deprecated architectures; only the four inference classes are ported. `load_discriminator()` asserts the presence of an `architecture_config` key and raises specifically on partial loads — silent mismatches are not tolerated.
+
+2. **ALPHA_FIDELITY = 0 as a clean ablation.** Setting `config.ALPHA_FIDELITY` to zero causes `FAMAILObjective.forward()` to skip the discriminator call entirely; no GPU memory is consumed and no checkpoint is required, making zero-weight runs a true ablation rather than a downweighted one.
+
+The discriminator's LSTM requires `torch.backends.cudnn.flags(enabled=False)` during the forward pass because the cuDNN RNN kernel does not support backward passes in eval mode; without this flag, `loss.backward()` after a discriminator call raises a `RuntimeError`.
+
+**Pointer-outs.** API surface, ported-class inventory, and multi-stream context decisions: `../fidelity/README.md`. Checkpoint provenance and architecture config format: `../discriminator_checkpoints/README.md`.
+
+**Load-bearing claims.** Three claims a reviewer could contest: (1) a discriminator pre-trained on Shenzhen traces is a sufficient realism proxy — it is not tested on out-of-distribution perturbations; (2) collapsing the multi-stream context to a single scalar is adequate for gradient guidance — spatial, temporal, and profile signals are pooled without per-stream interpretability; (3) eval-mode behavior with dropout disabled is equivalent to the training-time forward for gradient signal — a behavioral assumption about the V3 checkpoint, not a theorem.
+
+F_fidelity enters the objective in §3 as the third term. Unlike the fairness terms, it is not decomposed per cell — it is a per-trajectory check, not a per-unit audit.
