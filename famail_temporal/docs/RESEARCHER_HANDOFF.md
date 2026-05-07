@@ -89,3 +89,46 @@ Three load-bearing claims a reviewer could push back on: (1) equal weights for F
 The objective is implemented in `../algorithm/README.md` (`FAMAILObjective.forward()`); all weights are in `../config.py`.
 
 §4–§6 give each term in full; §7 decomposes the two fairness terms per cell; §8 puts everything inside the trajectory-modification loop.
+
+---
+
+## §4. F_spatial — pooled Gini fairness
+
+F_spatial is a Gini-based measure of equity in service exposure across active units.
+
+**Ratio definitions.** Each active `(cell, t)` unit `u` carries two service-rate scalars derived from its mean-hourly counts and its supply `S_u`:
+
+- `DSR_u = pickup_u / S_u` — demand-service ratio: how many pickups occur per mean active taxi.
+- `ASR_u = dropoff_u / S_u` — arrival-service ratio: how many dropoffs occur per mean active taxi.
+
+Both ratios use `S_u` as the denominator rather than raw pickup counts, so units where taxis are present but not picking up passengers register as low-ratio rather than absent.
+
+**F_spatial formula.**
+
+```
+F_spatial = 1 − ½(Gini(DSR) + Gini(ASR))
+```
+
+`Gini(x)` is applied to the full N-vector of values across all active units simultaneously. The scalar result is in [0, 1].
+
+**Pairwise Gini formula.**
+
+```
+G(x) = Σ_i Σ_j |x_i − x_j| / (2 N² mean(x))
+```
+
+The double sum runs over all ordered pairs from the N active units. This form is differentiable with respect to `x` everywhere except at measure-zero ties — gradient flow through `F_spatial` during ST-iFGSM is well-defined almost surely.
+
+**Sign convention.** `F_spatial = 1` indicates perfect equality: every active unit receives the same service ratio for both DSR and ASR. `F_spatial = 0` indicates maximum concentration: one unit absorbs all service mass and every other unit receives none.
+
+**Design choices.**
+
+1. **Pooled, not block-averaged.** The Gini is computed once over all N active units rather than computed per time-block and then averaged across blocks. Time-blocks with more active units carry proportionally more weight, which reflects their larger contribution to total service exposure across the operating day.
+
+2. **DSR + ASR equal weighting.** Pickups and dropoffs are treated as dual signals of service: pickups capture where taxis initiate service and dropoffs capture where riders arrive. Weighting either alone biases the metric toward the origin view (pickup-only) or the destination view (dropoff-only); equal weighting treats service as a round-trip phenomenon.
+
+**Implementation pointer.** `pairwise_gini()` and `compute_fspatial()` are in `../fairness/spatial.py`; see `../fairness/README.md` for the full API. The module receives only the N-vectors; it has no knowledge of the `(48, 90, T)` grid geometry.
+
+**Load-bearing claims.** Three claims that a reviewer could push back on: (1) supply `S_u` is the right denominator — using raw counts rather than a rate would make high-supply cells structurally advantaged, but the choice that `S_u` correctly normalizes for taxi availability rather than demand is an assumption about what "fair exposure" means; (2) the measure-zero differentiability guarantee holds in practice during optimization — empirically, ties are rare across N = 5,834 units, but a gradient blackout at a tie is not theoretically impossible; (3) equal weighting of DSR and ASR is normatively neutral — it encodes the judgment that origin equity and destination equity matter equally, which may not hold in all city contexts.
+
+F_spatial enters the objective in §3 as the first term and is decomposed per cell in §7.
