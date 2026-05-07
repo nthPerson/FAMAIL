@@ -234,7 +234,7 @@ Numbered for reference from the recipes.
 
 4. **Treating attribution as per-trajectory.** Attribution is per-(cell, hour-block); two trajectories whose pickups land in the same cell-block share the same α. Per-driver fairness attribution is explicitly out of scope (see [`../docs/FAIRNESS_ATTRIBUTION_EXPORT_DESIGN.md`](../docs/FAIRNESS_ATTRIBUTION_EXPORT_DESIGN.md) §8). If you build a model that conditions on driver identity, α is still the per-cell quantity — not a per-driver one.
 
-5. **Uniform sampling over the long format without stratifying on `is_active`.** The long-format DataFrame has roughly `48 × 90 × 288 × n_days` rows, and only ~15% of them are active in a typical export. Uniform sampling trains on a lot of NaN. Filter on `is_active` first, or use the dense format and apply a mask.
+5. **Uniform sampling over the long format without stratifying on `is_active`.** The long-format DataFrame has roughly `48 × 90 × 288 × n_days` rows, and only ~33% of them are active in a typical export (the manuel-handoff export averages ~1,440 active cells per block out of 4,320 total). Uniform sampling trains on a lot of NaN. Filter on `is_active` first, or use the dense format and apply a mask.
 
 6. **Treating `demand_D` and `supply_S` as per-bucket counts.** They are mean-hourly rates at the block level, not raw counts at the bucket level. Downstream features that assume bucket-level counts are off by a factor of 12 (or more, depending on aggregation).
 
@@ -255,15 +255,16 @@ nansum(causal_attribution)   ≈  metadata["overall_F_causal"]     # tolerance: 
 isnan(spatial_attribution)   ==  ~active_mask                    # element-wise
 isnan(causal_attribution)    ==  ~active_mask                    # element-wise
 
-# Broadcast-equality invariants (sanity-check the broadcast trap)
-spatial[x, y, b1]            ==  spatial[x, y, b2]               # for any b1, b2 in same hour-block
-spatial[..., d1]             ==  spatial[..., d2]                # for any day indices d1, d2
+# Broadcast-equality invariants (sanity-check the broadcast trap; long/tuples format)
+# block_of(b) = (b - 1) // 12
+all spatial_fairness_attribution values share the same value across (x, y, block_of(time_bucket))
+all spatial_fairness_attribution values share the same value across day for fixed (x, y, time_bucket)
 
 # Active-count invariants
 metadata["n_active_cells_per_block"][t]  ==  active_mask[..., t].sum()  # per block t
 
 # Cross-format invariants (same data, three views)
-dense values  ==  long DataFrame values  ==  tuples row values   # for any chosen (x, y, time_bucket, day)
+dense[x, y, block_of(time_bucket)]  ==  long DataFrame[(x, y, time_bucket, day)]  ==  tuples row(x, y, time_bucket, day)   # block_of(b) = (b - 1) // 12
 ```
 
 If `nansum(spatial_attribution)` differs from `metadata["overall_F_spatial"]` by more than `1e-5`, the loaded array is not the export tool's output — most likely a stale file, a partial download, or a downstream step that mutated the array in place. Stop and re-load before training.
