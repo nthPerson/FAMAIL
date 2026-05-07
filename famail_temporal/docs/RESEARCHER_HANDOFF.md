@@ -50,7 +50,7 @@ The dataset covers 50 Shenzhen taxi drivers across three calendar months (July�
 
 All three share a unified aggregation rule: sum 5-minute GPS buckets to hourly within each time block, average across hours in the block, then average across qualifying weekdays. The result is a mean-hourly rate for each `(cell, block)`. For the source datasets that feed aggregation, see [../source_data/README.md](../source_data/README.md).
 
-**Active-unit filter.** A `(cell, t)` unit participates in the fairness audit only when all three conditions hold: (1) `active_taxis_3d[c, t] > ACTIVE_SUPPLY_THRESHOLD` (0.5 mean taxis per hour), (2) cell `c` is inside the Shenzhen administrative boundary per `grid_to_district_mapping.pkl`, and (3) every selected demographic feature for cell `c` is finite. The conjunction ensures audit units are geographically valid, operationally reachable, and covariate-complete. The current dataset yields N = 5,834 active units.
+**Active-unit filter.** A `(cell, t)` unit participates in the fairness audit only when all three conditions hold: (1) `active_taxis_3d[c, t] > ACTIVE_SUPPLY_THRESHOLD` (0.5 mean taxis per hour), (2) cell `c` is inside the Shenzhen administrative boundary per `grid_to_district_mapping.pkl`, and (3) every selected demographic feature for cell `c` is finite. The conjunction ensures audit units are geographically valid, operationally reachable, and covariate-complete. The current dataset yields N = 34,524 active units (see §11).
 
 **Why supply, not demand, defines the mask.** The filter uses taxi supply, not observed passenger demand, as the reachability criterion. Observed demand is endogenous to historical service patterns: a residential cell chronically under-served may show near-zero pickups not because demand is absent, but because residents gave up on taxi service and found alternatives. A demand-based threshold would conflate "no service territory" with "unfair service territory" — and would specifically excise the cells most relevant to the fairness question. Supply measures whether taxis physically traverse the cell, determined by road networks and geography rather than by service allocation history; `ACTIVE_SUPPLY_THRESHOLD = 0.5` admits cells where taxis *can* serve regardless of whether they *do*. Full rationale is in [F_CAUSAL_METHODOLOGY_NOTES.md](F_CAUSAL_METHODOLOGY_NOTES.md) §5.
 
@@ -129,7 +129,7 @@ This form is differentiable with respect to `x` everywhere except at measure-zer
 
 **Implementation pointer.** `pairwise_gini()` and `compute_fspatial()` are in `../fairness/spatial.py`; see `../fairness/README.md` for the full API. The module receives only the N-vectors; it has no knowledge of the `(48, 90, T)` grid geometry.
 
-**Load-bearing claims.** Three claims that a reviewer could push back on: (1) supply `S_u` is the right denominator — using raw counts rather than a rate would make high-supply cells structurally advantaged, but the choice that `S_u` correctly normalizes for taxi availability rather than demand is an assumption about what "fair exposure" means; (2) the measure-zero differentiability guarantee holds in practice during optimization — empirically, ties are rare across N = 5,834 units, but a gradient blackout at a tie is not theoretically impossible; (3) equal weighting of DSR and ASR is normatively neutral — it encodes the judgment that origin equity and destination equity matter equally, which may not hold in all city contexts.
+**Load-bearing claims.** Three claims that a reviewer could push back on: (1) supply `S_u` is the right denominator — using raw counts rather than a rate would make high-supply cells structurally advantaged, but the choice that `S_u` correctly normalizes for taxi availability rather than demand is an assumption about what "fair exposure" means; (2) the measure-zero differentiability guarantee holds in practice during optimization — empirically, ties are rare across N = 34,524 units, but a gradient blackout at a tie is not theoretically impossible; (3) equal weighting of DSR and ASR is normatively neutral — it encodes the judgment that origin equity and destination equity matter equally, which may not hold in all city contexts.
 
 F_spatial enters the objective in §3 as the first term and is decomposed per cell in §7.
 
@@ -175,7 +175,7 @@ where `r²_demo = R'H_demo R / R'MR` is introduced here as the demographic-expla
 
 **Pointer-outs.** Full methodology rationale — including the two-R² diagnostic, DEMAND_FLOOR sensitivity table, and paper-ready text — is in `F_CAUSAL_METHODOLOGY_NOTES.md` (sibling in this directory). The power-basis fitting routine is in `../fairness/g0_power_basis.py`; hat-matrix precomputation (H_demo and M) is in `../fairness/hat_matrices.py`.
 
-**Load-bearing claims.** Six claims a reviewer could contest: (1) demand is the correct first-stage control — the Frisch-Waugh-Lovell theorem grounds this; partial regression on `R` isolates the demographic effect after demand is partialled out; (2) the power basis suits the demand-service relationship — signal-regime R² of 0.69 and log-log Pearson correlation −0.89 are the empirical anchors; (3) `DEMAND_FLOOR = 0.5` produces a well-scaled residual — the sensitivity table in `F_CAUSAL_METHODOLOGY_NOTES.md` §6 shows values ≤ 0.1 fail the scale-balance criterion; (4) three demographic features span socioeconomic variation adequately — parsimonious by design, not a completeness claim; (5) all-cells OLS coefficients are the correct source for `g_0` — signal-regime coefficients would misspecify the baseline for floor-regime cells, breaking per-cell attribution consistency in §7; (6) `r²_demo` supports a causal interpretation — this rests on demand being exogenous to cell demographics, plausible under the supply-based mask (§2) but not tested instrumentally.
+**Load-bearing claims.** Six claims a reviewer could contest: (1) demand is the correct first-stage control — the Frisch-Waugh-Lovell theorem grounds this; partial regression on `R` isolates the demographic effect after demand is partialled out; (2) the power basis suits the demand-service relationship — signal-regime R² ≈ 0.29 and log-log Pearson correlation −0.89 are the empirical anchors (see §11); (3) `DEMAND_FLOOR = 0.5` produces a well-scaled residual — the sensitivity table in `F_CAUSAL_METHODOLOGY_NOTES.md` §6 shows values ≤ 0.1 fail the scale-balance criterion; (4) three demographic features span socioeconomic variation adequately — parsimonious by design, not a completeness claim; (5) all-cells OLS coefficients are the correct source for `g_0` — signal-regime coefficients would misspecify the baseline for floor-regime cells, breaking per-cell attribution consistency in §7; (6) `r²_demo` supports a causal interpretation — this rests on demand being exogenous to cell demographics, plausible under the supply-based mask (§2) but not tested instrumentally.
 
 F_causal enters the objective in §3 as the second term and is decomposed per cell in §7. DEMAND_FLOOR's empirical justification is reprised in §9 as a sensitivity-study opportunity.
 
@@ -270,9 +270,9 @@ PROCEDURE modify_batch(bundle, trajectories, k):
 
   F_before ← Objective(bundle.pickup_3d)
 
-  α ← compute_per_unit_attribution(bundle)          # (N,) vector, Σα = F_causal
-  ranking ← rank_trajectories(trajectories, α)      # ascending by α_i
-  selected ← select_top_k(ranking, k)               # only α_i < 0 retained
+  attributions ← compute_per_unit_attribution(bundle)   # (N,) vector of α_i; Σ_i α_i = F per §7
+  ranking ← rank_trajectories(trajectories, attributions)   # ascending by α_i
+  selected ← select_top_k(ranking, k)                       # only α_i < 0 retained
 
   base ← clone(bundle.pickup_3d)                    # shared mutable tensor
 
@@ -379,7 +379,7 @@ Six known limitations bound the methodology's claims.
 
 5. **F_fidelity inherits any bias in the discriminator.** The realism score is produced by a Siamese discriminator pre-trained on Shenzhen traces (§6 load-bearing claims); out-of-distribution perturbations are not tested against a held-out ground truth, so bias in the discriminator's training distribution propagates directly into the fidelity gradient signal.
 
-6. **The soft-cell-assignment kernel size and temperature schedule are unswept.** The Gaussian softmax neighborhood `(2k+1) × (2k+1)` and annealing bounds `τ_max` → `τ_min` (§8 design choice 1) were set by engineering judgment and have not been subjected to a hyperparameter sweep. Gradient-signal quality and convergence speed are both sensitive to these choices, and their interaction with ε-ball size is untested.
+6. **The soft-cell-assignment kernel size and temperature schedule are unswept.** The Gaussian softmax neighborhood `(2k+1) × (2k+1)` and annealing bounds `τ_max` → `τ_min` (§8 design choice 1) were set by engineering judgment and have not been subjected to a hyperparameter sweep. Gradient-signal quality and convergence speed are both sensitive to these choices, and their interaction with the ε-ball constraint (§8 design choice 7) is untested.
 
 For expanded treatment of limitations 1–3 and 5, see `F_CAUSAL_METHODOLOGY_NOTES.md` §9 (sibling in this directory).
 
