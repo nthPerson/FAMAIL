@@ -381,6 +381,6 @@ Six known limitations bound the methodology's claims.
 
 6. **The soft-cell-assignment kernel size and temperature schedule are unswept.** The Gaussian softmax neighborhood `(2k+1) × (2k+1)` and annealing bounds `τ_max` → `τ_min` (§8 design choice 1) were set by engineering judgment and have not been subjected to a hyperparameter sweep. Gradient-signal quality and convergence speed are both sensitive to these choices, and their interaction with ε-ball size is untested.
 
-§10 points to the in-tree material that develops any of these in greater depth.
-
 For expanded treatment of limitations 1–3 and 5, see `F_CAUSAL_METHODOLOGY_NOTES.md` §9 (sibling in this directory).
+
+§10 points to the in-tree material that develops any of these in greater depth.
