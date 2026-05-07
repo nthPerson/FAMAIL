@@ -254,3 +254,108 @@ where M = I − 11'/N is the centering matrix, H_demo is the demographic hat mat
 Full formulation — including worked examples, the decision audit trail, and the relationship to the prior (1 − F) decompositions — is in `FAIRNESS_DECOMPOSITION_FORMULATION.md` (sibling in this directory).
 
 Per-cell α_i drives trajectory selection in §8 (cells with α_i < 0 are highest-priority modification targets) and is the primary export downstream tooling consumes.
+
+---
+
+## §8. Trajectory-modification algorithm
+
+The algorithm modifies a small set of high-priority trajectories using ST-iFGSM, with cohesion preserved by a single grid-to-unit conversion point and a delta-tensor injection pattern.
+
+Per-unit fairness attribution is computed once from the unmodified pickup tensor, producing an N-vector α where each entry scores one active `(cell, time-block)` unit according to the 1/N-shifted decomposition in §7. Every trajectory inherits the score of its pickup unit. Trajectories are ranked ascending by α_i — the most-negative first — and the top-k with strictly negative scores are selected for modification. Modifications proceed sequentially: each trajectory is perturbed in full before the next begins, and a shared base tensor accumulates all committed changes. Attribution is fixed at its pre-modification value for the entire batch, so the selection order is stable; later trajectories optimize against a fairness landscape already shifted by earlier modifications, which is intentional.
+
+**Outer pipeline pseudocode.**
+
+```text
+PROCEDURE modify_batch(bundle, trajectories, k):
+
+  F_before ← Objective(bundle.pickup_3d)
+
+  α ← compute_per_unit_attribution(bundle)          # (N,) vector, Σα = F_causal
+  ranking ← rank_trajectories(trajectories, α)      # ascending by α_i
+  selected ← select_top_k(ranking, k)               # only α_i < 0 retained
+
+  base ← clone(bundle.pickup_3d)                    # shared mutable tensor
+
+  FOR traj IN selected:
+    base ← modify_single(traj, base, bundle)        # commits to base on return
+
+  F_after ← Objective(base)
+
+  RETURN (F_before, F_after, base)
+```
+
+`modify_single` encapsulates the per-trajectory ST-iFGSM loop: subtract the original contribution, iterate to convergence, commit the final location back to the shared base.
+
+**Inner ST-iFGSM pseudocode.**
+
+```text
+PROCEDURE modify_single(traj, base, bundle):
+
+  # Extract pickup cell (orig_x, orig_y) and time block t*
+  (orig_x, orig_y), t* ← pickup_cell_and_time_block(traj)
+
+  # Pickup-mass: one trajectory's mean-hourly contribution
+  pickup_mass ← 1 / (n_hours_per_block[t*] · n_days)
+
+  # Subtract original contribution so base reflects "world without this traj"
+  base[orig_x, orig_y, t*] ← base[orig_x, orig_y, t*] − pickup_mass
+
+  Δ ← [0, 0]                                    # cumulative perturbation (x, y)
+
+  FOR it IN 1 .. MAX_ITERATIONS:
+
+    τ ← anneal(τ_max, τ_min, it, MAX_ITERATIONS) # temperature annealing
+
+    pickup ← orig + Δ                             # current candidate location
+    pickup ← differentiable leaf (requires grad)  # autograd entry point
+
+    probs ← SoftCellAssignment(pickup, τ)         # Gaussian softmax over k×k neighborhood
+                                                   # probs sums to 1
+
+    # Delta-tensor injection: build soft_3d without in-place ops
+    delta_3d ← zeros_like(base)
+    delta_3d[:, :, t*] ← inject(probs, pickup_mass)   # only t* slice is non-zero
+    soft_3d ← base + delta_3d                          # autograd graph intact
+
+    total, (F_spatial, F_causal, F_fidelity) ← Objective(soft_3d)
+                                                   # mask→N conversion inside Objective
+
+    ∂total/∂pickup ← backward(total, pickup)
+
+    Δ ← clip(Δ + α_step · sign(∂total/∂pickup), −ε, ε)   # ε-ball constraint
+
+    pickup_new ← clip(orig + Δ, grid_bounds)      # grid-boundary clip
+    Δ ← pickup_new − orig                          # re-sync after grid clip
+
+    IF |total − total_prev| < convergence_tol: BREAK
+
+  # Commit final location to shared base (mass balance)
+  (new_x, new_y) ← round(orig + Δ)
+  IF (new_x, new_y) ≠ (orig_x, orig_y):
+    base[orig_x, orig_y, t*] ← base[orig_x, orig_y, t*] − pickup_mass
+    base[new_x, new_y, t*]   ← base[new_x, new_y, t*]   + pickup_mass
+
+  RETURN base
+```
+
+**Design choices.**
+
+1. **Soft-cell assignment via Gaussian softmax.** `SoftCellAssignment` places a Gaussian-weighted distribution over a `(2k+1) × (2k+1)` neighborhood and normalizes by softmax with temperature τ, mapping the continuous candidate pickup position to a differentiable discrete-cell distribution. This continuous-to-discrete bridge enables gradient flow from cell-level fairness scalars back to the two-dimensional pickup coordinate.
+
+2. **Delta-tensor injection pattern.** Rather than modifying `base` in place, the modifier constructs a zero tensor `delta_3d`, writes soft pickup mass into the `t*` slice via `inject`, and adds it to `base` in a single autograd-safe operation. In-place operations on tensors with an active gradient history break the computation graph; the delta pattern avoids this entirely.
+
+3. **Single grid-to-unit conversion point.** The masking operation converting the `(48, 90, T)` grid tensor to an N-vector occurs exactly once, at the top of `FAMAILObjective.forward()`. Every fairness module downstream receives only N-vectors; every fidelity module receives only trajectory features. This invariant keeps each module independently testable and eliminates a class of silent shape-mismatch bugs.
+
+4. **Sequential modification with shared `_base_pickup_3d`.** Trajectories are modified one at a time, each committing its final pickup location to the shared base before the next begins. Attribution is computed once from the original unmodified tensor, so the selection ranking is stable; but each modification changes the fairness landscape that subsequent modifications optimize against. The order-dependence is intentional: it allows the algorithm to accumulate and respond to incremental fairness gains rather than treating each trajectory as independent.
+
+5. **Strictly-negative top-k filter.** `select_top_k` admits only trajectories whose pickup unit has α_i strictly below zero — cells that are actively dragging fairness below the uniform 1/N baseline. Trajectories at or above the baseline are helping fairness; modifying them would at best be neutral and at worst introduce noise into the gradient landscape. The filter ensures every selected trajectory is a justified intervention.
+
+6. **Pickup-mass conservation.** `pickup_3d` stores mean-hourly rates, so a single trajectory contributes exactly `1 / (n_hours_per_block[t*] · n_days)` to its cell's rate. When the trajectory is moved, `pickup_mass` is subtracted from the original cell and added to the new cell, preserving the total mass of the aggregated tensor across every modification.
+
+7. **ST-iFGSM signed-gradient step.** The perturbation update uses the sign of the gradient rather than its magnitude: `Δ ← clip(Δ + α_step · sign(∂total/∂pickup), −ε, ε)`. This makes the step size invariant to gradient-magnitude differences across F_spatial, F_causal, and F_fidelity — all three contribute to the total without any one term dominating simply because its gradient norm is larger. The ε-ball constraint `||Δ||_∞ ≤ ε` bounds how far the pickup can move from the original cell, keeping modifications local.
+
+**Pointer-outs.** The gradient-flow diagram and full API surface are in `../algorithm/README.md`. The ST-iFGSM loop, shared-base management, and mass-balance commit are implemented in `../algorithm/modifier.py`. The attribution pipeline — `compute_per_unit_attribution`, `rank_trajectories`, and `select_top_k` — is in `../algorithm/attribution.py`.
+
+**Load-bearing claims.** Seven claims a reviewer could contest: (1) attribution computed once before modification yields a stable selection order — sequential updates to the fairness landscape do not feed back into which trajectories are selected; (2) soft-cell assignment provides sufficient gradient signal — the Gaussian softmax is differentiable almost everywhere, but signal quality degrades when mass spreads thin across the neighborhood; (3) the strictly-negative filter is the correct selection criterion — α_i < 0 is the algebraic condition from the 1/N-shifted decomposition of §7 for a cell's unfairness contribution exceeding its baseline share; (4) the delta-tensor injection pattern is autograd-safe — it avoids all in-place operations on leaf tensors, a verifiable property of `modifier.py`; (5) sequential ordering with a shared base produces better aggregate fairness than parallel perturbations — an empirical claim the codebase measures but does not prove theoretically; (6) pickup-mass conservation holds under mean-hourly aggregation — the subtract-at-origin and add-at-destination accounting is exact per trajectory but accumulates floating-point rounding across a large batch; (7) the signed-gradient step is robust to gradient-magnitude variation across objective terms — a property of FGSM-class methods inherited here by design, assuming sign information is sufficient for consistent progress.
+
+§9 lists the methodological gaps a reviewer should know about before assessing results.
