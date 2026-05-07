@@ -291,45 +291,48 @@ PROCEDURE modify_batch(bundle, trajectories, k):
 ```text
 PROCEDURE modify_single(traj, base, bundle):
 
-  # Extract pickup cell (orig_x, orig_y) and time block t*
+  # Extract pickup cell and time block
   (orig_x, orig_y), t* ← pickup_cell_and_time_block(traj)
+  orig ← (orig_x, orig_y)
 
   # Pickup-mass: one trajectory's mean-hourly contribution
   pickup_mass ← 1 / (n_hours_per_block[t*] · n_days)
 
-  # Subtract original contribution so base reflects "world without this traj"
-  base[orig_x, orig_y, t*] ← base[orig_x, orig_y, t*] − pickup_mass
+  # Working copy with this trajectory's contribution removed; used only
+  # inside the iteration loop. The shared base is untouched until commit.
+  working ← clone(base)
+  working[orig_x, orig_y, t*] ← working[orig_x, orig_y, t*] − pickup_mass
 
-  Δ ← [0, 0]                                    # cumulative perturbation (x, y)
+  Δ ← (0, 0)                                     # cumulative perturbation (x, y)
 
   FOR it IN 1 .. MAX_ITERATIONS:
 
     τ ← anneal(τ_max, τ_min, it, MAX_ITERATIONS) # temperature annealing
 
-    pickup ← orig + Δ                             # current candidate location
-    pickup ← differentiable leaf (requires grad)  # autograd entry point
+    pickup ← orig + Δ                            # candidate position; gradient flows through pickup
 
-    probs ← SoftCellAssignment(pickup, τ)         # Gaussian softmax over k×k neighborhood
+    probs ← SoftCellAssignment(pickup, τ)        # Gaussian softmax over (2k+1)×(2k+1) cells
                                                    # probs sums to 1
 
     # Delta-tensor injection: build soft_3d without in-place ops
-    delta_3d ← zeros_like(base)
-    delta_3d[:, :, t*] ← inject(probs, pickup_mass)   # only t* slice is non-zero
-    soft_3d ← base + delta_3d                          # autograd graph intact
+    delta_3d ← zero tensor with same shape as working
+    delta_3d at slice t* ← inject(probs, pickup_mass)   # only t* slice non-zero
+    soft_3d ← working + delta_3d                  # autograd-safe addition
 
     total, (F_spatial, F_causal, F_fidelity) ← Objective(soft_3d)
-                                                   # mask→N conversion inside Objective
+                                                   # the (48,90,T)→(N,) conversion happens
+                                                   # exactly once, inside Objective
 
-    ∂total/∂pickup ← backward(total, pickup)
+    g ← ∇_pickup total                            # gradient flow back to pickup
 
-    Δ ← clip(Δ + α_step · sign(∂total/∂pickup), −ε, ε)   # ε-ball constraint
+    Δ ← clip(Δ + α_step · sign(g), −ε, ε)         # ε-ball constraint
 
     pickup_new ← clip(orig + Δ, grid_bounds)      # grid-boundary clip
     Δ ← pickup_new − orig                          # re-sync after grid clip
 
     IF |total − total_prev| < convergence_tol: BREAK
 
-  # Commit final location to shared base (mass balance)
+  # Commit final location to the SHARED base (mass conservation)
   (new_x, new_y) ← round(orig + Δ)
   IF (new_x, new_y) ≠ (orig_x, orig_y):
     base[orig_x, orig_y, t*] ← base[orig_x, orig_y, t*] − pickup_mass
@@ -346,7 +349,7 @@ PROCEDURE modify_single(traj, base, bundle):
 
 3. **Single grid-to-unit conversion point.** The masking operation converting the `(48, 90, T)` grid tensor to an N-vector occurs exactly once, at the top of `FAMAILObjective.forward()`. Every fairness module downstream receives only N-vectors; every fidelity module receives only trajectory features. This invariant keeps each module independently testable and eliminates a class of silent shape-mismatch bugs.
 
-4. **Sequential modification with shared `_base_pickup_3d`.** Trajectories are modified one at a time, each committing its final pickup location to the shared base before the next begins. Attribution is computed once from the original unmodified tensor, so the selection ranking is stable; but each modification changes the fairness landscape that subsequent modifications optimize against. The order-dependence is intentional: it allows the algorithm to accumulate and respond to incremental fairness gains rather than treating each trajectory as independent.
+4. **Sequential modification with shared base.** Trajectories are modified one at a time, each committing its final pickup location to the shared base before the next begins. Attribution is computed once from the original unmodified tensor, so the selection ranking is stable; but each modification changes the fairness landscape that subsequent modifications optimize against. The order-dependence is intentional: it allows the algorithm to accumulate and respond to incremental fairness gains rather than treating each trajectory as independent.
 
 5. **Strictly-negative top-k filter.** `select_top_k` admits only trajectories whose pickup unit has α_i strictly below zero — cells that are actively dragging fairness below the uniform 1/N baseline. Trajectories at or above the baseline are helping fairness; modifying them would at best be neutral and at worst introduce noise into the gradient landscape. The filter ensures every selected trajectory is a justified intervention.
 
