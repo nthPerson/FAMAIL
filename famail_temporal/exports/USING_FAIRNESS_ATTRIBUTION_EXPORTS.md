@@ -267,3 +267,15 @@ dense values  ==  long DataFrame values  ==  tuples row values   # for any chose
 ```
 
 If `nansum(spatial_attribution)` differs from `metadata["overall_F_spatial"]` by more than `1e-5`, the loaded array is not the export tool's output — most likely a stale file, a partial download, or a downstream step that mutated the array in place. Stop and re-load before training.
+
+---
+
+## §5. Pointers
+
+For depth on what this how-to summarizes:
+
+- **Math (1/N decomposition, Gini, demographic R²):** [`../docs/FAIRNESS_DECOMPOSITION_FORMULATION.md`](../docs/FAIRNESS_DECOMPOSITION_FORMULATION.md)
+- **F_causal methodology, DEMAND_FLOOR rationale, two-R² diagnostic:** [`../docs/F_CAUSAL_METHODOLOGY_NOTES.md`](../docs/F_CAUSAL_METHODOLOGY_NOTES.md)
+- **Project orientation (the right entry point if you hit this doc with no FAMAIL context):** [`../docs/RESEARCHER_HANDOFF.md`](../docs/RESEARCHER_HANDOFF.md)
+- **Export tool design rationale (per-driver scope, day broadcasting, format choice):** [`../docs/FAIRNESS_ATTRIBUTION_EXPORT_DESIGN.md`](../docs/FAIRNESS_ATTRIBUTION_EXPORT_DESIGN.md)
+- **Per-export reference card with that export's actual F values:** the `README.md` inside the export directory you received.
