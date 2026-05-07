@@ -74,13 +74,13 @@ Three terms compose the optimization objective: two fairness metrics and one rea
 L = α_s · F_spatial + α_c · F_causal + α_f · F_fidelity
 ```
 
-Default weights from `../config.py`: α_s = 0.33, α_c = 0.33, α_f = 0.34 (sum ≈ 1). No renormalization is applied inside the objective.
+Default weights from `../config.py`: α_s ≈ 0.33, α_c ≈ 0.33, α_f ≈ 0.34 (sum ≈ 1). No renormalization is applied inside the objective.
 
-**F_spatial** is 1 minus the Gini coefficient of the driver service rate across all N_active active units — a perfectly equal distribution yields F_spatial = 1, full concentration yields 0 (see §4).
+**F_spatial** is `1 − ½(Gini(DSR) + Gini(ASR))`, the average of two pooled Gini coefficients over all N active units — `DSR` is the demand-service ratio and `ASR` is the arrival-service ratio. Perfect equality across both yields F_spatial = 1, full concentration yields 0 (see §4).
 
-**F_causal** is 1 minus the R² of the demographic projection on the demand-partialled residual R = Y − g_0(D) — zero demographic explanatory power yields F_causal = 1 (see §5).
+**F_causal** is a double-regression metric: `1 − r²_demo`, where `r²_demo` is the R² from a demographic projection on the residual `R = Y − g_0(D)` left over after a first-stage power-basis fit of service rate on demand. Zero demographic explanatory power yields F_causal = 1 (see §5).
 
-**F_fidelity** is the Siamese discriminator score for a modified trajectory against the real-trace distribution — scores near 1 are realistic, near 0 are implausible (see §6).
+**F_fidelity** is the Multi-Stream Siamese discriminator score for a modified trajectory against the real-trace distribution — scores near 1 are realistic, near 0 are implausible (see §6).
 
 **Clean ablation.** Setting `ALPHA_FIDELITY = 0` in `../config.py` removes F_fidelity from L entirely; no GPU memory is consumed by the discriminator and no checkpoint is required.
 
