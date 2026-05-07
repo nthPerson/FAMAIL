@@ -418,3 +418,34 @@ Pointers into the in-tree material, organized by concern.
 - The per-cell attribution export tool will get its own standalone document. Current design notes are in [`FAIRNESS_ATTRIBUTION_EXPORT_DESIGN.md`](FAIRNESS_ATTRIBUTION_EXPORT_DESIGN.md) (sibling in this directory).
 
 §11 gives the dataset numbers a reviewer can use to anchor scale judgments.
+
+---
+
+## §11. Diagnostics snapshot
+
+Diagnostic snapshot dated against the source-data git SHA at the document's writing date.
+
+The table below records the ten load-bearing quantities as they stood at document-writing time. These values flow directly into pickup-mass computation, active-unit selection, and the fairness metrics reported in prior sections; a reviewer who re-runs preprocessing on the same source data should expect matching results.
+
+| Quantity | Value |
+|---|---:|
+| N_active (active cell–time-block units) | 34,524 |
+| n_days (DataBundle) | 5 † |
+| g0 R² — all cells | 0.0293 |
+| g0 R² — signal-regime cells | 0.2899 |
+| Signal-regime n | 4,796 |
+| Baseline F_spatial | 0.0822 |
+| Baseline F_causal | 0.8052 |
+| DEMAND_FLOOR | 0.5 |
+| ACTIVE_SUPPLY_THRESHOLD | 0.5 |
+| T (hourly time blocks) | 24 |
+
+† **n_days discrepancy.** The DataBundle reports `n_days = 5`, but `source_data/processing_metadata.json` reports `n_days = 66`, consistent with the 65–66 day figure cited throughout the methodology notes. The value `5` is recorded here as-is because it flows through into pickup-mass computation; readers should treat it as a probable stale-bundle artifact, verify against `processing_metadata.json`, and re-run the refresh command below to regenerate.
+
+The demographic features used in the causal regression are: `housing`, `gdp`, `comp`.
+
+---
+
+*Snapshot date: 2026-05-07. Source-data git SHA: a532ead.*
+
+Refresh by running `python -m famail_temporal.preprocess --force`.
