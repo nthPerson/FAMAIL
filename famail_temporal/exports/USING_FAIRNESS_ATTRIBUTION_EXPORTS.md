@@ -1,6 +1,6 @@
 # Using FAMAIL Fairness-Attribution Exports
 
-Assumes you have read **`docs/RESEARCHER_HANDOFF.md`**. If you have not, start there.
+Assumes you have read **`../docs/RESEARCHER_HANDOFF.md`**. If you have not, start there.
 
 ## TL;DR
 
