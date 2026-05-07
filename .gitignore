@@ -61,6 +61,7 @@ famail_temporal/results/*
 # Fairness-attribution export artifacts (per-run timestamped dirs)
 famail_temporal/exports/*
 !famail_temporal/exports/.gitkeep
+!famail_temporal/exports/USING_FAIRNESS_ATTRIBUTION_EXPORTS.md
 logs/
 
 # Discriminator training outputs (per-run timestamped dirs)
