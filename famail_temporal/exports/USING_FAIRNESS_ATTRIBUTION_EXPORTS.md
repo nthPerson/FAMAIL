@@ -160,6 +160,12 @@ The natural framing — drawn directly from [`../docs/FAIRNESS_DECOMPOSITION_FOR
 **Option A — α as an evaluation diagnostic (no training change).** Score generated trajectories' pickup distribution against α offline.
 
 ```text
+# Pre-load once before scoring
+load fairness_attribution_dense.pkl as dense
+α_grid = dense["spatial"]                    # or dense["causal"]; pick one (see §1.5)
+mask   = dense["active_mask"]
+λ      = a scalar weight you choose          # used in Option B
+
 # After generating a batch of trajectories
 gen_pickup_grid = histogram_2d_per_block(generated_trajectories)   # (gx, gy, T)
 gen_alpha_mass  = nansum(gen_pickup_grid * α_grid)                 # NaN at inactive cells
