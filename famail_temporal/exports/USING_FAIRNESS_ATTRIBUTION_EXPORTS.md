@@ -106,3 +106,14 @@ spatial = where(isnan(spatial), 0, spatial)             # ambiguates "inactive" 
 ```
 
 Zero is a valid attribution value (a cell at the negative-fair / anti-fair boundary, see §1.2); replacing NaN with zero throws away the inactive-versus-boundary distinction.
+
+### §1.5 Two metrics, briefly
+
+Each export carries two attribution columns; they measure different things and are not interchangeable.
+
+- **`spatial_fairness_attribution`** decomposes `F_spatial`, a Gini-based measure of equity in service exposure across active `(cell, hour-block)` units. Its per-cell α captures how a cell's service-rate ratios (DSR = pickup/supply, ASR = dropoff/supply) compare to the rest of the active set.
+- **`causal_fairness_attribution`** decomposes `F_causal = 1 − r²_demo`, where `r²_demo` is the share of the demand-adjusted residual variance explained by neighborhood demographics. Its per-cell α captures whether the cell's residual service rate aligns with neighborhood wealth (negative α) or is uncorrelated with it (positive α).
+
+Full derivation in [`../docs/FAIRNESS_DECOMPOSITION_FORMULATION.md`](../docs/FAIRNESS_DECOMPOSITION_FORMULATION.md). Causal-specific methodology in [`../docs/F_CAUSAL_METHODOLOGY_NOTES.md`](../docs/F_CAUSAL_METHODOLOGY_NOTES.md).
+
+**This document does not prescribe which metric to use.** Both are exported because they measure different things; the choice depends on what your model is trying to optimize and is yours to make.
