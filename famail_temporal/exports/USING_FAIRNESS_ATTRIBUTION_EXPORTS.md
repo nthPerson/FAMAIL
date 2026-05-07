@@ -80,3 +80,29 @@ Three concrete consequences:
 - **Aggregations along broadcast axes are pass-throughs of the per-block / pooled value.** `mean` and `std` over a broadcast axis return the per-block / pooled value with zero spread.
 
 If your training loop needs a per-state reward at finer granularity than `(cell, hour-block)`, you are looking up a duplicated value, not a finer signal. That is fine — it just means your model is being trained on the same target that the audit measured. Decisions to break the broadcast (e.g., per-day fairness) require recomputing the audit, which is out of scope for this export.
+
+### §1.4 Active vs inactive cells
+
+Every (x, y, time_bucket, day) appears in the export — including cells that are not part of the fairness audit. The `is_active` boolean (long / tuples) and `active_mask` array (dense) tell you which is which. A cell is **inactive** when any of three conditions holds:
+
+- The cell has insufficient supply: mean active taxis below `ACTIVE_SUPPLY_THRESHOLD = 0.5` per hour.
+- The cell is outside the Shenzhen administrative boundary.
+- Any required demographic feature for the cell is NaN.
+
+NaN propagation rule: at inactive cells, **every numeric column is NaN** — both attribution columns and the context columns `demand_D`, `supply_S`, `service_rate_Y`.
+
+Recommended masking pattern:
+
+```text
+# Preferred: mask before reducing
+active = mask                                           # bool array same shape as spatial
+total_spatial = sum(spatial[active])                    # equals overall_F_spatial
+
+# Acceptable: NaN-aware reductions
+total_spatial = nansum(spatial)                         # equals overall_F_spatial
+
+# Wrong: replace NaN with 0 without intent
+spatial = where(isnan(spatial), 0, spatial)             # ambiguates "inactive" with "exactly zero α"
+```
+
+Zero is a valid attribution value (a cell at the negative-fair / anti-fair boundary, see §1.2); replacing NaN with zero throws away the inactive-versus-boundary distinction.
