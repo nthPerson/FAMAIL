@@ -384,3 +384,37 @@ Six known limitations bound the methodology's claims.
 For expanded treatment of limitations 1–3 and 5, see `F_CAUSAL_METHODOLOGY_NOTES.md` §9 (sibling in this directory).
 
 §10 points to the in-tree material that develops any of these in greater depth.
+
+---
+
+## §10. Where to read more
+
+Pointers into the in-tree material, organized by concern.
+
+**Math and methodology.**
+
+- [`FAIRNESS_DECOMPOSITION_FORMULATION.md`](FAIRNESS_DECOMPOSITION_FORMULATION.md) — full derivation of the 1/N-shifted per-cell decomposition, worked perfect-fair / perfect-unfair examples, and the audit trail comparing the current sums-to-F form to the prior (1 − F) decompositions.
+- [`F_CAUSAL_METHODOLOGY_NOTES.md`](F_CAUSAL_METHODOLOGY_NOTES.md) — empirical justification for the power basis, the DEMAND_FLOOR clamp, the two-R² diagnostic, the active-mask rationale, and paper-ready methods text.
+
+**Module-by-module designs.**
+
+- [`../data/README.md`](../data/README.md) — `DataBundle` API, source-data producer/consumer split, canonical ordering enforcement.
+- [`../fairness/README.md`](../fairness/README.md) — `compute_fspatial`, `compute_fcausal_torch`, per-cell attribution functions, hat-matrix precomputation.
+- [`../fidelity/README.md`](../fidelity/README.md) — Multi-Stream Siamese discriminator port, multi-stream context decisions, cuDNN workaround.
+- [`../algorithm/README.md`](../algorithm/README.md) — gradient-flow diagram, single grid-to-unit conversion point, soft-cell assignment, attribution-to-trajectory ranking.
+- [`../evaluation/README.md`](../evaluation/README.md) — end-to-end experiment runner, output artifacts, CLI flags.
+
+**Operational.**
+
+- [`../README.md`](../README.md) — top-level quickstart, four architectural invariants, directory layout.
+- [`../evaluation/EVALUATION_QUICKSTART.md`](../evaluation/EVALUATION_QUICKSTART.md) — how to run a full experiment.
+
+**Tests as living spec.**
+
+- [`../tests/README.md`](../tests/README.md) — math-invariant guards (sum-to-F, shape contracts), bug-class regression tests, integration tests against real data.
+
+**Forthcoming.**
+
+- The per-cell attribution export tool will get its own standalone document. Current design notes are in [`FAIRNESS_ATTRIBUTION_EXPORT_DESIGN.md`](FAIRNESS_ATTRIBUTION_EXPORT_DESIGN.md) (sibling in this directory).
+
+§11 gives the dataset numbers a reviewer can use to anchor scale judgments.
