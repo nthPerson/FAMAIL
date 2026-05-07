@@ -117,7 +117,7 @@ F_spatial = 1 − ½(Gini(DSR) + Gini(ASR))
 G(x) = Σ_i Σ_j |x_i − x_j| / (2 N² mean(x))
 ```
 
-The double sum runs over all ordered pairs from the N active units. This form is differentiable with respect to `x` everywhere except at measure-zero ties — gradient flow through `F_spatial` during ST-iFGSM is well-defined almost surely.
+This form is differentiable with respect to `x` everywhere except at measure-zero ties — gradient flow through `F_spatial` during ST-iFGSM is well-defined almost surely.
 
 **Sign convention.** `F_spatial = 1` indicates perfect equality: every active unit receives the same service ratio for both DSR and ASR. `F_spatial = 0` indicates maximum concentration: one unit absorbs all service mass and every other unit receives none.
 
