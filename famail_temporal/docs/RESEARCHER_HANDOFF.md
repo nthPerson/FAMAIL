@@ -35,3 +35,29 @@ Three load-bearing claims that the rest of the document defends: (1) a supply-ba
 For the architectural quickstart and the four invariants every module must respect, see `../README.md`.
 
 The remainder of the document defines what 'fair' means in this project (§3–§7) and how trajectories are rerouted (§8).
+
+---
+
+## §2. Dataset and active-unit construction
+
+Fairness is measured over a discrete set of active spatial-temporal units; this section defines that set.
+
+The dataset covers 50 Shenzhen taxi drivers across three calendar months (July–September), weekdays only. The spatial grid is 48 × 90 cells; T = 24 hourly time blocks span a full operating day. Three primary tensors are constructed from the raw GPS records (see [../data/README.md](../data/README.md)):
+
+- `pickup_3d` — mean hourly pickups per `(cell, block)`.
+- `dropoff_3d` — mean hourly dropoffs per `(cell, block)`.
+- `active_taxis_3d` — mean hourly active taxis per `(cell, block)`.
+
+All three share a unified aggregation rule: sum 5-minute GPS buckets to hourly within each time block, average across hours in the block, then average across qualifying weekdays. The result is a mean-hourly rate for each `(cell, block)`. For the source datasets that feed aggregation, see [../source_data/README.md](../source_data/README.md).
+
+**Active-unit filter.** A `(cell, t)` unit participates in the fairness audit only when all three conditions hold: (1) `active_taxis_3d[c, t] > ACTIVE_SUPPLY_THRESHOLD` (0.5 mean taxis per hour), (2) cell `c` is inside the Shenzhen administrative boundary per `grid_to_district_mapping.pkl`, and (3) every selected demographic feature for cell `c` is finite. The conjunction ensures audit units are geographically valid, operationally reachable, and covariate-complete. The current dataset yields N = 5,834 active units.
+
+**Why supply, not demand, defines the mask.** The filter uses taxi supply, not observed passenger demand, as the reachability criterion. Observed demand is endogenous to historical service patterns: a residential cell chronically under-served may show near-zero pickups not because demand is absent, but because residents gave up on taxi service and found alternatives. A demand-based threshold would conflate "no service territory" with "unfair service territory" — and would specifically excise the cells most relevant to the fairness question. Supply measures whether taxis physically traverse the cell, determined by road networks and geography rather than by service allocation history; `ACTIVE_SUPPLY_THRESHOLD = 0.5` admits cells where taxis *can* serve regardless of whether they *do*. Full rationale is in [F_CAUSAL_METHODOLOGY_NOTES.md](F_CAUSAL_METHODOLOGY_NOTES.md) §5.
+
+**Canonical active-unit ordering.** The active set is enumerated once at preprocess time: cells in row-major order (x = 0..47, y = 0..89), and within each cell the T = 24 blocks in ascending order (0..23). This ordering is serialized in `cache/unit_index_map_*.pkl` and asserted at every load boundary. Every `(N,)` array in the system — pickup counts, supply ratios, fairness attributions, hat-matrix rows — shares this ordering; a length mismatch raises an assertion error before it can propagate silently downstream.
+
+**Demographics.** Each active cell carries three z-scored district-level features: housing price per square metre (`AvgHousingPricePerSqM`), GDP per capita (`GDPperCapita`), and compensation per employed person (`CompPerCapita`). These are standardized via `StandardScaler` before entering the hat-matrix projection in `F_causal`. NaN in any feature disqualifies the cell under condition (3); demographic completeness is part of the active-unit definition, not a post-hoc filter.
+
+Four load-bearing claims a reviewer could contest: (a) supply-based masking cleanly separates "unreachable" from "unfairly served" — the endogeneity argument is the defense; (b) mean-hourly aggregation is scale-consistent — Gini is scale-invariant and `g_0(D)` is re-fit at the same scale; (c) the three-condition conjunction is necessary — dropping any one admits boundary-invalid, taxi-inaccessible, or covariate-incomplete units; (d) three demographic features suffice for the causal audit — parsimonious by design and consistent with prior FAMAIL iterations, but an empirical choice open to extension.
+
+All N-vectors and (48, 90, T) tensors in the rest of the document share the active-unit ordering established here.
