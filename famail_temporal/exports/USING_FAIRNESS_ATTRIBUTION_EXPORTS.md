@@ -47,3 +47,21 @@ metadata = payload["metadata"]
 ```
 
 Decision rule: **dense for tensor lookups inside a training loop, long for pandas filtering, tuples for dependency-free iteration**. The metadata sidecar (`metadata.json`) carries the same dict that is embedded inside each `.pkl`; either source is fine.
+
+### §1.2 Sign convention and scale
+
+Per-cell α is **signed** and **unbounded**. The sum over active cells equals F ∈ [0, 1]:
+
+```text
+Σ over active cells  spatial_fairness_attribution  =  F_spatial
+Σ over active cells  causal_fairness_attribution   =  F_causal
+```
+
+Reading: positive α means "the cell contributes more than the 1/N baseline to fairness"; negative α means the cell drags fairness below baseline. Magnitude is unbounded in both directions.
+
+Two anti-patterns to avoid:
+
+- **Do not clamp per-cell α to [0, 1] without intent.** Only the overall metric is in [0, 1]. Clamping per-cell α silently discards the negative-fair signal and turns a signed reward into a one-sided one.
+- **Do not treat per-cell magnitudes as probabilities.** They are signed contributions to a sum, not weights. Anything that requires a [0, 1] or simplex constraint needs explicit normalization on your side; this document does not prescribe one.
+
+The full derivation of the 1/N-shifted decomposition lives in [`../docs/FAIRNESS_DECOMPOSITION_FORMULATION.md`](../docs/FAIRNESS_DECOMPOSITION_FORMULATION.md).
