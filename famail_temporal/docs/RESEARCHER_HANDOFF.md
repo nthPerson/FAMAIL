@@ -245,7 +245,7 @@ where M = I − 11'/N is the centering matrix, H_demo is the demographic hat mat
 | α_i > 1/N | Above-baseline fair; cell contributes more than its uniform share to F | Low — not a target |
 | α_i ≈ 1/N | Neutral; cell carries its uniform share | Monitor only |
 | 0 < α_i < 1/N | Mildly underperforming the baseline; positive but sub-uniform contribution | Low–medium |
-| α_i < 0 | Drags fairness below baseline; cell's unfairness contribution exceeds 1/N | Highest — primary modification target |
+| α_i ≤ 0 | Drags fairness below baseline; cell's unfairness contribution meets or exceeds 1/N | Highest — primary modification target |
 
 **Justification for the uniform 1/N baseline.** The uniform baseline is the minimum-assumption prior: no auxiliary signal — demand, supply, or demographics — enters α_i beyond the metric's own unfairness term; any deviation from 1/N is attributable entirely to unfairness_contrib_i. Perfect-fair limit: Gini = 0 or r²_demo = 0 gives every α_i = 1/N and Σ α_i = 1 = F. Perfect-unfair limit: Gini = 1 or r²_demo = 1 drives outlier α_i toward −1 and Σ α_i = 0 = F.
 
