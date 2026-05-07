@@ -117,3 +117,9 @@ Each export carries two attribution columns; they measure different things and a
 Full derivation in [`../docs/FAIRNESS_DECOMPOSITION_FORMULATION.md`](../docs/FAIRNESS_DECOMPOSITION_FORMULATION.md). Causal-specific methodology in [`../docs/F_CAUSAL_METHODOLOGY_NOTES.md`](../docs/F_CAUSAL_METHODOLOGY_NOTES.md).
 
 **This document does not prescribe which metric to use.** Both are exported because they measure different things; the choice depends on what your model is trying to optimize and is yours to make.
+
+---
+
+## §2. Recipes
+
+Each recipe is self-contained; pick the one that matches your training method. All three assume you have read §1 (sign convention, broadcast trap, NaN handling) and use the loading patterns from §1.1.
