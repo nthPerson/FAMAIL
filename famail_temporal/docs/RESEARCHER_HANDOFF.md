@@ -362,3 +362,25 @@ PROCEDURE modify_single(traj, base, bundle):
 **Load-bearing claims.** Seven claims a reviewer could contest: (1) attribution computed once before modification yields a stable selection order — sequential updates to the fairness landscape do not feed back into which trajectories are selected; (2) soft-cell assignment provides sufficient gradient signal — the Gaussian softmax is differentiable almost everywhere, but signal quality degrades when mass spreads thin across the neighborhood; (3) the strictly-negative filter is the correct selection criterion — α_i < 0 is the algebraic condition from the 1/N-shifted decomposition of §7 for a cell's unfairness contribution exceeding its baseline share; (4) the delta-tensor injection pattern is autograd-safe — it avoids all in-place operations on leaf tensors, a verifiable property of `modifier.py`; (5) sequential ordering with a shared base produces better aggregate fairness than parallel perturbations — an empirical claim the codebase measures but does not prove theoretically; (6) pickup-mass conservation holds under mean-hourly aggregation — the subtract-at-origin and add-at-destination accounting is exact per trajectory but accumulates floating-point rounding across a large batch; (7) the signed-gradient step is robust to gradient-magnitude variation across objective terms — a property of FGSM-class methods inherited here by design, assuming sign information is sufficient for consistent progress.
 
 §9 lists the methodological gaps a reviewer should know about before assessing results.
+
+---
+
+## §9. Known limitations and open questions
+
+Six known limitations bound the methodology's claims.
+
+1. **Zero-supply cells are excluded entirely.** The active-mask design (§2 active-unit filter) cannot distinguish "unfair supply of zero" from "no service territory." Extending coverage to zero-supply cells would require a supply-prediction model whose outputs replace the active-mask criterion.
+
+2. **Endogenous demand is controlled but not modeled.** The double-regression design (§5 F_causal formulation) treats observed `D` as-is rather than as a proxy for latent potential demand under fair service. A more sophisticated extension would instrument latent demand from demographics or land use and substitute it into the stage-one fit.
+
+3. **DEMAND_FLOOR = 0.5 is a pragmatic choice, not a derived quantity.** The value is empirically motivated by residual-scale balance (§5 design choice 2), but is not derived from the data-generating process. A sensitivity study sweeping `DEMAND_FLOOR ∈ {0.1, 0.25, 0.5, 1.0}` and reporting the resulting F_causal trajectories would constitute an appropriate robustness check for the final paper.
+
+4. **Per-day fairness aggregation is pooled, not per-day.** The active-unit construction (§2 active-unit filter) averages over all qualifying weekdays, so F_spatial and F_causal reflect a mean-day fairness posture rather than weekday-to-weekday variation. Whether unfairness concentrates on specific weekdays is an observable but unexposed signal; per-day attribution is a future research direction.
+
+5. **F_fidelity inherits any bias in the discriminator.** The realism score is produced by a Siamese discriminator pre-trained on Shenzhen traces (§6 load-bearing claims); out-of-distribution perturbations are not tested against a held-out ground truth, so bias in the discriminator's training distribution propagates directly into the fidelity gradient signal.
+
+6. **The soft-cell-assignment kernel size and temperature schedule are unswept.** The Gaussian softmax neighborhood `(2k+1) × (2k+1)` and annealing bounds `τ_max` → `τ_min` (§8 design choice 1) were set by engineering judgment and have not been subjected to a hyperparameter sweep. Gradient-signal quality and convergence speed are both sensitive to these choices, and their interaction with ε-ball size is untested.
+
+§10 points to the in-tree material that develops any of these in greater depth.
+
+For expanded treatment of limitations 1–3 and 5, see `F_CAUSAL_METHODOLOGY_NOTES.md` §9 (sibling in this directory).
