@@ -202,3 +202,55 @@ The discriminator's LSTM requires `torch.backends.cudnn.flags(enabled=False)` du
 **Load-bearing claims.** Three claims a reviewer could contest: (1) a discriminator pre-trained on Shenzhen traces is a sufficient realism proxy — it is not tested on out-of-distribution perturbations; (2) collapsing the multi-stream context to a single scalar is adequate for gradient guidance — spatial, temporal, and profile signals are pooled without per-stream interpretability; (3) eval-mode behavior with dropout disabled is equivalent to the training-time forward for gradient signal — a behavioral assumption about the V3 checkpoint, not a theorem.
 
 F_fidelity enters the objective in §3 as the third term. Unlike the fairness terms, it is not decomposed per cell — it is a per-trajectory check, not a per-unit audit.
+
+---
+
+## §7. Per-cell fairness attribution
+
+Both fairness metrics admit a per-cell decomposition that sums to F itself, signed so that positive = fair.
+
+**The decomposition problem.** F_spatial and F_causal are each a scalar in [0, 1] ("higher = fairer"). A per-cell audit requires distributing that scalar across all N active units as a signed N-vector α with Σ_i α_i = F — not Σ_i α_i = 1 − F. A decomposition summing to the complement forces consumers to track an implicit sign flip against the published metric. The natural per-cell terms for both metrics land on the unfairness side — Gini is a sum of non-negative pairwise terms, and r²_demo decomposes as a squared-residual difference, both summing to 1 − F — so the decomposition re-anchors each term against a uniform baseline 1/N.
+
+**1/N-shifted decomposition.**
+
+```
+α_i = (1/N) − unfairness_contrib_i
+Σ_i α_i = F
+```
+
+The unfairness contribution is metric-specific.
+
+**For F_spatial:**
+
+```
+unfairness_contrib_i = ½(gini_dsr_i + gini_asr_i)
+
+where  gini_i(x) = Σ_j |x_i − x_j| / (2 N² mean(x))
+```
+
+Each gini_i(x) is the per-unit contribution to the pooled Gini coefficient; summing over i recovers Gini(x). Equal weighting of DSR and ASR mirrors the F_spatial definition in §4.
+
+**For F_causal:**
+
+```
+unfairness_contrib_i = ((MR)_i² − ((I − H_demo)R)_i²) / R'MR
+```
+
+where M = I − 11'/N is the centering matrix, H_demo is the demographic hat matrix, and R = Y − g_0(D) is the demand-adjusted residual. Each term is the per-cell difference between the centered squared residual and the post-demographic-fit squared residual, normalized by total centered variance. Summing over i gives r²_demo = 1 − F_causal.
+
+**Sign-convention table.**
+
+| α_i band | Cell semantics | Priority |
+|---|---|---|
+| α_i > 1/N | Above-baseline fair; cell contributes more than its uniform share to F | Low — not a target |
+| α_i ≈ 1/N | Neutral; cell carries its uniform share | Monitor only |
+| 0 < α_i < 1/N | Mildly underperforming the baseline; positive but sub-uniform contribution | Low–medium |
+| α_i < 0 | Drags fairness below baseline; cell's unfairness contribution exceeds 1/N | Highest — primary modification target |
+
+**Justification for the uniform 1/N baseline.** The uniform baseline is the minimum-assumption prior: no auxiliary signal — demand, supply, or demographics — enters α_i beyond the metric's own unfairness term; any deviation from 1/N is attributable entirely to unfairness_contrib_i. Perfect-fair limit: Gini = 0 or r²_demo = 0 gives every α_i = 1/N and Σ α_i = 1 = F. Perfect-unfair limit: Gini = 1 or r²_demo = 1 drives outlier α_i toward −1 and Σ α_i = 0 = F.
+
+**Load-bearing claims.** Four claims a reviewer could push back on: (1) Σ α_i = F follows algebraically from the 1/N shift — verify that the pairwise Gini per-cell form and the squared-residual causal form each sum to their 1 − F complement before accepting the equality; (2) the uniform prior 1/N carries no weighting by cell area, demand, or supply — contestable on the grounds that higher-demand cells deserve a larger baseline share; (3) the per-cell causal term is signed, not non-negative — cells where demographic regression worsens local fit yield negative unfairness_contrib_i and α_i > 1/N even when F_causal < 1, which is correct behavior; (4) α_i is recomputed at each gradient step of ST-iFGSM because pickup perturbations change R, so gradient flow through R is live throughout the loop.
+
+Full formulation — including worked examples, the decision audit trail, and the relationship to the prior (1 − F) decompositions — is in `FAIRNESS_DECOMPOSITION_FORMULATION.md` (sibling in this directory).
+
+Per-cell α_i drives trajectory selection in §8 (cells with α_i < 0 are highest-priority modification targets) and is the primary export downstream tooling consumes.
