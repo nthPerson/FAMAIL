@@ -239,3 +239,31 @@ Numbered for reference from the recipes.
 6. **Treating `demand_D` and `supply_S` as per-bucket counts.** They are mean-hourly rates at the block level, not raw counts at the bucket level. Downstream features that assume bucket-level counts are off by a factor of 12 (or more, depending on aggregation).
 
 7. **Combining attributions across exports without re-checking `n_days` and `famail_git_sha`.** Attribution magnitudes scale with the active-set size and depend on the source-data SHA. Cross-export aggregation requires explicit reconciliation against both `metadata["famail_git_sha"]` and `metadata["source_data_processing_metadata"]["git_sha"]`; merging exports from different commits silently mixes fairness audits computed under different rules.
+
+---
+
+## §4. Sanity-check checklist
+
+Run these after loading the export. Each invariant takes one line; if any fail, your load is corrupt and your training run will be too.
+
+```text
+# Sum-to-F invariants (the load-bearing math anchor)
+nansum(spatial_attribution)  ≈  metadata["overall_F_spatial"]    # tolerance: 1e-5
+nansum(causal_attribution)   ≈  metadata["overall_F_causal"]     # tolerance: 1e-5
+
+# NaN-position invariants
+isnan(spatial_attribution)   ==  ~active_mask                    # element-wise
+isnan(causal_attribution)    ==  ~active_mask                    # element-wise
+
+# Broadcast-equality invariants (sanity-check the broadcast trap)
+spatial[x, y, b1]            ==  spatial[x, y, b2]               # for any b1, b2 in same hour-block
+spatial[..., d1]             ==  spatial[..., d2]                # for any day indices d1, d2
+
+# Active-count invariants
+metadata["n_active_cells_per_block"][t]  ==  active_mask[..., t].sum()  # per block t
+
+# Cross-format invariants (same data, three views)
+dense values  ==  long DataFrame values  ==  tuples row values   # for any chosen (x, y, time_bucket, day)
+```
+
+If `nansum(spatial_attribution)` differs from `metadata["overall_F_spatial"]` by more than `1e-5`, the loaded array is not the export tool's output — most likely a stale file, a partial download, or a downstream step that mutated the array in place. Stop and re-load before training.
