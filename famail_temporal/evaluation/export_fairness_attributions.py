@@ -387,6 +387,13 @@ for row in payload["rows"]:
   available at export time).
 - Config snapshot in `metadata.json` under `config_snapshot`.
 
+## How to use this export
+
+For a prescriptive how-to on plugging this export into a GAN, GAIL, or
+generic offline-RL training loop — including loading patterns, the
+sign convention, the broadcast trap, pitfalls, and sanity checks —
+see [`../USING_FAIRNESS_ATTRIBUTION_EXPORTS.md`](../USING_FAIRNESS_ATTRIBUTION_EXPORTS.md).
+
 ## Contact
 
 Methodology questions:
