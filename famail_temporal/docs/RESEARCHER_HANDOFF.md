@@ -61,3 +61,31 @@ All three share a unified aggregation rule: sum 5-minute GPS buckets to hourly w
 Four load-bearing claims a reviewer could contest: (a) supply-based masking cleanly separates "unreachable" from "unfairly served" — the endogeneity argument is the defense; (b) mean-hourly aggregation is scale-consistent — Gini is scale-invariant and `g_0(D)` is re-fit at the same scale; (c) the three-condition conjunction is necessary — dropping any one admits boundary-invalid, taxi-inaccessible, or covariate-incomplete units; (d) three demographic features suffice for the causal audit — parsimonious by design and consistent with prior FAMAIL iterations, but an empirical choice open to extension.
 
 All N-vectors and (48, 90, T) tensors in the rest of the document share the active-unit ordering established here.
+
+---
+
+## §3. The objective at a glance
+
+Three terms compose the optimization objective: two fairness metrics and one realism check.
+
+`L` is the top-level scalar that the ST-iFGSM loop maximizes. It is a weighted sum of three component scalars, each in [0, 1] where higher is better:
+
+```
+L = α_s · F_spatial + α_c · F_causal + α_f · F_fidelity
+```
+
+Default weights from `../config.py`: α_s = 0.33, α_c = 0.33, α_f = 0.34 (sum ≈ 1). No renormalization is applied inside the objective.
+
+**F_spatial** is 1 minus the Gini coefficient of the driver service rate across all N_active active units — a perfectly equal distribution yields F_spatial = 1, full concentration yields 0 (see §4).
+
+**F_causal** is 1 minus the R² of the demographic projection on the demand-partialled residual R = Y − g_0(D) — zero demographic explanatory power yields F_causal = 1 (see §5).
+
+**F_fidelity** is the Siamese discriminator score for a modified trajectory against the real-trace distribution — scores near 1 are realistic, near 0 are implausible (see §6).
+
+**Clean ablation.** Setting `ALPHA_FIDELITY = 0` in `../config.py` removes F_fidelity from L entirely; no GPU memory is consumed by the discriminator and no checkpoint is required.
+
+Three load-bearing claims a reviewer could push back on: (1) equal weights for F_spatial and F_causal assert that Gini-based exposure equity and demographic causal fairness are commensurable — a normative choice with no empirical ground truth; (2) all three terms are monotone in the same direction, which assumes the discriminator score and both fairness scalars improve jointly under the same perturbations — a coupling assumption that warrants empirical validation; (3) three terms are sufficient to characterize fairness for this dataset — this is a design boundary, not a completeness theorem.
+
+The objective is implemented in `../algorithm/README.md` (`FAMAILObjective.forward()`); all weights are in `../config.py`.
+
+§4–§6 give each term in full; §7 decomposes the two fairness terms per cell; §8 puts everything inside the trajectory-modification loop.
