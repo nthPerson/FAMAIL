@@ -12,7 +12,7 @@ per-cell attribution is used in two places:
 
 **Single source of truth.** One canonical decomposition per metric.
 Everywhere this project says "fairness attribution," it means exactly
-this. Readers should not have to learn two parallel definitions.
+this.
 
 ---
 

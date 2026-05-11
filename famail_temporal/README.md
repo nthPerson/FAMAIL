@@ -20,7 +20,7 @@ All three terms are in [0, 1] where **higher is always better**:
 | Term | Measures | Formula |
 |---|---|---|
 | `F_spatial` | Equitable demand-service ratio across `N` active units | `1 - 0.5 * (Gini(DSR) + Gini(ASR))` |
-| `F_causal` | Service alignment with demand (not demographics) | `R'(I-H_demo)R / R'MR` — Option B |
+| `F_causal` | Service alignment with demand (not demographics) | `R'(I-H_demo)R / R'MR` |
 | `F_fidelity` | Realism of modified trajectories | Pre-trained Multi-Stream Siamese discriminator |
 
 Default weights: `alpha_spatial = alpha_causal = 0.33`, `alpha_fidelity = 0.34`. Set
