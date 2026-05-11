@@ -28,11 +28,21 @@ from torch.utils.data import DataLoader
 try:
     from sklearn.metrics import (
         accuracy_score, f1_score, precision_score, recall_score,
-        roc_auc_score, confusion_matrix
+        roc_auc_score, confusion_matrix, roc_curve, precision_recall_curve,
     )
     SKLEARN_AVAILABLE = True
 except ImportError:
     SKLEARN_AVAILABLE = False
+
+
+# Plot generation — optional, degrades gracefully if matplotlib is missing.
+try:
+    import matplotlib
+    matplotlib.use("Agg")  # non-interactive backend; safe in training jobs
+    import matplotlib.pyplot as plt
+    MATPLOTLIB_AVAILABLE = True
+except ImportError:
+    MATPLOTLIB_AVAILABLE = False
 
 
 @dataclass
@@ -65,7 +75,18 @@ class TrainingConfig:
     
     # Misc
     device: str = "auto"  # "auto", "cuda", "cpu"
-    num_workers: int = 0
+    # num_workers=4 + pin_memory=True (in dataset.py) + non_blocking=True on
+    # .to() calls (in this file) together keep the GPU saturated on the
+    # Siamese workload. The prior default of 0 produced ~0% GPU utilization
+    # even with cuda device because the data loader ran synchronously in
+    # the main thread between batches.
+    num_workers: int = 4
+    # Mixed-precision training — wraps forward pass in autocast() and uses
+    # GradScaler for the backward pass. Gives ~1.5-2x speedup on Ampere+
+    # GPUs via Tensor Cores. Automatically disabled on CPU. The BCELoss
+    # final step is forced to FP32 to avoid the sigmoid→log(0) failure
+    # mode that FP16 precision limits can trigger.
+    amp: bool = True
     seed: int = 42
     
     def to_dict(self) -> Dict:
@@ -183,7 +204,7 @@ class Trainer:
         else:
             self.device = torch.device(config.device)
             
-        self.model = model.to(self.device)
+        self.model = model.to(self.device, non_blocking=True)
         
         # Loss function
         self.criterion = nn.BCELoss()
@@ -197,6 +218,13 @@ class Trainer:
         
         # Learning rate scheduler
         self.scheduler = self._create_scheduler()
+
+        # Mixed-precision scaler. Active only on CUDA + config.amp=True.
+        # On CPU, GradScaler is a no-op (its .scale/.step methods pass
+        # through). We pre-check the device type here so the training loop
+        # branches cleanly without per-batch cost.
+        self.amp_enabled = bool(getattr(config, "amp", True)) and self.device.type == "cuda"
+        self.scaler = torch.amp.GradScaler('cuda', enabled=self.amp_enabled)
         
         # Early stopping
         self.early_stopping = EarlyStopping(
@@ -249,13 +277,13 @@ class Trainer:
         """
         kwargs = {}
         if 'driving_1' in batch:
-            kwargs['driving_1'] = batch['driving_1'].to(self.device)
-            kwargs['driving_2'] = batch['driving_2'].to(self.device)
-            kwargs['mask_d1'] = batch['mask_d1'].to(self.device)
-            kwargs['mask_d2'] = batch['mask_d2'].to(self.device)
+            kwargs['driving_1'] = batch['driving_1'].to(self.device, non_blocking=True)
+            kwargs['driving_2'] = batch['driving_2'].to(self.device, non_blocking=True)
+            kwargs['mask_d1'] = batch['mask_d1'].to(self.device, non_blocking=True)
+            kwargs['mask_d2'] = batch['mask_d2'].to(self.device, non_blocking=True)
         if 'profile_1' in batch:
-            kwargs['profile_1'] = batch['profile_1'].to(self.device)
-            kwargs['profile_2'] = batch['profile_2'].to(self.device)
+            kwargs['profile_1'] = batch['profile_1'].to(self.device, non_blocking=True)
+            kwargs['profile_2'] = batch['profile_2'].to(self.device, non_blocking=True)
         return kwargs
 
     def _train_epoch(self) -> float:
@@ -269,32 +297,38 @@ class Trainer:
         n_batches = 0
 
         for batch in self.train_loader:
-            x1 = batch['x1'].to(self.device)
-            x2 = batch['x2'].to(self.device)
-            mask1 = batch['mask1'].to(self.device)
-            mask2 = batch['mask2'].to(self.device)
-            labels = batch['label'].to(self.device)
+            x1 = batch['x1'].to(self.device, non_blocking=True)
+            x2 = batch['x2'].to(self.device, non_blocking=True)
+            mask1 = batch['mask1'].to(self.device, non_blocking=True)
+            mask2 = batch['mask2'].to(self.device, non_blocking=True)
+            labels = batch['label'].to(self.device, non_blocking=True)
             kwargs = self._extract_multi_stream_kwargs(batch)
 
-            self.optimizer.zero_grad()
+            self.optimizer.zero_grad(set_to_none=True)
 
-            # Forward pass
-            outputs = self.model(x1, x2, mask1, mask2, **kwargs).squeeze(-1)
-            
-            # Compute loss
+            # Forward pass under autocast when AMP is enabled. The output
+            # is cast back to FP32 before BCELoss because FP16 sigmoid can
+            # produce exactly 0 or 1, which BCELoss evaluates as log(0).
+            with torch.amp.autocast('cuda', enabled=self.amp_enabled):
+                outputs = self.model(x1, x2, mask1, mask2, **kwargs).squeeze(-1)
+            outputs = outputs.float()
             loss = self.criterion(outputs, labels)
-            
-            # Backward pass
-            loss.backward()
-            
-            # Gradient clipping
+
+            # Backward pass via GradScaler. On CPU (scaler disabled) this
+            # reduces to plain loss.backward() — no behavioural difference.
+            self.scaler.scale(loss).backward()
+
+            # Gradient clipping — must unscale first so max_norm is applied
+            # in the unscaled gradient space that downstream code expects.
+            self.scaler.unscale_(self.optimizer)
             torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
-            
-            self.optimizer.step()
-            
+
+            self.scaler.step(self.optimizer)
+            self.scaler.update()
+
             total_loss += loss.item()
             n_batches += 1
-            
+
         return total_loss / n_batches
     
     @torch.no_grad()
@@ -311,15 +345,17 @@ class Trainer:
         all_labels = []
         
         for batch in self.val_loader:
-            x1 = batch['x1'].to(self.device)
-            x2 = batch['x2'].to(self.device)
-            mask1 = batch['mask1'].to(self.device)
-            mask2 = batch['mask2'].to(self.device)
-            labels = batch['label'].to(self.device)
+            x1 = batch['x1'].to(self.device, non_blocking=True)
+            x2 = batch['x2'].to(self.device, non_blocking=True)
+            mask1 = batch['mask1'].to(self.device, non_blocking=True)
+            mask2 = batch['mask2'].to(self.device, non_blocking=True)
+            labels = batch['label'].to(self.device, non_blocking=True)
             kwargs = self._extract_multi_stream_kwargs(batch)
 
-            # Forward pass
-            outputs = self.model(x1, x2, mask1, mask2, **kwargs).squeeze(-1)
+            # Forward pass — autocast for speed, FP32 cast before BCELoss
+            with torch.amp.autocast('cuda', enabled=self.amp_enabled):
+                outputs = self.model(x1, x2, mask1, mask2, **kwargs).squeeze(-1)
+            outputs = outputs.float()
 
             # Compute loss
             loss = self.criterion(outputs, labels)
@@ -394,16 +430,16 @@ class Trainer:
         
         samples_tested = 0
         for batch in self.val_loader:
-            x1 = batch['x1'].to(self.device)
-            mask1 = batch['mask1'].to(self.device)
+            x1 = batch['x1'].to(self.device, non_blocking=True)
+            mask1 = batch['mask1'].to(self.device, non_blocking=True)
 
             # Build identical-pair kwargs for multi-stream
             id_kwargs = {}
             if 'driving_1' in batch:
-                d1 = batch['driving_1'].to(self.device)
-                md1 = batch['mask_d1'].to(self.device)
+                d1 = batch['driving_1'].to(self.device, non_blocking=True)
+                md1 = batch['mask_d1'].to(self.device, non_blocking=True)
             if 'profile_1' in batch:
-                p1 = batch['profile_1'].to(self.device)
+                p1 = batch['profile_1'].to(self.device, non_blocking=True)
 
             # Test each trajectory against itself
             for i in range(min(len(x1), n_samples - samples_tested)):
@@ -783,13 +819,210 @@ class Trainer:
         
         # Save comprehensive results summary
         self.save_results_json(training_start_time=training_start_time)
-            
+
+        # Generate paper-ready training plots. Errors are caught non-fatally
+        # because plot failures shouldn't lose the trained model.
+        try:
+            self.generate_training_plots(verbose=verbose)
+        except Exception as e:
+            if verbose:
+                print(f"[warn] plot generation failed: {e}")
+
         if verbose:
             print("-" * 60)
             print(f"Training complete!")
             print(f"Best validation loss: {self.history.best_val_loss:.4f} at epoch {self.history.best_epoch}")
-            
+            if MATPLOTLIB_AVAILABLE:
+                print(f"Training plots: {self.checkpoint_dir / 'plots'}")
+
         return self.history
+
+    def generate_training_plots(self, verbose: bool = True):
+        """Render PNG plots of training metrics to ``<checkpoint_dir>/plots/``.
+
+        Generates loss curves, accuracy curves, AUC/F1 curves, identical-
+        pair sanity curve, learning-rate schedule, ROC curve, precision-
+        recall curve, and a four-panel training summary. ROC and PR
+        curves use the final-epoch model predictions over the val set.
+        """
+        if not MATPLOTLIB_AVAILABLE:
+            if verbose:
+                print("[info] matplotlib not available; skipping training plots")
+            return None
+
+        plots_dir = self.checkpoint_dir / "plots"
+        plots_dir.mkdir(parents=True, exist_ok=True)
+
+        h = self.history
+        epochs = list(range(1, len(h.train_loss) + 1))
+
+        fig, ax = plt.subplots(figsize=(8, 5))
+        ax.plot(epochs, h.train_loss, label='train', color='tab:blue', alpha=0.85)
+        ax.plot(epochs, h.val_loss, label='val', color='tab:orange', alpha=0.85)
+        if h.best_epoch:
+            ax.axvline(h.best_epoch, linestyle=':', color='gray',
+                       label=f'best epoch ({h.best_epoch})')
+        ax.set_xlabel('Epoch')
+        ax.set_ylabel('BCE loss')
+        ax.set_title('Training & validation loss')
+        ax.legend()
+        ax.grid(alpha=0.3)
+        fig.tight_layout()
+        fig.savefig(plots_dir / "loss_curves.png", dpi=150)
+        plt.close(fig)
+
+        fig, ax = plt.subplots(figsize=(8, 5))
+        ax.plot(epochs, h.val_accuracy, label='overall', color='tab:blue')
+        ax.plot(epochs, h.val_positive_accuracy, label='positive (same driver)',
+                color='tab:green', alpha=0.7)
+        ax.plot(epochs, h.val_negative_accuracy, label='negative (diff driver)',
+                color='tab:red', alpha=0.7)
+        ax.set_xlabel('Epoch')
+        ax.set_ylabel('Accuracy')
+        ax.set_title('Validation accuracy per epoch')
+        ax.legend()
+        ax.grid(alpha=0.3)
+        ax.set_ylim(0.4, 1.01)
+        fig.tight_layout()
+        fig.savefig(plots_dir / "accuracy_curves.png", dpi=150)
+        plt.close(fig)
+
+        fig, ax = plt.subplots(figsize=(8, 5))
+        ax.plot(epochs, h.val_auc, label='AUC', color='tab:purple')
+        ax.plot(epochs, h.val_f1, label='F1', color='tab:brown')
+        ax.set_xlabel('Epoch')
+        ax.set_ylabel('Score')
+        ax.set_title('Validation AUC and F1 per epoch')
+        ax.legend()
+        ax.grid(alpha=0.3)
+        ax.set_ylim(0.4, 1.01)
+        fig.tight_layout()
+        fig.savefig(plots_dir / "auc_f1_curves.png", dpi=150)
+        plt.close(fig)
+
+        fig, ax = plt.subplots(figsize=(8, 5))
+        ax.plot(epochs, h.val_identical_score, color='teal')
+        ax.axhline(0.5, linestyle=':', color='red',
+                   label='warning threshold (0.5)')
+        ax.set_xlabel('Epoch')
+        ax.set_ylabel('Mean identical-pair score')
+        ax.set_title('Identical-trajectory probability (Siamese sanity)')
+        ax.legend()
+        ax.grid(alpha=0.3)
+        ax.set_ylim(0.0, 1.01)
+        fig.tight_layout()
+        fig.savefig(plots_dir / "identical_curve.png", dpi=150)
+        plt.close(fig)
+
+        fig, ax = plt.subplots(figsize=(8, 5))
+        ax.plot(epochs, h.learning_rates, color='tab:olive')
+        ax.set_xlabel('Epoch')
+        ax.set_ylabel('Learning rate')
+        ax.set_title('Learning-rate schedule')
+        ax.set_yscale('log')
+        ax.grid(alpha=0.3)
+        fig.tight_layout()
+        fig.savefig(plots_dir / "learning_rate_curve.png", dpi=150)
+        plt.close(fig)
+
+        if SKLEARN_AVAILABLE:
+            try:
+                self._generate_roc_and_pr_plots(plots_dir)
+            except Exception as e:
+                if verbose:
+                    print(f"[warn] ROC/PR curve generation failed: {e}")
+
+        fig, axes = plt.subplots(2, 2, figsize=(12, 8))
+        axes[0, 0].plot(epochs, h.train_loss, label='train')
+        axes[0, 0].plot(epochs, h.val_loss, label='val')
+        axes[0, 0].set_title('Loss')
+        axes[0, 0].set_xlabel('Epoch')
+        axes[0, 0].legend()
+        axes[0, 0].grid(alpha=0.3)
+        axes[0, 1].plot(epochs, h.val_accuracy, label='acc', color='tab:blue')
+        axes[0, 1].plot(epochs, h.val_auc, label='AUC', color='tab:purple')
+        axes[0, 1].plot(epochs, h.val_f1, label='F1', color='tab:brown')
+        axes[0, 1].set_title('Validation metrics')
+        axes[0, 1].set_xlabel('Epoch')
+        axes[0, 1].legend()
+        axes[0, 1].grid(alpha=0.3)
+        axes[1, 0].plot(epochs, h.val_identical_score, color='teal')
+        axes[1, 0].axhline(0.5, linestyle=':', color='red')
+        axes[1, 0].set_title('Identical-pair score')
+        axes[1, 0].set_xlabel('Epoch')
+        axes[1, 0].set_ylim(0, 1.01)
+        axes[1, 0].grid(alpha=0.3)
+        axes[1, 1].plot(epochs, h.learning_rates, color='tab:olive')
+        axes[1, 1].set_yscale('log')
+        axes[1, 1].set_title('Learning rate')
+        axes[1, 1].set_xlabel('Epoch')
+        axes[1, 1].grid(alpha=0.3)
+        fig.suptitle(
+            f'Training summary — best val_loss {h.best_val_loss:.4f} at '
+            f'epoch {h.best_epoch}/{len(h.train_loss)}'
+        )
+        fig.tight_layout()
+        fig.savefig(plots_dir / "training_summary.png", dpi=150)
+        plt.close(fig)
+
+        if verbose:
+            print(f"[info] training plots written to {plots_dir}")
+        return plots_dir
+
+    @torch.no_grad()
+    def _generate_roc_and_pr_plots(self, plots_dir: Path) -> None:
+        """Collect val-set predictions and render ROC + PR plots."""
+        self.model.train(mode=False)  # switch to inference mode
+        all_probs: List[float] = []
+        all_labels: List[float] = []
+        for batch in self.val_loader:
+            x1 = batch['x1'].to(self.device, non_blocking=True)
+            x2 = batch['x2'].to(self.device, non_blocking=True)
+            mask1 = batch['mask1'].to(self.device, non_blocking=True)
+            mask2 = batch['mask2'].to(self.device, non_blocking=True)
+            labels = batch['label']
+            if 'driving_1' in batch:
+                outputs = self.model(
+                    x1=x1, x2=x2, mask1=mask1, mask2=mask2,
+                    driving_1=batch['driving_1'].to(self.device, non_blocking=True),
+                    driving_2=batch['driving_2'].to(self.device, non_blocking=True),
+                    mask_d1=batch['mask_d1'].to(self.device, non_blocking=True),
+                    mask_d2=batch['mask_d2'].to(self.device, non_blocking=True),
+                    profile_1=batch['profile_1'].to(self.device, non_blocking=True),
+                    profile_2=batch['profile_2'].to(self.device, non_blocking=True),
+                )
+            else:
+                outputs = self.model(x1, x2, mask1, mask2)
+            all_probs.extend(outputs.squeeze(-1).cpu().numpy().tolist())
+            all_labels.extend(labels.numpy().tolist())
+
+        labels_np = np.asarray(all_labels)
+        probs_np = np.asarray(all_probs)
+
+        fpr, tpr, _ = roc_curve(labels_np, probs_np)
+        auc = roc_auc_score(labels_np, probs_np)
+        fig, ax = plt.subplots(figsize=(6, 6))
+        ax.plot(fpr, tpr, color='tab:purple', label=f'ROC (AUC = {auc:.3f})')
+        ax.plot([0, 1], [0, 1], linestyle=':', color='gray', label='chance')
+        ax.set_xlabel('False Positive Rate')
+        ax.set_ylabel('True Positive Rate')
+        ax.set_title('ROC curve — validation set')
+        ax.legend()
+        ax.grid(alpha=0.3)
+        fig.tight_layout()
+        fig.savefig(plots_dir / "roc_curve.png", dpi=150)
+        plt.close(fig)
+
+        prec, rec, _ = precision_recall_curve(labels_np, probs_np)
+        fig, ax = plt.subplots(figsize=(6, 6))
+        ax.plot(rec, prec, color='tab:green')
+        ax.set_xlabel('Recall')
+        ax.set_ylabel('Precision')
+        ax.set_title('Precision–Recall curve — validation set')
+        ax.grid(alpha=0.3)
+        fig.tight_layout()
+        fig.savefig(plots_dir / "precision_recall_curve.png", dpi=150)
+        plt.close(fig)
     
     @torch.no_grad()
     def evaluate(self, test_loader: DataLoader, verbose: bool = True) -> Dict[str, Any]:
@@ -808,10 +1041,10 @@ class Trainer:
         all_labels = []
         
         for batch in test_loader:
-            x1 = batch['x1'].to(self.device)
-            x2 = batch['x2'].to(self.device)
-            mask1 = batch['mask1'].to(self.device)
-            mask2 = batch['mask2'].to(self.device)
+            x1 = batch['x1'].to(self.device, non_blocking=True)
+            x2 = batch['x2'].to(self.device, non_blocking=True)
+            mask1 = batch['mask1'].to(self.device, non_blocking=True)
+            mask2 = batch['mask2'].to(self.device, non_blocking=True)
             labels = batch['label']
             
             outputs = self.model(x1, x2, mask1, mask2).squeeze(-1)

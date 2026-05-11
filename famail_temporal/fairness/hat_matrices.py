@@ -1,8 +1,21 @@
 """
-Pre-compute hat matrices for pooled Option B F_causal.
+Pre-compute hat-matrix building blocks for pooled Option B F_causal.
 
-Inputs are active-unit vectors (length N). Constants during optimization —
-only the residual vector R changes across forward passes.
+Exports both a **compact** representation of the demographic projection
+(`X_demo`, `XtX_inv`) and — at small N only — the classic **dense** hat
+matrices `I_minus_H_demo` and `M`. The compact form is O(Np) in memory;
+the dense form is O(N²) and becomes untenable as N grows (≈19 GB at
+N=34,524). Production code paths use the compact form; the dense form
+is retained for test compatibility and for debug-level introspection
+on small problems.
+
+Frisch–Waugh–Lovell identities that let us skip the N×N materialization:
+    (I − H) R  =  R − X (XᵀX)⁻¹ (Xᵀ R)
+    Rᵀ(I − H)R = RᵀR − (Xᵀ R)ᵀ (XᵀX)⁻¹ (Xᵀ R)
+    M R        =  R − (1ᵀR / N) · 1
+    Rᵀ M R     =  RᵀR − (1ᵀR)² / N
+Both sides are algebraically identical; the right-hand sides use only
+O(Np) and O(p²) intermediates.
 """
 
 from __future__ import annotations
@@ -15,16 +28,33 @@ from sklearn.preprocessing import StandardScaler
 from famail_temporal import config
 
 
+# Emit the N×N dense matrices only when N is below this threshold.
+# At N=5,834 (T=4) we use ~544 MB; at N=34,524 (T=24) we would need ~19 GB.
+# 10_000 keeps the dense form available for small-N problems and tests
+# while skipping it for production-scale caches.
+_DENSE_MATERIALIZATION_MAX_N = 10_000
+
+
 def precompute_hat_matrices(
     demands: np.ndarray,
     demographic_features: np.ndarray,
     feature_names: List[str],
 ) -> Dict[str, np.ndarray]:
-    """Build (I - H_demo), M, and diagnostics.
+    """Build the compact demographic-projection representation + diagnostics.
 
-    H_demo projects onto [1, standardized(demographics)] (intercept included).
-    M = I - 11'/N is the centering matrix.
-    Asserts H_demo has full rank.
+    Always-emitted compact fields:
+      - ``X_demo``: (N, p+1) design matrix = [1 | standardized(demographics)]
+      - ``XtX_inv``: (p+1, p+1) = (XᵀX)⁻¹
+      - ``scaler_mean``, ``scaler_std``: per-demographic standardization params
+      - ``n_units``, ``n_demo_features``, ``feature_names``, ``rank_H_demo``
+
+    Conditionally emitted dense fields (only when N ≤ _DENSE_MATERIALIZATION_MAX_N):
+      - ``I_minus_H_demo``: (N, N) residual-maker matrix
+      - ``M``: (N, N) centering matrix
+
+    Production callers MUST use the compact form (``compute_fcausal_compact``);
+    the dense form is retained for small-N debug/testing and the legacy
+    ``compute_fcausal_torch(R, I_minus_H_demo, M)`` API.
     """
     D = np.asarray(demands, dtype=np.float64)
     demo = np.asarray(demographic_features, dtype=np.float64)
@@ -75,41 +105,36 @@ def precompute_hat_matrices(
 
     scaler = StandardScaler()
     X_demo_scaled = scaler.fit_transform(demo)
-    X = np.column_stack([np.ones(N), X_demo_scaled])
+    X = np.column_stack([np.ones(N), X_demo_scaled])  # (N, p+1)
 
-    # rank(H) == rank(X) always (H inherits X's column space). rank(X) on
-    # (N, p+1) is O(N * p^2) vs rank(H) on (N, N) which is O(N^3) — critical
-    # at the N=~8000 preprocessing scale.
+    # rank(X) on (N, p+1) is O(N * p^2) — cheap even at large N.
     rank_X = int(np.linalg.matrix_rank(X))
     expected_rank = X.shape[1]
     assert rank_X == expected_rank, (
         f"X has rank {rank_X}, expected {expected_rank}. "
         "Demographic collinearity or zero-variance column — check feature set."
     )
-    H = X @ np.linalg.pinv(X)
-    # Preserve the 'rank_H_demo' key in the return dict for back-compat
+
+    # Compact form: XtX_inv is (p+1) x (p+1) — always cheap.
+    XtX = X.T @ X
+    XtX_inv = np.linalg.inv(XtX)
     rank_H_demo = rank_X  # rank(H) == rank(X)
 
-    I_minus_H_demo = np.eye(N) - H
-    M = np.eye(N) - np.ones((N, N)) / N
+    # Sanity-check compact form before freezing.
+    if not np.all(np.isfinite(XtX_inv)):
+        raise RuntimeError("XtX_inv contains non-finite values")
 
-    # Sanity-check the constructed hat matrices before freezing.
-    if not np.all(np.isfinite(I_minus_H_demo)):
-        raise RuntimeError("I_minus_H_demo contains non-finite values")
-    if not np.all(np.isfinite(M)):
-        raise RuntimeError("M contains non-finite values")
-
-    # Freeze load-bearing constants so downstream code can't mutate them.
-    I_minus_H_demo.setflags(write=False)
-    M.setflags(write=False)
+    # Freeze compact form.
+    X.setflags(write=False)
+    XtX_inv.setflags(write=False)
     scaler_mean = np.asarray(scaler.mean_, dtype=np.float64)
     scaler_std = np.asarray(scaler.scale_, dtype=np.float64)
     scaler_mean.setflags(write=False)
     scaler_std.setflags(write=False)
 
-    return {
-        'I_minus_H_demo': I_minus_H_demo,
-        'M': M,
+    out: Dict[str, np.ndarray] = {
+        'X_demo': X,
+        'XtX_inv': XtX_inv,
         'scaler_mean': scaler_mean,
         'scaler_std': scaler_std,
         'n_units': N,
@@ -117,6 +142,90 @@ def precompute_hat_matrices(
         'feature_names': list(feature_names),
         'rank_H_demo': rank_H_demo,
     }
+
+    # Conditionally emit the dense (N, N) matrices at small N only.
+    if N <= _DENSE_MATERIALIZATION_MAX_N:
+        H = X @ np.linalg.pinv(X)
+        I_minus_H_demo = np.eye(N) - H
+        M = np.eye(N) - np.ones((N, N)) / N
+        if not np.all(np.isfinite(I_minus_H_demo)):
+            raise RuntimeError("I_minus_H_demo contains non-finite values")
+        if not np.all(np.isfinite(M)):
+            raise RuntimeError("M contains non-finite values")
+        I_minus_H_demo.setflags(write=False)
+        M.setflags(write=False)
+        out['I_minus_H_demo'] = I_minus_H_demo
+        out['M'] = M
+
+    return out
+
+
+def compute_fcausal_compact(
+    R: torch.Tensor,
+    X_demo: torch.Tensor,
+    XtX_inv: torch.Tensor,
+    eps: float = config.EPS,
+) -> torch.Tensor:
+    """Pooled Option B F_causal via the compact (FWL) form.
+
+    Equivalent to ``R'(I − H)R / R'MR`` but computed without any N×N
+    materialization — memory is O(Np + p²). Required for production-scale
+    caches where N can reach tens of thousands.
+
+    Algebra:
+        Rᵀ(I − H)R  =  RᵀR  −  (XᵀR)ᵀ (XᵀX)⁻¹ (XᵀR)
+        RᵀMR        =  RᵀR  −  (1ᵀR)² / N
+        F_causal    =  (Rᵀ(I − H)R) / (RᵀMR)  clamped to [0, 1]
+
+    Parameters
+    ----------
+    R : torch.Tensor, shape (N,)
+        Residual vector Y − g_0(D). Typically requires_grad=True.
+    X_demo : torch.Tensor, shape (N, p+1)
+        Design matrix [1 | standardized(demographics)], constant wrt R.
+    XtX_inv : torch.Tensor, shape (p+1, p+1)
+        Precomputed inverse of XᵀX, constant wrt R.
+    eps : float, optional
+        Numerical guard for the degenerate Rᵀ M R ~ 0 branch.
+
+    Returns
+    -------
+    torch.Tensor, scalar
+        F_causal in [0, 1], higher = fairer. See
+        ``compute_fcausal_torch`` for the full orientation and limit-case
+        documentation (they apply identically to this compact form).
+    """
+    if R.ndim != 1:
+        raise ValueError(f"R must be 1-D; got shape {tuple(R.shape)}")
+    if X_demo.ndim != 2:
+        raise ValueError(f"X_demo must be 2-D; got shape {tuple(X_demo.shape)}")
+    if XtX_inv.ndim != 2:
+        raise ValueError(
+            f"XtX_inv must be 2-D; got shape {tuple(XtX_inv.shape)}"
+        )
+    N = R.shape[0]
+    if X_demo.shape[0] != N:
+        raise ValueError(
+            f"X_demo.shape[0]={X_demo.shape[0]} but R has length {N}"
+        )
+    p1 = X_demo.shape[1]
+    if XtX_inv.shape != (p1, p1):
+        raise ValueError(
+            f"XtX_inv shape {tuple(XtX_inv.shape)} inconsistent with "
+            f"X_demo.shape[1]={p1}"
+        )
+
+    RtR = R @ R                           # scalar
+    XtR = X_demo.T @ R                    # shape (p+1,)
+    ss_res_demo = RtR - XtR @ XtX_inv @ XtR
+    sum_R = R.sum()
+    ss_tot = RtR - sum_R * sum_R / N
+    f_causal = torch.where(
+        ss_tot < eps,
+        torch.ones_like(ss_tot),
+        ss_res_demo / (ss_tot + eps),
+    )
+    return torch.clamp(f_causal, 0.0, 1.0)
 
 
 def compute_fcausal_torch(
@@ -127,9 +236,14 @@ def compute_fcausal_torch(
 ) -> torch.Tensor:
     """Pooled Option B: F_causal = R'(I-H)R / R'MR, clamped to [0, 1].
 
+    LEGACY DENSE-MATRIX FORM. Retained for small-N debug/testing and for
+    backward-compatible call sites. Production code should prefer
+    ``compute_fcausal_compact(R, X_demo, XtX_inv)``, which is O(Np) in
+    memory and algebraically identical.
+
     Differentiable wrt R. The hat matrices are constants (frozen read-only
-    numpy arrays from precompute_hat_matrices, wrapped in torch tensors by
-    the caller). When ``R'MR < eps`` (no total variance to explain, e.g.,
+    numpy arrays from ``precompute_hat_matrices``, wrapped in torch tensors
+    by the caller). When ``R'MR < eps`` (no total variance to explain, e.g.,
     constant R), returns 1.0 by convention — gradients flow through the
     non-degenerate branch in the typical case via ``torch.where``.
 
@@ -151,8 +265,19 @@ def compute_fcausal_torch(
     Returns
     -------
     torch.Tensor, scalar
-        F_causal in [0, 1], higher = fairer (residuals are well-explained
-        by demographics => service aligns with demand, not demographics).
+        F_causal in [0, 1], higher = fairer. Algebraically
+            F_causal = R'(I - H_demo)R / R'MR
+                     = SSR_demo / SST
+                     = 1 - r²_demo
+        where r²_demo is the coefficient of determination from regressing R
+        on [1, standardized_demographics]. Orientation:
+        - High F_causal (near 1) ⇔ low r²_demo ⇔ demographics explain LITTLE
+          of R ⇔ service deviations from the demand baseline are not driven
+          by demographics ⇔ FAIR.
+        - Low F_causal (near 0) ⇔ high r²_demo ⇔ demographics explain MOST
+          of R ⇔ service deviations are predicted by demographics ⇔ UNFAIR.
+        Per the design spec: R ∈ span(X_demo) → F_causal = 0 (fully unfair);
+        R ⊥ X_demo → F_causal = 1 (fully fair).
     """
     # Shape / dim validation — fail loud rather than producing silent garbage
     # from a broadcasting surprise.
@@ -181,26 +306,56 @@ def compute_fcausal_torch(
     return torch.clamp(f_causal, 0.0, 1.0)
 
 
+def apply_i_minus_h(
+    R: torch.Tensor,
+    X_demo: torch.Tensor,
+    XtX_inv: torch.Tensor,
+) -> torch.Tensor:
+    """Compute (I − H_demo) R using the compact representation.
+
+    Returns a length-N tensor. O(Np) memory. Required by attribution
+    routines that need the residual-after-projection vector.
+
+    Identity: (I − H) R = R − X (XᵀX)⁻¹ (XᵀR).
+    """
+    XtR = X_demo.T @ R             # (p+1,)
+    return R - X_demo @ (XtX_inv @ XtR)
+
+
 def hat_matrices_to_torch(
     hat: Dict[str, np.ndarray],
     dtype: torch.dtype = torch.float32,
     device: str = "cpu",
 ) -> Dict[str, torch.Tensor]:
-    """Convert the numpy hat-matrix dict to torch tensors for use in torch-based computations.
+    """Convert the numpy hat dict to torch tensors.
 
-    Internally calls `.copy()` on each array before conversion because the arrays
-    returned by `precompute_hat_matrices` are read-only (frozen via setflags), and
-    `torch.from_numpy()` emits UserWarning on non-writable arrays.
+    Always converts the compact representation (``X_demo``, ``XtX_inv``).
+    When present in the input dict, also converts the dense forms
+    (``I_minus_H_demo``, ``M``) for backward compatibility.
+
+    Internally calls `.copy()` on each array before conversion because the
+    arrays returned by ``precompute_hat_matrices`` are read-only (frozen
+    via ``setflags``), and ``torch.from_numpy()`` emits UserWarning on
+    non-writable arrays.
 
     Args:
-        hat: Dict returned from precompute_hat_matrices()
-        dtype: Target torch dtype (default float32)
-        device: Target device string (default "cpu")
+        hat: Dict returned from ``precompute_hat_matrices()``.
+        dtype: Target torch dtype (default ``torch.float32``).
+        device: Target device string (default ``"cpu"``).
 
     Returns:
-        Dict with 'I_minus_H_demo' and 'M' as torch tensors on the specified device.
+        Dict with torch tensors on the specified device. Always contains
+        ``X_demo`` and ``XtX_inv``. Contains ``I_minus_H_demo`` and ``M``
+        only if they are present in the input ``hat`` dict.
     """
-    return {
-        'I_minus_H_demo': torch.from_numpy(hat['I_minus_H_demo'].copy()).to(dtype=dtype, device=device),
-        'M': torch.from_numpy(hat['M'].copy()).to(dtype=dtype, device=device),
+    out = {
+        'X_demo': torch.from_numpy(hat['X_demo'].copy()).to(dtype=dtype, device=device),
+        'XtX_inv': torch.from_numpy(hat['XtX_inv'].copy()).to(dtype=dtype, device=device),
     }
+    if 'I_minus_H_demo' in hat:
+        out['I_minus_H_demo'] = torch.from_numpy(
+            hat['I_minus_H_demo'].copy(),
+        ).to(dtype=dtype, device=device)
+    if 'M' in hat:
+        out['M'] = torch.from_numpy(hat['M'].copy()).to(dtype=dtype, device=device)
+    return out

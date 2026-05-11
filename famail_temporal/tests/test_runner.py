@@ -11,10 +11,33 @@ from famail_temporal.evaluation.runner import (
 @pytest.fixture
 def tiny_bundle(monkeypatch):
     from famail_temporal.tests.test_objective import _make_synthetic_bundle
-    bundle = _make_synthetic_bundle(N_cells_per_block=8, seed=0)
+    from famail_temporal.algorithm.attribution import compute_per_unit_attribution
+    # seed=5 chosen because it produces a synthetic bundle with at least one
+    # cell whose αᵢ < 0 (drag cell). Seeds 0-4 happen to give a uniformly
+    # above-baseline distribution at this size, which would leave the top-k
+    # selector with nothing to pick.
+    bundle = _make_synthetic_bundle(N_cells_per_block=8, seed=5)
     from famail_temporal.utils.trajectory import Trajectory, TrajectoryState
+    # Find a cell with strictly NEGATIVE attribution — under the 1/N-shifted
+    # decomposition αᵢ < 0 marks cells dragging fairness below baseline, and
+    # those are what select_top_k picks. The RNG state of the synthetic bundle
+    # varies with config.T (more active cells at T=24), so "first active cell"
+    # is not guaranteed to have negative attribution.
+    attribution = compute_per_unit_attribution(bundle)
+    gy = bundle.unit_map.grid_shape[1]
     ix_x, ix_y, ix_t = np.where(bundle.mask_3d)
-    x, y, t_block = int(ix_x[0]), int(ix_y[0]), int(ix_t[0])
+    chosen = None
+    for i in range(len(ix_x)):
+        if attribution[bundle.unit_map.from_cell_time(
+            int(ix_x[i]) * gy + int(ix_y[i]),
+            int(ix_t[i]),
+        )] < -1e-6:
+            chosen = i
+            break
+    assert chosen is not None, (
+        "synthetic bundle has no cells with negative attribution — seed unstable"
+    )
+    x, y, t_block = int(ix_x[chosen]), int(ix_y[chosen]), int(ix_t[chosen])
     start_hour = config.TIME_BLOCKS[t_block][1]
     tb = start_hour * 12 + 1
     trajs = []

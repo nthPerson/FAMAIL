@@ -11,7 +11,7 @@ from typing import List, Tuple
 
 # Paths
 PACKAGE_ROOT = Path(__file__).resolve().parent
-RAW_DATA_DIR = PACKAGE_ROOT / "raw_data"
+SOURCE_DATA_DIR = PACKAGE_ROOT / "source_data"
 CACHE_DIR = PACKAGE_ROOT / "cache"
 DISCRIMINATOR_CHECKPOINT_DIR = PACKAGE_ROOT / "discriminator_checkpoints"
 DISCRIMINATOR_CHECKPOINT_FILENAME = "default/best.pt"
@@ -20,18 +20,25 @@ DISCRIMINATOR_CHECKPOINT_FILENAME = "default/best.pt"
 GRID_DIMS: Tuple[int, int] = (48, 90)
 N_TIME_BUCKETS: int = 288
 
-# Time blocks — end > 24 encodes wraparound
+# Time blocks — each hourly block spans (h, h+1). No wraparound needed at
+# hourly resolution. Names are zero-padded (hour_00 .. hour_23) for stable
+# lexicographic ordering. The prior 4-block configuration (morning_peak,
+# midday, evening_peak, night) was retained during framework validation
+# and superseded at T=24 on 2026-04-24.
 TIME_BLOCKS: List[Tuple[str, int, int]] = [
-    ("morning_peak", 7, 10),
-    ("midday",       10, 16),
-    ("evening_peak", 16, 20),
-    ("night",        20, 31),  # 20 to 07 next day
+    (f"hour_{h:02d}", h, h + 1) for h in range(24)
 ]
 T: int = len(TIME_BLOCKS)
 
 # Active-unit filter
 ACTIVE_SUPPLY_THRESHOLD: float = 0.5
-DEMAND_FLOOR: float = 0.01
+# DEMAND_FLOOR is a CLAMP, not an activity filter: cells with observed D <
+# DEMAND_FLOOR have their D substituted with DEMAND_FLOOR before computing
+# Y = S/D. Keeping them in the active set (rather than filtering them out)
+# preserves the ability of F_causal to detect unfairness in reachable-but-
+# low-demand areas. See docs/F_CAUSAL_METHODOLOGY_NOTES.md §4 for the
+# 0.5-value rationale (residual-scale balance against signal-regime Y).
+DEMAND_FLOOR: float = 0.5
 SUPPLY_FLOOR: float = 0.1
 
 # Demographics

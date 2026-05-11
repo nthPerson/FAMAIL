@@ -6,7 +6,7 @@ import torch
 
 from famail_temporal import config
 from famail_temporal.data.loader import DataBundle
-from famail_temporal.fairness.causal import compute_fcausal
+from famail_temporal.fairness.causal import compute_fcausal_from_compact
 from famail_temporal.fairness.hat_matrices import hat_matrices_to_torch
 from famail_temporal.fairness.spatial import compute_fspatial
 
@@ -44,10 +44,10 @@ def compute_gradient_sensitivity(
             np.asarray(bundle.g0_func(D_clamped.detach().numpy()), dtype=np.float32),
         )
     tensors = hat_matrices_to_torch(bundle.hat_matrices)
-    f_causal, _ = compute_fcausal(
+    f_causal, _ = compute_fcausal_from_compact(
         demand_N=pickup_N_b, supply_N=active_N,
         g0_D_N=g0_D,
-        I_minus_H_demo=tensors["I_minus_H_demo"], M=tensors["M"],
+        X_demo=tensors["X_demo"], XtX_inv=tensors["XtX_inv"],
     )
     grad_ca = torch.autograd.grad(f_causal, pickup_tensor_b)[0].detach().numpy()
 

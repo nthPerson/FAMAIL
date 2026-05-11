@@ -20,7 +20,7 @@ All three terms are in [0, 1] where **higher is always better**:
 | Term | Measures | Formula |
 |---|---|---|
 | `F_spatial` | Equitable demand-service ratio across `N` active units | `1 - 0.5 * (Gini(DSR) + Gini(ASR))` |
-| `F_causal` | Service alignment with demand (not demographics) | `R'(I-H_demo)R / R'MR` — Option B |
+| `F_causal` | Service alignment with demand (not demographics) | `R'(I-H_demo)R / R'MR` |
 | `F_fidelity` | Realism of modified trajectories | Pre-trained Multi-Stream Siamese discriminator |
 
 Default weights: `alpha_spatial = alpha_causal = 0.33`, `alpha_fidelity = 0.34`. Set
@@ -35,13 +35,14 @@ discriminator checkpoint.
 # 1. Install dependencies
 pip install -r famail_temporal/requirements.txt
 
-# 2. Copy raw data files into raw_data/
-#    (see raw_data/README.md for the expected file list)
-cp source_data/all_trajs.pkl          famail_temporal/raw_data/
-cp source_data/pickup_dropoff_counts.pkl famail_temporal/raw_data/
-cp source_data/latest_traffic.pkl     famail_temporal/raw_data/
-cp source_data/grid_to_district_mapping.pkl famail_temporal/raw_data/
-# ... (see raw_data/README.md for the full list)
+# 2. Provision source_data/ — one of:
+#    (a) Run the unified source-generation tool on raw GPS:
+#        python -m famail_temporal.data.source_generation \
+#            --input-dir raw_data/ --output-dir famail_temporal/source_data/
+#    (b) Copy pre-built files in from the repo-root source_data/ directory.
+#    See famail_temporal/source_data/README.md for the full file list.
+cp source_data/cell_demographics.pkl        famail_temporal/source_data/
+cp source_data/grid_to_district_mapping.pkl famail_temporal/source_data/
 
 # 3. Run preprocessing (one-time; writes to cache/)
 python -m famail_temporal.preprocess
@@ -109,7 +110,7 @@ for traj_idx in top_k:
 | `algorithm/` | [README](algorithm/README.md) | ST-iFGSM loop, FAMAILObjective, soft cell assignment, attribution-to-trajectory ranking |
 | `utils/` | [README](utils/README.md) | Reproducible seeding and trajectory dataclasses |
 | `tests/` | [README](tests/README.md) | Math invariants, bug-class guards, and integration tests |
-| `raw_data/` | [README](raw_data/README.md) | Raw input files copied from the parent project |
+| `source_data/` | [README](source_data/README.md) | Source datasets (output of `source_generation/`; input to `preprocess.py` and `loader.py`) |
 | `cache/` | [README](cache/README.md) | Preprocessed artifacts with config-encoded filenames |
 | `discriminator_checkpoints/` | [README](discriminator_checkpoints/README.md) | Canonical fidelity checkpoint and provenance |
 
@@ -118,7 +119,7 @@ Root files:
 | File | Role |
 |---|---|
 | `config.py` | Single source of truth for all hyperparameters |
-| `preprocess.py` | One-time preprocessing: `raw_data/` → `cache/` |
+| `preprocess.py` | One-time preprocessing: `source_data/` → `cache/` |
 | `requirements.txt` | `torch`, `numpy`, `scikit-learn`, `pytest` |
 
 ---

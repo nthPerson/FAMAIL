@@ -21,7 +21,7 @@ Before your first run, confirm:
 | Requirement | How to check |
 |---|---|
 | Preprocess cache exists | `ls famail_temporal/cache/` shows cached artifacts. If empty, run `python -m famail_temporal.preprocess`. |
-| Raw trajectory data exists | `ls famail_temporal/raw_data/passenger_seeking_trajs_45-800.pkl` |
+| Source trajectory data exists | `ls famail_temporal/source_data/passenger_seeking_trajs.pkl` |
 | Discriminator checkpoint (optional but recommended) | `ls famail_temporal/discriminator_checkpoints/default/best.pt`. If absent, the runner falls back to `nn.Identity` and silently forces `alpha_fidelity=0.0` (see "Common pitfalls" below). |
 | Conda env active | `conda activate famail` (or your project env) |
 | Tests pass | `pytest famail_temporal/tests/ -q` → expect all fast tests green. Run `--run-slow` if you want to validate the end-to-end pipeline on real data (~2 minutes). |
@@ -131,10 +131,8 @@ Each is a dict (deserialized via standard pickle loading):
     "grid": np.ndarray,                        # (48, 90, T, 4) float32
     "channel_names": ["spatial_attr", "causal_attr",
                       "gini_decomp_dsr", "gini_decomp_asr"],
-    "time_blocks": [("morning_peak", 7, 10),
-                    ("midday", 10, 16),
-                    ("evening_peak", 16, 20),
-                    ("night", 20, 31)],
+    "time_blocks": [(f"hour_{h:02d}", h, h + 1) for h in range(24)],
+    # 24 hourly blocks as of 2026-04-24 (previously 4 named blocks).
     "active_mask": np.ndarray,                 # (48, 90, T) bool
 }
 ```

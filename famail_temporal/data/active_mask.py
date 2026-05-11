@@ -14,6 +14,12 @@ class UnitIndexMap:
     """Canonical ordering of active (cell, t) units.
 
     Ordering rule: cell-major, then time-block within cell.
+
+    The ``grid_shape`` field (gx, gy) records the (grid_x, grid_y) dimensions
+    used to encode flat cells as ``x * gy + y``. Consumers that need to
+    encode/decode flat cells (e.g. ``rank_trajectories``) must read gy from
+    here rather than from ``config.GRID_DIMS`` so they remain correct under
+    smaller test bundles.
     """
     cell_indices: np.ndarray
     time_block_indices: np.ndarray
@@ -21,6 +27,7 @@ class UnitIndexMap:
     n_units: int
     n_active_cells: int
     units_per_block: np.ndarray
+    grid_shape: Tuple[int, int]
 
     @classmethod
     def from_mask(cls, mask_3d: np.ndarray, grid_shape: Tuple[int, int]) -> "UnitIndexMap":
@@ -69,6 +76,7 @@ class UnitIndexMap:
             n_units=n_units,
             n_active_cells=n_active_cells,
             units_per_block=units_per_block,
+            grid_shape=(int(gx), int(gy)),
         )
 
     def from_cell_time(self, cell: int, t: int) -> int:

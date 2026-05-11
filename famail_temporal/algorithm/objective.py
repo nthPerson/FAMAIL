@@ -21,7 +21,7 @@ import torch.nn as nn
 
 from famail_temporal import config
 from famail_temporal.data.loader import DataBundle
-from famail_temporal.fairness.causal import compute_fcausal
+from famail_temporal.fairness.causal import compute_fcausal_from_compact
 from famail_temporal.fairness.spatial import compute_fspatial
 from famail_temporal.fairness.hat_matrices import hat_matrices_to_torch
 from famail_temporal.fidelity.compute import compute_ffidelity
@@ -65,10 +65,13 @@ class FAMAILObjective(nn.Module):
         self.register_buffer("dropoff_3d", torch.from_numpy(bundle.dropoff_3d).float())
         self.register_buffer("active_taxis_3d", torch.from_numpy(bundle.active_taxis_3d).float())
 
-        # Hat matrices for F_causal (converted to torch, handling read-only arrays)
+        # Hat-matrix building blocks for F_causal (compact FWL form — O(Np)
+        # memory instead of O(N²)). At N=34,524 (T=24) the dense form is
+        # ~19 GB; compact form is ~1 MB. See fairness/hat_matrices.py for
+        # the algebraic identity.
         tensors = hat_matrices_to_torch(bundle.hat_matrices)
-        self.register_buffer("I_minus_H_demo", tensors['I_minus_H_demo'])
-        self.register_buffer("M", tensors['M'])
+        self.register_buffer("X_demo", tensors['X_demo'])
+        self.register_buffer("XtX_inv", tensors['XtX_inv'])
 
         self.g0_func = bundle.g0_func
         self.discriminator = bundle.discriminator
@@ -113,12 +116,12 @@ class FAMAILObjective(nn.Module):
             g0_D_N = torch.from_numpy(np.asarray(g0_D_np, dtype=np.float32)).to(device)
 
         # ── F_causal ───────────────────────────────────────────────────
-        f_causal, cs_debug = compute_fcausal(
+        f_causal, cs_debug = compute_fcausal_from_compact(
             demand_N=pickup_N,
             supply_N=active_taxis_N,
             g0_D_N=g0_D_N,
-            I_minus_H_demo=self.I_minus_H_demo,
-            M=self.M,
+            X_demo=self.X_demo,
+            XtX_inv=self.XtX_inv,
         )
 
         # ── F_fidelity ─────────────────────────────────────────────────

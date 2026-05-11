@@ -1,12 +1,19 @@
 """Fairness-aware state-space grid builder.
 
 Produces a (grid_x, grid_y, T, 4) tensor whose channels are:
-    0: spatial_attr       (sums to 1 - F_spatial)
-    1: causal_attr        (sums to 1 - F_causal)
-    2: gini_decomp_dsr    (sums to Gini(DSR))
-    3: gini_decomp_asr    (sums to Gini(ASR))
+    0: αᵢ_spatial         (sums to F_spatial; canonical 1/N-shifted decomp)
+    1: αᵢ_causal          (sums to F_causal; canonical 1/N-shifted decomp)
+    2: gini_decomp_dsr    (sums to Gini(DSR); per-cell Gini contribution)
+    3: gini_decomp_asr    (sums to Gini(ASR); per-cell Gini contribution)
 
-Inactive units are NaN on all channels.
+Channels 0 and 1 are the canonical fairness attributions (positive = cell
+contributes more than 1/N baseline to fairness; negative = drags below).
+Channels 2 and 3 are the underlying Gini decompositions retained for
+diagnostic purposes (sum to the Gini coefficient = unfairness side).
+
+Inactive units are NaN on all channels. See
+``famail_temporal/docs/FAIRNESS_DECOMPOSITION_FORMULATION.md`` for the
+formulation of the per-cell fairness attribution.
 """
 
 from __future__ import annotations
@@ -17,8 +24,11 @@ import torch
 
 from famail_temporal import config
 from famail_temporal.data.loader import DataBundle
-from famail_temporal.fairness.spatial import compute_spatial_attribution
-from famail_temporal.fairness.causal import per_unit_attribution
+from famail_temporal.fairness.spatial import (
+    per_cell_fairness_attribution_spatial,
+    per_unit_gini_decomposition,
+)
+from famail_temporal.fairness.causal import per_cell_fairness_attribution_causal
 from famail_temporal.fairness.hat_matrices import hat_matrices_to_torch
 
 
@@ -54,20 +64,22 @@ def build_fairness_grid(
         )
 
     mask = bundle.mask_3d
-
-    # Project 3D -> N in canonical order (numpy boolean indexing iterates
-    # in C order, matching UnitIndexMap's cell-major/time-within-cell ordering).
     pickup_N = torch.from_numpy(pickup_3d[mask]).float()
     dropoff_N = torch.from_numpy(bundle.dropoff_3d[mask]).float()
     active_N = torch.from_numpy(bundle.active_taxis_3d[mask]).float()
 
-    # Channels 0, 2, 3 - spatial attribution.
-    sp = compute_spatial_attribution(pickup_N, dropoff_N, active_N)
-    spatial_attr = sp["spatial_attr"].detach().numpy()
-    gini_dsr = sp["gini_decomp_dsr"].detach().numpy()
-    gini_asr = sp["gini_decomp_asr"].detach().numpy()
+    # Channel 0 — spatial fairness attribution (sums to F_spatial).
+    spatial_attr = per_cell_fairness_attribution_spatial(
+        pickup_N, dropoff_N, active_N,
+    ).detach().numpy()
 
-    # Channel 1 - causal attribution (sums to 1 - F_causal).
+    # Channels 2, 3 — diagnostic Gini decompositions (sum to Gini = unfair).
+    dsr = pickup_N / (active_N + config.EPS)
+    asr = dropoff_N / (active_N + config.EPS)
+    gini_dsr = per_unit_gini_decomposition(dsr).detach().numpy()
+    gini_asr = per_unit_gini_decomposition(asr).detach().numpy()
+
+    # Channel 1 — causal fairness attribution (sums to F_causal).
     D_clamped = torch.clamp(pickup_N, min=config.DEMAND_FLOOR)
     Y = active_N / D_clamped
     g0_D = torch.from_numpy(
@@ -75,8 +87,8 @@ def build_fairness_grid(
     )
     R = Y - g0_D
     tensors = hat_matrices_to_torch(bundle.hat_matrices)
-    causal_attr = per_unit_attribution(
-        R, tensors["I_minus_H_demo"], tensors["M"],
+    causal_attr = per_cell_fairness_attribution_causal(
+        R, tensors["X_demo"], tensors["XtX_inv"],
     ).detach().numpy()
 
     # Scatter back with NaN on inactive cells. Shape is derived from the

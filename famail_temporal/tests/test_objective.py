@@ -14,9 +14,14 @@ from famail_temporal.fidelity.context import MultiStreamData
 
 
 def _make_synthetic_bundle(N_cells_per_block=20, seed=0):
-    """Build a minimal DataBundle for testing — small grid, synthetic data."""
+    """Build a minimal DataBundle for testing — small grid, synthetic data.
+
+    Uses config.T for the time-block axis so the bundle matches whatever
+    T the global config is set to (4 during framework validation, 24 in
+    production). Hardcoded previously to T=4.
+    """
     rng = np.random.RandomState(seed)
-    gx, gy, t = 8, 8, 4
+    gx, gy, t = 8, 8, config.T
 
     # Random active mask with approximately N_cells_per_block per block
     mask = np.zeros((gx, gy, t), dtype=bool)
@@ -63,7 +68,11 @@ def _make_synthetic_bundle(N_cells_per_block=20, seed=0):
         dropoff_3d=dropoff_3d,
         active_taxis_3d=active_3d,
         mask_3d=mask,
-        n_hours_per_block=np.array([3, 6, 4, 11], dtype=np.int32),
+        n_hours_per_block=np.array(
+            [config.TIME_BLOCKS[i][2] - config.TIME_BLOCKS[i][1]
+             for i in range(t)],
+            dtype=np.int32,
+        ),
         n_days=65,
         unit_map=unit_map,
         g0_func=g0,
@@ -221,8 +230,8 @@ def test_famailobjective_on_real_data():
     from famail_temporal.data.loader import DataBundle
 
     required = [
-        config.RAW_DATA_DIR / "pickup_dropoff_counts.pkl",
-        config.RAW_DATA_DIR / "cell_demographics.pkl",
+        config.SOURCE_DATA_DIR / "pickup_dropoff_counts.pkl",
+        config.SOURCE_DATA_DIR / "cell_demographics.pkl",
     ]
     for path in required:
         if not path.exists():

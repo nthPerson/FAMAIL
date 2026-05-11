@@ -1,16 +1,24 @@
 #!/usr/bin/bash
+# Provision famail_temporal/ with non-source-generation dependencies.
+#
+# Most source datasets are now produced by the unified source-generation tool:
+#   python -m famail_temporal.data.source_generation \
+#       --input-dir raw_data/ --output-dir famail_temporal/source_data/
+#
+# This script only copies the files that that tool does NOT produce:
+# 1. The 2 external inputs (census/district data — not GPS-derived).
+# 2. The discriminator checkpoint.
+#
+# See famail_temporal/source_data/README.md for the full file inventory.
 
-# Copy raw data (see famail_temporal/raw_data/README.md)
-cp source_data/pickup_dropoff_counts.pkl       famail_temporal/raw_data/
-cp source_data/active_taxis_5x5_hourly.pkl     famail_temporal/raw_data/
-cp source_data/cell_demographics.pkl            famail_temporal/raw_data/
-cp source_data/grid_to_district_mapping.pkl     famail_temporal/raw_data/
-cp source_data/passenger_seeking_trajs_45-800.pkl famail_temporal/raw_data/
-cp discriminator/multi_stream/extracted_data/driving_trajs.pkl          famail_temporal/raw_data/ms_driving_trajs.pkl
-cp discriminator/multi_stream/extracted_data/seeking_trajs.pkl          famail_temporal/raw_data/ms_seeking_trajs.pkl
-cp discriminator/multi_stream/extracted_data/profile_features.pkl       famail_temporal/raw_data/ms_profile_features.pkl
-cp discriminator/multi_stream/extracted_data/seeking_calendar_days.pkl  famail_temporal/raw_data/ms_seeking_calendar_days.pkl
-cp discriminator/multi_stream/extracted_data/driving_calendar_days.pkl  famail_temporal/raw_data/ms_driving_calendar_days.pkl
+set -e
 
-# Copy discriminator checkpoint
-cp discriminator/model/checkpoints/20260316_223817/best.pt famail_temporal/discriminator_checkpoints/default/best.pt
+# External inputs consumed by preprocess.py (see source_data/README.md, Group B).
+cp source_data/cell_demographics.pkl        famail_temporal/source_data/
+cp source_data/grid_to_district_mapping.pkl famail_temporal/source_data/
+
+# Discriminator checkpoint for F_fidelity (retrain after regenerating
+# ms_* source datasets; see CHANGELOG 2026-04-20 entry for the scheduled-next
+# retraining task).
+cp discriminator/model/checkpoints/20260316_223817/best.pt \
+   famail_temporal/discriminator_checkpoints/default/best.pt

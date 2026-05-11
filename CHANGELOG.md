@@ -5,6 +5,69 @@ and non-trivial edits. Minor bugfixes and UI tweaks are omitted.
 
 ---
 
+## 2026-04-20 — Rename `famail_temporal/raw_data/` → `famail_temporal/source_data/`
+
+The producer-output directory inside `famail_temporal/` was misleadingly named
+`raw_data/` — the actual raw taxi GPS pickles live at the repo-root `raw_data/`
+(as input to the source-generation tool). The files *inside* `famail_temporal/` are
+derived source datasets, not raw.
+
+Renames:
+- Directory: `famail_temporal/raw_data/` → `famail_temporal/source_data/` (preserves
+  per-file history of tracked `.gitkeep` and `README.md`).
+- Config symbol: `config.RAW_DATA_DIR` → `config.SOURCE_DATA_DIR`.
+- Source-generation default: `DEFAULT_OUTPUT_DIR` now points at
+  `famail_temporal/source_data`.
+
+Also deleted the stale `passenger_seeking_trajs_45-800.pkl` file (no longer referenced
+after Task 15 switched `loader.py` to the new `passenger_seeking_trajs.pkl`
+filename).
+
+**Required operator action after pulling this change:**
+1. If you have uncommitted data files under `famail_temporal/raw_data/`, move them:
+   `mkdir -p famail_temporal/source_data && mv famail_temporal/raw_data/*.pkl famail_temporal/source_data/ && rmdir famail_temporal/raw_data`
+2. Update any local scripts that referenced `config.RAW_DATA_DIR` — use `config.SOURCE_DATA_DIR`.
+3. Re-run `python -m famail_temporal.data.source_generation --output-dir famail_temporal/source_data/` if regenerating source datasets.
+
+---
+
+## 2026-04-20 — Unified source-data generation tool
+
+Added `famail_temporal/data/source_generation/` — a unified tool that
+generates all 8 GPS-derived source datasets from raw taxi_record_*.pkl.
+Replaces the legacy `pickup_dropoff_counts/`, `active_taxis/`, and
+`new_all_trajs/` tools with a single pipeline whose cross-file consistency
+holds by construction.
+
+**Semantic changes (results from before this commit are NOT directly
+comparable to results from after):**
+
+- `active_taxis` definition changed from "any driver present in 5×5 neighborhood"
+  to "driver with at least one empty (passenger=0) ping in 5×5 neighborhood."
+  F_spatial's DSR denominator now represents service-capacity rather than
+  traffic-presence.
+- Each seeking trajectory's `states[-1]` is now the pickup-transition record
+  (first passenger=1 ping), not the last seeking ping. The modifier's
+  mass-balance invariant (`pickup_3d[states[-1].cell] >= 1`) now holds by
+  construction.
+- Day filter unified to weekdays-only (Mon-Fri, day_index ∈ {1..5}) across
+  all 8 output files. Saturday records are no longer included in
+  `pickup_dropoff_counts`.
+- Profile feature `home_x/y` redefined as mode-of-cell at `time_bucket == 1`
+  (midnight), not mode-of-trajectory-start-cell.
+- Profile features `shift_start`/`shift_end` redefined as 5th/95th percentile
+  (previously min/max).
+
+**Required operator action after pulling this change:**
+1. Regenerate source data:
+   `python -m famail_temporal.data.source_generation --input-dir raw_data/ --output-dir famail_temporal/source_data/`
+2. Regenerate preprocess cache:
+   `python -m famail_temporal.preprocess --force`
+3. Retrain the v3 discriminator on the new multi-stream files before running
+   experiments with F_fidelity enabled.
+
+---
+
 ## 2026-04-16 - FAMAIL Temporal Evaluation Framework
 
 **Files**: `famail_temporal/evaluation/*`, `famail_temporal/fairness/spatial.py`,
