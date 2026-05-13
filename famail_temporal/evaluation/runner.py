@@ -4,6 +4,8 @@ from __future__ import annotations
 import argparse
 import datetime as _dt
 import re
+import sys
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -21,6 +23,113 @@ from famail_temporal.data.loader import DataBundle
 from famail_temporal.evaluation.augment import augment_trajectories
 from famail_temporal.evaluation.grid import build_fairness_grid
 from famail_temporal.fidelity.context import MultiStreamContextBuilder
+
+try:
+    from tqdm import tqdm as _tqdm
+    _TQDM_AVAILABLE = True
+except ImportError:
+    _TQDM_AVAILABLE = False
+    _tqdm = None  # type: ignore
+
+
+def _log(t0: float, msg: str) -> None:
+    """One-line phase marker: ``[runner +HH:MM:SS] msg``.
+
+    All phase prints go through this so the timestamp format stays uniform and
+    elapsed time is continuous from ``t0`` (typically set at CLI start).
+    """
+    dt = time.monotonic() - t0
+    h, rem = divmod(int(dt), 3600)
+    m, s = divmod(rem, 60)
+    print(f"[runner +{h:02d}:{m:02d}:{s:02d}] {msg}", flush=True)
+
+
+def _modify_with_progress(
+    modifier: TrajectoryModifier,
+    trajectories: List[Any],
+) -> List[ModificationHistory]:
+    """Run ``modify_single`` on each trajectory with an iteration-level progress bar.
+
+    The bar's total is ``len(trajectories) * max_iterations`` (iter-units) so it
+    ticks every ST-iFGSM step rather than waiting for an entire trajectory to
+    finish. Per-trajectory work can be 5-15 seconds × ``max_iterations``, so a
+    per-trajectory bar would sit at 0/n for many minutes; this bar updates once
+    every ~10 sec. Early-converged trajectories advance the bar by the unused
+    iters so total ETA stays honest.
+
+    Postfix shows ``traj=N/K conv=C`` — current trajectory index and the
+    running count of converged trajectories (primary signal for "is the
+    optimizer actually finding minima or just hitting the iter cap").
+
+    Falls back to throttled plain-print every ~5% when stderr is not a TTY or
+    tqdm is unavailable.
+    """
+    n_trajs = len(trajectories)
+    max_iters = modifier.max_iterations
+    total_iter_units = n_trajs * max_iters
+    use_tqdm = _TQDM_AVAILABLE and sys.stderr.isatty()
+
+    if use_tqdm:
+        state = {"current_traj": 0, "n_conv": 0}
+        bar = _tqdm(
+            total=total_iter_units, desc="modifying", unit="iter",
+            leave=True, dynamic_ncols=True,
+        )
+
+        def _on_iter(_it_idx: int, _result) -> None:
+            bar.update(1)
+            bar.set_postfix(
+                traj=f"{state['current_traj']}/{n_trajs}",
+                conv=state["n_conv"],
+                refresh=False,
+            )
+
+        histories: List[ModificationHistory] = []
+        try:
+            for i, t in enumerate(trajectories, start=1):
+                state["current_traj"] = i
+                bar.set_postfix(
+                    traj=f"{state['current_traj']}/{n_trajs}",
+                    conv=state["n_conv"],
+                    refresh=False,
+                )
+                h = modifier.modify_single(t, on_iteration=_on_iter)
+                # Advance bar past any unused iters when convergence broke early
+                unused = max_iters - len(h.iterations)
+                if unused > 0:
+                    bar.update(unused)
+                histories.append(h)
+                if h.converged:
+                    state["n_conv"] += 1
+        finally:
+            bar.close()
+        return histories
+
+    # Non-TTY / no-tqdm fallback: print iter-units progress every ~5% of total
+    step = max(1, total_iter_units // 20)
+    iters_seen = 0
+    n_conv = 0
+    histories = []
+
+    def _on_iter_fallback(_it_idx: int, _result) -> None:
+        nonlocal iters_seen
+        iters_seen += 1
+        if iters_seen % step == 0 or iters_seen == total_iter_units:
+            print(
+                f"[runner]   modifying: {iters_seen}/{total_iter_units} iters  "
+                f"converged_so_far={n_conv}",
+                flush=True,
+            )
+
+    for t in trajectories:
+        h = modifier.modify_single(t, on_iteration=_on_iter_fallback)
+        # Account for early-converged iters in the fallback print path too
+        unused = max_iters - len(h.iterations)
+        iters_seen += unused
+        histories.append(h)
+        if h.converged:
+            n_conv += 1
+    return histories
 
 
 @dataclass(frozen=True)
@@ -133,25 +242,56 @@ def run_experiment(
     max_drivers: Optional[int] = None,
     k: int = 100,
     diagnostics_enabled: bool = True,
+    t0: Optional[float] = None,
 ) -> ExperimentResult:
     if k <= 0:
         raise ValueError(f"k must be > 0; got {k}")
+    if t0 is None:
+        t0 = time.monotonic()
 
     restore_config = _apply_config_overrides(config_overrides or {})
     try:
         experiment_id = _generate_experiment_id(name)
+        _log(t0, f"experiment_id = {experiment_id}")
+        _log(
+            t0,
+            f"loading data bundle (max_trajectories={max_trajectories}, "
+            f"max_drivers={max_drivers}, diagnostics={diagnostics_enabled})...",
+        )
         bundle = _load_bundle(max_trajectories=max_trajectories, max_drivers=max_drivers)
+        _log(
+            t0,
+            f"bundle loaded: n_trajectories={len(bundle.trajectories)}  "
+            f"n_active_units={bundle.unit_map.n_units}  "
+            f"grid={tuple(bundle.unit_map.grid_shape)} T={bundle.pickup_3d.shape[2]}",
+        )
 
+        _log(t0, "building fairness grid (before)...")
         grid_before = build_fairness_grid(bundle)
         if diagnostics_enabled:
+            _log(t0, "computing gradient sensitivity (before)...")
             from famail_temporal.evaluation.diagnostics import compute_gradient_sensitivity
             sensitivity_before = compute_gradient_sensitivity(bundle, bundle.pickup_3d)
         else:
             sensitivity_before = None
         metrics_before = _scalar_metrics_from_grid(grid_before)
+        _log(
+            t0,
+            f"metrics_before: F_spatial={metrics_before['f_spatial']:.6f}  "
+            f"F_causal={metrics_before['f_causal']:.6f}",
+        )
+        _log(t0, f"augmenting {len(bundle.trajectories)} trajectories (before)...")
         augmented_before = augment_trajectories(bundle.trajectories, grid_before)
-        attribution = compute_per_unit_attribution(bundle)
 
+        _log(t0, "computing per-unit attribution...")
+        attribution = compute_per_unit_attribution(bundle)
+        _log(
+            t0,
+            f"attribution: range=[{attribution.min():.3e}, {attribution.max():.3e}]  "
+            f"frac_negative={(attribution < 0).mean():.3f}",
+        )
+
+        _log(t0, f"ranking {len(bundle.trajectories)} trajectories...")
         scored = rank_trajectories(bundle.trajectories, attribution, bundle.unit_map)
         if k > len(scored):
             raise ValueError(
@@ -170,6 +310,11 @@ def run_experiment(
             )
         top_k_scores = [scored[i][1] for i in range(len(top_k_indices))]
         top_k_trajs = [bundle.trajectories[i] for i in top_k_indices]
+        _log(
+            t0,
+            f"selected top-k: {len(top_k_indices)}/{k} requested  "
+            f"(score range [{top_k_scores[0]:.3e}, {top_k_scores[-1]:.3e}])",
+        )
 
         # When no trained discriminator is available the bundle carries an
         # nn.Identity() placeholder, which cannot handle the fidelity call
@@ -191,20 +336,43 @@ def run_experiment(
             multi_stream_builder=ms_builder,
             diagnostics_enabled=diagnostics_enabled,
         )
-        histories = modifier.modify_batch(top_k_trajs)
+        _log(
+            t0,
+            f"modifying {len(top_k_trajs)} trajectories  "
+            f"(max_iters={modifier.max_iterations}, "
+            f"alphas=(sp={effective_alphas[0]:.2f}, "
+            f"ca={effective_alphas[1]:.2f}, fi={effective_alphas[2]:.2f}))",
+        )
+        histories = _modify_with_progress(modifier, top_k_trajs)
+        n_converged = sum(1 for h in histories if h.converged)
+        _log(
+            t0,
+            f"modification done: converged={n_converged}/{len(histories)}  "
+            f"mean_iters={np.mean([h.total_iterations for h in histories]):.1f}",
+        )
 
         pickup_after = modifier.current_pickup_3d()
+        _log(t0, "building fairness grid (after)...")
         grid_after = build_fairness_grid(bundle, pickup_3d=pickup_after)
         if diagnostics_enabled:
+            _log(t0, "computing gradient sensitivity (after)...")
             sensitivity_after = compute_gradient_sensitivity(bundle, pickup_after)
         else:
             sensitivity_after = None
         metrics_after = _scalar_metrics_from_grid(grid_after)
+        _log(
+            t0,
+            f"metrics_after:  F_spatial={metrics_after['f_spatial']:.6f}  "
+            f"F_causal={metrics_after['f_causal']:.6f}  "
+            f"(ΔF_sp={metrics_after['f_spatial']-metrics_before['f_spatial']:+.3e}, "
+            f"ΔF_ca={metrics_after['f_causal']-metrics_before['f_causal']:+.3e})",
+        )
 
         modified_by_tid = {h.original.trajectory_id: h.modified for h in histories}
         trajs_after = [
             modified_by_tid.get(t.trajectory_id, t) for t in bundle.trajectories
         ]
+        _log(t0, f"augmenting {len(trajs_after)} trajectories (after)...")
         augmented_after = augment_trajectories(trajs_after, grid_after)
 
         snapshot = {
@@ -266,6 +434,7 @@ def _parse_cli_overrides(raw: list[str]) -> dict:
 
 
 def main(argv: Optional[list[str]] = None) -> int:
+    t0 = time.monotonic()
     args = _build_arg_parser().parse_args(argv)
     overrides = _parse_cli_overrides(args.override)
     result = run_experiment(
@@ -275,17 +444,26 @@ def main(argv: Optional[list[str]] = None) -> int:
         max_drivers=args.max_drivers,
         k=args.k,
         diagnostics_enabled=not args.no_diagnostics,
+        t0=t0,
     )
     from famail_temporal.evaluation.persistence import write
     from famail_temporal.evaluation.report import render
     output_root = Path(config.PACKAGE_ROOT) / "results"
+    _log(t0, "writing artifacts to disk...")
     out_dir = write(result, output_root=output_root)
+    _log(t0, "rendering report.md...")
     render(out_dir)
-    print(f"[runner] experiment_id = {result.experiment_id}")
-    print(f"[runner] results_dir  = {out_dir}")
-    print(f"[runner] report       = {out_dir / 'report.md'}")
-    print(f"[runner]   F_spatial: {result.f_spatial_before:.4f} -> {result.f_spatial_after:.4f}")
-    print(f"[runner]   F_causal:  {result.f_causal_before:.4f} -> {result.f_causal_after:.4f}")
+    _log(t0, f"experiment_id = {result.experiment_id}")
+    _log(t0, f"results_dir  = {out_dir}")
+    _log(t0, f"report       = {out_dir / 'report.md'}")
+    _log(
+        t0,
+        f"F_spatial: {result.f_spatial_before:.4f} -> {result.f_spatial_after:.4f}",
+    )
+    _log(
+        t0,
+        f"F_causal:  {result.f_causal_before:.4f} -> {result.f_causal_after:.4f}",
+    )
     return 0
 
 

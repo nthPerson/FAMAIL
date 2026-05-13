@@ -23,7 +23,7 @@ modification. This is intentional.
 
 from __future__ import annotations
 from dataclasses import dataclass, field
-from typing import List
+from typing import Callable, List, Optional
 import warnings
 
 import numpy as np
@@ -228,7 +228,11 @@ class TrajectoryModifier:
         }
         return grad_combined, diagnostics
 
-    def modify_single(self, trajectory: Trajectory) -> ModificationHistory:
+    def modify_single(
+        self,
+        trajectory: Trajectory,
+        on_iteration: Optional[Callable[[int, "ModificationResult"], None]] = None,
+    ) -> ModificationHistory:
         """Run the ST-iFGSM loop on a single trajectory.
 
         Steps:
@@ -236,6 +240,14 @@ class TrajectoryModifier:
         2. Subtract this trajectory's contribution from the shared base
         3. Iteratively perturb the pickup location using signed gradients
         4. Persist the final change to the shared _base_pickup_3d
+
+        Args:
+            trajectory: The trajectory whose pickup location to perturb.
+            on_iteration: Optional callback invoked after each ST-iFGSM step
+                with ``(iteration_index, ModificationResult)``. Pure
+                instrumentation — does not affect any algorithmic state.
+                Default ``None`` (no callback). Use for progress bars,
+                live diagnostics, etc.
         """
         self._prev_grad_sign = None
         pickup_state = trajectory.states[-1]
@@ -384,6 +396,8 @@ class TrajectoryModifier:
                 dominant_term=(tier_a_metrics or {}).get("dominant_term"),
             )
             iterations.append(result)
+            if on_iteration is not None:
+                on_iteration(it, result)
 
             # (g) Convergence check
             if abs(float(total.detach()) - prev_objective) < self.convergence_tol:
