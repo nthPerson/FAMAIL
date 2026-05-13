@@ -1,5 +1,12 @@
 # `data/` — Data pipeline: producer (raw GPS → source datasets) and consumer (source → cache tensors)
 
+> **First-time setup:** you don't need to run the producer to use this module.
+> `python -m famail_temporal.fetch_data` pulls the source datasets, raw GPS, and
+> discriminator checkpoint from the public HuggingFace dataset
+> (<https://huggingface.co/datasets/nthPerson/famail-temporal-data>). Only re-run
+> the producer if you need to change a producer-side convention or re-process
+> raw GPS.
+
 ## Purpose
 
 Everything the rest of `famail_temporal/` needs in order to load data sits under this directory.

@@ -40,7 +40,7 @@ Before your first regeneration run, confirm:
 
 | Requirement | How to check |
 |---|---|
-| Raw GPS files present | `ls raw_data/taxi_record_{07,08,09}_50drivers.pkl` — all 3 exist. These are not committed to the repo (binary, large); obtain from the project's source. |
+| Raw GPS files present | `ls raw_data/taxi_record_{07,08,09}_50drivers.pkl` — all 3 exist. These are not committed to the repo (binary, large); the easiest way to obtain them is `python -m famail_temporal.fetch_data`, which pulls them from <https://huggingface.co/datasets/nthPerson/famail-temporal-data>. |
 | `famail_temporal/source_data/` exists (output directory) | `ls famail_temporal/source_data/` — directory is present (may be empty except for `.gitkeep`). |
 | `.venv` active with pandas + numpy + pytest | `.venv/bin/python -c "import pandas, numpy"` — both import cleanly. |
 | Tests pass | `.venv/bin/pytest famail_temporal/data/source_generation/tests/ -q` — expect 81 passed, 1-2 real-data-gated skips. |

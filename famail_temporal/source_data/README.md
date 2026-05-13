@@ -5,66 +5,59 @@ This directory holds the source datasets consumed by `famail_temporal` at load t
 - `python -m famail_temporal.preprocess` reads 4 of them to build the `(48, 90, T)` cache tensors.
 - `famail_temporal.data.loader.DataBundle.load()` reads 6 more at load time to populate the trajectory list, multi-stream discriminator context, and profile features.
 
-All `.pkl` files in this directory are gitignored (binary, large). The directory itself is tracked via `.gitkeep` and this README.
+All data files in this directory are gitignored. The directory itself is tracked via `.gitkeep` and this README.
 
-> **Naming note.** The repo-root `raw_data/` directory holds the *actually raw* taxi GPS pickle files (`taxi_record_*.pkl`), which are the **input** to `famail_temporal.data.source_generation`. This `famail_temporal/source_data/` directory holds the **output** of that tool — the source datasets consumed by the algorithm. "Raw" and "source" refer to two different stages of the pipeline.
+## Provisioning a fresh checkout
+
+**Recommended:** fetch from the project's public HuggingFace dataset:
+
+```bash
+python -m famail_temporal.fetch_data
+python -m famail_temporal.preprocess
+```
+
+This downloads `source_data/`, `raw_data/`, and the discriminator checkpoint in one shot. No HF token required — the dataset is public. Add `--skip-raw` if you don't need the 418 MB raw GPS bundle. See [`../fetch_data.py`](../fetch_data.py) for flags.
+
+Dataset: <https://huggingface.co/datasets/nthPerson/famail-temporal-data>
+
+**Alternative — regenerate from raw GPS:**
+
+1. Obtain the 3 raw files `raw_data/taxi_record_{07,08,09}_50drivers.pkl` from the HF dataset (`python -m famail_temporal.fetch_data --skip-raw=false` covers this).
+2. Obtain the 2 external inputs `cell_demographics.pkl` and `grid_to_district_mapping.pkl` from the HF dataset and place them in this directory.
+3. Run `python -m famail_temporal.data.source_generation --input-dir raw_data/ --output-dir famail_temporal/source_data/` to produce the 8 generated files.
+4. Run `python -m famail_temporal.preprocess --force` to build the cache tensors.
+
+> **Naming note.** "Raw" and "source" refer to two different stages of the pipeline. The `raw_data/` directory at the repository root holds the raw taxi GPS files (the *input* to `source_generation`). This `famail_temporal/source_data/` directory holds the *output* of that tool — the datasets the algorithm actually consumes.
 
 ---
 
-## Files
+## File inventory
 
-Files fall into 3 groups depending on how they're provisioned:
-
-### Group A — Produced by the unified source-generation tool (8 files)
-
-These regenerate every time you run:
-
-```bash
-python -m famail_temporal.data.source_generation \
-    --input-dir raw_data/ \
-    --output-dir famail_temporal/source_data/
-```
+**Produced by the source-generation tool (8 files + 2 sidecars):**
 
 | Filename | Consumer | Purpose |
 |---|---|---|
 | `pickup_dropoff_counts.pkl` | `preprocess.py` | `pickup_3d`, `dropoff_3d` tensors |
-| `active_taxis_5x5_hourly.pkl` | `preprocess.py` | `active_taxis_3d` tensor (bundle format with `data`/`stats`/`config`/`version`) |
-| `passenger_seeking_trajs.pkl` | `loader.py::_load_trajectories` | `bundle.trajectories` |
-| `ms_driving_trajs.pkl` | `loader.py::_load_multi_stream` | Discriminator driving stream |
-| `ms_seeking_trajs.pkl` | `loader.py::_load_multi_stream` | Discriminator seeking stream |
-| `ms_profile_features.pkl` | `loader.py::_load_multi_stream` | Discriminator per-driver profile (11 features, z-score normalized) |
-| `ms_seeking_calendar_days.pkl` | `loader.py::_load_multi_stream` | Reserved (loaded but currently unconsumed) |
-| `ms_driving_calendar_days.pkl` | `loader.py::_load_multi_stream` | Reserved (loaded but currently unconsumed) |
-
-Each run also writes `driver_index_mapping.pkl` (sidecar for joining plate-keyed and int-keyed files) and `processing_metadata.json` (run-level audit record with config snapshot, GPS bounds, git SHA, and per-trajectory removal summary).
+| `active_taxis_5x5_hourly.pkl` | `preprocess.py` | `active_taxis_3d` (bundle: `data`/`stats`/`config`/`version`) |
+| `passenger_seeking_trajs.pkl` | `loader.py` | `bundle.trajectories` |
+| `ms_driving_trajs.pkl` | `loader.py` | Discriminator driving stream |
+| `ms_seeking_trajs.pkl` | `loader.py` | Discriminator seeking stream |
+| `ms_profile_features.pkl` | `loader.py` | Per-driver profile (11 features, z-score normalized) |
+| `ms_seeking_calendar_days.pkl` | `loader.py` | Reserved (loaded but currently unconsumed) |
+| `ms_driving_calendar_days.pkl` | `loader.py` | Reserved (loaded but currently unconsumed) |
+| `driver_index_mapping.pkl` (sidecar) | — | Joins plate-keyed and int-keyed files |
+| `processing_metadata.json` (sidecar) | — | Run-level audit (config snapshot, GPS bounds, git SHA, removals) |
 
 See [`../data/source_generation/SOURCE_DATASET_GENERATION_QUICKSTART.md`](../data/source_generation/SOURCE_DATASET_GENERATION_QUICKSTART.md) for operator instructions and [`../data/source_generation/README.md`](../data/source_generation/README.md) for architectural details.
 
-### Group B — External inputs (2 files, manually provisioned)
+**External inputs (2 files):** Not produced by the source-generation tool — sourced from Shenzhen census and ArcGIS district data.
 
-These are NOT produced by the source-generation tool. They come from census / geographic data in the repo-root `source_data/` directory and must be copied in once per checkout:
+| Filename | Consumer |
+|---|---|
+| `cell_demographics.pkl` | `preprocess.py`; `data/demographics.py` |
+| `grid_to_district_mapping.pkl` | `preprocess.py` (Shenzhen boundary mask) |
 
-| Filename | Source (relative to repo root) | Consumer |
-|---|---|---|
-| `cell_demographics.pkl` | `source_data/cell_demographics.pkl` | `preprocess.py`; `data/demographics.py` |
-| `grid_to_district_mapping.pkl` | `source_data/grid_to_district_mapping.pkl` | `preprocess.py` (Shenzhen boundary mask) |
-
-Copy with:
-
-```bash
-cp source_data/cell_demographics.pkl       famail_temporal/source_data/
-cp source_data/grid_to_district_mapping.pkl famail_temporal/source_data/
-```
-
----
-
-## Provisioning a fresh checkout
-
-1. Ensure the raw taxi GPS files are at repo-root `raw_data/taxi_record_{07,08,09}_50drivers.pkl`.
-2. Copy the 2 external inputs from `source_data/` (see Group B above).
-3. Run `python -m famail_temporal.data.source_generation` to produce the 8 Group-A files.
-4. Run `python -m famail_temporal.preprocess --force` to build the cache tensors.
-5. Verify with `pytest famail_temporal/tests/ -q` — all fast tests should pass, including `test_databundle_load_real_data`.
+Both ship inside the HuggingFace dataset's `source_data/` directory and land here automatically via `fetch_data`.
 
 ---
 

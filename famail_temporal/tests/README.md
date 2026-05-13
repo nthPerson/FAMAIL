@@ -33,8 +33,8 @@ production code — "this is research code" is not an excuse for untested invari
 | `test_modifier_integration.py` | Fixed-seed 5-iteration run: metrics improve/plateau, no NaN |
 | `test_seeding.py` | set_all_seeds produces identical results across two runs |
 | `test_trajectory.py` | TrajectoryState field access, coordinate indexing |
-| `conftest.py` | `synthetic_bundle` fixture; `seeded` autouse fixture; `--run-slow` flag |
-| `synthetic/fixtures.py` | `make_synthetic_bundle()` — in-memory DataBundle with known properties |
+| `conftest.py` | `seeded` autouse fixture (calls `set_all_seeds(42)`); `--run-slow` flag |
+| `test_objective.py` | Exports `_make_synthetic_bundle()` — an in-memory `DataBundle` with known properties, reused by other test modules |
 
 ---
 
@@ -109,25 +109,15 @@ pytest famail_temporal/tests/test_math_invariants.py -v
 
 ## Fixtures
 
-**`conftest.py`** provides two fixtures and the `--run-slow` flag:
+**`conftest.py`** provides one autouse fixture and the `--run-slow` flag:
 
 | Fixture | Scope | Description |
 |---|---|---|
-| `synthetic_bundle` | `session` | In-memory `DataBundle` with N=200 synthetic active units, T=4 blocks, 5 synthetic trajectories. No disk I/O. All tests that do not need real data use this fixture. |
-| `seeded` | `function` (autouse) | Calls `set_all_seeds(42)` and sets `torch.backends.cudnn.deterministic = True` before every test. Ensures reproducibility without explicit seed management in individual tests. |
+| `seeded` | `function` (autouse) | Calls `set_all_seeds(42)` before every test. Ensures reproducibility without explicit seed management in individual tests. |
 
-**`synthetic/fixtures.py`** defines `make_synthetic_bundle()`:
+**Synthetic bundles** are built on demand by `_make_synthetic_bundle()`, defined in `test_objective.py` and imported by other test modules. It generates pickup/dropoff/active-taxis tensors with known statistical properties (e.g., one grid quadrant has systematically higher DSR to produce non-trivial Gini), computes hat matrices and attribution scores so math invariant tests can compare against expected values, and returns a `DataBundle` with `discriminator=None` (so fast tests do not require a checkpoint).
 
-- Generates pickup/dropoff/active-taxis tensors with known statistical properties (e.g., one
-  grid quadrant has systematically higher DSR to produce non-trivial Gini)
-- Computes hat matrices and attribution scores analytically so that math invariant tests can
-  compare against closed-form expected values
-- Creates 5 synthetic `Trajectory` objects with pickups in known (cell, t_block) slots
-- Returns a `DataBundle` with `discriminator=None` unless `include_discriminator=True` is
-  specified (avoids requiring a checkpoint for fast tests)
-
-Slow tests that need the real discriminator use `DataBundle.load()` directly and are decorated
-with `@pytest.mark.slow`.
+Slow tests that need the real discriminator use `DataBundle.load()` directly and are decorated with `@pytest.mark.slow`.
 
 ---
 

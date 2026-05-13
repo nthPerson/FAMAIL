@@ -12,7 +12,7 @@ Preprocessed artifacts produced by `python -m famail_temporal.preprocess`. All f
 - `thr` — active supply threshold (e.g., `thr0.5`)
 - `feat-...` — only present for artifacts that depend on the demographic feature set (e.g., `feat-housing-gdp-comp`)
 
-Example: `hat_matrices_T4_thr0.5_feat-housing-gdp-comp.pkl`
+Example: `hat_matrices_T24_thr0.5_feat-housing-gdp-comp.pkl` (with the default `T=24` hourly time blocks).
 
 This encoding lets multiple configurations coexist in the same cache directory without invalidation.
 

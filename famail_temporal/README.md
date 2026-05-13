@@ -35,16 +35,12 @@ discriminator checkpoint.
 # 1. Install dependencies
 pip install -r famail_temporal/requirements.txt
 
-# 2. Provision source_data/ — one of:
-#    (a) Run the unified source-generation tool on raw GPS:
-#        python -m famail_temporal.data.source_generation \
-#            --input-dir raw_data/ --output-dir famail_temporal/source_data/
-#    (b) Copy pre-built files in from the repo-root source_data/ directory.
-#    See famail_temporal/source_data/README.md for the full file list.
-cp source_data/cell_demographics.pkl        famail_temporal/source_data/
-cp source_data/grid_to_district_mapping.pkl famail_temporal/source_data/
+# 2. Fetch source_data/, raw_data/, and the discriminator checkpoint from the
+#    project's public HuggingFace dataset (~600 MB total; no auth needed).
+#    See: https://huggingface.co/datasets/nthPerson/famail-temporal-data
+python -m famail_temporal.fetch_data         # add --skip-raw to drop raw GPS (200 MB total)
 
-# 3. Run preprocessing (one-time; writes to cache/)
+# 3. Run preprocessing (one-time; writes to famail_temporal/cache/)
 python -m famail_temporal.preprocess
 
 # 4. Run the fast test suite (should pass in < 10 seconds)
@@ -52,7 +48,15 @@ pytest famail_temporal/tests/
 
 # 5. Run all tests including slow integration tests
 pytest famail_temporal/tests/ --run-slow
+
+# 6. Run an end-to-end experiment (all trajectories, k=100)
+python -m famail_temporal.evaluation.runner --name demo
 ```
+
+**Alternative for step 2:** regenerate `source_data/` from raw GPS instead of
+downloading it. See [`source_data/README.md`](source_data/README.md) for the file
+list and [`data/source_generation/README.md`](data/source_generation/README.md)
+for the tool.
 
 ---
 
@@ -74,7 +78,7 @@ set_all_seeds(42)
 
 # Load preprocessed data (uses cache; rebuild with force_rebuild_cache=True)
 bundle = DataBundle.load()
-print(f"Active units: {bundle.unit_map.n_units}")  # expected: 6,000–8,000
+print(f"Active units: {bundle.unit_map.n_units}")  # ~34,500 at T=24 (hourly)
 
 # Build the objective
 objective = FAMAILObjective(bundle)
@@ -104,23 +108,28 @@ for traj_idx in top_k:
 
 | Path | README | One-sentence description |
 |---|---|---|
-| `data/` | [README](data/README.md) | Ingest raw files; produce canonical `(48, 90, T)` tensors and active-unit index |
+| `data/` | [README](data/README.md) | Producer (raw GPS → source datasets) and consumer (source → cache tensors + `DataBundle`) |
 | `fairness/` | [README](fairness/README.md) | Pooled Gini and Option B R^2 fairness metrics; per-unit attribution decomposition |
 | `fidelity/` | [README](fidelity/README.md) | Port of the pre-trained Siamese discriminator for trajectory realism scoring |
 | `algorithm/` | [README](algorithm/README.md) | ST-iFGSM loop, FAMAILObjective, soft cell assignment, attribution-to-trajectory ranking |
+| `evaluation/` | [README](evaluation/README.md) | End-to-end experiment runner (`python -m famail_temporal.evaluation.runner`) |
 | `utils/` | [README](utils/README.md) | Reproducible seeding and trajectory dataclasses |
 | `tests/` | [README](tests/README.md) | Math invariants, bug-class guards, and integration tests |
 | `source_data/` | [README](source_data/README.md) | Source datasets (output of `source_generation/`; input to `preprocess.py` and `loader.py`) |
 | `cache/` | [README](cache/README.md) | Preprocessed artifacts with config-encoded filenames |
 | `discriminator_checkpoints/` | [README](discriminator_checkpoints/README.md) | Canonical fidelity checkpoint and provenance |
+| `exports/` | — | Snapshotted handoff bundles (e.g., fairness-attribution exports for downstream teams) |
+| `docs/` | — | Methodology notes and design specs referenced from sub-READMEs |
+| `results/` | — | Per-experiment output directory written by `evaluation/runner.py` |
 
 Root files:
 
 | File | Role |
 |---|---|
 | `config.py` | Single source of truth for all hyperparameters |
+| `fetch_data.py` | One-shot download of source/raw/checkpoint from the HuggingFace dataset |
 | `preprocess.py` | One-time preprocessing: `source_data/` → `cache/` |
-| `requirements.txt` | `torch`, `numpy`, `scikit-learn`, `pytest` |
+| `requirements.txt` | `torch`, `numpy`, `scikit-learn`, `huggingface_hub`, `pytest` |
 
 ---
 
@@ -141,7 +150,8 @@ Four architectural invariants that every module in this directory must respect:
    All other inputs are frozen. `g_0(D)` is evaluated under `torch.no_grad()`.
 
 4. **No external dependencies.** No imports from outside `famail_temporal/`. Only `torch`,
-   `numpy`, `scikit-learn`, and `pytest`.
+   `numpy`, `scikit-learn`, and `pytest` for the algorithm; `huggingface_hub` is used
+   exclusively by `fetch_data.py` and is not imported anywhere else.
 
 ---
 

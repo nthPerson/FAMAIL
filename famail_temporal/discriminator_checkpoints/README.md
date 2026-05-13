@@ -4,12 +4,17 @@ The canonical checkpoint used by `famail_temporal/` lives at:
 
     discriminator_checkpoints/default/best.pt
 
-## Canonical checkpoint provenance
+## Provisioning
 
-Copy from the parent project:
+`python -m famail_temporal.fetch_data` downloads this file as part of the
+public HuggingFace dataset bundle — no manual step needed.
 
-    cp discriminator/model/checkpoints/20260316_223817/best.pt \
-       famail_temporal/discriminator_checkpoints/default/best.pt
+Dataset: <https://huggingface.co/datasets/nthPerson/famail-temporal-data>
+
+To skip the discriminator entirely (fairness-only experiments), set
+`ALPHA_FIDELITY = 0` in `config.py`; the loader will not look for the file.
+
+## Checkpoint format
 
 The checkpoint should contain:
 

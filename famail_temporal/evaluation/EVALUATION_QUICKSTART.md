@@ -22,7 +22,7 @@ Before your first run, confirm:
 |---|---|
 | Preprocess cache exists | `ls famail_temporal/cache/` shows cached artifacts. If empty, run `python -m famail_temporal.preprocess`. |
 | Source trajectory data exists | `ls famail_temporal/source_data/passenger_seeking_trajs.pkl` |
-| Discriminator checkpoint (optional but recommended) | `ls famail_temporal/discriminator_checkpoints/default/best.pt`. If absent, the runner falls back to `nn.Identity` and silently forces `alpha_fidelity=0.0` (see "Common pitfalls" below). |
+| Discriminator checkpoint | `ls famail_temporal/discriminator_checkpoints/default/best.pt`. If absent, the runner falls back to `nn.Identity` and silently forces `alpha_fidelity=0.0` (see "Common pitfalls" below). |
 | Conda env active | `conda activate famail` (or your project env) |
 | Tests pass | `pytest famail_temporal/tests/ -q` → expect all fast tests green. Run `--run-slow` if you want to validate the end-to-end pipeline on real data (~2 minutes). |
 
