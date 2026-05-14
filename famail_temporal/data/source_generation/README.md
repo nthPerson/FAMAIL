@@ -13,7 +13,7 @@ The design problem this solves: the three legacy tools disagreed on the
 `time_bucket` offset (0-indexed vs 1-indexed), on the weekend filter (drop Sat+Sun vs drop Sun only),
 and on the pickup-cell semantic (last seeking GPS ping vs first passenger=1 ping). Those disagreements
 manifested as a runtime error: `pickup_3d[states[-1].cell]` was zero for ~23% of trajectories, making
-the modifier's mass-balance bookkeeping underflow. See [`docs/superpowers/specs/2026-04-20-unified-source-data-generation-design.md`](../../../docs/superpowers/specs/2026-04-20-unified-source-data-generation-design.md) for the full history.
+the modifier's mass-balance bookkeeping underflow. The full design spec (with cross-references to each root-cause bug) lives in the parent monorepo and is available upon request.
 
 > **Serialization note.** The tool both reads and writes `.pkl` files. Inputs are the project's
 > own raw taxi GPS files; outputs are the 8 downstream files consumed by `famail_temporal.preprocess`

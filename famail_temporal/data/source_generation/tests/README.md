@@ -72,7 +72,7 @@ Every module was written test-first. The pattern repeated across Phase 1-4:
 4. Re-run — verify GREEN.
 5. Commit (test + impl together).
 
-This discipline is documented per task in [`docs/superpowers/plans/2026-04-20-unified-source-data-generation.md`](../../../../docs/superpowers/plans/2026-04-20-unified-source-data-generation.md).
+This discipline is documented per task in the implementation plan, which lives in the parent monorepo and is available upon request.
 
 ---
 

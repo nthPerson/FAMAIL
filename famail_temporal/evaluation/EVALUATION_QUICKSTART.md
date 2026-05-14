@@ -6,9 +6,7 @@ A researcher's guide to running experiments with `famail_temporal.evaluation` an
 2. **What changes were necessary to improve fairness?**
 3. **Which trajectories were modified, and why?**
 
-For authoritative artifact schemas and architectural rationale, see
-[`docs/superpowers/specs/2026-04-16-evaluation-framework-design.md`](../docs/superpowers/specs/2026-04-16-evaluation-framework-design.md).
-For the terse CLI reference, see [`evaluation/README.md`](evaluation/README.md).
+For the terse CLI reference, see [`README.md`](README.md) in this directory. The full design spec (authoritative artifact schemas and architectural rationale) lives in the parent monorepo and is available upon request.
 
 > **Serialization note.** Several run artifacts use Python pickle (`.pkl`) format for structural compatibility with the existing `passenger_seeking_trajs_45-800.pkl` dataset and for preserving numpy tensor shapes. The examples in this guide load those artifacts back with `pickle.load` — this is only safe because every `.pkl` in a run directory was written by this same framework on the same machine. Never load `.pkl` artifacts from untrusted sources.
 
@@ -556,10 +554,9 @@ These are the cells where, if you could nudge any trajectory's pickup there by o
 
 ## Where to look next
 
-- **Authoritative schemas:** [design spec](../docs/superpowers/specs/2026-04-16-evaluation-framework-design.md) §§3–8
-- **Implementation phases:** [implementation plan](../docs/superpowers/plans/2026-04-16-evaluation-framework.md)
-- **Terse CLI reference:** [`evaluation/README.md`](evaluation/README.md)
-- **Changelog entry:** `CHANGELOG.md` → `2026-04-16 — FAMAIL Temporal Evaluation Framework`
+- **Authoritative schemas + implementation phases:** the design spec and per-task plan both live in the parent monorepo and are available upon request.
+- **Terse CLI reference:** [`README.md`](README.md) in this directory.
+- **Changelog entry:** `2026-04-16 — FAMAIL Temporal Evaluation Framework` in the parent monorepo's `CHANGELOG.md`.
 - **The canonical fairness math:** [`fairness/spatial.py`](fairness/spatial.py), [`fairness/causal.py`](fairness/causal.py), [`fairness/hat_matrices.py`](fairness/hat_matrices.py)
 - **The ST-iFGSM modifier:** [`algorithm/modifier.py`](algorithm/modifier.py)
 

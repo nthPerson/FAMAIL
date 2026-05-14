@@ -1,0 +1,101 @@
+# ----------------------------------------------------------------------------
+# Mirror famail_temporal/ -> mkelly-sdsu/famail (lab repo)
+#
+# What this does
+#   On every push to main that touches famail_temporal/**, rsync the contents
+#   of famail_temporal/ into the lab repo's famail_temporal/ subdirectory and
+#   commit the result. Snapshot-only: the lab repo's famail_temporal/ subdir is
+#   force-replaced (with rsync --delete), so files removed here disappear
+#   there. Other paths in the lab repo (README.md, famail_proposal.pdf,
+#   langground/, etc.) are NEVER touched.
+#
+# REQUIRED MANUAL SETUP (see famail_temporal/docs/MIRROR_SETUP.md)
+#   1. Generate a fine-grained Personal Access Token (PAT) scoped to
+#      mkelly-sdsu/famail with "Contents: Read and write" permission.
+#   2. In this repo: Settings -> Secrets and variables -> Actions
+#      -> New repository secret
+#         Name:  LAB_REPO_TOKEN
+#         Value: <the PAT from step 1>
+#   3. If main is protected on the lab repo, ensure the PAT owner can bypass
+#      protection rules (or add a bypass exception).
+#
+# Operating notes
+#   - This is one-way. To pull PI changes back, run the companion workflow
+#     `pull-famail-temporal-from-lab.yml` (manual dispatch, opens a PR).
+#   - If the PI commits to famail_temporal/ in the lab repo and you push to
+#     main here before pulling those commits back, the next sync will
+#     overwrite their changes. Always run the backward workflow first if
+#     the PI may have committed.
+#   - All variables that originate outside the workflow file itself flow
+#     through env: blocks rather than ${{ }} interpolation inside run: so
+#     untrusted strings cannot reach a shell command verb.
+# ----------------------------------------------------------------------------
+
+name: Mirror famail_temporal/ to lab repo
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'famail_temporal/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    env:
+      LAB_REPO: mkelly-sdsu/famail
+      LAB_BRANCH: main
+      SUBDIR: famail_temporal
+      UPSTREAM_SHA: ${{ github.sha }}
+      UPSTREAM_REPO: ${{ github.repository }}
+    steps:
+      - name: Check out monorepo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Clone lab repo
+        env:
+          LAB_REPO_TOKEN: ${{ secrets.LAB_REPO_TOKEN }}
+        run: |
+          if [ -z "${LAB_REPO_TOKEN}" ]; then
+            echo "::error::LAB_REPO_TOKEN secret is not set. See famail_temporal/docs/MIRROR_SETUP.md."
+            exit 1
+          fi
+          git clone --depth 1 --branch "${LAB_BRANCH}" \
+            "https://x-access-token:${LAB_REPO_TOKEN}@github.com/${LAB_REPO}.git" \
+            "${RUNNER_TEMP}/lab"
+
+      - name: Rsync famail_temporal/ into lab repo
+        run: |
+          mkdir -p "${RUNNER_TEMP}/lab/${SUBDIR}"
+          rsync --archive --delete \
+            "${GITHUB_WORKSPACE}/${SUBDIR}/" \
+            "${RUNNER_TEMP}/lab/${SUBDIR}/"
+
+      - name: Commit and push if changed
+        working-directory: ${{ runner.temp }}/lab
+        run: |
+          git config user.name  'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+
+          git add -A "${SUBDIR}"
+
+          if git diff --staged --quiet; then
+            echo 'No staged changes after rsync. Exiting cleanly.'
+            exit 0
+          fi
+
+          short_sha="${UPSTREAM_SHA:0:7}"
+          printf '%s\n\n%s\n' \
+            "Sync ${SUBDIR}/ from ${UPSTREAM_REPO}@${short_sha}" \
+            "Upstream commit: ${UPSTREAM_SHA}" \
+            > "${RUNNER_TEMP}/commit-msg.txt"
+
+          git commit --file "${RUNNER_TEMP}/commit-msg.txt"
+          git push origin "${LAB_BRANCH}"

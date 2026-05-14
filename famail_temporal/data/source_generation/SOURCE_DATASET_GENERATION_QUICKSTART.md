@@ -9,9 +9,7 @@ This document answers three core operational questions:
 2. **What did the tool actually produce, and is it trustworthy?** (Auditing via `processing_metadata.json`.)
 3. **What do I need to do downstream after regeneration?** (Preprocess cache + v3 discriminator retraining.)
 
-For the architectural deep-dive, see [`README.md`](README.md) in this directory.
-For the full design rationale (why the tool exists, what each decision protects against),
-see [`docs/superpowers/specs/2026-04-20-unified-source-data-generation-design.md`](../../../docs/superpowers/specs/2026-04-20-unified-source-data-generation-design.md).
+For the architectural deep-dive, see [`README.md`](README.md) in this directory. The full design spec (covering each decision and the predecessor-tool bugs it protects against) lives in the parent monorepo and is available upon request.
 
 > **Serialization note.** The tool reads and writes Python `.pkl` files because the downstream
 > consumers (`famail_temporal/preprocess.py`, `famail_temporal/data/loader.py`, and the v3
@@ -358,9 +356,8 @@ Fix: If intentional (e.g., you're testing on a subset), pass `expect_n_drivers=<
 ## Where to look next
 
 - **Architecture:** [`README.md`](README.md) — module layout, design choices, architecture diagram.
-- **Design rationale:** [`docs/superpowers/specs/2026-04-20-unified-source-data-generation-design.md`](../../../docs/superpowers/specs/2026-04-20-unified-source-data-generation-design.md) — why each decision was made, with cross-references to the three root-cause bugs it addresses.
-- **Implementation plan:** [`docs/superpowers/plans/2026-04-20-unified-source-data-generation.md`](../../../docs/superpowers/plans/2026-04-20-unified-source-data-generation.md) — per-task TDD breakdown, for anyone maintaining the tool.
-- **CHANGELOG entry:** [`CHANGELOG.md`](../../../CHANGELOG.md) — `2026-04-20 — Unified source-data generation tool` section documents all semantic changes vs. the legacy tools.
+- **Design rationale:** the predecessor tools disagreed on `time_bucket` offset, weekend filter, and pickup-cell semantic, which caused a 23% mass-balance underflow in the modifier — the unified single-event-stream architecture eliminates all three by construction. Full spec is in the parent monorepo, available upon request.
+- **Implementation plan / changelog:** per-task TDD breakdown and the semantic-change log vs. the legacy tools both live in the parent monorepo and are available upon request.
 - **Downstream:** [`famail_temporal/evaluation/EVALUATION_QUICKSTART.md`](../../evaluation/EVALUATION_QUICKSTART.md) — how to run experiments with the regenerated source data.
 
 If something in the output looks wrong, `processing_metadata.json`'s `git_sha` + `config_snapshot` + `bounds` are almost always enough to reproduce the run from a clean checkout.

@@ -2,9 +2,9 @@
 
 **Date trained:** 2026-04-24
 **Run ID:** `20260424_120508`
-**Source checkpoint:** `/home/robert/FAMAIL/checkpoints/20260424_120508/best.pt`
+**Source checkpoint:** `checkpoints/20260424_120508/best.pt` (in the parent monorepo)
 **Installed at:** `famail_temporal/discriminator_checkpoints/default/best.pt`
-**Plots directory:** `/home/robert/FAMAIL/checkpoints/20260424_120508/plots/` (8 PNGs)
+**Plots directory:** `checkpoints/20260424_120508/plots/` (8 PNGs, in the parent monorepo)
 **Training duration:** ~48 minutes (88 epochs via early stopping at ~33 s/epoch)
 
 ## Context
@@ -156,7 +156,7 @@ python -m discriminator.model.train \
 
 ## Training plots
 
-All plots at `/home/robert/FAMAIL/checkpoints/20260424_120508/plots/`:
+All plots at `checkpoints/20260424_120508/plots/` in the parent monorepo:
 
 - `loss_curves.png` — train vs val BCE loss per epoch
 - `accuracy_curves.png` — overall, positive-class, negative-class accuracy
