@@ -139,7 +139,7 @@ linear parameters compatible with the hat-matrix algebra in `fairness/`.
 
 `source_generation/` is the one tool that turns raw taxi GPS pickles (`raw_data/taxi_record_07_50drivers.pkl`, `_08_`, `_09_`) into all 8 source datasets + driver-index mapping + processing metadata. It replaces three legacy tools (`pickup_dropoff_counts/`, `active_taxis/`, `new_all_trajs/`) with a single pipeline whose cross-file consistency holds by construction: every output derives from one enriched event-stream DataFrame produced in one pass.
 
-The full design rationale lives in [`docs/superpowers/specs/2026-04-20-unified-source-data-generation-design.md`](../../docs/superpowers/specs/2026-04-20-unified-source-data-generation-design.md). The producer-side architecture (single event stream → deterministic views) is documented in [`source_generation/README.md`](source_generation/README.md). For running the tool and interpreting its outputs, see [`source_generation/SOURCE_DATASET_GENERATION_QUICKSTART.md`](source_generation/SOURCE_DATASET_GENERATION_QUICKSTART.md).
+The producer-side architecture (single event stream → deterministic views) is documented in [`source_generation/README.md`](source_generation/README.md). For running the tool and interpreting its outputs, see [`source_generation/SOURCE_DATASET_GENERATION_QUICKSTART.md`](source_generation/SOURCE_DATASET_GENERATION_QUICKSTART.md). The full design spec lives in the parent monorepo and is available upon request.
 
 **When do you regenerate?** Only when one of:
 - Raw GPS data is replaced or updated.

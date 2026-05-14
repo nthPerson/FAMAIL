@@ -170,12 +170,10 @@ coexist in `cache/` without invalidating each other.
 
 ## Design specification
 
-Full design decisions, mathematical derivations, stability safeguards, and identified snags are
-documented in:
-
-```
-docs/superpowers/specs/2026-04-16-famail-temporal-design.md
-```
+The full design spec — covering mathematical derivations, stability safeguards, and identified
+snags — lives in the parent monorepo (`docs/superpowers/specs/2026-04-16-famail-temporal-design.md`)
+and is available upon request.
 
 This README is a navigational entry point. For mathematical details of any component, consult
-the component's sub-directory README and the spec.
+the component's sub-directory README and the docs in [`docs/`](docs/) (`F_CAUSAL_METHODOLOGY_NOTES.md`,
+`FAIRNESS_DECOMPOSITION_FORMULATION.md`, `RESEARCHER_HANDOFF.md`).

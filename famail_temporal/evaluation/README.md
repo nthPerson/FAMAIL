@@ -32,9 +32,9 @@ Programmatic:
 
 ## What gets written
 
-See `docs/superpowers/specs/2026-04-16-evaluation-framework-design.md` for the
-authoritative artifact list and schemas. Summary, per run (under
-`famail_temporal/results/{experiment_id}/`):
+The authoritative artifact list and schemas live in the design spec in the parent monorepo
+(available upon request); the summary below covers what each run writes under
+`famail_temporal/results/{experiment_id}/`:
 
 - `metrics.json` - config snapshot + provenance + before/after scalars
 - `grid_before.pkl` / `grid_after.pkl` - (48, 90, T, 4) fairness grids

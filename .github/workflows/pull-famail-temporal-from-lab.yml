@@ -1,0 +1,127 @@
+# ----------------------------------------------------------------------------
+# Pull famail_temporal/ from mkelly-sdsu/famail (lab repo) -> this monorepo
+#
+# What this does
+#   Manually triggered from the Actions tab (workflow_dispatch). Clones the
+#   lab repo, rsyncs its famail_temporal/ subdirectory into this monorepo's
+#   famail_temporal/, creates a new branch with that change, pushes it, and
+#   opens a Pull Request against main for review.
+#
+#   The PR mechanism is intentional: backward sync never auto-commits to
+#   main, so PI changes never silently overwrite local work in progress.
+#   You review the PR, resolve conflicts if any, and merge when ready.
+#
+# When to run this
+#   - Before pushing to main after the PI has committed to the lab repo
+#     (so the next forward sync does not overwrite their work).
+#   - Periodically, to catch up on any drift between the two repos.
+#
+# REQUIRED MANUAL SETUP (see famail_temporal/docs/MIRROR_SETUP.md)
+#   - Uses the same LAB_REPO_TOKEN secret as the forward workflow.
+#     Read scope (Contents: Read) is sufficient, but the existing
+#     Read-and-write token from the forward workflow works fine.
+#   - The built-in GITHUB_TOKEN is used to push the sync branch and open
+#     the PR in this monorepo; no extra secret needed for that side.
+#
+# Operating notes
+#   - The workflow always creates a fresh branch named
+#     `sync/lab-YYYY-MM-DD-HHMMSS-<short-sha>`. If you run it twice in a
+#     row with no lab changes, the second run exits cleanly with no PR.
+#   - All variables that originate outside this file flow through env:
+#     blocks rather than ${{ }} interpolation inside run:. The lab SHA
+#     comes from `git rev-parse` (40-char hex, no shell metacharacters
+#     possible); lab-side commit messages are NEVER interpolated.
+# ----------------------------------------------------------------------------
+
+name: Pull famail_temporal/ from lab repo
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  pull-from-lab:
+    runs-on: ubuntu-latest
+    env:
+      LAB_REPO: mkelly-sdsu/famail
+      LAB_BRANCH: main
+      SUBDIR: famail_temporal
+    steps:
+      - name: Check out monorepo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Clone lab repo
+        env:
+          LAB_REPO_TOKEN: ${{ secrets.LAB_REPO_TOKEN }}
+        run: |
+          if [ -z "${LAB_REPO_TOKEN}" ]; then
+            echo "::error::LAB_REPO_TOKEN secret is not set. See famail_temporal/docs/MIRROR_SETUP.md."
+            exit 1
+          fi
+          git clone --depth 1 --branch "${LAB_BRANCH}" \
+            "https://x-access-token:${LAB_REPO_TOKEN}@github.com/${LAB_REPO}.git" \
+            "${RUNNER_TEMP}/lab"
+          if [ ! -d "${RUNNER_TEMP}/lab/${SUBDIR}" ]; then
+            echo "::error::Lab repo does not have a ${SUBDIR}/ directory yet. Run the forward workflow first."
+            exit 1
+          fi
+
+      - name: Capture lab-side SHA
+        id: lab
+        working-directory: ${{ runner.temp }}/lab
+        run: |
+          lab_sha=$(git rev-parse HEAD)
+          lab_short=$(git rev-parse --short HEAD)
+          echo "lab_sha=${lab_sha}"     >> "${GITHUB_OUTPUT}"
+          echo "lab_short=${lab_short}" >> "${GITHUB_OUTPUT}"
+
+      - name: Rsync lab famail_temporal/ into monorepo
+        run: |
+          rsync --archive --delete \
+            "${RUNNER_TEMP}/lab/${SUBDIR}/" \
+            "${GITHUB_WORKSPACE}/${SUBDIR}/"
+
+      - name: Create branch, commit, push, open PR
+        env:
+          GH_TOKEN:  ${{ secrets.GITHUB_TOKEN }}
+          LAB_SHA:   ${{ steps.lab.outputs.lab_sha }}
+          LAB_SHORT: ${{ steps.lab.outputs.lab_short }}
+        run: |
+          git config user.name  'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+
+          if [ -z "$(git status --porcelain)" ]; then
+            echo 'Lab repo is in sync with monorepo; nothing to do.'
+            exit 0
+          fi
+
+          branch="sync/lab-$(date -u +%Y-%m-%d-%H%M%S)-${LAB_SHORT}"
+          git checkout -b "${branch}"
+          git add -A "${SUBDIR}"
+
+          if git diff --staged --quiet; then
+            echo 'No staged changes; nothing to PR.'
+            exit 0
+          fi
+
+          printf '%s\n\n%s\n' \
+            "Sync ${SUBDIR}/ from ${LAB_REPO}@${LAB_SHORT}" \
+            "Lab commit: ${LAB_SHA}" \
+            > "${RUNNER_TEMP}/commit-msg.txt"
+
+          git commit --file "${RUNNER_TEMP}/commit-msg.txt"
+          git push origin "${branch}"
+
+          pr_title="Sync ${SUBDIR}/ from lab repo @ ${LAB_SHORT}"
+          pr_body="Automated backward sync of \`${SUBDIR}/\` from ${LAB_REPO}@${LAB_SHA}. Review the diff for any PI-side changes before merging."
+
+          gh pr create \
+            --base main \
+            --head "${branch}" \
+            --title "${pr_title}" \
+            --body  "${pr_body}"
