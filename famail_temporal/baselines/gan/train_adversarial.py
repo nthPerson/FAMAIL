@@ -13,7 +13,6 @@ from typing import Dict, List, Tuple
 import torch
 import torch.nn as nn
 
-from famail_temporal.baselines.gan import config as gc
 from famail_temporal.baselines.gan.generator import TrajectoryLSTM
 from famail_temporal.baselines.gan.critic import SequenceCritic
 from famail_temporal.baselines.gan.gumbel import gumbel_rollout
@@ -70,6 +69,9 @@ def adversarial_finetune(
             )
 
             # ----- Discriminator step (generator fixed) -----
+            # no_grad detaches the fake, so the generator gets no gradient here;
+            # the resulting hard one-hots feed forward_soft purely as data (the
+            # critic still trains on them via its own params).
             with torch.no_grad():
                 fake_soft, fake_len = gumbel_rollout(
                     model, cc, tb, max_len=max_len, tau=tau,
