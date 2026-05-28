@@ -1,9 +1,9 @@
 """Standard-adversarial training paradigm (spec B0): MLE pretrain -> Gumbel
 adversarial fine-tune -> generate -> demand grid -> data-level fairness.
 
-This is the spec's "B0 end-to-end" with the adversarial stage Phase 2 deferred.
-FAMAIL and B2 reuse this verbatim by passing an edited / filtered bundle
-(Phase 4); only the training data changes.
+This completes the spec's "B0 end-to-end" by adding the adversarial stage that
+the Phase-2 MLE keystone (b0.py) deferred. FAMAIL and B2 reuse this verbatim by
+passing an edited / filtered bundle (Phase 4); only the training data changes.
 """
 from __future__ import annotations
 import torch
