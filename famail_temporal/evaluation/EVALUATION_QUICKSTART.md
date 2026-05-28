@@ -253,7 +253,7 @@ Use this when you need to plot a per-iteration convergence curve or see exactly 
 
 ### `gradient_sensitivity_before.pkl` / `gradient_sensitivity_after.pkl`
 
-Written only when `--no-diagnostics` is NOT set. Same payload shape as the fairness grid pickles but 2-channel:
+Written only when `--diagnostics` is set. Same payload shape as the fairness grid pickles but 2-channel:
 
 ```python
 {
@@ -360,15 +360,15 @@ for m_path in glob.glob("famail_temporal/results/*/metrics.json"):
 pd.DataFrame(rows).sort_values("epsilon_ball")
 ```
 
-### Turning diagnostics off for faster runs
+### Turning diagnostics on for deeper analysis
 
-Tier A gradient decomposition costs ~3× per-iteration backward time. For large sweeps where you only care about final deltas:
+Tier A gradient decomposition costs ~3× per-iteration backward time, so diagnostics are off by default. Opt in when you want decomposition and sensitivity artifacts:
 
 ```bash
-python -m famail_temporal.evaluation.runner --name fast-sweep --no-diagnostics
+python -m famail_temporal.evaluation.runner --name deep-analysis --diagnostics
 ```
 
-This also skips writing `gradient_sensitivity_*.pkl` artifacts.
+Without the flag, `gradient_sensitivity_*.pkl` artifacts are not written.
 
 ---
 

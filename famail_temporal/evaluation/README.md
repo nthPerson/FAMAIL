@@ -27,7 +27,7 @@ Programmatic:
 | `--max-trajectories N` | Limit the dataset (useful for quick iterations) |
 | `--max-drivers N` | Limit the number of drivers loaded |
 | `-k N` | Number of top-attribution trajectories to modify (default 100) |
-| `--no-diagnostics` | Skip Tier A gradient decomposition and Tier C sensitivity grids |
+| `--diagnostics` | Enable Tier A gradient decomposition and Tier C sensitivity grids (~3x backward cost; off by default) |
 | `--override KEY=VALUE` | Override any `famail_temporal.config` attribute. Repeat the flag. |
 
 ## What gets written

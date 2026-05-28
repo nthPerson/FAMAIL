@@ -63,13 +63,27 @@ class ModificationResult:
 
 @dataclass
 class ModificationHistory:
-    """Full history of modifying one trajectory."""
+    """Full history of modifying one trajectory.
+
+    ``modified`` is the trajectory built from the *best-iterate* perturbation
+    (the iter with the highest objective value seen during optimization),
+    not the last iterate. ``best_iteration`` records which iter that was;
+    ``best_objective`` is the corresponding objective value. ``iterations``
+    still contains every iter that ran, so downstream consumers can inspect
+    the full optimization trajectory.
+
+    ``converged=True`` means the patience-based early-stop fired (no
+    improvement above CONVERGENCE_TOL for PATIENCE consecutive iters);
+    ``converged=False`` means the run hit MAX_ITERATIONS.
+    """
     original: Trajectory
     modified: Trajectory
     iterations: List[ModificationResult] = field(default_factory=list)
     converged: bool = False
     total_iterations: int = 0
     final_objective: float = 0.0
+    best_iteration: int = -1
+    best_objective: float = float("-inf")
 
 
 class TrajectoryModifier:
@@ -91,6 +105,8 @@ class TrajectoryModifier:
         max_iterations: int | None = None,
         convergence_tol: float | None = None,
         diagnostics_enabled: bool | None = None,
+        device: torch.device | str | None = None,
+        patience: int | None = None,
     ):
         # Resolve each config-backed default at __init__ time (NOT at
         # function-definition time) so config-override mutations applied
@@ -112,10 +128,27 @@ class TrajectoryModifier:
             config.DIAGNOSTICS_ENABLED if diagnostics_enabled is None
             else diagnostics_enabled
         )
+        # Patience-based early stop. ``None`` disables early stopping (always
+        # runs max_iterations). Any non-negative integer N triggers
+        # convergence when the best objective hasn't improved by more than
+        # convergence_tol for N consecutive iters.
+        self.patience = (
+            config.PATIENCE if patience is None else patience
+        )
 
-        self.soft_assign = SoftCellAssignment()
-        # Clone so we don't mutate the original bundle array
-        self._base_pickup_3d = torch.from_numpy(bundle.pickup_3d).float().clone()
+        # Resolve device. If unspecified, inherit from the objective's first
+        # buffer (it's an nn.Module with registered buffers already on the
+        # correct device). Default to CPU when no inference source exists.
+        if device is None:
+            buf = next(objective.buffers(), None)
+            device = buf.device if buf is not None else torch.device("cpu")
+        self.device = torch.device(device)
+
+        self.soft_assign = SoftCellAssignment().to(self.device)
+        # Clone so we don't mutate the original bundle array; place on device.
+        self._base_pickup_3d = (
+            torch.from_numpy(bundle.pickup_3d).float().to(self.device).clone()
+        )
         self._prev_grad_sign = None
 
     def current_pickup_3d(self) -> np.ndarray:
@@ -279,8 +312,42 @@ class TrajectoryModifier:
         original_pickup = np.array([float(orig_cx), float(orig_cy)], dtype=np.float32)
         cumulative_delta = np.zeros(2, dtype=np.float32)
 
+        # Cache the dense-fidelity feature tensor once per trajectory. The
+        # underlying ``trajectory.states`` never change inside this loop —
+        # only the cumulative_delta does, which we splice into a clone every
+        # iter. Skipping the rebuild saves one Python list-comp + numpy alloc
+        # + torch tensor construction per iter. Lands on self.device so the
+        # downstream discriminator forward stays on-device.
+        tau_features_cached = (
+            trajectory.to_tensor().unsqueeze(0).to(self.device)
+            if self.objective.alpha_fidelity > 0
+            else None
+        )
+
+        # Cache the multi-stream context kwargs once per trajectory. Of the
+        # kwargs dict that ``build_fidelity_kwargs`` returns, only
+        # ``x2[0, 0, -1, 0:2]`` (the perturbed pickup coords on slot 0 of the
+        # modified branch) actually changes across iters. driving_1/2,
+        # profile_1/2, x1/mask1, slots 1..N-1 of x2, and mask2 all depend
+        # only on ``trajectory.driver_id`` and ``trajectory.states`` — both
+        # constant within this loop. Building it once saves the heaviest
+        # per-iter allocation in the fidelity path: ~5 seeking-context pads,
+        # driving sample + pad, profile fetch, two coordinate conversions.
+        ms_kwargs_cached = (
+            self.multi_stream_builder.build_fidelity_kwargs(trajectory, trajectory)
+            if (self.objective.alpha_fidelity > 0
+                and self.multi_stream_builder is not None)
+            else None
+        )
+
         iterations: List[ModificationResult] = []
-        prev_objective = float("-inf")
+        # Best-iterate tracking. We persist the perturbation associated with
+        # the best objective value seen across all iters (not the last) —
+        # standard methodology in PGD/MI-FGSM literature.
+        best_objective = float("-inf")
+        best_cumulative_delta = np.zeros(2, dtype=np.float32)
+        best_iteration = -1
+        iters_since_improvement = 0
         converged = False
 
         for it in range(self.max_iterations):
@@ -290,13 +357,14 @@ class TrajectoryModifier:
                     self._get_annealed_temperature(it)
                 )
 
-            # (b) Build pickup_tensor with requires_grad=True
+            # (b) Build pickup_tensor with requires_grad=True (on self.device)
             current_pickup = original_pickup + cumulative_delta
             pickup_tensor = torch.tensor(
-                current_pickup, dtype=torch.float32, requires_grad=True,
+                current_pickup, dtype=torch.float32,
+                device=self.device, requires_grad=True,
             )
             cell_tensor = torch.tensor(
-                [orig_cx, orig_cy], dtype=torch.float32,
+                [orig_cx, orig_cy], dtype=torch.float32, device=self.device,
             ).unsqueeze(0)
 
             # (c) Compute soft probs -> inject into t_block slice
@@ -314,21 +382,19 @@ class TrajectoryModifier:
             tau_prime_features = None
             ms_kwargs = None
             if self.objective.alpha_fidelity > 0:
-                tau_features = trajectory.to_tensor().unsqueeze(0)
+                tau_features = tau_features_cached
                 tau_prime_features = tau_features.clone()
                 tau_prime_features[0, -1, 0] = pickup_tensor[0]
                 tau_prime_features[0, -1, 1] = pickup_tensor[1]
                 if self.multi_stream_builder is not None:
-                    modified = trajectory.apply_perturbation(cumulative_delta)
-                    ms_kwargs = self.multi_stream_builder.build_fidelity_kwargs(
-                        trajectory, modified,
-                    )
-                    # Inject gradient through slot 0 of x2 (+1 for 1-indexed coords)
-                    x2 = ms_kwargs["x2"]
-                    x2_new = x2.clone()
+                    # Reuse the per-trajectory cache and splice only the
+                    # iter-dependent slot — slot 0's last state coords on
+                    # x2 — into a fresh clone. The cache itself is never
+                    # mutated, so subsequent iters start from clean state.
+                    x2_new = ms_kwargs_cached["x2"].clone()
                     x2_new[0, 0, -1, 0] = pickup_tensor[0] + 1
                     x2_new[0, 0, -1, 1] = pickup_tensor[1] + 1
-                    ms_kwargs["x2"] = x2_new
+                    ms_kwargs = {**ms_kwargs_cached, "x2": x2_new}
 
             # (d) Forward through FAMAILObjective
             total, terms = self.objective(
@@ -399,16 +465,32 @@ class TrajectoryModifier:
             if on_iteration is not None:
                 on_iteration(it, result)
 
-            # (g) Convergence check
-            if abs(float(total.detach()) - prev_objective) < self.convergence_tol:
-                converged = True
-                break
-            prev_objective = float(total.detach())
+            # (g) Best-iterate tracking + patience-based convergence.
+            # Improvement counts only if it exceeds convergence_tol — set
+            # above the metric's numerical noise floor so noise-level
+            # fluctuations don't spuriously reset the patience counter.
+            current_objective = float(total.detach())
+            if current_objective > best_objective + self.convergence_tol:
+                best_objective = current_objective
+                best_cumulative_delta = cumulative_delta.copy()
+                best_iteration = it
+                iters_since_improvement = 0
+            else:
+                iters_since_improvement += 1
+                if (self.patience is not None
+                        and iters_since_improvement >= self.patience):
+                    converged = True
+                    break
 
-        # Create the modified trajectory
-        modified = trajectory.apply_perturbation(cumulative_delta)
+        # Create the modified trajectory from the BEST iterate seen, not the
+        # last. If no iter exceeded the initial -inf by more than tol (rare;
+        # would only happen if all iters had degenerate objective values),
+        # best_cumulative_delta stays at its zero default — i.e., no
+        # perturbation, which is the correct fallback.
+        modified = trajectory.apply_perturbation(best_cumulative_delta)
 
-        # Persist change to shared _base_pickup_3d (sub at old, add at new)
+        # Persist change to shared _base_pickup_3d (sub at old, add at new).
+        # Uses the BEST iterate's pickup cell, matching the returned trajectory.
         new_cx = int(modified.pickup_state.x_grid)
         new_cy = int(modified.pickup_state.y_grid)
         if (new_cx, new_cy) != (orig_cx, orig_cy):
@@ -422,6 +504,8 @@ class TrajectoryModifier:
             converged=converged,
             total_iterations=len(iterations),
             final_objective=iterations[-1].objective_value if iterations else 0.0,
+            best_iteration=best_iteration,
+            best_objective=best_objective if best_iteration >= 0 else 0.0,
         )
 
     def modify_batch(

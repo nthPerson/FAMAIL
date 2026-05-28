@@ -9,6 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import numpy as np
+import torch
 from sklearn.isotonic import IsotonicRegression
 from sklearn.linear_model import LinearRegression
 
@@ -88,12 +89,61 @@ class G0Function:
         # Make the array read-only and store via object.__setattr__ (frozen dataclass).
         coeffs.setflags(write=False)
         object.__setattr__(self, "coefficients", coeffs)
+        # Per-device torch cache for ``eval_torch``: amortizes the one-time
+        # numpy→torch coefficient transfer so repeated calls inside the modifier
+        # iter loop avoid host-device syncs. Mutating the dict in place is OK
+        # on a frozen dataclass; only attribute rebinding is forbidden.
+        object.__setattr__(self, "_coef_torch_cache", {})
 
     def __call__(self, d: np.ndarray) -> np.ndarray:
         d_arr = np.asarray(d, dtype=np.float64)
         d_clipped = np.clip(d_arr, self.d_min, self.d_max)
         X = build_power_basis_features(d_clipped, include_intercept=True)
         return X @ self.coefficients
+
+    def eval_torch(self, d: torch.Tensor) -> torch.Tensor:
+        """Evaluate g_0(D) directly in torch on whatever device ``d`` lives.
+
+        Numerically equivalent to ``__call__`` but stays in torch end-to-end:
+        no ``.cpu().numpy()`` round-trip, no host-device sync inside the
+        modifier iter loop. The 4 power-basis coefficients are cached per
+        device (a tiny one-time transfer) and broadcast-multiplied into the
+        features built on ``d.device``.
+
+        Caller is responsible for using ``torch.no_grad()`` if they want g_0
+        treated as a frozen constant (matching the convention in
+        ``FAMAILObjective.forward``).
+        """
+        d_clipped = torch.clamp(d, self.d_min, self.d_max)
+        d_safe = d_clipped + 1.0
+        # Power basis features: [1, 1/(D+1), 1/sqrt(D+1), sqrt(D+1)]
+        ones = torch.ones_like(d_safe)
+        inv_d_safe = 1.0 / d_safe
+        sqrt_d_safe = torch.sqrt(d_safe)
+        inv_sqrt_d_safe = 1.0 / sqrt_d_safe
+        feats = torch.stack(
+            [ones, inv_d_safe, inv_sqrt_d_safe, sqrt_d_safe], dim=-1,
+        )  # (..., 4)
+        # Lazy-init the per-device cache. Instances restored from on-disk
+        # cache artifacts bypass __post_init__ (state restoration sets
+        # __dict__ directly), so the cache attribute may be absent on legacy
+        # cached instances. Initializing on first use makes eval_torch robust
+        # against that schema drift — same backward-compatibility lesson as
+        # UnitIndexMap.grid_shape earlier in the project.
+        cache = getattr(self, "_coef_torch_cache", None)
+        if cache is None:
+            cache = {}
+            object.__setattr__(self, "_coef_torch_cache", cache)
+        device_key = str(d.device)
+        if device_key not in cache:
+            # ``.copy()`` is required because self.coefficients is frozen
+            # read-only (setflags(write=False)) and torch.from_numpy emits
+            # UserWarning on non-writable arrays.
+            cache[device_key] = torch.from_numpy(
+                self.coefficients.copy(),
+            ).to(dtype=d.dtype, device=d.device)
+        coef = cache[device_key]
+        return feats @ coef
 
 
 def fit(demands: np.ndarray, supplies_over_demands: np.ndarray) -> tuple[G0Function, dict]:

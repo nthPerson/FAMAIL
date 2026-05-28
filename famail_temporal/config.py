@@ -57,7 +57,18 @@ ALPHA_FIDELITY: float = 0.34
 STEP_SIZE_ALPHA: float = 0.1
 EPSILON_BALL: float = 2.0
 MAX_ITERATIONS: int = 50
+# Convergence: the optimizer runs to MAX_ITERATIONS by default. Inside the
+# loop we track the best-seen objective and apply *patience-based* early
+# stopping — terminate when no iter has improved the best objective by more
+# than CONVERGENCE_TOL for PATIENCE consecutive iterations. This replaces the
+# old "|ΔL| < tol on consecutive iters" criterion, which fired prematurely
+# under ST-iFGSM's sign-only step rule (any near-stationary point looked
+# converged after one step). CONVERGENCE_TOL now plays the role of "minimum
+# improvement that counts" — set above the metric's numerical noise floor;
+# F-metrics are computed in float64 internally so 1e-6 is well above noise.
+# Set PATIENCE=None to disable early stopping and always run MAX_ITERATIONS.
 CONVERGENCE_TOL: float = 1e-6
+PATIENCE: int = 10
 
 # Gradient diagnostics
 DIAGNOSTICS_ENABLED: bool = True

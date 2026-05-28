@@ -215,17 +215,26 @@ def compute_fcausal_compact(
             f"X_demo.shape[1]={p1}"
         )
 
-    RtR = R @ R                           # scalar
-    XtR = X_demo.T @ R                    # shape (p+1,)
-    ss_res_demo = RtR - XtR @ XtX_inv @ XtR
-    sum_R = R.sum()
+    # Float64 internal reductions: at N≈35K, float32 sums hit a noise floor
+    # of ~1e-6 which is right at any reasonable convergence tolerance.
+    # Promoting to float64 lowers it to ~1e-13. Cast back on return to keep
+    # downstream type signatures (float32 storage) unchanged.
+    orig_dtype = R.dtype
+    R64 = R.to(torch.float64)
+    X64 = X_demo.to(torch.float64)
+    XtX_inv_64 = XtX_inv.to(torch.float64)
+
+    RtR = R64 @ R64                       # scalar
+    XtR = X64.T @ R64                     # shape (p+1,)
+    ss_res_demo = RtR - XtR @ XtX_inv_64 @ XtR
+    sum_R = R64.sum()
     ss_tot = RtR - sum_R * sum_R / N
     f_causal = torch.where(
         ss_tot < eps,
         torch.ones_like(ss_tot),
         ss_res_demo / (ss_tot + eps),
     )
-    return torch.clamp(f_causal, 0.0, 1.0)
+    return torch.clamp(f_causal, 0.0, 1.0).to(orig_dtype)
 
 
 def compute_fcausal_torch(
@@ -317,9 +326,16 @@ def apply_i_minus_h(
     routines that need the residual-after-projection vector.
 
     Identity: (I − H) R = R − X (XᵀX)⁻¹ (XᵀR).
+
+    Float64 internal reductions for numerical stability at N≈35K (see
+    ``compute_fcausal_compact`` for the rationale). Cast back on return.
     """
-    XtR = X_demo.T @ R             # (p+1,)
-    return R - X_demo @ (XtX_inv @ XtR)
+    orig_dtype = R.dtype
+    R64 = R.to(torch.float64)
+    X64 = X_demo.to(torch.float64)
+    XtX_inv_64 = XtX_inv.to(torch.float64)
+    XtR = X64.T @ R64             # (p+1,)
+    return (R64 - X64 @ (XtX_inv_64 @ XtR)).to(orig_dtype)
 
 
 def hat_matrices_to_torch(

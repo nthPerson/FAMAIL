@@ -41,7 +41,10 @@ from famail_temporal.utils.trajectory import Trajectory
 _INACTIVE_SCORE = float("inf")
 
 
-def compute_per_unit_attribution(bundle: DataBundle) -> np.ndarray:
+def compute_per_unit_attribution(
+    bundle: DataBundle,
+    pickup_3d: np.ndarray | None = None,
+) -> np.ndarray:
     """Compute the per-cell fairness attribution over active units.
 
     Wraps the canonical ``per_cell_fairness_attribution_causal`` and
@@ -50,13 +53,25 @@ def compute_per_unit_attribution(bundle: DataBundle) -> np.ndarray:
     negative = drags fairness below baseline.
 
     Args:
-        bundle: A loaded ``DataBundle``. Uses bundle.pickup_3d,
-            active_taxis_3d, mask_3d, g0_func, and hat_matrices.
+        bundle: A loaded ``DataBundle``. Uses bundle.active_taxis_3d,
+            mask_3d, g0_func, and hat_matrices.
+        pickup_3d: Optional pickup tensor to use in place of
+            ``bundle.pickup_3d``. Use ``modifier.current_pickup_3d()`` to
+            re-attribute against the post-modification state — required
+            for iterative top-k with re-attribution between modifications.
+            Same shape as ``bundle.pickup_3d``.
 
     Returns:
         np.ndarray of shape (N,) where N is the count of active cells.
     """
-    D = torch.from_numpy(bundle.pickup_3d[bundle.mask_3d]).float()
+    if pickup_3d is None:
+        pickup_3d = bundle.pickup_3d
+    if pickup_3d.shape != bundle.pickup_3d.shape:
+        raise ValueError(
+            f"pickup_3d shape {pickup_3d.shape} != bundle.pickup_3d shape "
+            f"{bundle.pickup_3d.shape}"
+        )
+    D = torch.from_numpy(pickup_3d[bundle.mask_3d]).float()
     S = torch.from_numpy(bundle.active_taxis_3d[bundle.mask_3d]).float()
     D = torch.clamp(D, min=config.DEMAND_FLOOR)
     Y = S / D
@@ -108,7 +123,11 @@ def rank_trajectories(
 
 
 def select_top_k(
-    scored: List[Tuple[int, float]], k: int,
+    scored: List[Tuple[int, float]],
+    k: int,
+    trajectories: List[Trajectory] | None = None,
+    max_per_unit: int | None = None,
+    max_per_cell: int | None = None,
 ) -> List[int]:
     """Return indices of the top-k trajectories with strictly negative scores.
 
@@ -116,5 +135,57 @@ def select_top_k(
     pickup cell has αᵢ < 0 (cell actively drags fairness below the 1/N
     baseline). Cells at the baseline (αᵢ ≈ 0) or above (αᵢ > 0) are
     helping fairness and have no priority for modification.
+
+    Optional diversity constraints (see ``docs/TRAJECTORY_EDITING_METHODOLOGY.md``
+    §8.3 for the empirical motivation):
+
+    - ``max_per_unit``: maximum trajectories selected from any single
+      (pickup_cell, t_block) unit. Default ``None`` (no cap). Setting
+      ``max_per_unit = 1`` enforces that every selected trajectory comes
+      from a distinct (cell, t_block), which prevents the source-side
+      concentration that drives destination pile-up. Recommended for any
+      run at production k where one unit might otherwise dominate.
+    - ``max_per_cell``: maximum trajectories per pickup cell (across all
+      time blocks). Default ``None``. Setting e.g. 1 enforces a fully
+      cell-distinct selection.
+
+    When either constraint is set, ``trajectories`` must be passed so
+    each candidate's (cell, t_block) can be derived. ``scored`` indices
+    must reference positions in ``trajectories``.
     """
-    return [idx for idx, score in scored[:k] if score < 0]
+    if (max_per_unit is not None or max_per_cell is not None) and trajectories is None:
+        raise ValueError(
+            "trajectories must be provided when max_per_unit or "
+            "max_per_cell is set"
+        )
+
+    unit_counts: dict[Tuple[int, int, int], int] = {}
+    cell_counts: dict[Tuple[int, int], int] = {}
+    selected: List[int] = []
+
+    for idx, score in scored:
+        if score >= 0:
+            break  # ascending order; no more strictly-negative candidates
+        if len(selected) >= k:
+            break
+
+        if max_per_unit is not None or max_per_cell is not None:
+            traj = trajectories[idx]
+            cx, cy = traj.pickup_cell
+            t_block = hour_to_block_index(
+                time_bucket_to_hour(traj.pickup_state.time_bucket)
+            )
+            unit_key = (cx, cy, t_block)
+            cell_key = (cx, cy)
+            if (max_per_unit is not None
+                    and unit_counts.get(unit_key, 0) >= max_per_unit):
+                continue
+            if (max_per_cell is not None
+                    and cell_counts.get(cell_key, 0) >= max_per_cell):
+                continue
+            unit_counts[unit_key] = unit_counts.get(unit_key, 0) + 1
+            cell_counts[cell_key] = cell_counts.get(cell_key, 0) + 1
+
+        selected.append(idx)
+
+    return selected
