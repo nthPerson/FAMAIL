@@ -44,6 +44,27 @@ def test_rollout_gradient_flows_to_model():
     assert grad_total > 0
 
 
+def test_soft_path_is_distribution_and_differentiable():
+    """hard=False returns per-step softmax distributions (sum to 1, not one-hot)
+    that still carry gradients to the model."""
+    torch.manual_seed(0)
+    model = TrajectoryLSTM()
+    B, max_len = 3, 6
+    cc, tb = _ctx(B)
+    soft, lengths = gumbel_rollout(
+        model, cc, tb, max_len=max_len, tau=1.0,
+        device=torch.device("cpu"), hard=False,
+    )
+    assert soft.shape == (B, max_len, gc.VOCAB_SIZE)
+    assert torch.allclose(soft.sum(dim=-1), torch.ones(B, max_len), atol=1e-5)
+    assert not torch.isnan(soft).any()
+    soft.sum().backward()
+    grad_total = sum(
+        p.grad.abs().sum() for p in model.parameters() if p.grad is not None
+    )
+    assert grad_total > 0
+
+
 def test_rollout_seed_deterministic():
     model = TrajectoryLSTM()
     cc, tb = _ctx(3)

@@ -31,6 +31,10 @@ def gumbel_rollout(
     soft_onehots: (B, max_len, VOCAB_SIZE) per-step straight-through one-hots,
         differentiable wrt model parameters.
     lengths: (B,) long — 1-based index of the first sampled EOS, or max_len.
+
+    The model must already reside on `device` (its parameters, incl.
+    cell_embed.weight, are used directly); callers in this package call
+    model.to(device) before rolling out.
     """
     cc = ctx_cell.to(device)
     tb = ctx_tblock.to(device)
@@ -49,11 +53,12 @@ def gumbel_rollout(
         y = F.gumbel_softmax(logits, tau=tau, hard=hard, dim=-1)        # (B, V)
         steps.append(y)
         nxt = y.argmax(dim=-1)                                          # (B,)
-        newly_ended = (~ended) & (nxt == gc.EOS)
+        eos_now = nxt == gc.EOS
+        newly_ended = (~ended) & eos_now
         lengths = torch.where(
             newly_ended, torch.full_like(lengths, t + 1), lengths,
         )
-        ended = ended | (nxt == gc.EOS)
+        ended = ended | eos_now
         prev_embed = y @ model.cell_embed.weight                       # (B, E)
 
     soft_onehots = torch.stack(steps, dim=1)                           # (B, L, V)
