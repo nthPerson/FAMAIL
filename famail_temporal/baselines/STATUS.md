@@ -38,9 +38,11 @@ Module `famail_temporal/baselines/` (16 tests passing: `python -m pytest famail_
   - Decision (2026-05-28): report as-is; defer B2's cost to model-level. No filtering-criterion change (gated). See spec §8.
 
 ### Editing (FAMAIL) — validated strongest config
-- Run `2026-05-27T22-29-57_1000k_causal_emphasis_dedup`: `k=1000`, `--max-per-unit 1`, **α = (0.2, 0.7, 0.1)** (causal-emphasis).
-- **ΔF_causal = +0.0087** (0.8052 → 0.8139); F_spatial flat (−0.0003); 999/1000 converged.
-- Balanced multi-objective (spatial + fidelity terms active) that matches pure-causal gain without gaming a single metric → preferred FAMAIL config. `run_data_pareto._run_edit` uses it.
+- Config: `--max-per-unit 1`, **α = (0.2, 0.7, 0.1)** (causal-emphasis) — a balanced multi-objective (spatial + fidelity terms active) that matches pure-causal gain without gaming a single metric. `run_data_pareto._run_edit` uses it.
+- Run `2026-05-27T22-29-57_1000k_causal_emphasis_dedup` (`k=1000`): **ΔF_causal = +0.0087** (0.8052 → 0.8139); F_spatial flat (−0.0003); 999/1000 converged.
+- Run `2026-05-28T00-22-24_10-000k_causal_emphasis_dedup` (`k=10000`): **ΔF_causal = +0.0093** (0.8052 → 0.8145); F_spatial flat (−0.0003); 1184/1186 converged.
+
+**Unit-distinct editing budget (finding, 2026-05-28):** with `--max-per-unit 1`, selection **caps at 1,186 trajectories regardless of K** (k=10000 still selected only 1,186). Reason: 2,829 of 34,524 active units have negative (drag) causal attribution, but only 1,186 of them contain a pickup to relocate — editing moves *existing* pickups, so drag-units with no demand (active by supply only) are unreachable, and `max-per-unit 1` takes ≤1 trajectory per unit. So ~1.1% of the corpus is the natural editable slice; K stops binding above ~1,186. Pushing ΔF higher needs a different lever (relax `max-per-unit` → pile-up risk, or gated coordinate-descent re-attribution rounds), not bigger K.
 
 ---
 
