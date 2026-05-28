@@ -28,5 +28,5 @@ ADV_LR_G = 1e-4                   # generator LR during fine-tune (small: don't 
 ADV_LR_D = 1e-4                   # critic LR
 ADV_BATCH_SIZE = 256
 GUMBEL_TAU_START = 1.0            # Gumbel-softmax temperature, annealed start
-GUMBEL_TAU_END = 0.5             #   -> end (sharper, closer to discrete)
-D_HIDDEN_DIM = 128               # critic LSTM hidden size
+GUMBEL_TAU_END = 0.5              #   -> end (sharper, closer to discrete)
+D_HIDDEN_DIM = 128                # critic LSTM hidden size
