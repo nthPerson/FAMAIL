@@ -2,6 +2,7 @@
 import numpy as np
 import pytest
 
+from famail_temporal import config
 from famail_temporal.tests.test_objective import _make_synthetic_bundle
 from famail_temporal.baselines.tests._helpers import (
     active_units, make_traj_at, negative_attribution_units,
@@ -38,6 +39,17 @@ def test_build_filtered_subtracts_mass_at_unit_only():
     assert np.allclose(delta, 0.0)
     # Bundle's own grid is untouched (copy semantics).
     assert np.allclose(bundle.pickup_3d, before)
+
+
+def test_build_filtered_floors_at_demand_floor():
+    """Over-subtraction floors the cell at DEMAND_FLOOR (no negative demand)."""
+    bundle = _make_synthetic_bundle()
+    (cx, cy, t_block) = active_units(bundle, 1)[0]
+    # Start the cell below one pickup mass so a single removal goes negative.
+    bundle.pickup_3d[cx, cy, t_block] = ds.pickup_mass(bundle, t_block) * 0.5
+    traj = make_traj_at(cx, cy, t_block, traj_id=0)
+    filtered = ds.build_filtered_pickup_3d(bundle, [traj])
+    assert filtered[cx, cy, t_block] == pytest.approx(config.DEMAND_FLOOR)
 
 
 def test_rank_returns_only_negative_scores_most_unfair_first():

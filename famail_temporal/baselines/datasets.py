@@ -14,6 +14,7 @@ from typing import List, Tuple
 
 import numpy as np
 
+from famail_temporal import config
 from famail_temporal.algorithm.attribution import (
     compute_per_unit_attribution, rank_trajectories,
 )
@@ -62,12 +63,19 @@ def build_filtered_pickup_3d(
 ) -> np.ndarray:
     """Demand grid after removing the given trajectories' pickup events.
 
-    Returns a fresh array (bundle.pickup_3d is not mutated). Cells may go
-    below DEMAND_FLOOR here; the downstream fairness grid clamps demand, so
-    no clamping is applied at this layer.
+    Returns a fresh array (bundle.pickup_3d is not mutated). Only the
+    modified cells are touched; each is floored at ``config.DEMAND_FLOOR``
+    after subtraction. Flooring is required because the spatial-fairness path
+    rejects negative demand, and demand cannot physically go negative. Over-
+    subtraction is possible because ``pickup_3d`` is an independent mean-
+    hourly counts artifact, not an exact sum of seeking-trajectory pickup
+    masses; flooring handles that gracefully. Untouched cells (including
+    legitimate zeros) are left exactly as in ``bundle.pickup_3d``.
     """
     pickup_3d = bundle.pickup_3d.copy()
+    floor = config.DEMAND_FLOOR
     for traj in removed_trajs:
         cx, cy, t_block = pickup_unit_of(traj)
-        pickup_3d[cx, cy, t_block] -= pickup_mass(bundle, t_block)
+        reduced = float(pickup_3d[cx, cy, t_block]) - pickup_mass(bundle, t_block)
+        pickup_3d[cx, cy, t_block] = max(reduced, floor)
     return pickup_3d
