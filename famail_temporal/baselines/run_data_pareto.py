@@ -1,0 +1,77 @@
+"""CLI: compute the data-level fairness x retention Pareto.
+
+Loads the full corpus bundle, computes the raw point and a filtered@K sweep
+(no GAN), optionally runs the existing one-shot editing pipeline for the
+FAMAIL point, and writes pareto_points.json + pareto.png.
+
+Example:
+    python -m famail_temporal.baselines.run_data_pareto \
+        --k-levels 100 500 1000 5000 --with-edit --edit-k 1000
+"""
+from __future__ import annotations
+import argparse
+from pathlib import Path
+from typing import List
+
+from famail_temporal import config
+from famail_temporal.data.loader import DataBundle
+from famail_temporal.baselines.pareto import (
+    ParetoPoint, raw_point, filtered_points, edited_point, points_to_json,
+)
+from famail_temporal.baselines.figure import plot_pareto
+
+
+def edited_point_from_result(result) -> ParetoPoint:
+    """Adapt an ExperimentResult's post-edit metrics into the edit ParetoPoint."""
+    return edited_point(
+        f_spatial=result.f_spatial_after, f_causal=result.f_causal_after,
+        gini_dsr=result.gini_dsr_after, gini_asr=result.gini_asr_after,
+    )
+
+
+def _run_edit(edit_k: int) -> ParetoPoint:
+    """Run the existing editing pipeline once for the FAMAIL point.
+
+    Uses the validated strongest config (pure F_causal, unit-distinct
+    selection). See methodology doc section 8.6.
+    """
+    from famail_temporal.evaluation.runner import run_experiment
+    result = run_experiment(
+        config_overrides={
+            "ALPHA_SPATIAL": 0.0, "ALPHA_CAUSAL": 1.0, "ALPHA_FIDELITY": 0.0,
+        },
+        name="data-pareto-edit",
+        k=edit_k,
+        max_per_unit=1,
+        device="auto",
+    )
+    return edited_point_from_result(result)
+
+
+def main(argv: List[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(prog="famail_temporal.baselines.run_data_pareto")
+    ap.add_argument("--k-levels", type=int, nargs="+",
+                    default=[100, 500, 1000, 5000])
+    ap.add_argument("--with-edit", action="store_true",
+                    help="Also run the editing pipeline for the FAMAIL point.")
+    ap.add_argument("--edit-k", type=int, default=1000)
+    ap.add_argument("--out-dir", type=Path,
+                    default=Path(config.PACKAGE_ROOT) / "results" / "data_pareto")
+    args = ap.parse_args(argv)
+
+    bundle = DataBundle.load()
+    points: List[ParetoPoint] = [raw_point(bundle)]
+    points.extend(filtered_points(bundle, args.k_levels))
+    if args.with_edit:
+        points.append(_run_edit(args.edit_k))
+
+    args.out_dir.mkdir(parents=True, exist_ok=True)
+    (args.out_dir / "pareto_points.json").write_text(points_to_json(points))
+    plot_pareto(points, args.out_dir / "pareto.png", metric="f_causal")
+    print(f"wrote {args.out_dir / 'pareto_points.json'}")
+    print(f"wrote {args.out_dir / 'pareto.png'}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
