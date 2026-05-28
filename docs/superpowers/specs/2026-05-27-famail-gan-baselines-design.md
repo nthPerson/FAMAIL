@@ -66,7 +66,7 @@ Each baseline is the rebuttal to a specific reviewer objection ("maybe the data 
 
 ## 3. Signal maximization (dedicated; ε=2 inviolable)
 
-The headline rests on detecting a fairness difference that is **small at the data level** (validated editing moves F_causal ~+0.8%, r² 0.195→~0.186) after it passes through a lossy, stochastic GAN. The model-level signal can be written as:
+The headline rests on detecting a fairness difference that is **small at the data level** (the validated editing config moves F_causal by **+0.0087**, 0.8052→0.8139 — run `2026-05-27T22-29-57_1000k_causal_emphasis_dedup`; r² 0.195→~0.186) after it passes through a lossy, stochastic GAN. The model-level signal can be written as:
 
 ```
 signal  =  (data-level ΔF)  ×  (GAN transmission fidelity)  −  noise
@@ -81,7 +81,7 @@ All three terms are levers. The plan below maximizes SNR **without ever relaxing
 
 ### 3.2 Numerator gains (bigger data-level ΔF, ε untouched)
 - **Large `k` (editing count).** Edit more trajectories. `k` is a selection-count knob, not an algorithm change — no sign-off needed. Default sweep extends well past the validated `k=1000` (e.g., `k ∈ {1000, 5000, 10000, 25000}`), bounded by the S1 diversity constraint (`--max-per-unit 1`). *(Convention: lowercase `k` = editing selection count; uppercase `K` = filtering removal count in B2 — kept distinct throughout this spec.)*
-- **Objective–metric alignment.** When headlining F_causal / disparate-impact, edit with `α=(0,1,0)` (pure F_causal), the validated strongest config.
+- **Objective–metric alignment.** When headlining F_causal, edit with a **causal-emphasis** objective. The validated strongest config is **`α=(0.2, 0.7, 0.1)`** with `k=1000, --max-per-unit 1` → **ΔF_causal = +0.0087** (run `2026-05-27T22-29-57_1000k_causal_emphasis_dedup`), matching the pure-`α=(0,1,0)` causal gain (+0.0088) while keeping a *balanced, defensible* multi-objective (spatial + fidelity terms remain active; F_spatial essentially flat at −0.0003). Prefer this over pure `α=(0,1,0)` — it avoids the "we gamed a single metric" critique. Increasing `k` and the gated coordinate-descent rounds (below) are the levers for pushing ΔF_causal higher still.
 - **Coordinate-descent re-attribution rounds** *(gated — see §3.4)*. Re-attribute and re-edit over `R` passes; each pickup remains capped at **ε=2 from its original cell** (cumulative cap, never stacked to 4). Re-attribution after each round recovers improvement that the greedy single pass leaves on the table. First investigate the existing `--iterative-topk` flag to see whether this is already implemented.
 
 ### 3.3 Metric lens (larger dynamic range, low risk)
@@ -193,6 +193,7 @@ New package `famail_temporal/baselines/`:
 | Compute budget (RTX 3070, 8 GB) | One arch × ~6 dataset variants × N seeds × 2 stages — bound before scale-up; defaults N=5 seeds, editing-`k` levels=4, B2 retention levels=6 (§9) |
 | Conditioning fidelity | Rollouts must aggregate to a corpus-comparable grid; validated by comparing B0 generations to the raw corpus distribution |
 | `--iterative-topk` semantics | Investigate before building coordinate-descent editing (may already exist) |
+| **Data-level filtering finding (2026-05-28)** | Phase 1 smoke: removing the top-K *most-unfair* trajectories (rank by per-cell attribution, subtract their demand) does **not** raise data-level F_causal — it slightly *lowers* it (0.8052→0.8016 at 3773 removed), because filtering perturbs a still-active unit's demand rather than removing the unit from the regression. So at the **data level**, B2 is Pareto-*dominated* by editing (worse fairness AND less data), not a fairness-vs-retention tradeoff. The conventional B2 tradeoff (filtering→less training data→worse model) is a **model-level** effect, captured only in Phase 2+. **Open decision (gated):** keep B2 as a model-level-only argument, adopt a different data-level filtering criterion (e.g., greedy marginal-ΔF removal), or reframe. Awaiting user direction. |
 
 ---
 
@@ -202,7 +203,7 @@ New package `famail_temporal/baselines/`:
 |---|---|
 | Seeds (paired) | 5 |
 | B2 retention levels | remove {1, 2, 5, 10, 20, 40}% + one level matched to editing's fairness |
-| Editing `k` sweep | {1000, 5000, 10000, 25000} with `--max-per-unit 1`, `α=(0,1,0)` |
+| Editing config (FAMAIL point) | `α=(0.2, 0.7, 0.1)` causal-emphasis + `--max-per-unit 1` (validated ΔF_causal=+0.0087 at k=1000); `k` sweep {1000, 5000, 10000, 25000} |
 | Coordinate-descent rounds R *(gated)* | 1 (single pass) until sign-off; then sweep {1, 2, 3} |
 | Generation sample size | corpus-matched (~105k) rollouts per model |
 | LSTM | 2 layers, 128 hidden |

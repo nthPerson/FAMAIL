@@ -32,13 +32,17 @@ def edited_point_from_result(result) -> ParetoPoint:
 def _run_edit(edit_k: int) -> ParetoPoint:
     """Run the existing editing pipeline once for the FAMAIL point.
 
-    Uses the validated strongest config (pure F_causal, unit-distinct
-    selection). See methodology doc section 8.6.
+    Uses the validated strongest config: causal-emphasis alpha=(0.2, 0.7, 0.1)
+    with unit-distinct selection (--max-per-unit 1), which achieved
+    DeltaF_causal=+0.0087 at k=1000 (run
+    2026-05-27T22-29-57_1000k_causal_emphasis_dedup) -- a balanced
+    multi-objective that matches the pure-causal gain without gaming a
+    single metric.
     """
     from famail_temporal.evaluation.runner import run_experiment
     result = run_experiment(
         config_overrides={
-            "ALPHA_SPATIAL": 0.0, "ALPHA_CAUSAL": 1.0, "ALPHA_FIDELITY": 0.0,
+            "ALPHA_SPATIAL": 0.2, "ALPHA_CAUSAL": 0.7, "ALPHA_FIDELITY": 0.1,
         },
         name="data-pareto-edit",
         k=edit_k,
