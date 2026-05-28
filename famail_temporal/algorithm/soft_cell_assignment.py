@@ -97,18 +97,20 @@ def inject_soft_counts_into_3d(
 ) -> torch.Tensor:
     """Inject probs_2d * pickup_mass into base_counts_3d at slice t_block.
 
-    Uses the delta-tensor pattern for autograd-safe gradient flow:
-        delta = zeros_like(base)
-        delta[:, :, t_block] = scatter(probs * pickup_mass)
-        return base + delta
+    Vectorized form: slice the in-bounds rectangle of probs_2d, pad it to fill
+    the (gx, gy) plane with zeros, then broadcast-multiply by a one-hot mask
+    along the time axis. Equivalent to the original element-by-element write
+    pattern but expressed in three GPU-friendly ops (slice / pad / mul-add)
+    instead of (2k+1)² scalar writes — critical for GPU readiness (each
+    scalar write on CUDA is a separate kernel launch + host-device sync).
 
-    The delta-tensor pattern is preferred over clone-then-in-place because
-    it unambiguously preserves the computational graph from probs_2d through
-    to the returned tensor. In-place ops on a clone can subtly break autograd
-    under certain PyTorch versions.
+    Autograd: ``probs_2d`` carries the gradient; slice, ``F.pad``, broadcast
+    multiply, and final ``+`` are all differentiable non-mutating ops, so the
+    autograd graph from probs_2d to the returned tensor is preserved.
 
     Only cells in the (2k+1, 2k+1) neighborhood of cell_xy in slice t_block
-    are modified. Cells outside the grid bounds are silently skipped.
+    are modified. Cells outside the grid bounds are silently skipped via the
+    in-bounds slice.
 
     Args:
         base_counts_3d: (grid_x, grid_y, T) float32 — the background counts
@@ -129,14 +131,37 @@ def inject_soft_counts_into_3d(
     )
     assert 0 <= t_block < t_total, f"t_block {t_block} out of range [0, {t_total})"
 
-    delta = torch.zeros_like(base_counts_3d)
     cx, cy = cell_xy
-    for di in range(-k, k + 1):
-        for dj in range(-k, k + 1):
-            ni, nj = cx + di, cy + dj
-            if 0 <= ni < gx and 0 <= nj < gy:
-                delta[ni, nj, t_block] = (
-                    delta[ni, nj, t_block]
-                    + probs_2d[di + k, dj + k] * pickup_mass
-                )
+    # In-bounds rectangle within the (gx, gy) plane
+    x_lo = max(0, cx - k)
+    x_hi = min(gx, cx + k + 1)
+    y_lo = max(0, cy - k)
+    y_hi = min(gy, cy + k + 1)
+    # Corresponding rectangle inside probs_2d ((2k+1, 2k+1))
+    px_lo = x_lo - (cx - k)
+    px_hi = px_lo + (x_hi - x_lo)
+    py_lo = y_lo - (cy - k)
+    py_hi = py_lo + (y_hi - y_lo)
+
+    # If the neighborhood lies entirely outside the grid, return base unchanged.
+    if x_hi <= x_lo or y_hi <= y_lo:
+        return base_counts_3d
+
+    contrib_2d = probs_2d[px_lo:px_hi, py_lo:py_hi] * pickup_mass  # (h, w)
+
+    # Pad contrib_2d to (gx, gy) by surrounding with zeros. F.pad uses last-dim-first:
+    # (pad_left, pad_right, pad_top, pad_bottom) for a 2-D tensor.
+    padded_2d = torch.nn.functional.pad(
+        contrib_2d,
+        (y_lo, gy - y_hi, x_lo, gx - x_hi),
+    )  # (gx, gy)
+
+    # Broadcast into the t_block slice without an in-place write:
+    # delta[i, j, k] = padded_2d[i, j] * 1{k == t_block}
+    one_hot_t = torch.zeros(
+        t_total, dtype=base_counts_3d.dtype, device=base_counts_3d.device,
+    )
+    one_hot_t[t_block] = 1.0
+    delta = padded_2d.unsqueeze(-1) * one_hot_t.view(1, 1, t_total)
+
     return base_counts_3d + delta

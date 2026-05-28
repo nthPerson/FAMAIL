@@ -64,6 +64,20 @@ class FAMAILObjective(nn.Module):
         self.register_buffer("mask_3d", torch.from_numpy(bundle.mask_3d))
         self.register_buffer("dropoff_3d", torch.from_numpy(bundle.dropoff_3d).float())
         self.register_buffer("active_taxis_3d", torch.from_numpy(bundle.active_taxis_3d).float())
+        # Pre-flattened active-unit vectors. These are constant for the entire
+        # run (bundle data never changes inside an optimizer pass), so gathering
+        # them once at __init__ rather than every forward saves an N-element
+        # indexed-gather × 2 per iter at production scale (N=34,524).
+        # ``pickup_N`` still has to be re-gathered per forward because it carries
+        # the gradient through ``soft_pickup_3d``.
+        self.register_buffer(
+            "dropoff_N",
+            torch.from_numpy(bundle.dropoff_3d[bundle.mask_3d].copy()).float(),
+        )
+        self.register_buffer(
+            "active_taxis_N",
+            torch.from_numpy(bundle.active_taxis_3d[bundle.mask_3d].copy()).float(),
+        )
 
         # Hat-matrix building blocks for F_causal (compact FWL form — O(Np)
         # memory instead of O(N²)). At N=34,524 (T=24) the dense form is
@@ -103,17 +117,19 @@ class FAMAILObjective(nn.Module):
 
         # ── THE single grid -> unit conversion point ────────────────────
         pickup_N = soft_pickup_3d[mask]
-        dropoff_N = self.dropoff_3d[mask]
-        active_taxis_N = self.active_taxis_3d[mask]
+        # dropoff_N / active_taxis_N are constant across iters — read the
+        # pre-flattened buffers instead of re-gathering every forward.
+        dropoff_N = self.dropoff_N
+        active_taxis_N = self.active_taxis_N
 
         # ── F_spatial ───────────────────────────────────────────────────
         f_spatial, sp_debug = compute_fspatial(pickup_N, dropoff_N, active_taxis_N)
 
-        # ── g0(D) computed without grad (frozen numpy function) ─────────
+        # ── g0(D) computed without grad (frozen function, torch-native) ──
+        # Stays on ``device`` end-to-end: no .cpu().numpy() round-trip per iter.
         with torch.no_grad():
             D_clamped = torch.clamp(pickup_N, min=config.DEMAND_FLOOR)
-            g0_D_np = self.g0_func(D_clamped.detach().cpu().numpy())
-            g0_D_N = torch.from_numpy(np.asarray(g0_D_np, dtype=np.float32)).to(device)
+            g0_D_N = self.g0_func.eval_torch(D_clamped).to(dtype=torch.float32)
 
         # ── F_causal ───────────────────────────────────────────────────
         f_causal, cs_debug = compute_fcausal_from_compact(

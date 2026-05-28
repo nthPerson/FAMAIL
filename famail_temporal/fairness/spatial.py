@@ -15,14 +15,41 @@ def per_unit_gini_decomposition(values: torch.Tensor) -> torch.Tensor:
     so that sum_i contrib_i == pairwise_gini(values) exactly (modulo float
     precision). Callers are responsible for passing only the active-unit
     subset - this function operates on 1-D N-vectors with no mask handling.
+
+    Implementation: sorted-order identity. For sorted values x_(1) <= ... <= x_(n),
+    the row-sum can be written as
+        Σⱼ |x_(k) - x_(j)|  =  (2k - n) · x_(k)  -  2·C_(k)  +  S_total
+    where C_(k) is the cumulative sum and S_total = Σ x_(k). This avoids the
+    O(N²) pairwise materialization (which at N=34,524 is a 4.77 GB allocation
+    done twice per modifier iteration) in favor of O(N log N) work and O(N)
+    memory. ``torch.sort`` and ``torch.scatter`` are both autograd-registered;
+    the gradient routes back via the sort permutation and is bit-equivalent
+    (modulo float-summation-order) to the pairwise form.
     """
     n = values.numel()
     if n <= 1:
         return torch.zeros_like(values)
-    mean_val = values.mean() + config.EPS
-    diff = torch.abs(values.unsqueeze(0) - values.unsqueeze(1))  # (N, N)
-    row_sums = diff.sum(dim=1)                                    # (N,)
-    return row_sums / (2 * n * n * mean_val)
+
+    # Compute reductions in float64 to keep the metric's noise floor well
+    # below any reasonable convergence tolerance. Cast back to caller dtype
+    # on return so type signatures (e.g. build_fairness_grid → float32
+    # storage) stay unchanged.
+    orig_dtype = values.dtype
+    values_64 = values.to(torch.float64)
+    mean_val = values_64.mean() + config.EPS
+
+    xs, sort_idx = torch.sort(values_64)
+    cumsum = torch.cumsum(xs, dim=0)
+    s_total = xs.sum()
+    k = torch.arange(
+        1, n + 1, dtype=xs.dtype, device=xs.device,
+    )
+    # Σⱼ |x_(k) − x_(j)|  =  (2k − n)·x_(k)  −  2·C_(k)  +  S_total
+    row_sums_sorted = (2 * k - n) * xs - 2 * cumsum + s_total
+    contrib_sorted = row_sums_sorted / (2 * n * n * mean_val)
+    # Unsort back to original positions; ``scatter`` is differentiable
+    out_64 = torch.empty_like(values_64).scatter_(0, sort_idx, contrib_sorted)
+    return out_64.to(orig_dtype)
 
 
 def pairwise_gini(values: torch.Tensor) -> torch.Tensor:
