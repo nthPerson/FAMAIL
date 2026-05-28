@@ -2,8 +2,9 @@
 
 forward() returns next-token logits for teacher-forced MLE training. The
 conditioning context (start cell + start time-block) is injected by adding a
-context embedding to every input-token embedding. A Gumbel-softmax sampling
-path can be layered on later (Phase 3) without changing this interface.
+context embedding to every input-token embedding. step_embed() decodes from a
+precomputed input embedding, which the Phase-3 Gumbel-softmax rollout uses to
+feed a differentiable soft embedding back as the next input.
 """
 from __future__ import annotations
 import torch

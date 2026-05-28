@@ -11,10 +11,10 @@ Design spec: [`docs/superpowers/specs/2026-05-27-famail-gan-baselines-design.md`
 
 | Baseline | Claim | Status |
 |---|---|---|
-| **B0** — generator on raw data | Bias propagates to the trained model | Implemented (Phase 2, MLE keystone) |
-| **B1** — + differentiable fairness loss | A model-level fairness fix is insufficient | Deferred (Phase 3) |
-| **B2** — generate-then-filter | Filtering buys fairness only by discarding scarce data | Data-level done; model-level deferred |
-| **FAMAIL** — edit pickups (ε=2) | Editing wins fairness *and* retention | Editing validated; model-level deferred |
+| **B0** — generator on raw data | Bias propagates to the trained model | Implemented (Phase 2 MLE keystone + Phase 3 adversarial) |
+| **B1** — + differentiable fairness loss | A model-level fairness fix is insufficient | Deferred (Phase 4) |
+| **B2** — generate-then-filter | Filtering buys fairness only by discarding scarce data | Data-level done; model-level deferred (Phase 4) |
+| **FAMAIL** — edit pickups (ε=2) | Editing wins fairness *and* retention | Editing validated; model-level deferred (Phase 4) |
 
 Headline = **model-level** (edited-data model fairer than raw-data model); fallback = **data-level Pareto**.
 
@@ -67,26 +67,50 @@ Module `famail_temporal/baselines/gan/` (14 tests passing: `python -m pytest fam
 
 ---
 
-## Deferred (Phase 3+)
+## Phase 3 — adversarial training subsystem + standard-adversarial B0 — DONE
 
-- Real-vs-fake discriminator (reuse Siamese encoder) + Gumbel-softmax adversarial fine-tune.
-- B1 differentiable fairness loss; B2/FAMAIL model-level dataset swaps; pure-GAN ablation.
-- Multi-seed paired training; signal-maximization sweeps (large k, coordinate-descent rounds — gated).
-- District disparate-impact ratio metric (Phase 1b; needs a confirmed per-district supply/demand definition — gated).
+Plan: [`docs/superpowers/plans/2026-05-28-famail-gan-baselines-phase3-adversarial.md`](../../docs/superpowers/plans/2026-05-28-famail-gan-baselines-phase3-adversarial.md).
+Adds the adversarial stage Phase 2 deferred, completing the spec's standard-adversarial B0. Module `famail_temporal/baselines/gan/` now at 43 tests passing across the whole `baselines/` suite (`python -m pytest famail_temporal/baselines/ -q`). Built via subagent + two-stage review per task + a final holistic review.
+
+| File | What it does |
+|---|---|
+| `generator.py` | + `step_embed` (decode from a precomputed input embedding); `step` delegates to it |
+| `gumbel.py` | `gumbel_rollout` — differentiable straight-through Gumbel-softmax rollout (fixed `max_len`; feeds `y @ cell_embed.weight` back; records first EOS in `lengths`) |
+| `critic.py` | `SequenceCritic` — real-vs-fake LSTM over the cell vocabulary; `forward_ids` (hard) + `forward_soft` (soft, differentiable via `soft_onehot @ embed.weight`) |
+| `train_adversarial.py` | `adversarial_finetune` — non-saturating GAN loop (D-step on real vs detached fake, G-step on a re-rolled differentiable fake), annealed Gumbel temp, separate G/critic optimizers |
+| `model_level.py` | `fit_and_evaluate` — MLE pretrain → adversarial fine-tune → generate → grid → fairness; returns `{generated, corpus, n_generated, mle_losses, adv_losses}` |
+| `run_b0_adversarial.py` | CLI → writes `results/b0_adversarial/b0_adversarial_fairness.json` |
+| `config.py` | + adversarial hyperparameters (`ADV_EPOCHS`, `ADV_LR_G/D`, `ADV_BATCH_SIZE`, `GUMBEL_TAU_START/END`, `D_HIDDEN_DIM`) |
+
+**Design notes:** the critic is a fresh vocab-embedding LSTM (mirrors the Siamese *design*, per spec decision #8 — the trained Siamese net stays reserved for eval-time realism); critic is unconditioned; fixed-length rollout (EOS recorded in `lengths`, no early break) keeps a static differentiable batch; straight-through hard Gumbel. B1's differentiable fairness loss and the FAMAIL/B2 model-level dataset swaps are **Phase 4** (the B1 reuse seam — `FAMAILObjective` + a terminal-soft-pickup scatter — is documented in the Phase-3 plan).
+
+**Not yet run:** the real-data adversarial-B0 smoke (`python -m famail_temporal.baselines.gan.run_b0_adversarial --mle-epochs 5 --adv-epochs 3 --device auto`) — needs the cache + GPU; expected `corpus.f_causal ≈ 0.805` with `generated.f_causal` near it. Watch the loss histories for D-collapse / amplification (a finding to record, not a bug to patch).
+
+---
+
+## Deferred (Phase 4+)
+
+- **B1** differentiable fairness loss (`λ·(1−F_causal)` on Gumbel generations via `FAMAILObjective` + a differentiable terminal-soft-pickup grid).
+- **B2 / FAMAIL** model-level dataset swaps (build edited/filtered *trajectory* datasets, then reuse `fit_and_evaluate`).
+- Pure-GAN ablation (skip MLE pretrain); multi-seed paired training; eval-time Siamese realism critic + JS-divergence utility.
+- Signal-maximization sweeps (large k, coordinate-descent rounds — gated); District disparate-impact ratio metric (Phase 1b; needs a confirmed per-district supply/demand definition — gated).
 
 ---
 
 ## How to run
 
 ```bash
-# All baseline tests (Phase 1 + Phase 2)
+# All baseline tests (Phase 1 + Phase 2 + Phase 3)
 python -m pytest famail_temporal/baselines/ -q
 
 # Data-level Pareto (no GAN); add --with-edit to also run the FAMAIL editing point
 python -m famail_temporal.baselines.run_data_pareto --k-levels 100 500 1000 5000
 
-# B0 generative baseline (trains the MLE generator; GPU recommended)
+# B0 generative baseline — MLE only (Phase 2; GPU recommended)
 python -m famail_temporal.baselines.gan.run_b0 --epochs 5 --device auto
+
+# B0 generative baseline — MLE + adversarial fine-tune (Phase 3; GPU recommended)
+python -m famail_temporal.baselines.gan.run_b0_adversarial --mle-epochs 5 --adv-epochs 3 --device auto
 ```
 
 PI-facing diagrams live in the research vault: `research-vault/FAMAIL/famail_temporal/diagrams/` (experimental design + fairness×retention Pareto).
