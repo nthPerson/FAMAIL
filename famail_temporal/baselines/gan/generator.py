@@ -41,6 +41,24 @@ class TrajectoryLSTM(nn.Module):
         out, _ = self.lstm(x)                                         # (B, L, H)
         return self.head(out)                                        # (B, L, V)
 
+    def step_embed(
+        self,
+        input_embed: torch.Tensor,  # (B, E) precomputed input-token embedding
+        ctx_cell: torch.Tensor,     # (B,) long start-cell ids
+        ctx_tblock: torch.Tensor,   # (B,) long start time-block ids
+        hidden=None,                # (h, c) LSTM state from the previous step
+    ):
+        """Single-step decode from a precomputed input embedding.
+
+        Used by the Gumbel-softmax rollout, where the next input is a
+        differentiable soft embedding (soft_onehot @ cell_embed.weight) rather
+        than a hard token id. Carries the recurrent state for O(L) decode.
+        """
+        ctx = self.cell_embed(ctx_cell) + self.tblock_embed(ctx_tblock)  # (B, E)
+        x = (input_embed + ctx).unsqueeze(1)                          # (B, 1, E)
+        out, hidden = self.lstm(x, hidden)                            # (B, 1, H)
+        return self.head(out[:, -1]), hidden                          # (B, V), state
+
     def step(
         self,
         token: torch.Tensor,       # (B,) long current token id
@@ -48,15 +66,10 @@ class TrajectoryLSTM(nn.Module):
         ctx_tblock: torch.Tensor,  # (B,) long start time-block ids
         hidden=None,               # (h, c) LSTM state from the previous step
     ):
-        """Single-step decode: next-token logits + updated LSTM state.
+        """Single-step decode from a token id: next-token logits + LSTM state.
 
-        Carries the recurrent state across calls so autoregressive sampling is
-        O(L) instead of O(L^2). Equivalent to slicing the last position of
-        forward() over the full prefix (LSTM is a recurrence), with the same
-        per-step additive conditioning.
+        Equivalent to slicing the last position of forward() over the full
+        prefix (LSTM is a recurrence), with the same per-step additive
+        conditioning. Delegates to step_embed after embedding the token.
         """
-        x = self.cell_embed(token)                                    # (B, E)
-        ctx = self.cell_embed(ctx_cell) + self.tblock_embed(ctx_tblock)  # (B, E)
-        x = (x + ctx).unsqueeze(1)                                    # (B, 1, E)
-        out, hidden = self.lstm(x, hidden)                            # (B, 1, H)
-        return self.head(out[:, -1]), hidden                          # (B, V), state
+        return self.step_embed(self.cell_embed(token), ctx_cell, ctx_tblock, hidden)
