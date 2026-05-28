@@ -53,6 +53,10 @@ class TrajectoryLSTM(nn.Module):
         Used by the Gumbel-softmax rollout, where the next input is a
         differentiable soft embedding (soft_onehot @ cell_embed.weight) rather
         than a hard token id. Carries the recurrent state for O(L) decode.
+
+        Note: cell_embed's padding_idx zeroing is NOT applied to input_embed
+        (it only zeros a hard-index lookup); callers are responsible for
+        masking PAD positions if they matter.
         """
         ctx = self.cell_embed(ctx_cell) + self.tblock_embed(ctx_tblock)  # (B, E)
         x = (input_embed + ctx).unsqueeze(1)                          # (B, 1, E)
