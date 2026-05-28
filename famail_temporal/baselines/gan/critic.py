@@ -6,6 +6,10 @@ differentiable Gumbel-softmax fake sequences (forward_soft, via
 soft_onehot @ embed.weight). One realism logit per sequence, read off the
 last valid timestep (BCEWithLogits convention: real = 1, fake = 0).
 Unconditioned (Phase-3 simplification).
+
+There is no unified ``forward``: callers pick ``forward_ids`` (hard) or
+``forward_soft`` (soft) explicitly, so ``critic(x)`` is intentionally not
+supported.
 """
 from __future__ import annotations
 
@@ -47,6 +51,15 @@ class SequenceCritic(nn.Module):
     def forward_soft(
         self, soft_onehots: torch.Tensor, lengths: torch.Tensor,
     ) -> torch.Tensor:
-        """Score soft generated sequences. soft_onehots: (B, L, VOCAB_SIZE)."""
+        """Score soft generated sequences. soft_onehots: (B, L, VOCAB_SIZE).
+
+        Deliberately does NOT detach embed.weight: in the discriminator step
+        the critic must learn from fakes through this path. During the
+        generator step, generator gradients also reach the critic's params,
+        but that is harmless because the critic is updated only by its own
+        optimizer (the generator optimizer holds no critic params, and the
+        critic optimizer zeroes grads before its own backward). Train the
+        critic only via its own loss/optimizer.
+        """
         embedded = soft_onehots @ self.embed.weight           # (B, L, E)
         return self._forward_embed(embedded, lengths)

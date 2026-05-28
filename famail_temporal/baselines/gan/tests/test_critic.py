@@ -46,4 +46,8 @@ def test_critic_can_separate_trivial_real_vs_fake():
         d_fake = critic.forward_ids(fake, lengths)
         loss = bce(d_real, torch.ones_like(d_real)) + bce(d_fake, torch.zeros_like(d_fake))
         opt.zero_grad(); loss.backward(); opt.step()
-    assert critic.forward_ids(real, lengths).mean() > critic.forward_ids(fake, lengths).mean()
+    # Require a clear margin, not just ordering, so a broken optimizer loop or
+    # misconfigured loss is caught (trivially separable + 50 Adam steps).
+    real_mean = critic.forward_ids(real, lengths).mean()
+    fake_mean = critic.forward_ids(fake, lengths).mean()
+    assert real_mean - fake_mean > 1.0
