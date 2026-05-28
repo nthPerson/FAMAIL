@@ -68,8 +68,16 @@ def pickups_to_pickup_3d(
     Each pickup adds pickup_mass(t_block) at its (cell, t_block), mirroring the
     editing modifier's accounting so the generated grid is scale-comparable to
     bundle.pickup_3d.
+
+    Pickups outside the bundle's grid are skipped. In production the generator's
+    cell vocabulary is derived from config.GRID_DIMS, which equals the real
+    bundle's grid, so the guard never fires. It only matters when the bundle
+    grid is smaller than the vocabulary (e.g. the small synthetic test bundle),
+    where it prevents an out-of-bounds index.
     """
     grid = np.zeros_like(bundle.pickup_3d)
+    gx, gy, n_t = grid.shape
     for (x, y, t_block) in pickups:
-        grid[x, y, t_block] += pickup_mass(bundle, t_block)
+        if 0 <= x < gx and 0 <= y < gy and 0 <= t_block < n_t:
+            grid[x, y, t_block] += pickup_mass(bundle, t_block)
     return grid

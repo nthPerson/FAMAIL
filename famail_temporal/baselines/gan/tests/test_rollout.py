@@ -35,6 +35,17 @@ def test_pickups_to_grid_scale_and_placement():
     assert np.allclose(grid, 0.0)
 
 
+def test_pickups_outside_grid_are_skipped():
+    """Pickups beyond the bundle's grid (vocab > grid in tests) are dropped."""
+    bundle = _make_synthetic_bundle()
+    gx, gy, n_t = bundle.pickup_3d.shape
+    pickups = [(gx + 5, gy + 5, 0), (1, 1, 0), (0, 0, n_t + 3)]
+    grid = rl.pickups_to_pickup_3d(bundle, pickups)
+    # Only the in-bounds (1, 1, 0) pickup is counted.
+    assert grid[1, 1, 0] == np.float32(pickup_mass(bundle, 0))
+    assert grid.sum() == np.float32(pickup_mass(bundle, 0))
+
+
 def test_generate_pickups_is_seed_deterministic():
     model = TrajectoryLSTM()
     contexts = [(5, 0), (9, 1), (3, 0)]
