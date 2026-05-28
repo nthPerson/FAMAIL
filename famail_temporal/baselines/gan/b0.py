@@ -35,6 +35,8 @@ def run_b0(
     context, and return generated vs corpus fairness."""
     if device is None:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    if not bundle.trajectories:
+        raise ValueError("run_b0 requires a non-empty corpus (bundle.trajectories)")
     set_all_seeds(seed)
 
     sequences = [trajectory_to_tokens(t) for t in bundle.trajectories]

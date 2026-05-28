@@ -20,23 +20,26 @@ def sample_trajectory_cells(
     """Sample one trajectory's cell ids (BOS/EOS/specials stripped).
 
     Autoregressive multinomial decode from BOS; stops at EOS or max_len.
-    Only in-vocabulary *cell* ids (< N_CELLS) are kept.
+    Only in-vocabulary *cell* ids (< N_CELLS) are kept. Uses the generator's
+    single-step decode (carried LSTM state) so cost is O(max_len), not
+    O(max_len^2).
     """
     model.to(device).train(False)   # inference mode (no dropout/grad)
     cc = torch.tensor([ctx_cell], dtype=torch.long, device=device)
     tb = torch.tensor([ctx_tblock], dtype=torch.long, device=device)
-    seq = [gc.BOS]
+    prev = gc.BOS
+    hidden = None
     cells: List[int] = []
     for _ in range(max_len):
-        inp = torch.tensor([seq], dtype=torch.long, device=device)
-        logits = model(inp, cc, tb)[0, -1]               # (V,)
-        probs = torch.softmax(logits / temperature, dim=-1)
+        tok = torch.tensor([prev], dtype=torch.long, device=device)
+        logits, hidden = model.step(tok, cc, tb, hidden)  # (1, V), state
+        probs = torch.softmax(logits[0] / temperature, dim=-1)
         nxt = int(torch.multinomial(probs, 1).item())
         if nxt == gc.EOS:
             break
-        seq.append(nxt)
         if nxt < gc.N_CELLS:                              # ignore stray specials
             cells.append(nxt)
+        prev = nxt
     return cells
 
 
