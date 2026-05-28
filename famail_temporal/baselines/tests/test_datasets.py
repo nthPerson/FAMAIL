@@ -4,7 +4,7 @@ import pytest
 
 from famail_temporal.tests.test_objective import _make_synthetic_bundle
 from famail_temporal.baselines.tests._helpers import (
-    active_units, make_traj_at,
+    active_units, make_traj_at, negative_attribution_units,
 )
 from famail_temporal.baselines import datasets as ds
 
@@ -42,12 +42,17 @@ def test_build_filtered_subtracts_mass_at_unit_only():
 
 def test_rank_returns_only_negative_scores_most_unfair_first():
     bundle = _make_synthetic_bundle()
-    # Put one trajectory on every active unit so ranking has candidates.
-    units = active_units(bundle, 25)
+    # Place trajectories on the bundle's negative-attribution units (the only
+    # valid filtering candidates) plus a few arbitrary active units, so the
+    # ranking has real candidates and the test is not vacuous.
+    neg_units = negative_attribution_units(bundle, 5)
+    assert neg_units, "synthetic bundle has no negative-attribution units"
+    units = neg_units + active_units(bundle, 10)
     bundle.trajectories.extend(
         make_traj_at(cx, cy, tb, traj_id=i) for i, (cx, cy, tb) in enumerate(units)
     )
     ranked = ds.rank_unfair_trajectory_indices(bundle)
+    assert ranked, "expected at least one strictly-unfair ranked trajectory"
     # All returned indices are valid and unique.
     assert len(set(ranked)) == len(ranked)
     assert all(0 <= i < len(bundle.trajectories) for i in ranked)
