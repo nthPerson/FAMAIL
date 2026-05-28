@@ -1,1 +1,1 @@
-"""B0 generative baseline (MLE keystone) for the FAMAIL GAN baselines."""
+"""GAN baselines for FAMAIL: B0 MLE keystone + Gumbel adversarial fine-tune."""
