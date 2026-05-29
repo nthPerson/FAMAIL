@@ -17,6 +17,7 @@ from famail_temporal.baselines.gan.generator import TrajectoryLSTM
 from famail_temporal.baselines.gan.critic import SequenceCritic
 from famail_temporal.baselines.gan.gumbel import gumbel_rollout
 from famail_temporal.baselines.gan.train_mle import _pad_batch
+from famail_temporal.baselines.gan.progress import Progress
 
 
 def _anneal(epoch: int, n_epochs: int, start: float, end: float) -> float:
@@ -38,15 +39,18 @@ def adversarial_finetune(
     tau_start: float,
     tau_end: float,
     device: torch.device,
+    progress: bool = False,
 ) -> Dict[str, List[float]]:
     """Fine-tune `model` (in place) against a fresh critic. Returns per-epoch
-    mean generator and discriminator losses."""
+    mean generator and discriminator losses. ``progress=True`` shows a per-epoch
+    bar with live g_loss / d_loss / tau (the divergence readout)."""
     model.to(device).train()
     critic = SequenceCritic().to(device).train()
     opt_g = torch.optim.Adam(model.parameters(), lr=lr_g)
     opt_d = torch.optim.Adam(critic.parameters(), lr=lr_d)
     bce = nn.BCEWithLogitsLoss()
     n = len(sequences)
+    n_batches = (n + batch_size - 1) // batch_size
     g_losses: List[float] = []
     d_losses: List[float] = []
 
@@ -55,6 +59,9 @@ def adversarial_finetune(
         perm = torch.randperm(n)
         g_batch: List[float] = []
         d_batch: List[float] = []
+        bar = Progress(
+            n_batches, f"adv epoch {epoch + 1}/{epochs}", enabled=progress,
+        )
         for start in range(0, n, batch_size):
             idx = perm[start : start + batch_size].tolist()
             real = _pad_batch([sequences[i] for i in idx], device)      # (b, Lr)
@@ -100,7 +107,13 @@ def adversarial_finetune(
 
             g_batch.append(float(loss_g.item()))
             d_batch.append(float(loss_d.item()))
-
+            bar.update(
+                1,
+                g=f"{sum(g_batch) / len(g_batch):.3f}",
+                d=f"{sum(d_batch) / len(d_batch):.3f}",
+                tau=f"{tau:.2f}",
+            )
+        bar.close()
         g_losses.append(sum(g_batch) / len(g_batch))
         d_losses.append(sum(d_batch) / len(d_batch))
 

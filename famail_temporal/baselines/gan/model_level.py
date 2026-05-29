@@ -6,6 +6,8 @@ the Phase-2 MLE keystone (b0.py) deferred. FAMAIL and B2 reuse this verbatim by
 passing an edited / filtered bundle (Phase 4); only the training data changes.
 """
 from __future__ import annotations
+import time
+
 import torch
 
 from famail_temporal.data.loader import DataBundle
@@ -20,6 +22,7 @@ from famail_temporal.baselines.gan.train_adversarial import adversarial_finetune
 from famail_temporal.baselines.gan.rollout import (
     generate_pickups, pickups_to_pickup_3d,
 )
+from famail_temporal.baselines.gan.progress import log_phase
 from famail_temporal.baselines.metrics import data_level_fairness
 
 
@@ -33,6 +36,7 @@ def fit_and_evaluate(
     max_tokens: int | None = gc.MAX_TRAIN_TOKENS,
     device: torch.device | None = None,
     seed: int = 0,
+    progress: bool = False,
 ) -> dict:
     """Train (MLE + adversarial) on bundle.trajectories, generate one rollout
     per real context, and return generated-vs-corpus fairness + loss histories.
@@ -42,7 +46,9 @@ def fit_and_evaluate(
     corpus has a long length tail (max ~1654 tokens) and the MLE logits tensor
     is (batch, seq_len, VOCAB=4323), so the cap bounds peak memory on small
     GPUs; it drops only ~1% of the corpus (p99 length is 213). ``mle_batch_size``
-    / ``adv_batch_size`` are exposed for the same reason.
+    / ``adv_batch_size`` are exposed for the same reason. ``progress=True``
+    prints phase markers and per-phase bars (training metrics + a generation
+    ETA) to stderr.
     """
     if device is None:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -52,10 +58,19 @@ def fit_and_evaluate(
         )
     set_all_seeds(seed)
 
+    t0 = time.monotonic()
+
+    def _phase(msg: str) -> None:
+        if progress:
+            log_phase(t0, msg)
+
+    _phase(f"device={device}")
+
     pairs = [
         (trajectory_to_tokens(t), trajectory_context(t))
         for t in bundle.trajectories
     ]
+    n_all = len(pairs)
     if max_tokens is not None:
         pairs = [(s, c) for (s, c) in pairs if len(s) <= max_tokens]
     if not pairs:
@@ -64,28 +79,43 @@ def fit_and_evaluate(
         )
     sequences = [s for s, _ in pairs]
     contexts = [c for _, c in pairs]
+    _phase(
+        f"corpus: {n_all} trajectories; training on {len(sequences)} "
+        f"(max_tokens={max_tokens} dropped {n_all - len(sequences)})"
+    )
 
     model = TrajectoryLSTM().to(device)
+    _phase(f"MLE pretrain: {mle_epochs} epochs, batch {mle_batch_size}")
     mle_losses = train_mle(
         model, sequences, contexts,
         epochs=mle_epochs, lr=gc.MLE_LR, batch_size=mle_batch_size,
-        device=device,
+        device=device, progress=progress,
     )
+    _phase(f"adversarial fine-tune: {adv_epochs} epochs, batch {adv_batch_size}")
     adv_losses = adversarial_finetune(
         model, sequences, contexts,
         epochs=adv_epochs, lr_g=gc.ADV_LR_G, lr_d=gc.ADV_LR_D,
         batch_size=adv_batch_size, max_len=max_len,
         tau_start=gc.GUMBEL_TAU_START, tau_end=gc.GUMBEL_TAU_END,
-        device=device,
+        device=device, progress=progress,
     )
 
-    pickups = generate_pickups(model, contexts, max_len=max_len, device=device)
+    _phase(f"generating {len(contexts)} rollouts (max_len {max_len})")
+    pickups = generate_pickups(
+        model, contexts, max_len=max_len, device=device, progress=progress,
+    )
     gen_grid = pickups_to_pickup_3d(bundle, pickups)
 
-    return {
+    _phase("scoring fairness")
+    result = {
         "generated": data_level_fairness(bundle, pickup_3d=gen_grid),
         "corpus": data_level_fairness(bundle),
         "n_generated": len(pickups),
         "mle_losses": mle_losses,
         "adv_losses": adv_losses,
     }
+    _phase(
+        f"done: generated f_causal={result['generated']['f_causal']:.4f} "
+        f"vs corpus {result['corpus']['f_causal']:.4f}"
+    )
+    return result

@@ -8,6 +8,7 @@ import torch
 from famail_temporal.baselines.gan import config as gc
 from famail_temporal.baselines.gan.generator import TrajectoryLSTM
 from famail_temporal.baselines.gan.sequences import unflat_cell
+from famail_temporal.baselines.gan.progress import Progress
 from famail_temporal.baselines.datasets import pickup_mass
 from famail_temporal.data.loader import DataBundle
 
@@ -45,14 +46,17 @@ def sample_trajectory_cells(
 
 def generate_pickups(
     model: TrajectoryLSTM, contexts: List[Tuple[int, int]],
-    *, max_len: int, device: torch.device,
+    *, max_len: int, device: torch.device, progress: bool = False,
 ) -> List[Tuple[int, int, int]]:
     """One rollout per context; pickup = terminal cell, t_block = context block.
 
     If a rollout produces no cells, it falls back to the start cell so every
     context yields a pickup (keeps the generated grid corpus-matched).
+    ``progress=True`` shows a bar over contexts (this batch-1 loop is the
+    longest phase, so the bar's ETA is the main "not hung" signal).
     """
     out: List[Tuple[int, int, int]] = []
+    bar = Progress(len(contexts), "generating rollouts", enabled=progress)
     for (ctx_cell, ctx_tblock) in contexts:
         cells = sample_trajectory_cells(
             model, ctx_cell, ctx_tblock, max_len=max_len, device=device,
@@ -60,6 +64,8 @@ def generate_pickups(
         terminal = cells[-1] if cells else ctx_cell
         x, y = unflat_cell(terminal)
         out.append((x, y, ctx_tblock))
+        bar.update(1)
+    bar.close()
     return out
 
 

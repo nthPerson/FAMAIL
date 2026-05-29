@@ -43,6 +43,8 @@ def main(argv: Optional[List[str]] = None) -> int:
                          "(<=0 disables the filter)")
     ap.add_argument("--device", default="auto")
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--quiet", action="store_true",
+                    help="suppress progress bars / phase markers")
     ap.add_argument("--out-dir", type=Path,
                     default=Path(config.PACKAGE_ROOT) / "results" / "b0_adversarial")
     args = ap.parse_args(argv)
@@ -54,6 +56,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         adv_batch_size=args.adv_batch_size,
         max_tokens=args.max_tokens if args.max_tokens > 0 else None,
         device=_resolve_device(args.device), seed=args.seed,
+        progress=not args.quiet,
     )
     args.out_dir.mkdir(parents=True, exist_ok=True)
     (args.out_dir / "b0_adversarial_fairness.json").write_text(
