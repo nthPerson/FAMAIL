@@ -28,11 +28,21 @@ def fit_and_evaluate(
     mle_epochs: int = gc.MLE_EPOCHS,
     adv_epochs: int = gc.ADV_EPOCHS,
     max_len: int = gc.MAX_GEN_LEN,
+    mle_batch_size: int = gc.MLE_BATCH_SIZE,
+    adv_batch_size: int = gc.ADV_BATCH_SIZE,
+    max_tokens: int | None = gc.MAX_TRAIN_TOKENS,
     device: torch.device | None = None,
     seed: int = 0,
 ) -> dict:
     """Train (MLE + adversarial) on bundle.trajectories, generate one rollout
     per real context, and return generated-vs-corpus fairness + loss histories.
+
+    Trajectories whose token sequence exceeds ``max_tokens`` are excluded from
+    both training and generation (``max_tokens=None`` disables the filter). The
+    corpus has a long length tail (max ~1654 tokens) and the MLE logits tensor
+    is (batch, seq_len, VOCAB=4323), so the cap bounds peak memory on small
+    GPUs; it drops only ~1% of the corpus (p99 length is 213). ``mle_batch_size``
+    / ``adv_batch_size`` are exposed for the same reason.
     """
     if device is None:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -42,19 +52,29 @@ def fit_and_evaluate(
         )
     set_all_seeds(seed)
 
-    sequences = [trajectory_to_tokens(t) for t in bundle.trajectories]
-    contexts = [trajectory_context(t) for t in bundle.trajectories]
+    pairs = [
+        (trajectory_to_tokens(t), trajectory_context(t))
+        for t in bundle.trajectories
+    ]
+    if max_tokens is not None:
+        pairs = [(s, c) for (s, c) in pairs if len(s) <= max_tokens]
+    if not pairs:
+        raise ValueError(
+            f"no training trajectories remain after the max_tokens={max_tokens} filter"
+        )
+    sequences = [s for s, _ in pairs]
+    contexts = [c for _, c in pairs]
 
     model = TrajectoryLSTM().to(device)
     mle_losses = train_mle(
         model, sequences, contexts,
-        epochs=mle_epochs, lr=gc.MLE_LR, batch_size=gc.MLE_BATCH_SIZE,
+        epochs=mle_epochs, lr=gc.MLE_LR, batch_size=mle_batch_size,
         device=device,
     )
     adv_losses = adversarial_finetune(
         model, sequences, contexts,
         epochs=adv_epochs, lr_g=gc.ADV_LR_G, lr_d=gc.ADV_LR_D,
-        batch_size=gc.ADV_BATCH_SIZE, max_len=max_len,
+        batch_size=adv_batch_size, max_len=max_len,
         tau_start=gc.GUMBEL_TAU_START, tau_end=gc.GUMBEL_TAU_END,
         device=device,
     )

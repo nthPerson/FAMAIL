@@ -17,7 +17,11 @@ N_LAYERS = 1
 # Training
 MLE_EPOCHS = 5
 MLE_LR = 1e-3
-MLE_BATCH_SIZE = 256
+MLE_BATCH_SIZE = 32               # small: MLE logits are (B, seq_len, VOCAB=4323);
+                                  # the corpus has a long length tail (max ~1654
+                                  # tokens), so a large batch OOMs an 8 GB GPU
+MAX_TRAIN_TOKENS = 256            # exclude trajectories longer than this from
+                                  # training (p99 length is 213; drops ~1% tail)
 
 # Generation
 MAX_GEN_LEN = 64                  # hard cap on rollout length (cells)
@@ -26,7 +30,8 @@ MAX_GEN_LEN = 64                  # hard cap on rollout length (cells)
 ADV_EPOCHS = 3
 ADV_LR_G = 1e-4                   # generator LR during fine-tune (small: don't undo MLE)
 ADV_LR_D = 1e-4                   # critic LR
-ADV_BATCH_SIZE = 256
+ADV_BATCH_SIZE = 64              # smaller than MLE: the G-step backprops through
+                                 # a 64-step Gumbel rollout (memory-heavy)
 GUMBEL_TAU_START = 1.0            # Gumbel-softmax temperature, annealed start
 GUMBEL_TAU_END = 0.5              #   -> end (sharper, closer to discrete)
 D_HIDDEN_DIM = 128                # critic LSTM hidden size
