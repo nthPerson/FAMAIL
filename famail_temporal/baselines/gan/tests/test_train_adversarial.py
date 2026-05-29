@@ -67,3 +67,23 @@ def test_finetune_with_stabilization_knobs_runs():
     assert len(history["d_losses"]) == 2
     after = model.state_dict()
     assert any(not torch.allclose(before[k], after[k]) for k in before)
+
+
+def test_finetune_mle_lambda_disabled_runs():
+    """mle_lambda=0 disables the MLE anchor; the loop still runs and reports the
+    adversarial g_loss (finite)."""
+    torch.manual_seed(0)
+    sequences = [
+        [gc.BOS, 10, 11, 12, gc.EOS],
+        [gc.BOS, 40, 41, gc.EOS],
+    ]
+    contexts = [(10, 0), (40, 1)]
+    model = TrajectoryLSTM()
+    history = adversarial_finetune(
+        model, sequences, contexts,
+        epochs=1, lr_g=1e-3, lr_d=1e-3, batch_size=2,
+        max_len=8, tau_start=1.0, tau_end=0.5, mle_lambda=0.0,
+        device=torch.device("cpu"),
+    )
+    assert set(history) == {"g_losses", "d_losses"}
+    assert all(math.isfinite(x) for x in history["g_losses"] + history["d_losses"])

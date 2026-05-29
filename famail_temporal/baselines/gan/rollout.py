@@ -44,27 +44,66 @@ def sample_trajectory_cells(
     return cells
 
 
+@torch.no_grad()
+def sample_terminal_cells_batched(
+    model: TrajectoryLSTM, ctx_cells: torch.Tensor, ctx_tblocks: torch.Tensor,
+    *, max_len: int, device: torch.device, temperature: float = 1.0,
+) -> torch.Tensor:
+    """Batched autoregressive decode -> each row's terminal (last) cell id.
+
+    Decodes ``ctx_cells.shape[0]`` rollouts in parallel from BOS, carrying the
+    LSTM state. Each row records its most recent in-vocabulary cell while it is
+    still active and freezes once it samples EOS; a row that never emits a cell
+    falls back to its start cell. Returns a (B,) long tensor of terminal cells.
+    Equivalent in contract to per-context ``sample_trajectory_cells`` + taking
+    the last cell, but processes the whole batch per step (far faster on GPU).
+    """
+    model.to(device).train(False)
+    cc = ctx_cells.to(device)
+    tb = ctx_tblocks.to(device)
+    B = cc.shape[0]
+    prev = torch.full((B,), gc.BOS, dtype=torch.long, device=device)
+    hidden = None
+    terminal = cc.clone()                                  # fallback: start cell
+    done = torch.zeros(B, dtype=torch.bool, device=device)
+    for _ in range(max_len):
+        logits, hidden = model.step(prev, cc, tb, hidden)  # (B, V), state
+        probs = torch.softmax(logits / temperature, dim=-1)
+        nxt = torch.multinomial(probs, 1).squeeze(1)       # (B,)
+        record = (~done) & (nxt < gc.N_CELLS)              # active + a real cell
+        terminal = torch.where(record, nxt, terminal)
+        done = done | (nxt == gc.EOS)
+        prev = nxt
+        if bool(done.all()):
+            break
+    return terminal
+
+
 def generate_pickups(
     model: TrajectoryLSTM, contexts: List[Tuple[int, int]],
-    *, max_len: int, device: torch.device, progress: bool = False,
+    *, max_len: int, device: torch.device,
+    gen_batch_size: int = gc.GEN_BATCH_SIZE, progress: bool = False,
 ) -> List[Tuple[int, int, int]]:
     """One rollout per context; pickup = terminal cell, t_block = context block.
 
-    If a rollout produces no cells, it falls back to the start cell so every
-    context yields a pickup (keeps the generated grid corpus-matched).
-    ``progress=True`` shows a bar over contexts (this batch-1 loop is the
-    longest phase, so the bar's ETA is the main "not hung" signal).
+    Decodes ``gen_batch_size`` contexts in parallel per step (the old batch-1
+    loop was the slowest phase). If a rollout produces no cells it falls back to
+    the start cell, so every context yields a pickup (keeps the generated grid
+    corpus-matched). ``progress=True`` shows a bar over contexts with an ETA.
     """
     out: List[Tuple[int, int, int]] = []
     bar = Progress(len(contexts), "generating rollouts", enabled=progress)
-    for (ctx_cell, ctx_tblock) in contexts:
-        cells = sample_trajectory_cells(
-            model, ctx_cell, ctx_tblock, max_len=max_len, device=device,
+    for start in range(0, len(contexts), gen_batch_size):
+        chunk = contexts[start : start + gen_batch_size]
+        cc = torch.tensor([c for c, _ in chunk], dtype=torch.long, device=device)
+        tb = torch.tensor([t for _, t in chunk], dtype=torch.long, device=device)
+        terminals = sample_terminal_cells_batched(
+            model, cc, tb, max_len=max_len, device=device,
         )
-        terminal = cells[-1] if cells else ctx_cell
-        x, y = unflat_cell(terminal)
-        out.append((x, y, ctx_tblock))
-        bar.update(1)
+        for (_, ctx_tblock), term in zip(chunk, terminals.tolist()):
+            x, y = unflat_cell(term)
+            out.append((x, y, ctx_tblock))
+        bar.update(len(chunk))
     bar.close()
     return out
 

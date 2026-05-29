@@ -43,6 +43,15 @@ def main(argv: Optional[List[str]] = None) -> int:
                     help="critic LR; lower it to slow a dominating critic")
     ap.add_argument("--d-update-every", type=int, default=gc.D_UPDATE_EVERY,
                     help="update the critic every k-th batch; raise to slow it")
+    ap.add_argument("--adv-mle-lambda", type=float, default=gc.ADV_MLE_LAMBDA,
+                    help="weight on the teacher-forced MLE anchor in the "
+                         "generator loss (0 disables; prevents drift/collapse)")
+    ap.add_argument("--adv-max-len", type=int, default=None,
+                    help="opt-in cap on the adversarial rollout length (tokens) "
+                         "as a hard backstop against fake-length blowup; "
+                         "defaults to --max-len")
+    ap.add_argument("--gen-batch-size", type=int, default=gc.GEN_BATCH_SIZE,
+                    help="contexts decoded in parallel during generation")
     ap.add_argument("--max-tokens", type=int, default=gc.MAX_TRAIN_TOKENS,
                     help="exclude trajectories longer than this from training "
                          "(<=0 disables the filter)")
@@ -60,7 +69,8 @@ def main(argv: Optional[List[str]] = None) -> int:
         max_len=args.max_len, mle_batch_size=args.mle_batch_size,
         adv_batch_size=args.adv_batch_size,
         adv_lr_g=args.adv_lr_g, adv_lr_d=args.adv_lr_d,
-        d_update_every=args.d_update_every,
+        d_update_every=args.d_update_every, adv_mle_lambda=args.adv_mle_lambda,
+        adv_max_len=args.adv_max_len, gen_batch_size=args.gen_batch_size,
         max_tokens=args.max_tokens if args.max_tokens > 0 else None,
         device=_resolve_device(args.device), seed=args.seed,
         progress=not args.quiet,

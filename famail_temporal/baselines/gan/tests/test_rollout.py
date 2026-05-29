@@ -57,3 +57,33 @@ def test_generate_pickups_is_seed_deterministic():
     assert len(a) == len(contexts)
     # Each pickup inherits its context's time-block (Phase-2 simplification).
     assert [p[2] for p in a] == [c[1] for c in contexts]
+
+
+def test_sample_terminal_cells_batched_valid_and_deterministic():
+    model = TrajectoryLSTM()
+    cc = torch.tensor([5, 9, 3, 0], dtype=torch.long)
+    tb = torch.tensor([0, 1, 0, 2], dtype=torch.long)
+    torch.manual_seed(1)
+    a = rl.sample_terminal_cells_batched(
+        model, cc, tb, max_len=16, device=torch.device("cpu"),
+    )
+    torch.manual_seed(1)
+    b = rl.sample_terminal_cells_batched(
+        model, cc, tb, max_len=16, device=torch.device("cpu"),
+    )
+    assert a.shape == (4,)
+    assert torch.equal(a, b)                         # deterministic given seed
+    assert bool((a < gc.N_CELLS).all())              # every terminal is a cell
+
+
+def test_generate_pickups_batches_match_count_across_batch_sizes():
+    """gen_batch_size changes throughput, not the contract: one pickup per
+    context, each with the context's time-block, terminals in-vocabulary."""
+    model = TrajectoryLSTM()
+    contexts = [(c, c % 3) for c in range(10)]
+    out = rl.generate_pickups(
+        model, contexts, max_len=12, device=torch.device("cpu"), gen_batch_size=4,
+    )
+    assert len(out) == len(contexts)
+    assert [p[2] for p in out] == [c[1] for c in contexts]
+    assert all(0 <= x < gc.GX and 0 <= y < gc.GY for (x, y, _) in out)

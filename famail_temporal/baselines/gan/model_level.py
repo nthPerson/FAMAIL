@@ -36,6 +36,9 @@ def fit_and_evaluate(
     adv_lr_g: float = gc.ADV_LR_G,
     adv_lr_d: float = gc.ADV_LR_D,
     d_update_every: int = gc.D_UPDATE_EVERY,
+    adv_mle_lambda: float = gc.ADV_MLE_LAMBDA,
+    adv_max_len: int | None = None,
+    gen_batch_size: int = gc.GEN_BATCH_SIZE,
     max_tokens: int | None = gc.MAX_TRAIN_TOKENS,
     device: torch.device | None = None,
     seed: int = 0,
@@ -94,19 +97,24 @@ def fit_and_evaluate(
         epochs=mle_epochs, lr=gc.MLE_LR, batch_size=mle_batch_size,
         device=device, progress=progress,
     )
-    _phase(f"adversarial fine-tune: {adv_epochs} epochs, batch {adv_batch_size}")
+    adv_len = adv_max_len if adv_max_len is not None else max_len
+    _phase(
+        f"adversarial fine-tune: {adv_epochs} epochs, batch {adv_batch_size}, "
+        f"mle_lambda={adv_mle_lambda}, rollout max_len={adv_len}"
+    )
     adv_losses = adversarial_finetune(
         model, sequences, contexts,
         epochs=adv_epochs, lr_g=adv_lr_g, lr_d=adv_lr_d,
-        batch_size=adv_batch_size, max_len=max_len,
+        batch_size=adv_batch_size, max_len=adv_len,
         tau_start=gc.GUMBEL_TAU_START, tau_end=gc.GUMBEL_TAU_END,
-        d_update_every=d_update_every,
+        d_update_every=d_update_every, mle_lambda=adv_mle_lambda,
         device=device, progress=progress,
     )
 
     _phase(f"generating {len(contexts)} rollouts (max_len {max_len})")
     pickups = generate_pickups(
-        model, contexts, max_len=max_len, device=device, progress=progress,
+        model, contexts, max_len=max_len, device=device,
+        gen_batch_size=gen_batch_size, progress=progress,
     )
     gen_grid = pickups_to_pickup_3d(bundle, pickups)
 

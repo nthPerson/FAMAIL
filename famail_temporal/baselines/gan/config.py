@@ -42,3 +42,11 @@ D_REAL_LABEL = 0.9                # one-sided label smoothing: real target < 1.0
 GRAD_CLIP = 5.0                   # max grad-norm for G and D (None disables)
 D_UPDATE_EVERY = 1                # update the critic every k-th batch; raise to
                                   # slow the critic when it dominates
+ADV_MLE_LAMBDA = 1.0              # weight on a teacher-forced MLE term added to
+                                  # the generator loss; anchors G to the real
+                                  # distribution so it can't drift/collapse
+                                  # (0 disables; the root-cause stabilizer)
+
+# Generation
+GEN_BATCH_SIZE = 512             # contexts decoded in parallel per rollout batch
+                                 # (batch-1 generation over ~105k is far slower)

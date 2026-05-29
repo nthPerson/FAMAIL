@@ -43,27 +43,34 @@ def adversarial_finetune(
     real_label: float = gc.D_REAL_LABEL,
     grad_clip: Optional[float] = gc.GRAD_CLIP,
     d_update_every: int = gc.D_UPDATE_EVERY,
+    mle_lambda: float = gc.ADV_MLE_LAMBDA,
     progress: bool = False,
 ) -> Dict[str, List[float]]:
     """Fine-tune `model` (in place) against a fresh critic. Returns per-epoch
-    mean generator and discriminator losses.
+    mean generator (adversarial) and discriminator losses.
 
     Stabilizers against discriminator dominance / generator collapse:
+      - ``mle_lambda`` adds a teacher-forced NLL term on the real batch to the
+        generator loss, anchoring G to the data distribution so it can't drift
+        (drift -> ever-longer fakes -> the critic separates on length ->
+        collapse). This is the root-cause fix; 0 disables it.
       - one-sided label smoothing: the critic's real target is ``real_label``
         (< 1.0), capping its confidence so its gradient to G never vanishes;
       - gradient clipping to ``grad_clip`` (None disables) on both nets;
       - ``d_update_every`` updates the critic only every k-th batch, letting a
         lagging generator catch up.
 
-    ``progress=True`` shows a per-epoch bar with live g_loss / d_loss / tau and
-    prints a per-epoch length diagnostic (mean real vs fake token length) to
-    check whether the critic can separate real from fake by length alone.
+    The reported g_loss is the *adversarial* component only (excludes the MLE
+    term) so it stays comparable to d_loss. ``progress=True`` shows a per-epoch
+    bar with live g / d / tau (and mle when active) and prints a per-epoch
+    length diagnostic (mean real vs fake token length).
     """
     model.to(device).train()
     critic = SequenceCritic().to(device).train()
     opt_g = torch.optim.Adam(model.parameters(), lr=lr_g)
     opt_d = torch.optim.Adam(critic.parameters(), lr=lr_d)
     bce = nn.BCEWithLogitsLoss()
+    ce = nn.CrossEntropyLoss(ignore_index=gc.PAD)
     n = len(sequences)
     n_batches = (n + batch_size - 1) // batch_size
     real_len_mean = sum(len(s) for s in sequences) / n
@@ -123,22 +130,34 @@ def adversarial_finetune(
                 device=device, hard=True,
             )
             d_fake_g = critic.forward_soft(fake_soft, fake_len)
-            loss_g = bce(d_fake_g, torch.ones_like(d_fake_g))
+            adv_g = bce(d_fake_g, torch.ones_like(d_fake_g))
+            loss_g = adv_g
+            mle_nll = None
+            if mle_lambda > 0:
+                # Teacher-forced NLL on the real batch anchors G to the data
+                # distribution, so it can't drift toward unrealistic lengths.
+                logits = model(real[:, :-1], cc, tb)            # (b, L-1, V)
+                mle_nll = ce(
+                    logits.reshape(-1, gc.VOCAB_SIZE), real[:, 1:].reshape(-1),
+                )
+                loss_g = adv_g + mle_lambda * mle_nll
             opt_g.zero_grad()
             loss_g.backward()
             if grad_clip is not None:
                 nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
             opt_g.step()
 
-            g_batch.append(float(loss_g.item()))
+            g_batch.append(float(adv_g.item()))   # adversarial component only
             fake_len_sum += float(fake_len.float().sum().item())
             fake_len_cnt += int(fake_len.numel())
-            bar.update(
-                1,
-                g=f"{sum(g_batch) / len(g_batch):.3f}",
-                d=f"{sum(d_batch) / max(1, len(d_batch)):.3f}",
-                tau=f"{tau:.2f}",
-            )
+            postfix = {
+                "g": f"{sum(g_batch) / len(g_batch):.3f}",
+                "d": f"{sum(d_batch) / max(1, len(d_batch)):.3f}",
+                "tau": f"{tau:.2f}",
+            }
+            if mle_nll is not None:
+                postfix["mle"] = f"{float(mle_nll.item()):.3f}"
+            bar.update(1, **postfix)
         bar.close()
         g_losses.append(sum(g_batch) / len(g_batch))
         d_losses.append(sum(d_batch) / max(1, len(d_batch)))
