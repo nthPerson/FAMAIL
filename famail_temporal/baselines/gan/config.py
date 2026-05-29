@@ -35,3 +35,10 @@ ADV_BATCH_SIZE = 64              # smaller than MLE: the G-step backprops throug
 GUMBEL_TAU_START = 1.0            # Gumbel-softmax temperature, annealed start
 GUMBEL_TAU_END = 0.5              #   -> end (sharper, closer to discrete)
 D_HIDDEN_DIM = 128                # critic LSTM hidden size
+
+# Adversarial stabilization (counter discriminator dominance / G-collapse)
+D_REAL_LABEL = 0.9                # one-sided label smoothing: real target < 1.0
+                                  # so the critic can't become over-confident
+GRAD_CLIP = 5.0                   # max grad-norm for G and D (None disables)
+D_UPDATE_EVERY = 1                # update the critic every k-th batch; raise to
+                                  # slow the critic when it dominates

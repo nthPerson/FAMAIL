@@ -38,6 +38,11 @@ def main(argv: Optional[List[str]] = None) -> int:
     ap.add_argument("--max-len", type=int, default=gc.MAX_GEN_LEN)
     ap.add_argument("--mle-batch-size", type=int, default=gc.MLE_BATCH_SIZE)
     ap.add_argument("--adv-batch-size", type=int, default=gc.ADV_BATCH_SIZE)
+    ap.add_argument("--adv-lr-g", type=float, default=gc.ADV_LR_G)
+    ap.add_argument("--adv-lr-d", type=float, default=gc.ADV_LR_D,
+                    help="critic LR; lower it to slow a dominating critic")
+    ap.add_argument("--d-update-every", type=int, default=gc.D_UPDATE_EVERY,
+                    help="update the critic every k-th batch; raise to slow it")
     ap.add_argument("--max-tokens", type=int, default=gc.MAX_TRAIN_TOKENS,
                     help="exclude trajectories longer than this from training "
                          "(<=0 disables the filter)")
@@ -54,6 +59,8 @@ def main(argv: Optional[List[str]] = None) -> int:
         bundle, mle_epochs=args.mle_epochs, adv_epochs=args.adv_epochs,
         max_len=args.max_len, mle_batch_size=args.mle_batch_size,
         adv_batch_size=args.adv_batch_size,
+        adv_lr_g=args.adv_lr_g, adv_lr_d=args.adv_lr_d,
+        d_update_every=args.d_update_every,
         max_tokens=args.max_tokens if args.max_tokens > 0 else None,
         device=_resolve_device(args.device), seed=args.seed,
         progress=not args.quiet,

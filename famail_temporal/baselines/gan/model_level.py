@@ -33,6 +33,9 @@ def fit_and_evaluate(
     max_len: int = gc.MAX_GEN_LEN,
     mle_batch_size: int = gc.MLE_BATCH_SIZE,
     adv_batch_size: int = gc.ADV_BATCH_SIZE,
+    adv_lr_g: float = gc.ADV_LR_G,
+    adv_lr_d: float = gc.ADV_LR_D,
+    d_update_every: int = gc.D_UPDATE_EVERY,
     max_tokens: int | None = gc.MAX_TRAIN_TOKENS,
     device: torch.device | None = None,
     seed: int = 0,
@@ -94,9 +97,10 @@ def fit_and_evaluate(
     _phase(f"adversarial fine-tune: {adv_epochs} epochs, batch {adv_batch_size}")
     adv_losses = adversarial_finetune(
         model, sequences, contexts,
-        epochs=adv_epochs, lr_g=gc.ADV_LR_G, lr_d=gc.ADV_LR_D,
+        epochs=adv_epochs, lr_g=adv_lr_g, lr_d=adv_lr_d,
         batch_size=adv_batch_size, max_len=max_len,
         tau_start=gc.GUMBEL_TAU_START, tau_end=gc.GUMBEL_TAU_END,
+        d_update_every=d_update_every,
         device=device, progress=progress,
     )
 
