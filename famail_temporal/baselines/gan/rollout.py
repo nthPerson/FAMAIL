@@ -48,15 +48,16 @@ def sample_trajectory_cells(
 def sample_terminal_cells_batched(
     model: TrajectoryLSTM, ctx_cells: torch.Tensor, ctx_tblocks: torch.Tensor,
     *, max_len: int, device: torch.device, temperature: float = 1.0,
-) -> torch.Tensor:
-    """Batched autoregressive decode -> each row's terminal (last) cell id.
+) -> Tuple[torch.Tensor, torch.Tensor]:
+    """Batched autoregressive decode -> (terminal cell, generated length) per row.
 
     Decodes ``ctx_cells.shape[0]`` rollouts in parallel from BOS, carrying the
     LSTM state. Each row records its most recent in-vocabulary cell while it is
     still active and freezes once it samples EOS; a row that never emits a cell
-    falls back to its start cell. Returns a (B,) long tensor of terminal cells.
-    Equivalent in contract to per-context ``sample_trajectory_cells`` + taking
-    the last cell, but processes the whole batch per step (far faster on GPU).
+    falls back to its start cell. Returns ``(terminal, gen_len)``, both (B,)
+    long: ``terminal`` is the pickup cell, ``gen_len`` is the 1-based step of
+    the first EOS (or ``max_len`` if none) — the free-running rollout length,
+    the real test of generation quality.
     """
     model.to(device).train(False)
     cc = ctx_cells.to(device)
@@ -65,18 +66,22 @@ def sample_terminal_cells_batched(
     prev = torch.full((B,), gc.BOS, dtype=torch.long, device=device)
     hidden = None
     terminal = cc.clone()                                  # fallback: start cell
+    gen_len = torch.full((B,), max_len, dtype=torch.long, device=device)
     done = torch.zeros(B, dtype=torch.bool, device=device)
-    for _ in range(max_len):
+    for t in range(max_len):
         logits, hidden = model.step(prev, cc, tb, hidden)  # (B, V), state
         probs = torch.softmax(logits / temperature, dim=-1)
         nxt = torch.multinomial(probs, 1).squeeze(1)       # (B,)
+        is_eos = nxt == gc.EOS
         record = (~done) & (nxt < gc.N_CELLS)              # active + a real cell
         terminal = torch.where(record, nxt, terminal)
-        done = done | (nxt == gc.EOS)
+        newly_eos = (~done) & is_eos
+        gen_len = torch.where(newly_eos, torch.full_like(gen_len, t + 1), gen_len)
+        done = done | is_eos
         prev = nxt
         if bool(done.all()):
             break
-    return terminal
+    return terminal, gen_len
 
 
 def generate_pickups(
@@ -89,22 +94,34 @@ def generate_pickups(
     Decodes ``gen_batch_size`` contexts in parallel per step (the old batch-1
     loop was the slowest phase). If a rollout produces no cells it falls back to
     the start cell, so every context yields a pickup (keeps the generated grid
-    corpus-matched). ``progress=True`` shows a bar over contexts with an ETA.
+    corpus-matched). ``progress=True`` shows a bar over contexts with an ETA and
+    prints the mean free-running rollout length (vs real ~18) at the end.
     """
     out: List[Tuple[int, int, int]] = []
+    gen_len_sum = 0.0
+    gen_len_cnt = 0
     bar = Progress(len(contexts), "generating rollouts", enabled=progress)
     for start in range(0, len(contexts), gen_batch_size):
         chunk = contexts[start : start + gen_batch_size]
         cc = torch.tensor([c for c, _ in chunk], dtype=torch.long, device=device)
         tb = torch.tensor([t for _, t in chunk], dtype=torch.long, device=device)
-        terminals = sample_terminal_cells_batched(
+        terminals, gen_lens = sample_terminal_cells_batched(
             model, cc, tb, max_len=max_len, device=device,
         )
         for (_, ctx_tblock), term in zip(chunk, terminals.tolist()):
             x, y = unflat_cell(term)
             out.append((x, y, ctx_tblock))
+        gen_len_sum += float(gen_lens.float().sum().item())
+        gen_len_cnt += int(gen_lens.numel())
         bar.update(len(chunk))
     bar.close()
+    if progress:
+        print(
+            f"[generation] mean generated length="
+            f"{gen_len_sum / max(1, gen_len_cnt):.1f} (real mean ~18; "
+            f">> that means the generator free-runs too long)",
+            flush=True,
+        )
     return out
 
 

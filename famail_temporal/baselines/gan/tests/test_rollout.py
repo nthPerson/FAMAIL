@@ -64,16 +64,17 @@ def test_sample_terminal_cells_batched_valid_and_deterministic():
     cc = torch.tensor([5, 9, 3, 0], dtype=torch.long)
     tb = torch.tensor([0, 1, 0, 2], dtype=torch.long)
     torch.manual_seed(1)
-    a = rl.sample_terminal_cells_batched(
+    a_term, a_len = rl.sample_terminal_cells_batched(
         model, cc, tb, max_len=16, device=torch.device("cpu"),
     )
     torch.manual_seed(1)
-    b = rl.sample_terminal_cells_batched(
+    b_term, b_len = rl.sample_terminal_cells_batched(
         model, cc, tb, max_len=16, device=torch.device("cpu"),
     )
-    assert a.shape == (4,)
-    assert torch.equal(a, b)                         # deterministic given seed
-    assert bool((a < gc.N_CELLS).all())              # every terminal is a cell
+    assert a_term.shape == (4,) and a_len.shape == (4,)
+    assert torch.equal(a_term, b_term) and torch.equal(a_len, b_len)  # deterministic
+    assert bool((a_term < gc.N_CELLS).all())         # every terminal is a cell
+    assert bool((a_len >= 1).all()) and bool((a_len <= 16).all())  # length bounds
 
 
 def test_generate_pickups_batches_match_count_across_batch_sizes():
