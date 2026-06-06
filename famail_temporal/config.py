@@ -70,6 +70,30 @@ MAX_ITERATIONS: int = 50
 CONVERGENCE_TOL: float = 1e-6
 PATIENCE: int = 10
 
+# Multi-loop re-attribution editing (algorithm-improvements side project,
+# spec 2026-06-06). The defaults below reproduce the historical single-pass
+# batch behavior exactly: MAX_ROUNDS=1 (one round), ACCEPT_RULE="objective"
+# (weighted-objective best-iterate, unchanged), EPSILON_CAP=EPSILON_BALL
+# (cumulative cap equals the per-edit ball ⇒ no extra clip for a single edit).
+MAX_ROUNDS: int = 1
+# Outer-loop convergence: stop when the best round F_causal has not improved by
+# more than ROUND_CONVERGENCE_TOL for ROUND_PATIENCE consecutive rounds. None
+# disables convergence (fixed MAX_ROUNDS). Set above the F-metric noise floor.
+ROUND_CONVERGENCE_TOL: float | None = None
+ROUND_PATIENCE: int = 2
+# Cumulative L-inf displacement cap from each trajectory's TRUE original pickup
+# cell, enforced across rounds. EPSILON_BALL (2.0) keeps edits in the cGAIL 5x5
+# IL window; set to float('inf') for unbounded per-round-epsilon stacking.
+EPSILON_CAP: float = EPSILON_BALL
+# Inner-loop acceptance gate. "objective": keep the best weighted-objective
+# iterate (historical). "non-regression": additionally require the persisted
+# iterate to improve F_causal and not regress F_spatial vs the trajectory's
+# iter-0 state.
+ACCEPT_RULE: str = "objective"
+# Max times the iterative (B=1) preset may edit the same trajectory across
+# rounds. 1 = historical no-re-edit; 0 = unlimited (epsilon-cap is the limiter).
+ITERATIVE_TOPK_MAX_EDITS: int = 1
+
 # Gradient diagnostics
 DIAGNOSTICS_ENABLED: bool = True
 
