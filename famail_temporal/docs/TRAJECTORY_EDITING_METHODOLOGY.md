@@ -477,10 +477,12 @@ one cell instead of spreading across multiple cells), not a
 Visualization saved at
 `results/2026-05-14T13-39-10_step1-grad-diag/topk_cell_clustering.png`.
 
-**M2 attempt: iterative top-k with re-attribution.** Implemented in
-`runner._iterative_topk_modify`. Each round: pull
-`modifier.current_pickup_3d()`, recompute attribution, re-rank with
-already-modified IDs excluded, pick the most-negative-αᵢ remaining
+**M2 attempt: iterative top-k with re-attribution.** Originally
+`runner._iterative_topk_modify`; as of 2026-06-06 this is the **iterative
+(B=1) preset of the unified engine** `algorithm/editing_loop.py::run_editing_rounds`
+(`--iterative-topk`; the old standalone function was removed in the §8.7 refactor).
+Each round: pull `modifier.current_pickup_3d()`, recompute attribution, re-rank
+with already-modified IDs excluded, pick the most-negative-αᵢ remaining
 trajectory, modify, repeat.
 
 **Result.** At k=20 the picked trajectories are **bit-identical** to
@@ -944,6 +946,97 @@ its improvement at scale."
   - What does +8.8e-03 r² reduction mean in domain-meaningful terms
     (per-driver, per-cell, per-passenger fairness improvement)?
   - Does per-time-block F_causal (R2 in §8.5's table) change the trade-off?
+
+### 8.7 Multi-loop re-attribution + non-regression gate — a negative result (2026-06-06)
+
+**Setup.** A time-boxed "algorithm-improvements" side project tested two
+pre-authorized changes against the strongest single-pass baseline
+(`2026-05-28T08-51-32_k-10000_causal_emphasis_no-dedup`: α=(0.2,0.7,0.1),
+k=10000, no dedup → **ΔF_causal=+0.0128**, ΔF_spatial=+0.0003):
+
+1. **Multi-loop re-attribution** — a unified outer loop
+   (`algorithm/editing_loop.py::run_editing_rounds`) that re-attributes against
+   the live grid and re-edits the full negative-α set each round, with a
+   convergence stop (round-over-round ΔF_causal < τ for `--round-patience`
+   rounds), a cumulative ε-cap from each trajectory's *true original* cell
+   (`--epsilon-cap`, default 2.0), and batch (B=K) / iterative (B=1) presets.
+   The historical single pass is the `--max-rounds 1` batch special case
+   (verified bit-equivalent; see §3.6 of the design spec).
+2. **Non-regression acceptance gate** (`--accept-rule non-regression`) — persist
+   a per-trajectory edit only if it improves F_causal and does not regress
+   F_spatial (vs the trajectory's iter-0 state), replacing the
+   weighted-objective best-iterate.
+
+Two full-corpus runs at α_fidelity=0 (a 13× speed lever; validated faithful
+below): **A1** = multi-loop, C=2, non-regression
+(`2026-06-06T17-45-58_A1_multiloop_C2_nonreg_afi0`); **A3** = multi-loop, C=2,
+objective gate (`2026-06-06T18-10-53_A3_multiloop_C2_objective_afi0`).
+
+**Results (fairness convention; higher = fairer, +ΔF = improvement).**
+
+| Config | Round 1 ΔF_causal | Final ΔF_causal | Final ΔF_spatial |
+|---|---|---|---|
+| Baseline (single-pass, objective, α_fi=0.1) | +0.0128 | **+0.0128** | +0.0003 |
+| A3 (multi-loop, objective, α_fi=0) | +0.01271 | +0.01213 | −0.00036 |
+| A1 (multi-loop, non-regression, α_fi=0) | +0.01239 | +0.01151 | −0.00064 |
+
+A1 round curve: +0.01239 (r1) → −7.07e-04 (r2) → −1.67e-04 (r3), converged.
+A3 round curve: +0.01271 (r1) → −6.43e-04 (r2) → +5.90e-05 (r3), converged.
+
+**Findings.**
+
+1. **Multi-loop re-attribution degrades F_causal, gate-independently.** Under
+   *both* gates, round 1 (which *is* the single pass) is the best iterate and
+   rounds 2+ are net-negative. This sharpens §8.2 (fine-grained re-attribution
+   was *null*) — at batch granularity it is net-*negative*. **Optimal number of
+   rounds = 1; the single pass wins.**
+2. **α_fi=0 proxy + engine baseline-equivalence validated in one number.** A3
+   round 1 = +0.01271 ≈ baseline +0.0128 (0.7% gap). This confirms both that the
+   engine refactor reproduces the historical single pass on real data, and that
+   dropping the (dormant, per §8.1) fidelity term is a faithful 13×-cheaper
+   proxy at bounded ε.
+3. **The non-regression gate slightly underperforms** the objective gate at the
+   single pass (+0.01239 vs +0.01271) and ended with *worse* hard-grid F_spatial
+   (−0.00064 vs −0.00036) — the opposite of its protective intent.
+4. **Root cause — the soft-relaxation vs discrete-grid gap.** Editing optimizes
+   (and the gate checks) the differentiable *soft* cell-assignment F-metrics, but
+   every accepted edit is int-snapped to a single cell and the reported metric is
+   the *hard* grid (`compute_per_unit_attribution(...).sum()`). Round 1 claims
+   the edits where the soft gain is large enough to survive snapping (≈ +0.0124).
+   Direct evidence: in A3, round 2's **1,666 edits — each accepted as a
+   soft-objective improvement — collectively reduced hard-grid F_causal by
+   6.4e-4.** The same gap lets the non-regression gate protect *soft* F_spatial
+   while *hard* F_spatial slips. So both pre-authorized changes are bounded by
+   the same relaxation gap, not by their own logic.
+5. **MAX_ITERATIONS needs no change.** A1/A3 converged at mean 16–17
+   iters/trajectory with only 7–10 of ~7,000 edits hitting the 50-iter cap. The
+   non-regression gate's consumption of the iter-0 patience slot is immaterial at
+   this convergence speed.
+
+**Decisions.**
+
+- **The single-pass, objective-gate config remains the shipped editing recipe**
+  (ΔF_causal=+0.0128). Multi-loop is documented as a negative result; it is *not*
+  the default (`--max-rounds` defaults to 1, `--accept-rule` to `objective`).
+- The multi-loop engine, non-regression gate, and configurable ε-cap **remain in
+  the codebase as opt-in machinery** (defaults preserve historical behavior),
+  available if the soft-vs-hard gap is ever closed (e.g., a hard-grid-aware
+  acceptance or de-snapping refinement — a gated future change).
+- **The outer loop deliberately reports the last round, not the best round.**
+  Adding best-round restore would make multi-loop "never worse than single-pass"
+  but would mask this finding; it was left as-is so the degradation is visible. A
+  best-round restore is the right addition *only if* multi-loop is ever pursued
+  for real.
+- **ε-convention clarification (supersedes "ε=2 inviolable across loops").** ε=2
+  is the inviolable *within-edit* ball (matches the cGAIL 5×5 IL window). The new
+  `--epsilon-cap` allows a *cumulative* cap across rounds (default 2.0 = bounded
+  to the IL window; `inf` = unbounded stacking), but since multi-loop itself does
+  not help, single-pass ε=2 stands as the recommendation.
+
+**Not run** (deprioritized once multi-loop was refuted): C=∞ (A2), B=1-vs-B=K
+granularity (A4), and the α_fi=0.1 headline confirmations (H1/H2). The C=2
+multi-loop already degrades, so larger ε / finer granularity were not expected to
+reverse the sign; the α_fi=0 proxy was validated by finding 2.
 
 ## 9. Glossary
 
