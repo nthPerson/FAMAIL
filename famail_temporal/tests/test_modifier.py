@@ -206,3 +206,18 @@ def test_epsilon_cap_is_respected_relative_to_original_cell():
     s = history.modified.pickup_state
     assert abs(s.x_grid - x) <= 1.0 + 1e-5
     assert abs(s.y_grid - y) <= 1.0 + 1e-5
+
+
+def test_soft_neighborhood_size_override_reaches_soft_assign(monkeypatch):
+    """A runtime SOFT_NEIGHBORHOOD_SIZE override must reach SoftCellAssignment.
+    Regression: the size was previously frozen by SoftCellAssignment's
+    import-time default arg, so `--override SOFT_NEIGHBORHOOD_SIZE` was silently
+    ignored. The modifier now resolves it from config at construction time."""
+    bundle = _make_synthetic_bundle()
+    m_default = TrajectoryModifier(
+        objective=FAMAILObjective(bundle, alpha_fidelity=0.0), bundle=bundle)
+    assert m_default.soft_assign.k == config.SOFT_NEIGHBORHOOD_SIZE // 2
+    monkeypatch.setattr(config, "SOFT_NEIGHBORHOOD_SIZE", 11)
+    m_wide = TrajectoryModifier(
+        objective=FAMAILObjective(bundle, alpha_fidelity=0.0), bundle=bundle)
+    assert m_wide.soft_assign.k == 5  # 11 // 2

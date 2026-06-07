@@ -156,7 +156,13 @@ class TrajectoryModifier:
             device = buf.device if buf is not None else torch.device("cpu")
         self.device = torch.device(device)
 
-        self.soft_assign = SoftCellAssignment().to(self.device)
+        # Resolve neighborhood_size from config at construction time (NOT via
+        # SoftCellAssignment's import-time default arg) so a runtime
+        # `--override SOFT_NEIGHBORHOOD_SIZE` actually takes effect — mirrors how
+        # the other config-backed values are resolved here.
+        self.soft_assign = SoftCellAssignment(
+            neighborhood_size=config.SOFT_NEIGHBORHOOD_SIZE,
+        ).to(self.device)
         # Clone so we don't mutate the original bundle array; place on device.
         self._base_pickup_3d = (
             torch.from_numpy(bundle.pickup_3d).float().to(self.device).clone()
