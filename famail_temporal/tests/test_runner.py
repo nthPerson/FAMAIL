@@ -245,3 +245,15 @@ def test_cli_parses_multiloop_flags():
     assert args.epsilon_cap == float("inf")
     assert args.accept_rule == "non-regression"
     assert args.iterative_topk_max_edits == 0
+
+
+def test_cli_parses_ste_flag():
+    from famail_temporal.evaluation.runner import _build_arg_parser
+    assert _build_arg_parser().parse_args(["-k", "10", "--ste"]).ste is True
+    assert _build_arg_parser().parse_args(["-k", "10"]).ste is False
+
+
+def test_run_experiment_ste_runs(tiny_bundle):
+    result = run_experiment(k=4, use_ste=True)
+    assert len(result.rounds) == 1  # default single round
+    assert len(result.modified_trajectory_ids) >= 1

@@ -215,6 +215,7 @@ def run_experiment(
     epsilon_cap: Optional[float] = None,
     accept_rule: Optional[str] = None,
     iterative_topk_max_edits: Optional[int] = None,
+    use_ste: Optional[bool] = None,
     max_per_unit: Optional[int] = None,
     max_per_cell: Optional[int] = None,
 ) -> ExperimentResult:
@@ -327,6 +328,7 @@ def run_experiment(
             convergence_tol=convergence_tol,
             accept_rule=accept_rule,
             epsilon_cap=epsilon_cap,
+            use_ste=use_ste,
         )
         # Resolve outer-loop knobs. Historical --iterative-topk did up to k
         # single-edit rounds (B=1), stopping at pool-exhaustion — so iterative
@@ -515,6 +517,10 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     p.add_argument("--iterative-topk-max-edits", type=int, default=None,
                    help="Max edits per trajectory in --iterative-topk mode "
                         "(0 = unlimited). Default config.ITERATIVE_TOPK_MAX_EDITS (1).")
+    p.add_argument("--ste", action="store_true",
+                   help="Straight-through hard-metric editing: optimize/select/gate "
+                        "on the realizable hard grid (forward=hard, grad=soft). "
+                        "Off by default (config.STE_ENABLED).")
     p.add_argument(
         "--max-per-unit", type=int, default=None,
         help="Maximum trajectories selected from any single (pickup_cell, "
@@ -569,6 +575,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         epsilon_cap=args.epsilon_cap,
         accept_rule=args.accept_rule,
         iterative_topk_max_edits=args.iterative_topk_max_edits,
+        use_ste=(True if args.ste else None),
         max_per_unit=args.max_per_unit,
         max_per_cell=args.max_per_cell,
     )
