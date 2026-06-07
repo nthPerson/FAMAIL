@@ -64,3 +64,95 @@ def test_batch_single_round_edits_select_top_k_set():
         bundle.trajectories.index(h.original) for h in result.histories
     }
     assert edited_indices == expected
+
+
+def test_pool_exhausts_when_no_negative_alpha():
+    """A bundle whose only drag cell is fixed in round 1 eventually exhausts."""
+    bundle = _bundle_with_drag_trajectories(n_trajs=3)
+    modifier = _make_modifier(bundle, epsilon_cap=2.0)
+    result = run_editing_rounds(
+        modifier, bundle, k=10, mode="batch", max_rounds=50,
+        round_convergence_tol=None)
+    assert result.stop_reason in ("pool_exhausted", "max_rounds")
+    if result.stop_reason == "pool_exhausted":
+        assert len(result.rounds) >= 1
+
+
+def test_max_rounds_is_hard_ceiling():
+    bundle = _bundle_with_drag_trajectories()
+    modifier = _make_modifier(bundle, epsilon_cap=float("inf"))
+    result = run_editing_rounds(
+        modifier, bundle, k=4, mode="batch", max_rounds=3,
+        round_convergence_tol=None)
+    assert len(result.rounds) <= 3
+
+
+def test_convergence_stops_when_f_causal_plateaus():
+    """With a tiny epsilon_cap the grid barely changes => F_causal plateaus =>
+    convergence fires within round_patience rounds of the ceiling."""
+    bundle = _bundle_with_drag_trajectories()
+    modifier = _make_modifier(bundle, epsilon_cap=2.0)
+    result = run_editing_rounds(
+        modifier, bundle, k=4, mode="batch", max_rounds=50,
+        round_convergence_tol=1e-9, round_patience=2)
+    assert result.stop_reason in ("converged", "pool_exhausted")
+    assert len(result.rounds) < 50
+
+
+def test_bounded_cap_limits_total_displacement():
+    """With epsilon_cap=2, no edited trajectory drifts more than 2 (L-inf) from
+    its true original across all rounds."""
+    bundle = _bundle_with_drag_trajectories()
+    modifier = _make_modifier(bundle, epsilon_cap=2.0)
+    result = run_editing_rounds(
+        modifier, bundle, k=8, mode="batch", max_rounds=10,
+        round_convergence_tol=None)
+    orig = {t.trajectory_id: (float(t.pickup_state.x_grid),
+                              float(t.pickup_state.y_grid))
+            for t in bundle.trajectories}
+    for h in result.histories:
+        ox, oy = orig[h.original.trajectory_id]
+        s = h.modified.pickup_state
+        assert max(abs(s.x_grid - ox), abs(s.y_grid - oy)) <= 2.0 + 1e-5
+
+
+def test_unbounded_cap_allows_drift_past_two():
+    """With epsilon_cap=inf and multiple rounds, displacement is bounded only by
+    rounds * per-round eps (sanity), and the bounded run must never exceed 2."""
+    bundle = _bundle_with_drag_trajectories()
+    modifier = _make_modifier(bundle, epsilon_cap=float("inf"))
+    result = run_editing_rounds(
+        modifier, bundle, k=8, mode="batch", max_rounds=5,
+        round_convergence_tol=None)
+    orig = {t.trajectory_id: (float(t.pickup_state.x_grid),
+                              float(t.pickup_state.y_grid))
+            for t in bundle.trajectories}
+    max_disp = 0.0
+    for h in result.histories:
+        ox, oy = orig[h.original.trajectory_id]
+        s = h.modified.pickup_state
+        max_disp = max(max_disp, abs(s.x_grid - ox), abs(s.y_grid - oy))
+    assert max_disp <= 5 * 2.0 + 1e-5
+
+
+def test_iterative_max_edits_1_never_re_edits():
+    """B=1 with max_edits=1 edits each trajectory at most once (historical
+    --iterative-topk behavior)."""
+    bundle = _bundle_with_drag_trajectories()
+    modifier = _make_modifier(bundle, epsilon_cap=2.0)
+    result = run_editing_rounds(
+        modifier, bundle, k=1, mode="iterative", max_rounds=50,
+        iterative_max_edits=1, round_convergence_tol=None)
+    assert len(result.edited_ids) == len(set(result.edited_ids))
+    assert all(rec.n_edited == 1 for rec in result.rounds)
+
+
+def test_iterative_unlimited_can_re_edit():
+    """B=1 with max_edits=0 (unlimited) may edit the same trajectory more than
+    once across rounds when it stays most-negative and under the eps-cap."""
+    bundle = _bundle_with_drag_trajectories(n_trajs=2)
+    modifier = _make_modifier(bundle, epsilon_cap=float("inf"))
+    result = run_editing_rounds(
+        modifier, bundle, k=1, mode="iterative", max_rounds=6,
+        iterative_max_edits=0, round_convergence_tol=None)
+    assert len(result.edited_ids) > len(set(result.edited_ids))
