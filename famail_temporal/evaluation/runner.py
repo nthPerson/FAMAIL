@@ -16,12 +16,11 @@ import torch.nn as nn
 
 from famail_temporal import config
 from famail_temporal.algorithm.attribution import (
-    compute_per_unit_attribution, rank_trajectories, select_top_k,
+    compute_per_unit_attribution, rank_trajectories,
 )
 from famail_temporal.algorithm.editing_loop import run_editing_rounds, RoundRecord
 from famail_temporal.algorithm.modifier import TrajectoryModifier, ModificationHistory
 from famail_temporal.algorithm.objective import FAMAILObjective
-from famail_temporal.data.aggregation import hour_to_block_index, time_bucket_to_hour
 from famail_temporal.data.loader import DataBundle
 from famail_temporal.evaluation.augment import augment_trajectories
 from famail_temporal.evaluation.grid import build_fairness_grid
