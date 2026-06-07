@@ -221,3 +221,59 @@ def test_soft_neighborhood_size_override_reaches_soft_assign(monkeypatch):
     m_wide = TrajectoryModifier(
         objective=FAMAILObjective(bundle, alpha_fidelity=0.0), bundle=bundle)
     assert m_wide.soft_assign.k == 5  # 11 // 2
+
+
+def test_use_ste_default_false():
+    bundle = _make_synthetic_bundle()
+    m = TrajectoryModifier(
+        objective=FAMAILObjective(bundle, alpha_fidelity=0.0), bundle=bundle)
+    assert m.use_ste is False
+
+
+def test_ste_runs_and_gradient_flows():
+    """With STE on, modify_single runs end-to-end and the soft gradient still
+    flows (some iteration has a nonzero gradient norm)."""
+    bundle = _make_synthetic_bundle()
+    obj = FAMAILObjective(bundle, alpha_fidelity=0.0)
+    m = TrajectoryModifier(objective=obj, bundle=bundle, max_iterations=5,
+                           use_ste=True)
+    x, y, tb = _active_cell_and_bucket(bundle)
+    h = m.modify_single(_make_test_trajectory(pickup_xy=(x, y), time_bucket=tb))
+    assert isinstance(h, ModificationHistory)
+    assert any(it.gradient_norm > 0 for it in h.iterations)
+
+
+def test_ste_feeds_concentrated_hard_grid():
+    """STE hands the objective a grid with the pickup mass concentrated in ONE
+    cell (hard); the soft path spreads it over the neighborhood — so the two
+    grids differ in more than a single cell of the trajectory's t_block slice."""
+    import torch as _t
+    bundle = _make_synthetic_bundle()
+    x, y, tb = _active_cell_and_bucket(bundle)
+    t_block = bundle.unit_map.to_time_block(0)
+
+    def captured_grid(use_ste):
+        obj = FAMAILObjective(bundle, alpha_fidelity=0.0)
+        grids = []
+
+        def rec(soft_pickup_3d=None, **kw):
+            grids.append(soft_pickup_3d.detach().clone())
+            return (_t.tensor(1.0, requires_grad=True),
+                    {"f_spatial": _t.tensor(0.0), "f_causal": _t.tensor(0.0),
+                     "f_fidelity": _t.tensor(0.0)})
+
+        obj.forward = rec  # type: ignore[method-assign]
+        # max_iterations=2 so ANNEAL_TEMPERATURE uses TAU_MAX (=1.0) at iter-0,
+        # giving a spread soft distribution (TAU_MIN=0.1 would make it near-one-hot,
+        # so soft≈hard and n_diff would be 0 or 1).
+        m = TrajectoryModifier(objective=obj, bundle=bundle, max_iterations=2,
+                               patience=None, diagnostics_enabled=False,
+                               use_ste=use_ste)
+        m.modify_single(_make_test_trajectory(pickup_xy=(x, y), time_bucket=tb))
+        return grids[0]
+
+    soft_grid = captured_grid(False)
+    ste_grid = captured_grid(True)
+    n_diff = int((_t.abs(soft_grid[:, :, t_block] - ste_grid[:, :, t_block])
+                  > 1e-9).sum())
+    assert n_diff > 1

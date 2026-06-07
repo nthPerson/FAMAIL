@@ -109,6 +109,7 @@ class TrajectoryModifier:
         patience: int | None = None,
         accept_rule: str | None = None,
         epsilon_cap: float | None = None,
+        use_ste: bool | None = None,
     ):
         # Resolve each config-backed default at __init__ time (NOT at
         # function-definition time) so config-override mutations applied
@@ -147,6 +148,8 @@ class TrajectoryModifier:
         self.epsilon_cap = (
             config.EPSILON_CAP if epsilon_cap is None else epsilon_cap
         )
+        # Straight-through (hard-metric) editing toggle (see config.STE_ENABLED).
+        self.use_ste = config.STE_ENABLED if use_ste is None else use_ste
 
         # Resolve device. If unspecified, inherit from the objective's first
         # buffer (it's an nn.Module with registered buffers already on the
@@ -405,6 +408,28 @@ class TrajectoryModifier:
                 k=self.soft_assign.k, pickup_mass=pickup_mass,
             )
 
+            # (c2) Straight-through hard-metric grid (opt-in). Forward value =
+            # the HARD (realizable) grid: full pickup mass at int(current_pickup),
+            # the exact cell the persist step writes. Gradient flows via the soft
+            # assignment (soft_3d - soft_3d.detach()). This makes best-iterate +
+            # the acceptance gate select on the metric actually deployed (§8.8).
+            # int(current_pickup), NOT argmax(probs): soft uses cell centers, so
+            # argmax can tie-break wrong at integer coords.
+            if self.use_ste:
+                k_half = self.soft_assign.k
+                snap_x, snap_y = int(current_pickup[0]), int(current_pickup[1])
+                ox, oy = snap_x - orig_cx + k_half, snap_y - orig_cy + k_half
+                hard_probs = torch.zeros_like(probs)
+                if 0 <= ox < probs.shape[0] and 0 <= oy < probs.shape[1]:
+                    hard_probs[ox, oy] = 1.0
+                hard_3d = inject_soft_counts_into_3d(
+                    base_3d, hard_probs, (orig_cx, orig_cy), t_block,
+                    k=k_half, pickup_mass=pickup_mass,
+                )
+                objective_grid = hard_3d + (soft_3d - soft_3d.detach())
+            else:
+                objective_grid = soft_3d
+
             # Build fidelity features if needed
             tau_features = None
             tau_prime_features = None
@@ -426,7 +451,7 @@ class TrajectoryModifier:
 
             # (d) Forward through FAMAILObjective
             total, terms = self.objective(
-                soft_pickup_3d=soft_3d,
+                soft_pickup_3d=objective_grid,
                 tau_features=tau_features,
                 tau_prime_features=tau_prime_features,
                 multi_stream_kwargs=ms_kwargs,
