@@ -166,3 +166,16 @@ def test_iterative_unlimited_can_re_edit():
         modifier, bundle, k=1, mode="iterative", max_rounds=6,
         iterative_max_edits=0, round_convergence_tol=None)
     assert len(result.edited_ids) > len(set(result.edited_ids))
+
+
+def test_edit_scores_carry_real_selection_alpha():
+    """edit_scores is aligned with histories and holds the selection-time alpha
+    (strictly negative) of each edited trajectory — NOT placeholder zeros.
+    Persistence writes this per trajectory, so a zeros regression would corrupt
+    trajectories.csv."""
+    bundle = _bundle_with_drag_trajectories()
+    modifier = _make_modifier(bundle, epsilon_cap=2.0)
+    result = run_editing_rounds(modifier, bundle, k=8, mode="batch", max_rounds=1)
+    assert len(result.edit_scores) == len(result.histories)
+    assert len(result.edit_scores) > 0
+    assert all(s < 0 for s in result.edit_scores)  # selected = negative-alpha

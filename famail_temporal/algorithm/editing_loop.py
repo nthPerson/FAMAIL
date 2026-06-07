@@ -45,6 +45,7 @@ class EditingLoopResult:
     rounds: List[RoundRecord]
     stop_reason: str                       # "max_rounds"|"converged"|"pool_exhausted"
     edited_ids: List[object]               # trajectory ids edited (may repeat)
+    edit_scores: List[float]               # selection-time alpha per edit (aligned w/ histories)
 
 
 def _cum_disp(modified, ox: float, oy: float) -> float:
@@ -81,6 +82,7 @@ def run_editing_rounds(
     histories: List[ModificationHistory] = []
     rounds: List[RoundRecord] = []
     edited_ids: List[object] = []
+    edit_scores: List[float] = []
 
     attribution = compute_per_unit_attribution(
         bundle, pickup_3d=modifier.current_pickup_3d())
@@ -115,6 +117,7 @@ def run_editing_rounds(
             eligible, k=n_pick, trajectories=current_trajs,
             max_per_unit=max_per_unit, max_per_cell=max_per_cell,
         )
+        score_by_idx = dict(eligible)  # selection-time alpha per candidate
 
         for idx in selected:
             traj = current_trajs[idx]
@@ -123,6 +126,7 @@ def run_editing_rounds(
                 traj, on_iteration=on_iter, original_cell=orig_pos[tid])
             histories.append(h)
             edited_ids.append(tid)
+            edit_scores.append(float(score_by_idx[idx]))
             current_trajs[idx] = h.modified
             edit_count[tid] += 1
             cum_disp[tid] = _cum_disp(h.modified, *orig_pos[tid])
@@ -151,4 +155,4 @@ def run_editing_rounds(
 
     return EditingLoopResult(
         histories=histories, rounds=rounds,
-        stop_reason=stop_reason, edited_ids=edited_ids)
+        stop_reason=stop_reason, edited_ids=edited_ids, edit_scores=edit_scores)

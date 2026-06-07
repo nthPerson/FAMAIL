@@ -370,7 +370,9 @@ def run_experiment(
         )
         histories = loop_result.histories
         rounds = loop_result.rounds
-        top_k_scores = [0.0] * len(histories)
+        # Selection-time αᵢ per edit (aligned with histories) — persistence
+        # writes this per trajectory, so it must carry real scores.
+        top_k_scores = loop_result.edit_scores
         _log(t0, f"editing loop done: {len(histories)} edits over "
                  f"{len(rounds)} round(s), stop={loop_result.stop_reason}")
         n_converged = sum(1 for h in histories if h.converged)
