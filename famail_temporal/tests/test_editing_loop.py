@@ -100,20 +100,30 @@ def test_convergence_stops_when_f_causal_plateaus():
 
 
 def test_bounded_cap_limits_total_displacement():
-    """With epsilon_cap=2, no edited trajectory drifts more than 2 (L-inf) from
-    its true original across all rounds."""
+    """The cumulative epsilon-cap genuinely BINDS (not a vacuous assertion).
+
+    With the helper's 5 inner iterations a pickup would move up to ~0.5 cells
+    per round, and settles voluntarily near ~1.0 across rounds (mirroring the
+    real-data §8.3 finding that eps=2 rarely binds). A cap of 0.3 is therefore
+    strictly the binding constraint: no edited trajectory may exceed 0.3 (L-inf)
+    from its true original across all rounds, AND at least one must be held
+    exactly at the cap — so a broken cap (which would allow >=0.4) fails here."""
     bundle = _bundle_with_drag_trajectories()
-    modifier = _make_modifier(bundle, epsilon_cap=2.0)
+    modifier = _make_modifier(bundle, epsilon_cap=0.3)
     result = run_editing_rounds(
         modifier, bundle, k=8, mode="batch", max_rounds=10,
         round_convergence_tol=None)
     orig = {t.trajectory_id: (float(t.pickup_state.x_grid),
                               float(t.pickup_state.y_grid))
             for t in bundle.trajectories}
-    for h in result.histories:
-        ox, oy = orig[h.original.trajectory_id]
-        s = h.modified.pickup_state
-        assert max(abs(s.x_grid - ox), abs(s.y_grid - oy)) <= 2.0 + 1e-5
+    disps = [
+        max(abs(h.modified.pickup_state.x_grid - orig[h.original.trajectory_id][0]),
+            abs(h.modified.pickup_state.y_grid - orig[h.original.trajectory_id][1]))
+        for h in result.histories
+    ]
+    assert disps, "expected at least one edit"
+    assert max(disps) <= 0.3 + 1e-5          # cap is never exceeded
+    assert max(disps) >= 0.3 - 1e-5          # cap actually binds (not vacuous)
 
 
 def test_unbounded_cap_allows_drift_past_two():
