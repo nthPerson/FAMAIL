@@ -181,3 +181,28 @@ def test_non_regression_rejects_f_spatial_regression():
     history = modifier.modify_single(traj)
     # Best iterate must be iter1 (improves both), NOT iter2 (regresses f_spatial).
     assert history.best_iteration == 1
+
+
+def test_epsilon_cap_default_equals_epsilon_ball():
+    bundle = _make_synthetic_bundle()
+    obj = FAMAILObjective(bundle, alpha_fidelity=0.0)
+    modifier = TrajectoryModifier(objective=obj, bundle=bundle, max_iterations=3)
+    assert modifier.epsilon_cap == config.EPSILON_BALL
+
+
+def test_epsilon_cap_is_respected_relative_to_original_cell():
+    """modify_single keeps the pickup within epsilon_cap (L-inf) of original_cell.
+    The cross-round anchor distinction (cap from the TRUE original, not the
+    round-start cell) is covered at the engine level in test_editing_loop
+    (test_bounded_cap_limits_total_displacement)."""
+    bundle = _make_synthetic_bundle()
+    obj = FAMAILObjective(bundle, alpha_fidelity=0.0)
+    modifier = TrajectoryModifier(
+        objective=obj, bundle=bundle, max_iterations=50, epsilon_cap=1.0,
+    )
+    x, y, tb = _active_cell_and_bucket(bundle)
+    traj = _make_test_trajectory(pickup_xy=(x, y), time_bucket=tb)
+    history = modifier.modify_single(traj, original_cell=(x, y))
+    s = history.modified.pickup_state
+    assert abs(s.x_grid - x) <= 1.0 + 1e-5
+    assert abs(s.y_grid - y) <= 1.0 + 1e-5

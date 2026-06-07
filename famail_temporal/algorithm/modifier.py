@@ -108,6 +108,7 @@ class TrajectoryModifier:
         device: torch.device | str | None = None,
         patience: int | None = None,
         accept_rule: str | None = None,
+        epsilon_cap: float | None = None,
     ):
         # Resolve each config-backed default at __init__ time (NOT at
         # function-definition time) so config-override mutations applied
@@ -139,6 +140,12 @@ class TrajectoryModifier:
         # Inner-loop acceptance gate (see config.ACCEPT_RULE).
         self.accept_rule = (
             config.ACCEPT_RULE if accept_rule is None else accept_rule
+        )
+        # Cumulative L-inf cap from the true original cell, across rounds (see
+        # config.EPSILON_CAP). Equals EPSILON_BALL by default ⇒ no-op for a
+        # single edit anchored at its own cell.
+        self.epsilon_cap = (
+            config.EPSILON_CAP if epsilon_cap is None else epsilon_cap
         )
 
         # Resolve device. If unspecified, inherit from the objective's first
@@ -270,6 +277,8 @@ class TrajectoryModifier:
         self,
         trajectory: Trajectory,
         on_iteration: Optional[Callable[[int, "ModificationResult"], None]] = None,
+        *,
+        original_cell: Optional[tuple] = None,
     ) -> ModificationHistory:
         """Run the ST-iFGSM loop on a single trajectory.
 
@@ -315,6 +324,12 @@ class TrajectoryModifier:
         base_3d[orig_cx, orig_cy, t_block] -= pickup_mass
 
         original_pickup = np.array([float(orig_cx), float(orig_cy)], dtype=np.float32)
+        true_original = (
+            np.array([float(original_cell[0]), float(original_cell[1])],
+                     dtype=np.float32)
+            if original_cell is not None
+            else original_pickup
+        )
         cumulative_delta = np.zeros(2, dtype=np.float32)
 
         # Cache the dense-fidelity feature tensor once per trajectory. The
@@ -440,7 +455,17 @@ class TrajectoryModifier:
                 [0.0, 0.0],
                 [config.GRID_DIMS[0] - 1, config.GRID_DIMS[1] - 1],
             ).astype(np.float32)
-            # Re-sync cumulative_delta after grid-clip
+            # Cumulative-epsilon cap: keep within self.epsilon_cap (L-inf) of the
+            # TRUE original cell, across rounds. With epsilon_cap == EPSILON_BALL
+            # and original_cell == this call's start cell, this is a no-op
+            # (new_pickup is already within EPSILON_BALL of original_pickup).
+            if self.epsilon_cap is not None and np.isfinite(self.epsilon_cap):
+                new_pickup = np.clip(
+                    new_pickup,
+                    true_original - self.epsilon_cap,
+                    true_original + self.epsilon_cap,
+                ).astype(np.float32)
+            # Re-sync cumulative_delta after grid + cumulative-cap clips
             cumulative_delta = new_pickup - original_pickup
 
             prev_sign = self._prev_grad_sign
