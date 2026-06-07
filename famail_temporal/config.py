@@ -94,6 +94,12 @@ ACCEPT_RULE: str = "objective"
 # rounds. 1 = historical no-re-edit; 0 = unlimited (epsilon-cap is the limiter).
 ITERATIVE_TOPK_MAX_EDITS: int = 1
 
+# Straight-through (hard-metric) editing (spec 2026-06-06). When True, modify_single
+# evaluates/selects/gates on the realizable HARD grid (forward = hard, gradient =
+# soft) instead of the soft relaxation, closing the soft-vs-hard gap of §8.7.
+# Default False = historical soft behavior (bit-identical).
+STE_ENABLED: bool = False
+
 # Gradient diagnostics
 DIAGNOSTICS_ENABLED: bool = True
 

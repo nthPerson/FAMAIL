@@ -12,3 +12,8 @@ def test_multiloop_defaults_are_backward_compatible():
     assert config.EPSILON_CAP == config.EPSILON_BALL
     assert config.ACCEPT_RULE == "objective"
     assert config.ITERATIVE_TOPK_MAX_EDITS == 1
+
+
+def test_ste_default_is_off():
+    from famail_temporal import config
+    assert config.STE_ENABLED is False
