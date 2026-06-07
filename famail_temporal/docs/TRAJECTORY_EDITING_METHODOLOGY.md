@@ -1065,6 +1065,62 @@ C=2 multi-loop already degrades and ε=5 already showed larger ε is neutral, so
 these were not expected to reverse the sign; the α_fi=0 proxy was validated by
 finding 2 (and again by the ε=5 probe, +0.01283 ≈ +0.0128).
 
+### 8.8 Straight-through (hard-metric) editing — the ceiling is intrinsic (2026-06-06)
+
+**Setup.** §8.7 diagnosed the multi-loop degradation as a *soft-vs-hard gap*: the
+editor optimizes/selects on the differentiable **soft** cell-assignment metric
+but deploys/measures the discrete **hard** grid. To test whether that gap is what
+*bounds* ΔF_causal, we added an opt-in **straight-through estimator** (`--ste`,
+`config.STE_ENABLED`, `modifier.use_ste`): `modify_single` forwards the objective
+on the **hard** grid (full pickup mass at `int(current_pickup)`, the exact cell
+the persist writes) while back-propagating through the soft assignment —
+`objective_grid = hard_3d + (soft_3d − soft_3d.detach())`. Best-iterate and the
+acceptance gate then select on the realizable hard metric for free. Run **E2** =
+A3's config + `--ste` (`2026-06-06T22-29-08_E2_ste_multiloop_C2_objective_afi0`).
+
+**Results (fairness convention; all α_fi=0 except the baseline).**
+
+| Config | Round 1 (single pass) | Final (multi-loop) | Rounds 2+ |
+|---|---|---|---|
+| Baseline soft (α_fi=0.1) | +0.0128 | — | — |
+| A3 soft multi-loop | +0.01271 | +0.01213 | **degrade** (−7.1e-4, −1.7e-4) |
+| **E2 STE multi-loop** | **+0.01044** | +0.01042 | **flat** (+1.3e-4, −2.4e-4, +0.9e-4) |
+
+E2 converged in 4 rounds; 0 of 9,809 edits hit the iteration cap (mean ~12 iters).
+
+**Findings.**
+
+1. **STE fixes the degradation.** E2's rounds 2+ are flat (±1e-4 noise) where A3's
+   soft rounds went net-negative (−7e-4). So the multi-loop degradation genuinely
+   *was* the soft-vs-hard artifact — hard-metric selection stops the bleeding.
+2. **STE does not accumulate.** Flat, not rising — re-attribution yields no real
+   additional fairness even with the gap closed. **The +0.0128 ceiling is
+   intrinsic**, not an optimization artifact. (This is the disambiguation answer;
+   it corroborates the ε=5 / editable-slice evidence of §8.7.)
+3. **STE single-pass *underperforms* soft single-pass** (+0.01044 vs +0.01271 at
+   the same α_fi=0). Selecting on the *correct* (hard) metric did not help, because
+   the straight-through **gradient is a worse search direction** than the soft
+   gradient (the objective's grad evaluated at the concentrated hard grid is less
+   informative than at the spread soft grid). **Gradient quality dominates
+   selection fidelity here**: the soft relaxation, despite its snap-fragility, is
+   the better *optimizer*.
+
+**Decisions / reframe.**
+
+- **The soft single-pass config remains shipped** (ε=2, α=(0.2,0.7,0.1),
+  no-dedup, k=10000 → ΔF_causal **+0.0128**). *Four* levers have now failed to beat
+  it — multi-loop rounds, the non-regression gate, larger ε, and STE.
+- **The soft-vs-hard gap is real but not the binding constraint.** It caused the
+  multi-loop degradation (§8.7), yet closing it (STE) neither raised the ceiling
+  nor matched the soft optimizer. What bounds ΔF_causal is **intrinsic**: the
+  ~1–3% editable slice and the local gradient geometry (edits settle ≈1 cell from
+  their locally-fair spot), not the discretization, ε, or the optimizer.
+- **STE is retained as an opt-in diagnostic** (`--ste`, default off, bit-identical
+  when off); it is not the production path. A genuinely higher ceiling would
+  require editing *more / different* trajectories — i.e. a different
+  attribution/selection or a continuous-space reformulation (gated future work,
+  not this side project).
+
 ## 9. Glossary
 
 - **ST-iFGSM** — Soft-Target Iterative Fast Gradient Sign Method. Variant
