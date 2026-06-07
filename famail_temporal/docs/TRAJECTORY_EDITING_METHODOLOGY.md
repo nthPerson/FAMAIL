@@ -1033,10 +1033,37 @@ A3 round curve: +0.01271 (r1) → −6.43e-04 (r2) → +5.90e-05 (r3), converged
   to the IL window; `inf` = unbounded stacking), but since multi-loop itself does
   not help, single-pass ε=2 stands as the recommendation.
 
-**Not run** (deprioritized once multi-loop was refuted): C=∞ (A2), B=1-vs-B=K
-granularity (A4), and the α_fi=0.1 headline confirmations (H1/H2). The C=2
-multi-loop already degrades, so larger ε / finer granularity were not expected to
-reverse the sign; the α_fi=0 proxy was validated by finding 2.
+**ε=5 single-round probe (2026-06-06) — larger ε also yields no gain.** A direct
+test of whether a *bigger single step* (rather than more rounds) could push past
++0.0128: single-pass, k=10000, no-dedup, objective gate, α_fi=0, with
+`EPSILON_BALL=5`, `EPSILON_CAP=5`, and the soft-assignment window widened to
+`SOFT_NEIGHBORHOOD_SIZE=11` (±5). The window widening is **essential** — the ±2
+soft window (anchored at the original cell), not `EPSILON_BALL`, is the true
+edit-radius limit: a pickup that roams past the window edge gets a vanishing
+gradient, so it never moves further regardless of the ε ball. Result
+(`2026-06-06T19-42-49_eps5_softwin11_singlepass_causal_emphasis_afi0`):
+**ΔF_causal = +0.01283 — identical to the +0.0128 baseline.** The widened window
+*did* take effect (max move 4 cells vs the baseline's hard cap of 2), yet **only
+1.0% of edits moved beyond 2 cells**, and the mean move *fell* (0.77 vs 0.89 —
+the blurrier 11×11 soft distribution weakens the gradient for marginal
+trajectories). This **directly confirms §8.3 ("ε rarely binds")**: trajectories
+settle at their locally-fairest cell (≈1 cell away on average), so the editing
+ceiling (~+0.0128) is **intrinsic** — set by the editable slice and local
+gradient geometry, not by the ε hyperparameter. **So ε=2 is not just the
+in-distribution-safe choice; it is empirically optimal.** (A one-line modifier
+fix was needed for the `SOFT_NEIGHBORHOOD_SIZE` override to reach
+`SoftCellAssignment`, which a default-arg binding had silently frozen.)
+
+**Bottom line across §8.7:** all three levers tried to beat the single pass —
+multi-loop rounds, the non-regression gate, and a larger ε — *fail*. The shipped
+editing config stands: single-pass, ε=2, α=(0.2,0.7,0.1), no-dedup, k=10000 →
+**ΔF_causal +0.0128**.
+
+**Not run** (deprioritized once the above settled): C=∞ multi-loop (A2),
+B=1-vs-B=K granularity (A4), and the α_fi=0.1 headline confirmations (H1/H2). The
+C=2 multi-loop already degrades and ε=5 already showed larger ε is neutral, so
+these were not expected to reverse the sign; the α_fi=0 proxy was validated by
+finding 2 (and again by the ε=5 probe, +0.01283 ≈ +0.0128).
 
 ## 9. Glossary
 
