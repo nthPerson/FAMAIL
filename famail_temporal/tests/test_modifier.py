@@ -22,6 +22,15 @@ def _make_test_trajectory(driver_id=0, pickup_xy=(3, 4), time_bucket=90):
     return Trajectory(trajectory_id=0, driver_id=driver_id, states=states)
 
 
+def _active_cell_and_bucket(bundle, active_idx=0):
+    cell = bundle.unit_map.to_flat_cell(active_idx)
+    t_block = bundle.unit_map.to_time_block(active_idx)
+    gy = bundle.pickup_3d.shape[1]
+    x, y = cell // gy, cell % gy
+    _, start_hour, _ = config.TIME_BLOCKS[t_block]
+    return x, y, 1 + (start_hour * 12)
+
+
 def test_modify_single_returns_history():
     """modify_single returns a ModificationHistory with iterations."""
     bundle = _make_synthetic_bundle()
@@ -120,3 +129,55 @@ def test_modifier_resolves_config_at_init_not_at_import():
         )
     finally:
         config.MAX_ITERATIONS = original
+
+
+def test_accept_rule_default_is_objective():
+    """Default modifier keeps the historical objective gate."""
+    bundle = _make_synthetic_bundle()
+    obj = FAMAILObjective(bundle, alpha_fidelity=0.0)
+    modifier = TrajectoryModifier(objective=obj, bundle=bundle, max_iterations=3)
+    assert modifier.accept_rule == "objective"
+
+
+def test_non_regression_rejects_f_spatial_regression():
+    """Under non-regression, an iterate that lifts F_causal but dips F_spatial
+    below its iter-0 value is NOT persisted as best; objective rule may accept it.
+
+    We drive this deterministically with a stub objective whose terms we control
+    by iteration, so the test does not depend on bundle gradients.
+    """
+    import torch as _t
+    bundle = _make_synthetic_bundle()
+    obj = FAMAILObjective(bundle, alpha_fidelity=0.0)
+
+    # Sequence of (f_spatial, f_causal) per iteration. iter0 = baseline.
+    # iter1 improves BOTH; iter2 improves f_causal more but regresses f_spatial.
+    seq = [(0.10, 0.50), (0.11, 0.55), (0.09, 0.70)]
+    calls = {"i": 0}
+
+    def fake_forward(soft_pickup_3d=None, **kw):
+        i = min(calls["i"], len(seq) - 1)
+        fs, fc = seq[i]
+        calls["i"] += 1
+        total = _t.tensor(fs + fc, requires_grad=True)
+        terms = {
+            "f_spatial": _t.tensor(fs),
+            "f_causal": _t.tensor(fc),
+            "f_fidelity": _t.tensor(0.0),
+        }
+        return total, terms
+
+    # nn.Module dispatches obj(...) -> self.forward (dunder looked up on the
+    # type), so override forward, NOT __call__. diagnostics_enabled=False below
+    # selects the single-backward path (the decomposed path needs a real graph).
+    obj.forward = fake_forward  # type: ignore[method-assign]
+
+    modifier = TrajectoryModifier(
+        objective=obj, bundle=bundle, max_iterations=3, patience=None,
+        accept_rule="non-regression", diagnostics_enabled=False,
+    )
+    x, y, tb = _active_cell_and_bucket(bundle)
+    traj = _make_test_trajectory(pickup_xy=(x, y), time_bucket=tb)
+    history = modifier.modify_single(traj)
+    # Best iterate must be iter1 (improves both), NOT iter2 (regresses f_spatial).
+    assert history.best_iteration == 1

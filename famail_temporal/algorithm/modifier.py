@@ -107,6 +107,7 @@ class TrajectoryModifier:
         diagnostics_enabled: bool | None = None,
         device: torch.device | str | None = None,
         patience: int | None = None,
+        accept_rule: str | None = None,
     ):
         # Resolve each config-backed default at __init__ time (NOT at
         # function-definition time) so config-override mutations applied
@@ -134,6 +135,10 @@ class TrajectoryModifier:
         # convergence_tol for N consecutive iters.
         self.patience = (
             config.PATIENCE if patience is None else patience
+        )
+        # Inner-loop acceptance gate (see config.ACCEPT_RULE).
+        self.accept_rule = (
+            config.ACCEPT_RULE if accept_rule is None else accept_rule
         )
 
         # Resolve device. If unspecified, inherit from the objective's first
@@ -349,6 +354,8 @@ class TrajectoryModifier:
         best_iteration = -1
         iters_since_improvement = 0
         converged = False
+        f_causal_0 = None
+        f_spatial_0 = None
 
         for it in range(self.max_iterations):
             # (a) Anneal temperature
@@ -466,11 +473,20 @@ class TrajectoryModifier:
                 on_iteration(it, result)
 
             # (g) Best-iterate tracking + patience-based convergence.
-            # Improvement counts only if it exceeds convergence_tol — set
-            # above the metric's numerical noise floor so noise-level
-            # fluctuations don't spuriously reset the patience counter.
+            # iter-0 sits at the pre-edit pickup ⇒ captures the baseline F the
+            # non-regression gate compares against.
+            if it == 0:
+                f_causal_0 = result.f_causal
+                f_spatial_0 = result.f_spatial
             current_objective = float(total.detach())
-            if current_objective > best_objective + self.convergence_tol:
+            if self.accept_rule == "non-regression":
+                qualifies = (
+                    result.f_causal >= f_causal_0 + self.convergence_tol
+                    and result.f_spatial >= f_spatial_0 - self.convergence_tol
+                )
+            else:
+                qualifies = True
+            if qualifies and current_objective > best_objective + self.convergence_tol:
                 best_objective = current_objective
                 best_cumulative_delta = cumulative_delta.copy()
                 best_iteration = it
