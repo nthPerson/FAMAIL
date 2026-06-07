@@ -179,3 +179,19 @@ def test_edit_scores_carry_real_selection_alpha():
     assert len(result.edit_scores) == len(result.histories)
     assert len(result.edit_scores) > 0
     assert all(s < 0 for s in result.edit_scores)  # selected = negative-alpha
+
+
+def test_ste_multiloop_runs_and_is_valid():
+    """STE multi-loop runs end-to-end through the engine and returns a valid
+    result. (The quantitative STE-vs-soft comparison is the real-data E2
+    experiment, not a synthetic unit test — synthetic data is too small to show
+    the round-2+ degradation that STE fixes.)"""
+    bundle = _bundle_with_drag_trajectories()
+    modifier = _make_modifier(bundle, use_ste=True, epsilon_cap=2.0)
+    result = run_editing_rounds(
+        modifier, bundle, k=8, mode="batch", max_rounds=5,
+        round_convergence_tol=1e-5, round_patience=2)
+    assert isinstance(result, EditingLoopResult)
+    assert result.stop_reason in ("converged", "pool_exhausted", "max_rounds")
+    assert len(result.rounds) >= 1
+    assert all(r.f_causal == r.f_causal for r in result.rounds)  # no NaN
