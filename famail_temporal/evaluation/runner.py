@@ -6,7 +6,7 @@ import datetime as _dt
 import re
 import sys
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -18,6 +18,7 @@ from famail_temporal import config
 from famail_temporal.algorithm.attribution import (
     compute_per_unit_attribution, rank_trajectories, select_top_k,
 )
+from famail_temporal.algorithm.editing_loop import run_editing_rounds, RoundRecord
 from famail_temporal.algorithm.modifier import TrajectoryModifier, ModificationHistory
 from famail_temporal.algorithm.objective import FAMAILObjective
 from famail_temporal.data.aggregation import hour_to_block_index, time_bucket_to_hour
@@ -69,257 +70,6 @@ def _resolve_device(arg: str) -> torch.device:
     )
 
 
-def _iterative_topk_modify(
-    modifier: TrajectoryModifier,
-    bundle: "DataBundle",  # noqa: F821
-    k: int,
-    t0: float,
-    max_per_unit: Optional[int] = None,
-    max_per_cell: Optional[int] = None,
-) -> tuple[List[ModificationHistory], List[float]]:
-    """Iterative top-k with re-attribution.
-
-    Instead of selecting the entire top-k subset against the initial
-    attribution and then modifying each in sequence (which produces
-    trajectory-level interference when the top-k cluster geographically),
-    this loop alternates: re-attribute → re-rank → pick best remaining →
-    modify → repeat. Each new selection sees the true post-modification
-    state via ``modifier.current_pickup_3d()``.
-
-    Designed as a mitigation for the trajectory-interference failure mode
-    documented in TRAJECTORY_EDITING_METHODOLOGY.md §8.1: when many top-k
-    trajectories share a pickup cell, locally-optimal moves into the
-    same destination cell cumulatively oversupply that cell, dragging
-    global F_causal in the wrong direction.
-
-    Returns ``(histories, scores)`` where ``scores[i]`` is the
-    attribution score of the trajectory at the moment it was selected
-    (i.e., the score AFTER all prior modifications).
-    """
-    histories: List[ModificationHistory] = []
-    scores: List[float] = []
-    modified_ids: set = set()
-    # Cumulative pool counters for the per-(cell, t_block) and per-cell
-    # diversity budgets. These constrain which trajectory is picked each
-    # round, mirroring the batch-mode select_top_k(... max_per_unit, ...).
-    unit_counts: dict = {}
-    cell_counts: dict = {}
-
-    max_iters = modifier.max_iterations
-    total_iter_units = k * max_iters
-    use_tqdm = _TQDM_AVAILABLE and sys.stderr.isatty()
-
-    bar = None
-    if use_tqdm:
-        state = {"round": 0, "n_conv": 0}
-        bar = _tqdm(
-            total=total_iter_units, desc="iter-topk", unit="iter",
-            leave=True, dynamic_ncols=True,
-        )
-
-        def _on_iter(_it_idx: int, _result) -> None:
-            bar.update(1)
-            bar.set_postfix(
-                round=f"{state['round']}/{k}",
-                conv=state["n_conv"],
-                refresh=False,
-            )
-        on_iter_cb = _on_iter
-    else:
-        # Non-TTY fallback: log every ~5% of total
-        step_fallback = max(1, total_iter_units // 20)
-        seen_state = {"iters_seen": 0, "n_conv": 0}
-
-        def _on_iter_fallback(_it_idx: int, _result) -> None:
-            seen_state["iters_seen"] += 1
-            if (seen_state["iters_seen"] % step_fallback == 0
-                    or seen_state["iters_seen"] == total_iter_units):
-                print(
-                    f"[runner]   iter-topk: {seen_state['iters_seen']}/"
-                    f"{total_iter_units} iters  "
-                    f"converged_so_far={seen_state['n_conv']}",
-                    flush=True,
-                )
-        on_iter_cb = _on_iter_fallback
-
-    try:
-        for round_i in range(1, k + 1):
-            if use_tqdm:
-                state["round"] = round_i
-
-            # Re-attribute against current modifier state. This is the
-            # core of M2: each new pick sees prior modifications' effects.
-            pickup_now = modifier.current_pickup_3d()
-            attribution = compute_per_unit_attribution(
-                bundle, pickup_3d=pickup_now,
-            )
-
-            # Re-rank remaining trajectories. select_top_k's strict-αᵢ<0
-            # filter is enforced manually here so we can also exclude
-            # already-modified ids, enforce per-unit/per-cell budgets on
-            # the cumulative pool, and short-circuit when no candidates
-            # remain.
-            scored = rank_trajectories(
-                bundle.trajectories, attribution, bundle.unit_map,
-            )
-            best_idx, best_score = -1, 0.0
-            for idx, sc in scored:
-                if sc >= 0:
-                    break  # ascending order — first non-negative ends the search
-                traj = bundle.trajectories[idx]
-                if traj.trajectory_id in modified_ids:
-                    continue
-                if max_per_unit is not None or max_per_cell is not None:
-                    cx, cy = traj.pickup_cell
-                    t_block = hour_to_block_index(
-                        time_bucket_to_hour(traj.pickup_state.time_bucket)
-                    )
-                    unit_key = (cx, cy, t_block)
-                    cell_key = (cx, cy)
-                    if (max_per_unit is not None
-                            and unit_counts.get(unit_key, 0) >= max_per_unit):
-                        continue
-                    if (max_per_cell is not None
-                            and cell_counts.get(cell_key, 0) >= max_per_cell):
-                        continue
-                best_idx, best_score = idx, sc
-                break
-
-            if best_idx < 0:
-                _log(
-                    t0,
-                    f"iter-topk: terminating early at round {round_i}/{k} — "
-                    f"no negative-α candidates remain (modified={len(modified_ids)})",
-                )
-                # Advance bar to total so the progress display closes cleanly
-                if use_tqdm:
-                    remaining_iters = total_iter_units - bar.n
-                    if remaining_iters > 0:
-                        bar.update(remaining_iters)
-                break
-
-            traj = bundle.trajectories[best_idx]
-            modified_ids.add(traj.trajectory_id)
-            if max_per_unit is not None or max_per_cell is not None:
-                cx, cy = traj.pickup_cell
-                t_block = hour_to_block_index(
-                    time_bucket_to_hour(traj.pickup_state.time_bucket)
-                )
-                unit_counts[(cx, cy, t_block)] = (
-                    unit_counts.get((cx, cy, t_block), 0) + 1
-                )
-                cell_counts[(cx, cy)] = cell_counts.get((cx, cy), 0) + 1
-            h = modifier.modify_single(traj, on_iteration=on_iter_cb)
-
-            # Account for early-converged iters
-            unused = max_iters - len(h.iterations)
-            if use_tqdm:
-                if unused > 0:
-                    bar.update(unused)
-            else:
-                seen_state["iters_seen"] += unused
-
-            histories.append(h)
-            scores.append(best_score)
-            if h.converged:
-                if use_tqdm:
-                    state["n_conv"] += 1
-                else:
-                    seen_state["n_conv"] += 1
-    finally:
-        if bar is not None:
-            bar.close()
-
-    return histories, scores
-
-
-def _modify_with_progress(
-    modifier: TrajectoryModifier,
-    trajectories: List[Any],
-) -> List[ModificationHistory]:
-    """Run ``modify_single`` on each trajectory with an iteration-level progress bar.
-
-    The bar's total is ``len(trajectories) * max_iterations`` (iter-units) so it
-    ticks every ST-iFGSM step rather than waiting for an entire trajectory to
-    finish. Per-trajectory work can be 5-15 seconds × ``max_iterations``, so a
-    per-trajectory bar would sit at 0/n for many minutes; this bar updates once
-    every ~10 sec. Early-converged trajectories advance the bar by the unused
-    iters so total ETA stays honest.
-
-    Postfix shows ``traj=N/K conv=C`` — current trajectory index and the
-    running count of converged trajectories (primary signal for "is the
-    optimizer actually finding minima or just hitting the iter cap").
-
-    Falls back to throttled plain-print every ~5% when stderr is not a TTY or
-    tqdm is unavailable.
-    """
-    n_trajs = len(trajectories)
-    max_iters = modifier.max_iterations
-    total_iter_units = n_trajs * max_iters
-    use_tqdm = _TQDM_AVAILABLE and sys.stderr.isatty()
-
-    if use_tqdm:
-        state = {"current_traj": 0, "n_conv": 0}
-        bar = _tqdm(
-            total=total_iter_units, desc="modifying", unit="iter",
-            leave=True, dynamic_ncols=True,
-        )
-
-        def _on_iter(_it_idx: int, _result) -> None:
-            bar.update(1)
-            bar.set_postfix(
-                traj=f"{state['current_traj']}/{n_trajs}",
-                conv=state["n_conv"],
-                refresh=False,
-            )
-
-        histories: List[ModificationHistory] = []
-        try:
-            for i, t in enumerate(trajectories, start=1):
-                state["current_traj"] = i
-                bar.set_postfix(
-                    traj=f"{state['current_traj']}/{n_trajs}",
-                    conv=state["n_conv"],
-                    refresh=False,
-                )
-                h = modifier.modify_single(t, on_iteration=_on_iter)
-                # Advance bar past any unused iters when convergence broke early
-                unused = max_iters - len(h.iterations)
-                if unused > 0:
-                    bar.update(unused)
-                histories.append(h)
-                if h.converged:
-                    state["n_conv"] += 1
-        finally:
-            bar.close()
-        return histories
-
-    # Non-TTY / no-tqdm fallback: print iter-units progress every ~5% of total
-    step = max(1, total_iter_units // 20)
-    iters_seen = 0
-    n_conv = 0
-    histories = []
-
-    def _on_iter_fallback(_it_idx: int, _result) -> None:
-        nonlocal iters_seen
-        iters_seen += 1
-        if iters_seen % step == 0 or iters_seen == total_iter_units:
-            print(
-                f"[runner]   modifying: {iters_seen}/{total_iter_units} iters  "
-                f"converged_so_far={n_conv}",
-                flush=True,
-            )
-
-    for t in trajectories:
-        h = modifier.modify_single(t, on_iteration=_on_iter_fallback)
-        # Account for early-converged iters in the fallback print path too
-        unused = max_iters - len(h.iterations)
-        iters_seen += unused
-        histories.append(h)
-        if h.converged:
-            n_conv += 1
-    return histories
-
 
 @dataclass(frozen=True)
 class ExperimentResult:
@@ -359,6 +109,8 @@ class ExperimentResult:
 
     augmented_trajs_before: Dict[int, list]
     augmented_trajs_after: Dict[int, list]
+
+    rounds: List[RoundRecord] = field(default_factory=list)
 
 
 def _parse_override_value(s: str) -> Any:
@@ -458,6 +210,12 @@ def run_experiment(
     patience: Optional[int] = None,
     convergence_tol: Optional[float] = None,
     iterative_topk: bool = False,
+    max_rounds: Optional[int] = None,
+    round_convergence_tol: Optional[float] = None,
+    round_patience: Optional[int] = None,
+    epsilon_cap: Optional[float] = None,
+    accept_rule: Optional[str] = None,
+    iterative_topk_max_edits: Optional[int] = None,
     max_per_unit: Optional[int] = None,
     max_per_cell: Optional[int] = None,
 ) -> ExperimentResult:
@@ -523,58 +281,12 @@ def run_experiment(
                 f"k={k} exceeds ranked trajectory count {len(scored)}. "
                 f"Reduce k or widen max_trajectories."
             )
-        if iterative_topk:
-            # Iterative top-k mode: select the first trajectory now (to
-            # validate that at least one negative-αᵢ candidate exists), but
-            # defer the remaining k−1 picks to ``_iterative_topk_modify``,
-            # which re-attributes after each modification. ``top_k_indices``,
-            # ``top_k_scores``, and ``top_k_trajs`` are left empty here —
-            # the helper fills them dynamically.
-            top_k_indices: List[int] = []
-            top_k_scores: List[float] = []
-            top_k_trajs: List = []
-            first_neg = next(
-                ((i, s) for i, s in scored if s < 0), (None, None),
-            )
-            if first_neg[0] is None:
-                raise ValueError(
-                    "Top-k is empty - no trajectories with strictly negative "
-                    "attribution were found at the initial state."
-                )
-            _log(
-                t0,
-                f"iterative top-k enabled: re-attribute after each "
-                f"modification (k={k} target rounds)",
-            )
-        else:
-            top_k_indices = select_top_k(
-                scored, k=k,
-                trajectories=bundle.trajectories,
-                max_per_unit=max_per_unit,
-                max_per_cell=max_per_cell,
-            )
-            if not top_k_indices:
-                raise ValueError(
-                    "Top-k is empty - no trajectories with strictly negative "
-                    "attribution were found. Under the F-decomposition convention, "
-                    "negative αᵢ marks cells dragging fairness below baseline. "
-                    "If no such cells exist, the audit set is uniformly fair "
-                    "(unusual; check that the active mask is populated and "
-                    "demographics carry signal)."
-                )
-            top_k_scores = [scored[i][1] for i in range(len(top_k_indices))]
-            top_k_trajs = [bundle.trajectories[i] for i in top_k_indices]
-            div_str = ""
-            if max_per_unit is not None or max_per_cell is not None:
-                div_str = (
-                    f"  (diversity: max_per_unit={max_per_unit}, "
-                    f"max_per_cell={max_per_cell})"
-                )
-            _log(
-                t0,
-                f"selected top-k: {len(top_k_indices)}/{k} requested  "
-                f"(score range [{top_k_scores[0]:.3e}, {top_k_scores[-1]:.3e}])"
-                f"{div_str}",
+        if not any(s < 0 for _, s in scored):
+            raise ValueError(
+                "No trajectories with strictly negative attribution were found. "
+                "Under the F-decomposition convention, negative αᵢ marks cells "
+                "dragging fairness below baseline; if none exist the audit set is "
+                "uniformly fair (check the active mask / demographics carry signal)."
             )
 
         # When no trained discriminator is available the bundle carries an
@@ -614,33 +326,53 @@ def run_experiment(
             device=device,
             patience=resolved_patience,
             convergence_tol=convergence_tol,
+            accept_rule=accept_rule,
+            epsilon_cap=epsilon_cap,
         )
-        patience_str = (
-            "off" if modifier.patience is None else str(modifier.patience)
-        )
-        mode_str = "iterative-topk" if iterative_topk else "batch-topk"
-        n_to_modify = k if iterative_topk else len(top_k_trajs)
-        _log(
-            t0,
-            f"modifying {n_to_modify} trajectories  "
-            f"(mode={mode_str}, max_iters={modifier.max_iterations}, "
-            f"patience={patience_str}, "
-            f"conv_tol={modifier.convergence_tol:.2e}, "
-            f"alphas=(sp={effective_alphas[0]:.2f}, "
-            f"ca={effective_alphas[1]:.2f}, fi={effective_alphas[2]:.2f}))",
-        )
-        if iterative_topk:
-            histories, top_k_scores = _iterative_topk_modify(
-                modifier, bundle, k, t0,
-                max_per_unit=max_per_unit,
-                max_per_cell=max_per_cell,
-            )
-            top_k_indices = [
-                bundle.trajectories.index(h.original) for h in histories
-            ] if histories else []
-            top_k_trajs = [h.original for h in histories]
+        # Resolve outer-loop knobs. Historical --iterative-topk did up to k
+        # single-edit rounds (B=1), stopping at pool-exhaustion — so iterative
+        # mode defaults max_rounds to k. Batch defaults to config.MAX_ROUNDS (1).
+        if max_rounds is not None:
+            resolved_max_rounds = max_rounds
+        elif iterative_topk:
+            resolved_max_rounds = k
         else:
-            histories = _modify_with_progress(modifier, top_k_trajs)
+            resolved_max_rounds = config.MAX_ROUNDS
+        resolved_round_patience = (
+            config.ROUND_PATIENCE if round_patience is None else round_patience
+        )
+        resolved_round_tol = (
+            config.ROUND_CONVERGENCE_TOL if round_convergence_tol is None
+            else round_convergence_tol
+        )
+        resolved_max_edits = (
+            config.ITERATIVE_TOPK_MAX_EDITS if iterative_topk_max_edits is None
+            else iterative_topk_max_edits
+        )
+        if resolved_round_tol is not None and resolved_max_rounds <= 1:
+            _log(t0, "WARNING: round-convergence-tol set but max-rounds<=1; "
+                     "running a single pass. Raise --max-rounds for convergence mode.")
+        _log(t0, f"editing loop: mode={'iterative' if iterative_topk else 'batch'} "
+                 f"max_rounds={resolved_max_rounds} eps_cap={modifier.epsilon_cap} "
+                 f"accept={modifier.accept_rule} round_tol={resolved_round_tol}")
+        loop_result = run_editing_rounds(
+            modifier, bundle,
+            k=k,
+            mode="iterative" if iterative_topk else "batch",
+            max_rounds=resolved_max_rounds,
+            round_convergence_tol=resolved_round_tol,
+            round_patience=resolved_round_patience,
+            iterative_max_edits=resolved_max_edits,
+            max_per_unit=max_per_unit,
+            max_per_cell=max_per_cell,
+            on_iter=None,
+            log=lambda msg: _log(t0, msg),
+        )
+        histories = loop_result.histories
+        rounds = loop_result.rounds
+        top_k_scores = [0.0] * len(histories)
+        _log(t0, f"editing loop done: {len(histories)} edits over "
+                 f"{len(rounds)} round(s), stop={loop_result.stop_reason}")
         n_converged = sum(1 for h in histories if h.converged)
         mean_total_iters = (
             np.mean([h.total_iterations for h in histories]) if histories else 0.0
@@ -709,6 +441,7 @@ def run_experiment(
             top_k_scores=top_k_scores,
             augmented_trajs_before=augmented_before,
             augmented_trajs_after=augmented_after,
+            rounds=rounds,
         )
     finally:
         restore_config()
@@ -758,6 +491,29 @@ def _build_arg_parser() -> argparse.ArgumentParser:
              "TRAJECTORY_EDITING_METHODOLOGY.md §8.1). Costs k extra "
              "attribution computations.",
     )
+    p.add_argument("--max-rounds", type=int, default=None,
+                   help="Outer re-attribution rounds (hard ceiling; also the "
+                        "convergence-mode safety cap). Default config.MAX_ROUNDS "
+                        "(1 = single pass).")
+    p.add_argument("--round-convergence-tol", type=float, default=None,
+                   help="Enable convergence stop: halt when best round F_causal "
+                        "has not improved by more than this for --round-patience "
+                        "rounds. Default config.ROUND_CONVERGENCE_TOL (off).")
+    p.add_argument("--round-patience", type=int, default=None,
+                   help="Outer-loop patience (rounds). Default config.ROUND_PATIENCE.")
+    p.add_argument("--epsilon-cap", type=float, default=None,
+                   help="Cumulative L-inf displacement cap from each trajectory's "
+                        "true original cell, across rounds. Pass 'inf' for "
+                        "unbounded per-round-epsilon stacking. Default "
+                        "config.EPSILON_CAP (=EPSILON_BALL, 2.0).")
+    p.add_argument("--accept-rule", choices=["objective", "non-regression"],
+                   default=None,
+                   help="Inner acceptance gate. 'non-regression' requires each "
+                        "persisted edit to improve F_causal and not regress "
+                        "F_spatial. Default config.ACCEPT_RULE ('objective').")
+    p.add_argument("--iterative-topk-max-edits", type=int, default=None,
+                   help="Max edits per trajectory in --iterative-topk mode "
+                        "(0 = unlimited). Default config.ITERATIVE_TOPK_MAX_EDITS (1).")
     p.add_argument(
         "--max-per-unit", type=int, default=None,
         help="Maximum trajectories selected from any single (pickup_cell, "
@@ -806,6 +562,12 @@ def main(argv: Optional[list[str]] = None) -> int:
         patience=args.patience,
         convergence_tol=args.convergence_tol,
         iterative_topk=args.iterative_topk,
+        max_rounds=args.max_rounds,
+        round_convergence_tol=args.round_convergence_tol,
+        round_patience=args.round_patience,
+        epsilon_cap=args.epsilon_cap,
+        accept_rule=args.accept_rule,
+        iterative_topk_max_edits=args.iterative_topk_max_edits,
         max_per_unit=args.max_per_unit,
         max_per_cell=args.max_per_cell,
     )

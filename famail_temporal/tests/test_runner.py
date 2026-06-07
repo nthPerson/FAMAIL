@@ -204,3 +204,44 @@ def test_alpha_overrides_actually_reach_objective(tiny_bundle):
         f"expected effective_alpha_spatial=0.77, got "
         f"{result.effective_alpha_spatial}"
     )
+
+
+def test_run_experiment_multiloop_records_rounds(tiny_bundle):
+    """max_rounds>1 runs the engine and records per-round F_causal."""
+    result = run_experiment(
+        k=4, max_trajectories=None, max_drivers=None,
+        max_rounds=3, round_convergence_tol=None, accept_rule="non-regression",
+        epsilon_cap=2.0,
+    )
+    assert hasattr(result, "rounds")
+    assert 1 <= len(result.rounds) <= 3
+    assert all(hasattr(r, "f_causal") for r in result.rounds)
+
+
+def test_run_experiment_default_is_single_round(tiny_bundle):
+    """No multi-loop args ⇒ exactly one round (historical single pass)."""
+    result = run_experiment(k=4)
+    assert len(result.rounds) == 1
+
+
+def test_run_experiment_iterative_topk_one_edit_per_round(tiny_bundle):
+    """--iterative-topk maps to B=1 with max_rounds defaulting to k, so it edits
+    one trajectory per round (historical behavior), not the whole batch at once."""
+    result = run_experiment(k=6, iterative_topk=True)
+    assert len(result.modified_trajectory_ids) >= 1
+    # B=1: exactly one edit per round ⇒ #rounds == #edits.
+    assert len(result.rounds) == len(result.modified_trajectory_ids)
+    assert all(r.n_edited == 1 for r in result.rounds)
+
+
+def test_cli_parses_multiloop_flags():
+    from famail_temporal.evaluation.runner import _build_arg_parser
+    args = _build_arg_parser().parse_args(
+        ["-k", "10", "--max-rounds", "5", "--round-convergence-tol", "1e-4",
+         "--round-patience", "2", "--epsilon-cap", "inf",
+         "--accept-rule", "non-regression", "--iterative-topk-max-edits", "0"])
+    assert args.max_rounds == 5
+    assert args.round_convergence_tol == 1e-4
+    assert args.epsilon_cap == float("inf")
+    assert args.accept_rule == "non-regression"
+    assert args.iterative_topk_max_edits == 0

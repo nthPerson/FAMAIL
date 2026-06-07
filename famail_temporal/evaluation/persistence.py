@@ -354,6 +354,12 @@ def write(result: ExperimentResult, output_root: Path, bundle=None) -> Path:
             "gini_asr":  result.gini_asr_after  - result.gini_asr_before,
         },
         "convergence_summary": _convergence_summary(result),
+        "rounds": [
+            {"round_index": r.round_index, "n_edited": r.n_edited,
+             "f_causal": r.f_causal, "delta_f_causal": r.delta_f_causal,
+             "pool_size": r.pool_size}
+            for r in getattr(result, "rounds", [])
+        ],
         "diagnostics_summary": _diagnostics_summary(result),
         "artifact_paths": artifact_paths,
         "file_sizes_bytes": file_sizes,
