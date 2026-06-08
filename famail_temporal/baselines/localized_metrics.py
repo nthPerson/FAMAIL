@@ -95,13 +95,19 @@ def residual_and_demo(
 
 
 def f_causal_orthogonality(R: np.ndarray, X_demo: np.ndarray) -> float:
-    """F_causal under M = I: R'(I−H_demo)R / R'R = 1 − r²_demo.
+    """F_causal under M = I: 1 − R'(I−H_demo)R / R'R = SS_residual / SS_total.
 
-    Higher = fairer. R orthogonal to X_demo -> 1.0. R fully in span -> 0.0.
+    Higher = fairer (residual is less explained by demographics).
+
+    Implemented via the FWL identity R'(I−H)R = R'R − (X'R)'(X'X)⁻¹(X'R) to
+    avoid materializing the dense N×N hat matrix at production N≈34k (matches
+    the O(N·p) convention in famail_temporal/fairness/hat_matrices.py).
 
     Degenerate cases:
     - R has zero norm -> return 1.0 (no residual variance to explain).
-    - X_demo has zero columns -> return 0.0 (documented plan-spec fallback).
+    - X_demo has zero columns / rank 0 -> H_demo = 0, return F_causal = 0
+      (documented plan-spec fallback; the formula limit at H=0 is actually 1.0,
+      but the plan keeps 0.0 as a defensive fallback for malformed input).
     """
     R = np.asarray(R, dtype=np.float64).ravel()
     n = R.shape[0]
@@ -112,21 +118,38 @@ def f_causal_orthogonality(R: np.ndarray, X_demo: np.ndarray) -> float:
         return 1.0
     if X_demo.size == 0 or X_demo.shape[1] == 0:
         return 0.0
-    # H_demo = X (X'X)^-1 X'  (pinv for numerical safety)
-    XtX = X_demo.T @ X_demo
+    XtX = X_demo.T @ X_demo                # (p, p)
     XtX_inv = np.linalg.pinv(XtX)
-    H_demo = X_demo @ XtX_inv @ X_demo.T
-    res = R - H_demo @ R               # (I − H_demo) R
-    # F_causal = R'(I−H_demo)R / R'R  = 1 − r²_demo. R orthogonal to X_demo
-    # gives res = R, ratio = 1 (max fairness). R in span(X_demo) gives res = 0,
-    # ratio = 0 (fully explained by demographics).
-    return float((R @ res) / rr)
+    XtR = X_demo.T @ R                     # (p,)
+    ss_explained = float(XtR @ XtX_inv @ XtR)   # R' H R
+    ss_res = rr - ss_explained             # R' (I-H) R
+    return ss_res / rr
 
 
 def localized_f_causal(
     bundle: DataBundle, pickup_3d: np.ndarray, edited_units: Iterable[Tuple[int, int, int]],
 ) -> dict:
-    """Return localized + global F_causal for traceability."""
+    """Return localized + global F_causal under the SAME M=I formula.
+
+    Both fields use the M=I (uniform-weighting) form of F_causal, which is
+    `1 - r²_demo`. The localized field restricts the regression to the active
+    units the edit touched (typically ~1k-4k units); the global field uses ALL
+    active units (~34k). Both are directly comparable since they use the SAME
+    formula at different N.
+
+    NOTE: `f_causal_global` here is NOT the same number as
+    `data_level_fairness(bundle, pickup_3d=...)["f_causal"]` — production
+    F_causal uses M = I − 11'/N (centering), not M = I. The orchestrator (Task 6)
+    reports the production number SEPARATELY via `b0_fairness["f_causal"]` /
+    `famail_fairness["f_causal"]`; this function provides the localized signal
+    plus its directly-comparable global counterpart for the "did the local
+    signal beat the global dilution?" analysis.
+
+    Returns:
+        f_causal_localized      — M=I F_causal on the edited-units subset.
+        f_causal_global         — M=I F_causal on ALL active units (paired with localized).
+        n_edited_active_units   — size of the subset (0 → localized = nan).
+    """
     R, X_demo = residual_and_demo(bundle, pickup_3d)
     f_global = f_causal_orthogonality(R, X_demo)
     idx = active_unit_index_of(bundle, edited_units)
