@@ -1153,4 +1153,7 @@ E2 converged in 4 rounds; 0 of 9,809 edits hit the iteration cap (mean ~12 iters
   patterns of health practitioners: theoretical considerations and an
   application based on Alberta data.* Social Science & Medicine.
 - See in-repo: [FAIRNESS_DECOMPOSITION_FORMULATION.md](FAIRNESS_DECOMPOSITION_FORMULATION.md),
-  [F_CAUSAL_METHODOLOGY_NOTES.md](F_CAUSAL_METHODOLOGY_NOTES.md).
+  [F_CAUSAL_METHODOLOGY_NOTES.md](F_CAUSAL_METHODOLOGY_NOTES.md),
+  [MODEL_LEVEL_METRICS.md](MODEL_LEVEL_METRICS.md) (model-level
+  transmission + DI + localized F_causal diagnostics that complement
+  the data-level pipeline documented here).

@@ -3,7 +3,7 @@
 Living status of the GAN-baseline work that motivates and evaluates FAMAIL trajectory editing.
 Design spec: [`docs/superpowers/specs/2026-05-27-famail-gan-baselines-design.md`](../../docs/superpowers/specs/2026-05-27-famail-gan-baselines-design.md).
 
-**Last updated:** 2026-05-28
+**Last updated:** 2026-06-08
 
 ---
 
@@ -87,6 +87,34 @@ Adds the adversarial stage Phase 2 deferred, completing the spec's standard-adve
 **Design notes:** the critic is a fresh vocab-embedding LSTM (mirrors the Siamese *design*, per spec decision #8 — the trained Siamese net stays reserved for eval-time realism); critic is unconditioned; fixed-length rollout (EOS recorded in `lengths`, no early break) keeps a static differentiable batch; straight-through hard Gumbel. B1's differentiable fairness loss and the FAMAIL/B2 model-level dataset swaps are **Phase 4** (the B1 reuse seam — `FAMAILObjective` + a terminal-soft-pickup scatter — is documented in the Phase-3 plan).
 
 **Not yet run:** the real-data adversarial-B0 smoke (`python -m famail_temporal.baselines.gan.run_b0_adversarial --mle-epochs 5 --adv-epochs 3 --device auto`) — needs the cache + GPU; expected `corpus.f_causal ≈ 0.805` with `generated.f_causal` near it. Watch the loss histories for D-collapse / amplification (a finding to record, not a bug to patch).
+
+---
+
+## Phase 4 — model-level (MLE-only B0/FAMAIL) — METRIC HARDENING DONE (2026-06-08)
+
+Plan: [`docs/superpowers/plans/2026-06-06-metric-hardening.md`](../../docs/superpowers/plans/2026-06-06-metric-hardening.md).
+
+Adds the model-level transmission + dynamic-range metrics (`baselines/transmission.py`,
+`district_metrics.py`, `localized_metrics.py`, `run_metric_hardening.py`). Both
+generators (B0 + FAMAIL) train MLE-only via `fit_and_evaluate(..., adv_epochs=0,
+train_trajectories=...)`. The collapsing adversarial GAN remains an opt-in
+"amplification" ablation per the `B0_DECISION_BRIEF.md` pivot.
+
+### Results — first real-data run (2026-06-08, seed=0, RTX 3070, ~5 min)
+
+| Metric | B0 | FAMAIL | Delta |
+|---|---:|---:|---:|
+| Transmission ratio (JS_generated / JS_target) | — | — | **1.672** |
+| DI_primary (supply/demand, F_causal-aligned)   | 0.2637 | 0.2630 | -0.0008 |
+| DI_supplementary (demand/supply)               | 0.1307 | 0.1384 | +0.0077 |
+| F_causal_localized (M=I, n=1,186 edited units) | 0.2724 | 0.2636 | **-0.0088** |
+| F_causal_global (M=I, n=34,524)                | 0.8079 | 0.8107 | +0.0028 |
+| F_causal (production, M=center)                | 0.8080 | 0.8108 | +0.0028 |
+
+Reading: **signal transmits (ratio = 1.67 >> the 0.3 fragility threshold) but model-level fairness translation is direction-inconsistent — localized goes the wrong way, global goes a tiny right way, DI is essentially flat**. The data-level Pareto (+0.0128 ΔF_causal, intrinsic ceiling per §8.7-§8.8) remains the safer headline. Full writeup:
+[`baselines/metric_hardening/RESULTS.md`](metric_hardening/RESULTS.md);
+methodology: [`docs/MODEL_LEVEL_METRICS.md`](../docs/MODEL_LEVEL_METRICS.md);
+artifacts: `baselines/metric_hardening/results/2026-06-08T12-30-36_metric_hardening/`.
 
 ---
 
