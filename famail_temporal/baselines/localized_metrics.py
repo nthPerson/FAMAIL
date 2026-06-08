@@ -54,7 +54,10 @@ def active_unit_index_of(
 
     Returns a 1-D int array of indices into the N-vector ordering used by
     pickup_N, supply_N, X_demo, etc. (i.e., C-order traversal of mask_3d).
-    Drops units that fall outside mask_3d (inactive cells).
+    Drops units that fall outside mask_3d (inactive cells). Duplicate
+    (x, y, t_block) tuples collapse to a single index (preserving first-seen
+    order); useful for histories.pkl::original entries that share an
+    active-unit destination across multiple edited trajectories.
     """
     mask = bundle.mask_3d  # (GX, GY, T)
     # Build a (GX, GY, T) lookup table: -1 for inactive, else its flat index.

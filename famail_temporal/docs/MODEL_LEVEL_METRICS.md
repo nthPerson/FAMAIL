@@ -307,29 +307,27 @@ Degenerate cases:
   limit at `H = 0` would be 1.0; the plan-spec fallback is intentionally
   conservative).
 
-### 3.3 `f_causal_global` (M=I) is NOT the production F_causal
+### 3.3 The M=I global vs production M=center: a note on numerical coincidence
 
-This is the most important note in this section.
+`localized_f_causal` returns two F_causal fields built with M=I (uniform
+weighting):
 
-**Production F_causal** (the number reported in the rest of the paper,
-in `data_level_fairness`, and in the orchestrator's `b0_fairness` /
-`famail_fairness` / `corpus_fairness` blocks) uses `M = I - 11'/N`
-(centering). The localized module uses `M = I` (uniform weighting) on
-BOTH the localized and the global field so they are directly
-comparable to each other at different `N`. The two formulas yield
-*different* numbers — at the corpus level, `M=I` lands around 0.81 in
-the smoke run while `M=center` lands at 0.805.
+- `f_causal_localized` — restricted to the edited active units (~1k-4k).
+- `f_causal_global` — over ALL active units (~34k).
 
-The per-run `metrics.json` reports BOTH, in different blocks:
-- `localized_b0.f_causal_global`, `localized_famail.f_causal_global` —
-  the M=I global counterpart, paired with `f_causal_localized`.
-- `b0_fairness.f_causal`, `famail_fairness.f_causal`,
-  `corpus_fairness.f_causal` — the M=center production F_causal.
+The production F_causal in `data_level_fairness` uses `M = I − 11'/N`
+(centering). On this data the two formulations agree to ~1e-4: the smoke
+run shows `f_causal_global` = 0.8079 (M=I) and `b0_fairness.f_causal` =
+0.8080 (M=center) for the same B0 generator. This is not a coincidence:
+the residual `R = Y − g_0(D)` is approximately mean-zero by construction
+(g_0 fits the demand-only marginal), so `R'R − (Σ R)²/N ≈ R'R` and the
+two denominators essentially match. The pair appears in `metrics.json`
+for completeness and to keep the localized regression formally clean —
+NOT because the two formulations yield different numbers on this data.
 
-When writing the paper, the production F_causal is the only number that
-matches every other F_causal reference in the codebase. The M=I global
-is a research field strictly for paired comparison with the localized
-metric.
+The substantive comparisons of interest are between **generators** (B0
+vs FAMAIL) at fixed M-convention, and between **scales** (full N vs
+edited subset) at fixed M=I. Not between M-conventions.
 
 ### 3.4 Reading rules
 
