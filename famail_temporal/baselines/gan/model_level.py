@@ -28,6 +28,7 @@ from famail_temporal.baselines.metrics import data_level_fairness
 
 def fit_and_evaluate(
     bundle: DataBundle, *,
+    train_trajectories: list | None = None,
     mle_epochs: int = gc.MLE_EPOCHS,
     adv_epochs: int = gc.ADV_EPOCHS,
     max_len: int = gc.MAX_GEN_LEN,
@@ -58,10 +59,6 @@ def fit_and_evaluate(
     """
     if device is None:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    if not bundle.trajectories:
-        raise ValueError(
-            "fit_and_evaluate requires a non-empty corpus (bundle.trajectories)"
-        )
     set_all_seeds(seed)
 
     t0 = time.monotonic()
@@ -72,9 +69,14 @@ def fit_and_evaluate(
 
     _phase(f"device={device}")
 
+    train_trajectories = (
+        bundle.trajectories if train_trajectories is None else train_trajectories
+    )
+    if not train_trajectories:
+        raise ValueError("fit_and_evaluate requires a non-empty training corpus")
     pairs = [
         (trajectory_to_tokens(t), trajectory_context(t))
-        for t in bundle.trajectories
+        for t in train_trajectories
     ]
     n_all = len(pairs)
     if max_tokens is not None:
@@ -123,6 +125,7 @@ def fit_and_evaluate(
         "generated": data_level_fairness(bundle, pickup_3d=gen_grid),
         "corpus": data_level_fairness(bundle),
         "n_generated": len(pickups),
+        "pickups": pickups,
         "mle_losses": mle_losses,
         "adv_losses": adv_losses,
     }

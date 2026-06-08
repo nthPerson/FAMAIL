@@ -18,9 +18,9 @@ def test_fit_and_evaluate_returns_fairness_and_histories():
         bundle, mle_epochs=2, adv_epochs=2, max_len=8,
         device=torch.device("cpu"), seed=0,
     )
-    assert set(out) == {
+    assert {
         "generated", "corpus", "n_generated", "mle_losses", "adv_losses",
-    }
+    } <= set(out)
     for key in ("generated", "corpus"):
         m = out[key]
         assert set(m) == {"f_spatial", "f_causal", "gini_dsr", "gini_asr"}
