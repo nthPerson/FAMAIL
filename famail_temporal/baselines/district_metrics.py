@@ -173,6 +173,16 @@ def _load_hukou() -> Tuple[np.ndarray, list[str]]:
         )
     district_demographics = demo["district_demographics"]
     district_to_id = demo["district_to_id"]
+    # Guard against drift between the two pkls: the grid mapping's name->id
+    # must match the hukou source's, else district_of_active_units would label
+    # units with ids that point to the wrong row in `hukou_ratios`.
+    _, _, grid_name_to_id = _load_grid_to_district()
+    if dict(grid_name_to_id) != dict(district_to_id):
+        raise ValueError(
+            "district_to_id mismatch between grid_to_district_mapping.pkl and "
+            "cell_demographics.pkl; downstream DI would index the wrong "
+            "hukou row per district."
+        )
     n_districts = len(district_to_id)
     hukou = np.full(n_districts, np.nan, dtype=np.float64)
     names_by_id: list[str] = [""] * n_districts

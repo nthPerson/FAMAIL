@@ -6,7 +6,7 @@ from famail_temporal.baselines import district_metrics as dm
 
 
 def _synthetic_inputs():
-    """3 districts x 4 cells/t_blocks each = 12 active units. Hukou ratios
+    """6 districts x 2 active units each = 12 active units. Hukou ratios
     chosen so that district 0 = top-3 hukou, district 2 = bottom-3 hukou
     (with only 3 districts each is both top-3 and bottom-3, so we use 6
     districts to exercise the grouping cleanly)."""
@@ -63,3 +63,16 @@ def test_di_returns_per_district_means_for_traceability():
     assert out["per_district_y_primary"][0] == pytest.approx(5.0, rel=1e-6)
     # district 3 (high-hukou): supply/demand = 5/2 = 2.5
     assert out["per_district_y_primary"][3] == pytest.approx(2.5, rel=1e-6)
+
+
+def test_compute_di_raises_when_under_covered():
+    # hukou_ratios sized for 6 districts but only 5 covered; n_top+n_bottom=6.
+    _, hukou, _, demand_N, supply_N = _synthetic_inputs()
+    district_of_unit = np.array([0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 4, 4])  # no 5
+    with pytest.raises(ValueError):
+        dm.compute_di(
+            demand_N=demand_N, supply_N=supply_N,
+            district_of_unit=district_of_unit,
+            hukou_ratios=hukou,
+            n_top=3, n_bottom=3, demand_floor=1e-3, supply_floor=1e-3,
+        )
