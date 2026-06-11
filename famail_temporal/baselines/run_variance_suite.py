@@ -115,6 +115,9 @@ def _seed_metrics(bundle, result, edited_units) -> Dict[str, float]:
         "f_causal_localized": float(loc["f_causal_localized"]),
         "f_causal_global_mi": float(loc["f_causal_global"]),
         "final_mle_loss": float(result["mle_losses"][-1]),
+        # Full per-epoch curve: the convergence evidence behind the
+        # strengthened (20-epoch) pretraining choice (2026-06-10 direction).
+        "mle_losses": [float(x) for x in result["mle_losses"]],
     }
 
 

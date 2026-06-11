@@ -32,7 +32,7 @@ git checkout -b variance-suite-wgan
 
 ### Locked design decisions
 1. **Paired seeds**: B0 and FAMAIL share the seed within a pair (same init + shuffling; only training data differs). Report mean ± std of *paired deltas*, not just marginals.
-2. **MLE config matches the 2026-06-08 single-seed run** (5 epochs, batch 32, max_tokens 256) so numbers are directly comparable.
+2. **MLE pretraining strengthened to 20 epochs** (user direction, 2026-06-10): the 5-epoch generator was visibly under-converged (loss still dropping 0.84 -> 0.78 in the final epoch), so a 5x re-run at 5 epochs would only put error bars around a weak generator. Comparability with the 2026-06-08 single-seed run is deliberately sacrificed for generator strength; batch 32 / max_tokens 256 unchanged. Per-epoch MLE loss curves are persisted per seed as the convergence evidence.
 3. **JS noise floor** = within-variant pairwise JS (10 pairs per variant at n=5); **signal** = cross-variant paired JS (5 values). Both computed from the same terminal-cell histograms used by `transmission.py`.
 4. **WGAN-GP per Gulrajani et al.**: critic loss `mean(D(fake)) − mean(D(real)) + λ·GP`, λ=10; generator loss `−mean(D(fake))`; GP on embedding-space interpolates (real embeds vs soft-fake embeds, padded to common length, per-sample max length for readout). No label smoothing in wgan mode. The MLE anchor (`mle_lambda`) remains available in both modes.
 5. **`n_critic`** (wgan convention: critic updates per generator update) implemented as "G updates every n_critic-th batch". Existing `d_update_every` continues to mean "D updates every k-th batch" and composes with it.
@@ -828,22 +828,29 @@ run () {
   echo "[$(date +%H:%M:%S)] DONE  $name (exit $?)" >> "$OUT/logs/queue.log"
 }
 
-# 1. Headline: paired 5-seed variance suite (~30-40 min)
+# 1. Headline: paired 5-seed variance suite with the STRENGTHENED generator
+#    (20 MLE epochs per 2026-06-10 user direction; ~85-100 min)
 run variance_suite python -m famail_temporal.baselines.run_variance_suite \
-    --seeds 0,1,2,3,4 --mle-epochs 5 --device auto
+    --seeds 0,1,2,3,4 --mle-epochs 20 --device auto
 
-# 2. Pretraining ablation (Dr. Zhang's hypothesis; BCE stack unchanged)
+# 2. Pretraining ablation (Dr. Zhang's hypothesis: under-pretrained G is why
+#    the critic overpowers it). 10 vs 20 epochs, then 20 + critic-slowing
+#    (her "train G more per D update" recipe on the strongest pretrain).
 run ablation_mle10 python -m famail_temporal.baselines.gan.run_b0_adversarial \
     --mle-epochs 10 --adv-epochs 3 --seed 0 --out-dir "$OUT/ablation_mle10"
 run ablation_mle20 python -m famail_temporal.baselines.gan.run_b0_adversarial \
     --mle-epochs 20 --adv-epochs 3 --seed 0 --out-dir "$OUT/ablation_mle20"
+run ablation_mle20_dslow python -m famail_temporal.baselines.gan.run_b0_adversarial \
+    --mle-epochs 20 --adv-epochs 3 --d-update-every 2 --seed 0 \
+    --out-dir "$OUT/ablation_mle20_dslow"
 
-# 3. WGAN-GP (standard critic-heavy, then Dr. Zhang's gen-heavy instinct)
+# 3. WGAN-GP from the strongest (20-epoch) pretrain: standard critic-heavy,
+#    then Dr. Zhang's gen-heavy instinct
 run wgan_ncritic5 python -m famail_temporal.baselines.gan.run_b0_adversarial \
-    --gan-loss wgan-gp --n-critic 5 --mle-epochs 10 --adv-epochs 3 --seed 0 \
+    --gan-loss wgan-gp --n-critic 5 --mle-epochs 20 --adv-epochs 3 --seed 0 \
     --out-dir "$OUT/wgan_ncritic5"
 run wgan_genheavy python -m famail_temporal.baselines.gan.run_b0_adversarial \
-    --gan-loss wgan-gp --n-critic 1 --d-update-every 2 --mle-epochs 10 \
+    --gan-loss wgan-gp --n-critic 1 --d-update-every 2 --mle-epochs 20 \
     --adv-epochs 3 --seed 0 --out-dir "$OUT/wgan_genheavy"
 
 touch "$OUT/ALL_DONE"
