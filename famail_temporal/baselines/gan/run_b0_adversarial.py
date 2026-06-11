@@ -46,6 +46,15 @@ def main(argv: Optional[List[str]] = None) -> int:
     ap.add_argument("--adv-mle-lambda", type=float, default=gc.ADV_MLE_LAMBDA,
                     help="weight on the teacher-forced MLE anchor in the "
                          "generator loss (0 disables; prevents drift/collapse)")
+    ap.add_argument("--gan-loss", default=gc.GAN_LOSS,
+                    choices=["bce", "wgan-gp"],
+                    help="adversarial objective: non-saturating BCE GAN or "
+                         "Wasserstein GAN with gradient penalty")
+    ap.add_argument("--gp-lambda", type=float, default=gc.WGAN_GP_LAMBDA,
+                    help="gradient-penalty weight (wgan-gp only)")
+    ap.add_argument("--n-critic", type=int, default=1,
+                    help="critic updates per generator update (wgan-gp "
+                         "convention; 1 = update G every batch)")
     ap.add_argument("--adv-max-len", type=int, default=None,
                     help="opt-in cap on the adversarial rollout length (tokens) "
                          "as a hard backstop against fake-length blowup; "
@@ -70,14 +79,18 @@ def main(argv: Optional[List[str]] = None) -> int:
         adv_batch_size=args.adv_batch_size,
         adv_lr_g=args.adv_lr_g, adv_lr_d=args.adv_lr_d,
         d_update_every=args.d_update_every, adv_mle_lambda=args.adv_mle_lambda,
+        gan_loss=args.gan_loss, gp_lambda=args.gp_lambda, n_critic=args.n_critic,
         adv_max_len=args.adv_max_len, gen_batch_size=args.gen_batch_size,
         max_tokens=args.max_tokens if args.max_tokens > 0 else None,
         device=_resolve_device(args.device), seed=args.seed,
         progress=not args.quiet,
     )
     args.out_dir.mkdir(parents=True, exist_ok=True)
+    # Drop the bulky per-trajectory pickups (~105k tuples, ~5 MB) before
+    # serializing: consumers read only the fairness numbers + loss histories.
+    slim = {k: v for k, v in result.items() if k != "pickups"}
     (args.out_dir / "b0_adversarial_fairness.json").write_text(
-        result_to_json(result)
+        result_to_json(slim)
     )
     print(f"corpus    F_causal={result['corpus']['f_causal']:.4f}")
     print(f"generated F_causal={result['generated']['f_causal']:.4f}")

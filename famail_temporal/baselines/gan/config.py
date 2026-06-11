@@ -47,6 +47,16 @@ ADV_MLE_LAMBDA = 1.0              # weight on a teacher-forced MLE term added to
                                   # distribution so it can't drift/collapse
                                   # (0 disables; the root-cause stabilizer)
 
+# Wasserstein GAN (Meeting 37 action item: try WGAN against mode collapse /
+# length blowup). "wgan-gp" replaces the BCE losses with the Wasserstein
+# critic objective + gradient penalty (Gulrajani et al. 2017); no label
+# smoothing applies in this mode. The MLE anchor (ADV_MLE_LAMBDA) remains
+# available in both modes.
+GAN_LOSS = "bce"                  # "bce" | "wgan-gp"
+WGAN_GP_LAMBDA = 10.0             # gradient-penalty weight
+WGAN_N_CRITIC = 5                 # critic updates per generator update
+                                  # (wgan convention; ignored in bce mode)
+
 # Generation
 GEN_BATCH_SIZE = 512             # contexts decoded in parallel per rollout batch
                                  # (batch-1 generation over ~105k is far slower)

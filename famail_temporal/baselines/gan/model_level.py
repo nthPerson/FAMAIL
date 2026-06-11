@@ -38,6 +38,9 @@ def fit_and_evaluate(
     adv_lr_d: float = gc.ADV_LR_D,
     d_update_every: int = gc.D_UPDATE_EVERY,
     adv_mle_lambda: float = gc.ADV_MLE_LAMBDA,
+    gan_loss: str = gc.GAN_LOSS,
+    gp_lambda: float = gc.WGAN_GP_LAMBDA,
+    n_critic: int = 1,
     adv_max_len: int | None = None,
     gen_batch_size: int = gc.GEN_BATCH_SIZE,
     max_tokens: int | None = gc.MAX_TRAIN_TOKENS,
@@ -102,7 +105,8 @@ def fit_and_evaluate(
     adv_len = adv_max_len if adv_max_len is not None else max_len
     _phase(
         f"adversarial fine-tune: {adv_epochs} epochs, batch {adv_batch_size}, "
-        f"mle_lambda={adv_mle_lambda}, rollout max_len={adv_len}"
+        f"gan_loss={gan_loss}, mle_lambda={adv_mle_lambda}, "
+        f"rollout max_len={adv_len}"
     )
     adv_losses = adversarial_finetune(
         model, sequences, contexts,
@@ -110,6 +114,7 @@ def fit_and_evaluate(
         batch_size=adv_batch_size, max_len=adv_len,
         tau_start=gc.GUMBEL_TAU_START, tau_end=gc.GUMBEL_TAU_END,
         d_update_every=d_update_every, mle_lambda=adv_mle_lambda,
+        gan_loss=gan_loss, gp_lambda=gp_lambda, n_critic=n_critic,
         device=device, progress=progress,
     )
 

@@ -1,10 +1,18 @@
 """Gumbel-softmax adversarial fine-tune of an MLE-pretrained generator.
 
-Non-saturating GAN: the discriminator maximizes log D(real) + log(1 - D(fake));
-the generator maximizes log D(fake). The fake batch is a differentiable
-straight-through Gumbel-softmax rollout, so generator gradients flow through
-the discrete sequence. The Gumbel temperature is annealed across epochs. A
-fresh SequenceCritic is created and trained alongside (the trained Siamese
+Two loss modes (``gan_loss``):
+  - "bce" (default): non-saturating GAN. The discriminator maximizes
+    log D(real) + log(1 - D(fake)); the generator maximizes log D(fake).
+  - "wgan-gp": Wasserstein GAN with gradient penalty (Gulrajani et al. 2017).
+    The critic minimizes mean(D(fake)) - mean(D(real)) + gp_lambda * GP, where
+    GP is computed on embedding-space interpolates (discrete tokens can't be
+    interpolated); the generator minimizes -mean(D(fake)). The generator
+    updates only every ``n_critic``-th batch (wgan convention).
+
+In both modes the fake batch is a differentiable straight-through
+Gumbel-softmax rollout, so generator gradients flow through the discrete
+sequence. The Gumbel temperature is annealed across epochs. A fresh
+SequenceCritic is created and trained alongside (the trained Siamese
 discriminator is reserved for eval-time realism, not used here).
 """
 from __future__ import annotations
@@ -12,6 +20,7 @@ from typing import Dict, List, Optional, Tuple
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 from famail_temporal.baselines.gan import config as gc
 from famail_temporal.baselines.gan.generator import TrajectoryLSTM
@@ -25,6 +34,39 @@ def _anneal(epoch: int, n_epochs: int, start: float, end: float) -> float:
     if n_epochs <= 1:
         return end
     return start + (end - start) * (epoch / (n_epochs - 1))
+
+
+def _gradient_penalty(
+    critic: SequenceCritic,
+    real_ids: torch.Tensor,
+    real_lengths: torch.Tensor,
+    fake_soft: torch.Tensor,
+    fake_lengths: torch.Tensor,
+    *,
+    device: torch.device,
+) -> torch.Tensor:
+    """WGAN-GP penalty on embedding-space interpolates (Gulrajani et al.).
+
+    Token sequences are discrete, so the interpolation happens in the critic's
+    embedding space: real ids are embedded, fakes are soft-mixed embeddings,
+    both zero-padded to a common length, then x_hat = eps*real + (1-eps)*fake
+    with per-sample eps ~ U[0,1]. The readout length for x_hat is the
+    elementwise max of the pair so no valid timestep is cut off.
+    """
+    real_emb = critic.embed(real_ids)                       # (B, Lr, E)
+    fake_emb = fake_soft @ critic.embed.weight              # (B, Lf, E)
+    L = max(real_emb.size(1), fake_emb.size(1))
+    real_emb = F.pad(real_emb, (0, 0, 0, L - real_emb.size(1)))
+    fake_emb = F.pad(fake_emb, (0, 0, 0, L - fake_emb.size(1)))
+    eps = torch.rand(real_emb.size(0), 1, 1, device=device)
+    interp = (eps * real_emb + (1.0 - eps) * fake_emb).requires_grad_(True)
+    lengths = torch.maximum(real_lengths, fake_lengths)
+    scores = critic.forward_embed(interp, lengths)
+    grads = torch.autograd.grad(
+        outputs=scores.sum(), inputs=interp, create_graph=True,
+    )[0]                                                    # (B, L, E)
+    grad_norm = grads.flatten(1).norm(2, dim=1)             # (B,)
+    return ((grad_norm - 1.0) ** 2).mean()
 
 
 def adversarial_finetune(
@@ -44,18 +86,34 @@ def adversarial_finetune(
     grad_clip: Optional[float] = gc.GRAD_CLIP,
     d_update_every: int = gc.D_UPDATE_EVERY,
     mle_lambda: float = gc.ADV_MLE_LAMBDA,
+    gan_loss: str = gc.GAN_LOSS,
+    gp_lambda: float = gc.WGAN_GP_LAMBDA,
+    n_critic: int = 1,
     progress: bool = False,
 ) -> Dict[str, List[float]]:
     """Fine-tune `model` (in place) against a fresh critic. Returns per-epoch
     mean generator (adversarial) and discriminator losses.
 
+    ``gan_loss`` selects the adversarial objective:
+      - "bce" (default): non-saturating BCE GAN, exactly the historical
+        behavior (label smoothing active; G updates every batch).
+      - "wgan-gp": Wasserstein critic loss + ``gp_lambda`` * gradient penalty
+        on embedding-space interpolates; generator loss -mean(D(fake)). The
+        generator updates only every ``n_critic``-th batch (wgan convention:
+        n_critic critic updates per G update; composes with
+        ``d_update_every``). ``real_label`` smoothing is inert in this mode,
+        and the reported d_loss is the Wasserstein critic loss including the
+        gradient-penalty term.
+
     Stabilizers against discriminator dominance / generator collapse:
       - ``mle_lambda`` adds a teacher-forced NLL term on the real batch to the
         generator loss, anchoring G to the data distribution so it can't drift
         (drift -> ever-longer fakes -> the critic separates on length ->
-        collapse). This is the root-cause fix; 0 disables it.
+        collapse). This is the root-cause fix; 0 disables it. Available in
+        both loss modes.
       - one-sided label smoothing: the critic's real target is ``real_label``
-        (< 1.0), capping its confidence so its gradient to G never vanishes;
+        (< 1.0), capping its confidence so its gradient to G never vanishes
+        (bce mode only);
       - gradient clipping to ``grad_clip`` (None disables) on both nets;
       - ``d_update_every`` updates the critic only every k-th batch, letting a
         lagging generator catch up.
@@ -65,6 +123,8 @@ def adversarial_finetune(
     bar with live g / d / tau (and mle when active) and prints a per-epoch
     length diagnostic (mean real vs fake token length).
     """
+    if gan_loss not in ("bce", "wgan-gp"):
+        raise ValueError(f"unknown gan_loss: {gan_loss!r} (use 'bce' or 'wgan-gp')")
     model.to(device).train()
     critic = SequenceCritic().to(device).train()
     opt_g = torch.optim.Adam(model.parameters(), lr=lr_g)
@@ -112,11 +172,20 @@ def adversarial_finetune(
                     )
                 d_real = critic.forward_ids(real, real_lengths)
                 d_fake = critic.forward_soft(fake_soft, fake_len)
-                # One-sided label smoothing: real target < 1.0, fake stays 0.
-                loss_d = (
-                    bce(d_real, torch.full_like(d_real, real_label))
-                    + bce(d_fake, torch.zeros_like(d_fake))
-                )
+                if gan_loss == "bce":
+                    # One-sided label smoothing: real target < 1.0, fake stays 0.
+                    loss_d = (
+                        bce(d_real, torch.full_like(d_real, real_label))
+                        + bce(d_fake, torch.zeros_like(d_fake))
+                    )
+                else:  # wgan-gp: critic maximizes real-fake gap, GP enforces 1-Lipschitz
+                    loss_d = (
+                        d_fake.mean() - d_real.mean()
+                        + gp_lambda * _gradient_penalty(
+                            critic, real, real_lengths, fake_soft, fake_len,
+                            device=device,
+                        )
+                    )
                 opt_d.zero_grad()
                 loss_d.backward()
                 if grad_clip is not None:
@@ -124,34 +193,38 @@ def adversarial_finetune(
                 opt_d.step()
                 d_batch.append(float(loss_d.item()))
 
-            # ----- Generator step (non-saturating; gradients via Gumbel) -----
-            fake_soft, fake_len = gumbel_rollout(
-                model, cc, tb, max_len=max_len, tau=tau,
-                device=device, hard=True,
-            )
-            d_fake_g = critic.forward_soft(fake_soft, fake_len)
-            adv_g = bce(d_fake_g, torch.ones_like(d_fake_g))
-            loss_g = adv_g
+            # ----- Generator step (gradients via Gumbel) -----
+            g_step = gan_loss == "bce" or (batch_i % n_critic == n_critic - 1)
             mle_nll = None
-            if mle_lambda > 0:
-                # Teacher-forced NLL on the real batch anchors G to the data
-                # distribution, so it can't drift toward unrealistic lengths.
-                logits = model(real[:, :-1], cc, tb)            # (b, L-1, V)
-                mle_nll = ce(
-                    logits.reshape(-1, gc.VOCAB_SIZE), real[:, 1:].reshape(-1),
+            if g_step:
+                fake_soft, fake_len = gumbel_rollout(
+                    model, cc, tb, max_len=max_len, tau=tau,
+                    device=device, hard=True,
                 )
-                loss_g = adv_g + mle_lambda * mle_nll
-            opt_g.zero_grad()
-            loss_g.backward()
-            if grad_clip is not None:
-                nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
-            opt_g.step()
-
-            g_batch.append(float(adv_g.item()))   # adversarial component only
-            fake_len_sum += float(fake_len.float().sum().item())
-            fake_len_cnt += int(fake_len.numel())
+                d_fake_g = critic.forward_soft(fake_soft, fake_len)
+                if gan_loss == "bce":
+                    adv_g = bce(d_fake_g, torch.ones_like(d_fake_g))
+                else:  # wgan: maximize critic score on fakes
+                    adv_g = -d_fake_g.mean()
+                loss_g = adv_g
+                if mle_lambda > 0:
+                    # Teacher-forced NLL on the real batch anchors G to the data
+                    # distribution, so it can't drift toward unrealistic lengths.
+                    logits = model(real[:, :-1], cc, tb)            # (b, L-1, V)
+                    mle_nll = ce(
+                        logits.reshape(-1, gc.VOCAB_SIZE), real[:, 1:].reshape(-1),
+                    )
+                    loss_g = adv_g + mle_lambda * mle_nll
+                opt_g.zero_grad()
+                loss_g.backward()
+                if grad_clip is not None:
+                    nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
+                opt_g.step()
+                g_batch.append(float(adv_g.item()))   # adversarial component only
+                fake_len_sum += float(fake_len.float().sum().item())
+                fake_len_cnt += int(fake_len.numel())
             postfix = {
-                "g": f"{sum(g_batch) / len(g_batch):.3f}",
+                "g": f"{sum(g_batch) / max(1, len(g_batch)):.3f}",
                 "d": f"{sum(d_batch) / max(1, len(d_batch)):.3f}",
                 "tau": f"{tau:.2f}",
             }
@@ -159,7 +232,7 @@ def adversarial_finetune(
                 postfix["mle"] = f"{float(mle_nll.item()):.3f}"
             bar.update(1, **postfix)
         bar.close()
-        g_losses.append(sum(g_batch) / len(g_batch))
+        g_losses.append(sum(g_batch) / max(1, len(g_batch)))
         d_losses.append(sum(d_batch) / max(1, len(d_batch)))
         if progress:
             fake_len_mean = fake_len_sum / max(1, fake_len_cnt)

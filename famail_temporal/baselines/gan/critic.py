@@ -63,3 +63,14 @@ class SequenceCritic(nn.Module):
         """
         embedded = soft_onehots @ self.embed.weight           # (B, L, E)
         return self._forward_embed(embedded, lengths)
+
+    def forward_embed(
+        self, embedded: torch.Tensor, lengths: torch.Tensor,
+    ) -> torch.Tensor:
+        """Score pre-embedded sequences. embedded: (B, L, EMBED_DIM).
+
+        Public entry for the WGAN-GP gradient penalty, which interpolates
+        real and fake EMBEDDINGS (the discrete token space can't be
+        interpolated) and needs critic scores differentiable w.r.t. them.
+        """
+        return self._forward_embed(embedded, lengths)
