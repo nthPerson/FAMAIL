@@ -19,6 +19,15 @@ def test_mean_std_single_value_has_zero_std():
     assert out["mean"] == 5.0 and out["std"] == 0.0 and out["n"] == 1
 
 
+def test_mean_std_empty_is_nan_not_crash():
+    # Single-seed runs have zero within-variant JS pairs; aggregation must
+    # not throw away a completed (GPU-expensive) suite.
+    out = vs.mean_std([])
+    assert out["n"] == 0
+    assert math.isnan(out["mean"]) and math.isnan(out["std"])
+    assert math.isnan(out["min"]) and math.isnan(out["max"])
+
+
 def test_paired_delta_stats_subtracts_b0_from_famail():
     out = vs.paired_delta_stats(b0=[1.0, 2.0], famail=[1.5, 2.1])
     assert math.isclose(out["mean"], 0.3)

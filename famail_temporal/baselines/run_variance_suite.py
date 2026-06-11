@@ -59,8 +59,17 @@ METRIC_KEYS = [
 # ---------------- pure helpers (unit-tested) ----------------
 
 def mean_std(values: List[float]) -> Dict[str, float]:
-    """Sample statistics (ddof=1; std=0 for a single value)."""
+    """Sample statistics (ddof=1; std=0 for a single value; NaN for none).
+
+    The empty case matters for single-seed runs: with one seed there are no
+    within-variant JS pairs, and an unguarded arr.min() on a zero-size array
+    raises — which would discard a completed (GPU-expensive) suite at the
+    final aggregation step.
+    """
     arr = np.asarray(values, dtype=np.float64)
+    if arr.size == 0:
+        nan = float("nan")
+        return {"mean": nan, "std": nan, "min": nan, "max": nan, "n": 0}
     return {
         "mean": float(arr.mean()),
         "std": float(arr.std(ddof=1)) if arr.size > 1 else 0.0,
