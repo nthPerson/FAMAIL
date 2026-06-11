@@ -61,7 +61,12 @@ def _gradient_penalty(
     eps = torch.rand(real_emb.size(0), 1, 1, device=device)
     interp = (eps * real_emb + (1.0 - eps) * fake_emb).requires_grad_(True)
     lengths = torch.maximum(real_lengths, fake_lengths)
-    scores = critic.forward_embed(interp, lengths)
+    # cuDNN's RNN kernels don't support double backward, which the GP needs
+    # (loss_d.backward() differentiates through this grad graph). Disabling
+    # cuDNN for just this forward records the native LSTM implementation,
+    # which is twice-differentiable. CPU runs are unaffected.
+    with torch.backends.cudnn.flags(enabled=False):
+        scores = critic.forward_embed(interp, lengths)
     grads = torch.autograd.grad(
         outputs=scores.sum(), inputs=interp, create_graph=True,
     )[0]                                                    # (B, L, E)
