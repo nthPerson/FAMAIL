@@ -147,6 +147,30 @@ def _write_report(out_dir: Path, agg: dict, seeds: List[int]) -> None:
 Paired B0 (raw corpus) vs FAMAIL (edited corpus), MLE-only, same seed within
 each pair. Sample std (ddof=1), n={len(seeds)}.
 
+## Definitions
+
+- **B0** — LSTM grid-cell-sequence generator trained with teacher-forced MLE
+  only (behavioral cloning) on the RAW corpus.
+- **FAMAIL** — identical architecture/recipe/seed, trained on the EDITED
+  corpus (the persisted editing run supplied via --edit-dir).
+- **Paired (by seed)** — B0 and FAMAIL share the RNG seed within a pair, so
+  the only difference is the training corpus; paired deltas (FAMAIL - B0)
+  cancel seed-level variance.
+- **f_spatial / f_causal** — production fairness metrics (higher = fairer):
+  geographic evenness of pickups / 1 - fraction of the supply-demand residual
+  explained by district demographics.
+- **f_causal_localized** — M=I f_causal restricted to the active units the
+  edit relocated pickups out of; **f_causal_global_mi** — the same M=I
+  formula on ALL active units (the paired global comparator).
+- **di_primary / di_supplementary** — district disparate-impact ratio
+  (top-3 vs bottom-3 districts by hukou ratio) under Y = supply/demand
+  (f_causal-aligned) / Y = demand/supply (robustness lens); 1.0 = parity.
+- **JS** — Jensen-Shannon divergence between terminal-pickup-cell histograms,
+  in bits (0 = identical, 1 = disjoint). Terminal cells are the channel any
+  model-level fairness effect must pass through. The within-variant pairwise
+  JS across seeds is the seed NOISE FLOOR; the cross-variant paired JS is the
+  SIGNAL; JS(p_raw, p_edited) is the data-level TARGET the edit created.
+
 ## Fairness metrics, mean +/- std
 
 | Metric | B0 | FAMAIL | paired Delta (FAMAIL - B0) |
