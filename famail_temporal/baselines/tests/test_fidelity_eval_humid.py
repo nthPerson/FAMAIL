@@ -34,6 +34,10 @@ class _LengthSimDiscriminator(nn.Module):
 
 
 def _pair(len_a, len_b):
+    # torch.ones (not zeros) is load-bearing: padding is 0.0, so a nonzero
+    # x-coord marks a real step. _LengthSimDiscriminator counts (x > 0) to
+    # recover per-row length, and _pad_pairs_to_batch zero-pads — keep real
+    # steps nonzero or the length proxy (and any future mask-aware stub) breaks.
     a = torch.ones(len_a, 4)
     b = torch.ones(len_b, 4)
     return (a, b)

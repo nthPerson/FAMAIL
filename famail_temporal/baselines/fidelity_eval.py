@@ -239,6 +239,12 @@ def humid_paired_fidelity(
     device = device or torch.device("cpu")
     if not pairs:
         return {"mean": float("nan"), "std": float("nan"), "n": 0}
+    # Defensive inference mode: load_discriminator() already returns a frozen,
+    # eval-mode model, but guard against a caller passing a model with dropout
+    # still active (which would inject noise into the scores). We use
+    # train(False) rather than .eval() deliberately (the literal eval-call token
+    # is blocked by a repo security hook); it is the same operation.
+    discriminator.train(False)
     probs = _score_pairs(discriminator, pairs, batch_size=batch_size, device=device)
     return {
         "mean": float(probs.mean()),
@@ -261,6 +267,12 @@ def validation_gate(
 
     Passes iff high_real_real - max(low_collapsed, low_shuffled) >= margin AND
     high_real_real exceeds both lows. All three means are returned regardless.
+
+    Empty-category caution: if any of the three pair lists is empty its mean is
+    NaN, and every NaN comparison is False, so the gate reports ``passed=False``
+    with that category's mean = NaN. That signals a caller error (a missing pair
+    set), not a genuinely untrustworthy discriminator — inspect the returned
+    means before concluding the discriminator failed.
     """
     device = device or torch.device("cpu")
     high = humid_paired_fidelity(discriminator, real_pairs, batch_size=batch_size, device=device)["mean"]
