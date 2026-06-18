@@ -4,10 +4,24 @@ Run:  streamlit run famail_temporal/visualization/gradient_heatmap/app.py
 """
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+
 import numpy as np
 
-from . import render as rd
-from .loader import load_bundle
+# `streamlit run <path>` executes this file as a top-level script (__name__ ==
+# "__main__") with no parent package, and puts only the script's directory on
+# sys.path — not the repo root. So package-relative imports (`from . import ...`)
+# are invalid here and `famail_temporal` is not importable. Bootstrap the repo
+# root onto sys.path, then import the package absolutely. This is a no-op when the
+# module is imported normally (tests, `python -m ...`), where the package context
+# and relative imports of the submodules already work.
+_REPO_ROOT = Path(__file__).resolve().parents[3]  # famail_temporal/visualization/gradient_heatmap/app.py -> repo root
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
+from famail_temporal.visualization.gradient_heatmap import render as rd  # noqa: E402
+from famail_temporal.visualization.gradient_heatmap.loader import load_bundle  # noqa: E402
 
 
 def build_views(bundle, state) -> dict:
@@ -102,10 +116,10 @@ def main() -> None:  # pragma: no cover - Streamlit UI
 
     if show_conc:
         c1, c2 = st.columns(2)
-        c1.plotly_chart(views["main"], use_container_width=True)
-        c2.plotly_chart(views["concentration"], use_container_width=True)
+        c1.plotly_chart(views["main"], width="stretch")
+        c2.plotly_chart(views["concentration"], width="stretch")
     else:
-        st.plotly_chart(views["main"], use_container_width=True)
+        st.plotly_chart(views["main"], width="stretch")
 
     exp = views["main_export"]
     png = rd.export_png(

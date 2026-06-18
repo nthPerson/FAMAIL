@@ -56,3 +56,37 @@ def test_main_export_matches_main_figure():
     assert exp["vmin"] == hm.zmin and exp["vmax"] == hm.zmax
     assert exp["slice2d"].shape == (48, 90)
     assert exp["cmap"] in ("RdBu_r", "viridis")
+
+
+def test_app_top_level_imports_run_as_script(tmp_path):
+    """`streamlit run <path>` executes app.py as a top-level script with no parent
+    package, adding only the script's directory to sys.path (NOT the repo root).
+    Its top-level imports must still resolve. Regression for the relative-import
+    ImportError. We mimic that exactly: neutral cwd, no PYTHONPATH, only the script
+    dir on sys.path, and runpy with a non-__main__ run_name so we exercise the
+    module-level imports without launching the Streamlit UI.
+    """
+    import os
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    app_path = Path(__file__).resolve().parents[1] / "app.py"
+    script_dir = app_path.parent
+    code = (
+        "import runpy, sys; "
+        f"sys.path.insert(0, r'{script_dir}'); "
+        f"runpy.run_path(r'{app_path}', run_name='probe')"
+    )
+    env = dict(os.environ)
+    env.pop("PYTHONPATH", None)  # ensure the repo root is reachable ONLY via app.py's bootstrap
+    proc = subprocess.run(
+        [sys.executable, "-c", code],
+        cwd=str(tmp_path), env=env,
+        capture_output=True, text=True, timeout=120,
+    )
+    output = proc.stdout + proc.stderr
+    assert "attempted relative import with no known parent package" not in output, output
+    assert proc.returncode == 0, (
+        f"app.py top-level imports failed under script execution (rc={proc.returncode}):\n{output}"
+    )
