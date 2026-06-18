@@ -1,6 +1,6 @@
 # Level-1 v2 Methodology: Driver-Conditioned Generation + Identity-Aware Fidelity
 
-**Status:** implementation complete; full run in progress (see [`LEVEL1_V2_RESULTS.md`](LEVEL1_V2_RESULTS.md) for numbers).
+**Status:** implementation complete; full run done 2026-06-18 (see [`LEVEL1_V2_RESULTS.md`](LEVEL1_V2_RESULTS.md) for numbers — gate PASSED, Fidelity-A trusted).
 **Branch:** `two-level-paper`.
 **Design spec:** [`docs/superpowers/specs/2026-06-17-driver-conditioned-fidelity-design.md`](../../docs/superpowers/specs/2026-06-17-driver-conditioned-fidelity-design.md).
 **Implementation plan:** [`docs/superpowers/plans/2026-06-17-driver-conditioned-fidelity.md`](../../docs/superpowers/plans/2026-06-17-driver-conditioned-fidelity.md).
