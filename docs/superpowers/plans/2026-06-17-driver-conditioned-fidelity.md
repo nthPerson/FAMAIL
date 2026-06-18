@@ -1313,19 +1313,25 @@ def _real_context_tensors(real_trajs) -> List[torch.Tensor]:
 
 def _build_source_pairs(
     *, real_slot0: List[torch.Tensor], source_slot0: List[torch.Tensor],
+    source_slot0_other: List[torch.Tensor],
     real_context: List[torch.Tensor], source_context_other: List[torch.Tensor],
     profile_d, profile_dp, rng: random.Random,
 ) -> Tuple[list, list]:
     """Build matched + mismatched identity-branch pair lists for one driver.
 
     matched[i] = ( branch(real_slot0[i], real_context, prof d),
-                   branch(source_slot0[i], real_context, prof d) )    # same driver
+                   branch(source_slot0[i], real_context, prof d) )      # same driver d
     mismatched[i] = ( branch(real_slot0[i], real_context, prof d),
-                      branch(source_slot0[i], source_context_other, prof d') )  # diff driver
+                      branch(source_slot0_other[i], source_context_other, prof d') )  # diff driver
 
-    For raw, source_slot0 are other real-d trajectories. For edited/bc/gan,
-    source_slot0 are edited/generated-for-d trajectories. ``source_context_other``
-    is the OTHER driver d''s real context (used only in the mismatched branch).
+    The mismatched branch is a CLEAN different-driver branch: its slot-0 is the
+    source's trajectory FOR THE OTHER DRIVER d' (``source_slot0_other``), framed
+    with d''s real context + d''s profile (decisions 4/5). Using d's own slot-0
+    reframed as d' would leave the same driver-d trajectory in slot 0 of both
+    branches — not a same-vs-different-driver test. For raw, source_slot0 /
+    source_slot0_other are real-d / real-d'; for edited/bc/gan they are
+    edited/generated-for-d / -for-d'. matched and mismatched are sized
+    independently (d and d' may differ in count).
     """
     matched, mismatched = [], []
     for i in range(min(len(real_slot0), len(source_slot0))):
@@ -1335,8 +1341,10 @@ def _build_source_pairs(
             (real_branch[0], real_branch[1], profile_d),
             (src_branch_d[0], src_branch_d[1], profile_d),
         ))
+    for i in range(min(len(real_slot0), len(source_slot0_other))):
+        real_branch = fe.build_identity_branch(real_slot0[i], real_context, rng=rng)
         src_branch_dp = fe.build_identity_branch(
-            source_slot0[i], source_context_other, rng=rng,
+            source_slot0_other[i], source_context_other, rng=rng,
         )
         mismatched.append((
             (real_branch[0], real_branch[1], profile_d),
