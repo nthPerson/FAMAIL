@@ -1,6 +1,6 @@
 """Maximum-likelihood (next-token) training for the trajectory LSTM."""
 from __future__ import annotations
-from typing import List, Tuple
+from typing import Dict, List, Tuple
 
 import torch
 import torch.nn as nn
@@ -31,8 +31,15 @@ def train_mle(
     batch_size: int,
     device: torch.device,
     progress: bool = False,
-) -> List[float]:
-    """Train `model` by next-token cross-entropy. Returns per-epoch mean loss.
+) -> Dict[str, List[float]]:
+    """Train `model` by next-token cross-entropy.
+
+    Returns a dict with two keys:
+    - ``"epoch_losses"``: per-epoch mean loss list (one value per epoch), same
+      as the list this function previously returned directly.
+    - ``"batch_losses"``: flat list of every batch's loss in global-step order
+      across all epochs (length = epochs × batches_per_epoch). Useful for
+      plotting fine-grained training curves.
 
     Teacher forcing: predict tokens[1:] from tokens[:-1]. PAD positions are
     ignored by the loss. ``progress=True`` shows a per-epoch loss bar.
@@ -43,6 +50,7 @@ def train_mle(
     n = len(sequences)
     n_batches = (n + batch_size - 1) // batch_size
     epoch_losses: List[float] = []
+    all_batch_losses: List[float] = []
 
     for epoch in range(epochs):
         perm = torch.randperm(n)
@@ -69,6 +77,7 @@ def train_mle(
                 loss.backward()
                 opt.step()
                 batch_losses.append(float(loss.item()))
+                all_batch_losses.append(float(loss.item()))
                 bar.update(1, loss=f"{sum(batch_losses) / len(batch_losses):.3f}")
         epoch_losses.append(sum(batch_losses) / len(batch_losses))
-    return epoch_losses
+    return {"epoch_losses": epoch_losses, "batch_losses": all_batch_losses}
