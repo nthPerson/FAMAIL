@@ -96,9 +96,6 @@ def test_color_range_all_nan_unsigned_returns_sequential():
 
 
 def test_build_heatmap_figure_orientation_and_square():
-    import numpy as np
-    from famail_temporal.visualization.gradient_heatmap import render as rd
-    from famail_temporal.visualization.gradient_heatmap.geometry import load_district_geometry
     g = load_district_geometry()
     z = np.zeros((48, 90), dtype=float)
     fig = rd.build_heatmap_figure(z, g, title="t", zmin=-1, zmax=1, zmid=0,
@@ -108,18 +105,16 @@ def test_build_heatmap_figure_orientation_and_square():
     assert hm.z.shape == (48, 90)             # row=x_grid (south at bottom, no reversal)
     ya = fig.layout.yaxis
     assert ya.scaleanchor == "x" and ya.scaleratio == 1     # square cells
-    assert ya.autorange != "reversed"          # row 0 = south stays at bottom
+    assert ya.autorange in (True, None)        # row 0 = south stays at bottom
     # boundary trace present
     assert any(getattr(t, "mode", None) == "lines" for t in fig.data)
 
 
 def test_contour_overlay_adds_trace():
-    import numpy as np
-    from famail_temporal.visualization.gradient_heatmap import render as rd
-    from famail_temporal.visualization.gradient_heatmap.geometry import load_district_geometry
     g = load_district_geometry()
     fig = rd.build_heatmap_figure(np.zeros((48, 90)), g, title="t", zmin=0, zmax=1,
                                   zmid=None, colorscale="Viridis", show_boundaries=False)
+    assert not any(getattr(t, "mode", None) == "lines" for t in fig.data)
     n = len(fig.data)
     rd.build_contour_overlay(fig, np.random.default_rng(0).random((48, 90)))
     assert len(fig.data) == n + 1
@@ -127,9 +122,6 @@ def test_contour_overlay_adds_trace():
 
 
 def test_export_png_returns_png_bytes():
-    import numpy as np
-    from famail_temporal.visualization.gradient_heatmap import render as rd
-    from famail_temporal.visualization.gradient_heatmap.geometry import load_district_geometry
     g = load_district_geometry()
     data = rd.export_png(np.zeros((48, 90)), g, title="t", vmin=-1, vmax=1,
                          cmap="RdBu_r", show_boundaries=True)

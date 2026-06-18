@@ -72,7 +72,7 @@ def build_heatmap_figure(slice2d, geometry, *, title, zmin, zmax, zmid,
         go.Heatmap(
             z=slice2d, x=np.arange(cols), y=np.arange(rows),
             zmin=zmin, zmax=zmax, zmid=zmid, colorscale=colorscale,
-            colorbar=dict(title="value"),
+            colorbar=dict(title=dict(text="value")),
             hovertemplate="y_grid(col)=%{x}<br>x_grid(row)=%{y}<br>value=%{z}<extra></extra>",
         )
     )
@@ -103,7 +103,8 @@ def export_png(slice2d, geometry, *, title, vmin, vmax, cmap, show_boundaries=Tr
     """Render a publication-quality PNG (Matplotlib, origin='lower'); return bytes."""
     import io
     import matplotlib
-    matplotlib.use("Agg")
+    if matplotlib.get_backend().lower() != "agg":
+        matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
     fig, ax = plt.subplots(figsize=(13, 7))
