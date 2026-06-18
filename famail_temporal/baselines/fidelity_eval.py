@@ -13,7 +13,9 @@ import numpy as np
 import torch
 
 from famail_temporal.baselines.gan import config as gc
-from famail_temporal.baselines.transmission import jensen_shannon_divergence
+from famail_temporal.baselines.transmission import (
+    jensen_shannon_divergence, terminal_cell_histogram,
+)
 
 if TYPE_CHECKING:  # annotation-only; runtime dispatch is duck-typed (see below)
     from famail_temporal.utils.trajectory import Trajectory
@@ -68,12 +70,16 @@ def generated_to_disc_tensor(
 def trajectory_statistics(
     traj_or_cells: Union["Trajectory", Sequence[int]],
 ) -> Dict[str, float]:
-    """{'length', 'mean_displacement', 'coverage'} for a Trajectory or cell list.
+    """{'length', 'mean_displacement', 'coverage', 'radius_of_gyration',
+    'net_displacement'} for a Trajectory or cell list.
 
     - length: number of steps (0 for an empty cell list).
     - mean_displacement: mean Euclidean distance between consecutive (x, y)
       cells (0.0 if length < 2).
     - coverage: count of unique (x, y) cells visited.
+    - radius_of_gyration: RMS distance from centroid (0.0 if length < 2).
+    - net_displacement: Euclidean distance from first to last cell
+      (0.0 if length < 2).
     """
     # Deliberate duck-typed dispatch (not isinstance): a real ``Trajectory`` has
     # ``.states``; anything else is treated as a flat cell-id sequence. This lets
@@ -86,18 +92,34 @@ def trajectory_statistics(
     coverage = len(set(xy))
     if length < 2:
         mean_disp = 0.0
+        rog = 0.0
+        net_disp = 0.0
     else:
         dists = [
             float(np.hypot(xy[i + 1][0] - xy[i][0], xy[i + 1][1] - xy[i][1]))
             for i in range(length - 1)
         ]
         mean_disp = float(np.mean(dists))
-    return {"length": length, "mean_displacement": mean_disp, "coverage": coverage}
+        pts = np.asarray(xy, dtype=np.float64)            # [L, 2]
+        cm = pts.mean(axis=0)
+        rog = float(np.sqrt(np.mean(np.sum((pts - cm) ** 2, axis=1))))
+        net_disp = float(np.hypot(xy[-1][0] - xy[0][0], xy[-1][1] - xy[0][1]))
+    return {
+        "length": length,
+        "mean_displacement": mean_disp,
+        "coverage": coverage,
+        "radius_of_gyration": rog,
+        "net_displacement": net_disp,
+    }
 
 
 # -------------------------------------------------- distributional fidelity ----
 
 _STAT_KEYS = ("length", "mean_displacement", "coverage")
+_STAT_KEYS_V2 = (
+    "length", "mean_displacement", "coverage",
+    "radius_of_gyration", "net_displacement",
+)
 BINS = 50   # shared histogram bin count (spec §7: "Bin spec is a module constant")
 
 
@@ -114,15 +136,18 @@ def _hist(values: List[float], lo: float, hi: float, bins: int) -> np.ndarray:
     return counts.astype(np.float64) / total
 
 
-def stat_ranges(stat_lists: List[List[Dict[str, float]]]) -> Dict[str, tuple]:
+def stat_ranges(
+    stat_lists: List[List[Dict[str, float]]], *, keys: tuple = _STAT_KEYS,
+) -> Dict[str, tuple]:
     """Pooled (lo, hi) per statistic across ALL given sources (spec §7).
 
     Pass ``[raw_stats, edited_stats, bc_stats, gan_stats]`` so every source is
     histogrammed on ONE shared grid and the per-source JS values are mutually
-    comparable.
+    comparable. ``keys`` defaults to the original 3 (v1 backward-compat); pass
+    ``_STAT_KEYS_V2`` to include radius_of_gyration + net_displacement.
     """
     ranges: Dict[str, tuple] = {}
-    for key in _STAT_KEYS:
+    for key in keys:
         vals = [float(s[key]) for stats in stat_lists for s in stats]
         # No values pooled -> degenerate (0,0) grid -> _hist returns a uniform
         # histogram -> JS divergence 0 (the only sensible answer with no data).
@@ -136,15 +161,18 @@ def distributional_fidelity(
     *,
     bins: int = BINS,
     ranges: Dict[str, tuple] | None = None,
+    keys: tuple = _STAT_KEYS,
 ) -> Dict[str, object]:
     """Per-statistic JS divergence (bits, lower=better) of source vs raw.
 
-    For each of {length, mean_displacement, coverage}, histogram the source and
-    raw values on a shared bin grid, then take the Jensen-Shannon divergence.
-    aggregate = mean of the three. ``ranges`` supplies the shared (lo, hi) per
-    statistic — the orchestrator computes it once via ``stat_ranges`` over ALL
-    sources (spec §7) so per-source numbers are comparable. If None, falls back
-    to the per-call pooled src+raw range (used by the unit tests).
+    For each key in ``keys``, histogram the source and raw values on a shared
+    bin grid, then take the Jensen-Shannon divergence. aggregate = mean over all
+    keys. ``ranges`` supplies the shared (lo, hi) per statistic — the
+    orchestrator computes it once via ``stat_ranges`` over ALL sources (spec §7)
+    so per-source numbers are comparable. If None, falls back to the per-call
+    pooled src+raw range (used by the unit tests). ``keys`` defaults to the
+    original 3 (v1 backward-compat); pass ``_STAT_KEYS_V2`` to include
+    radius_of_gyration + net_displacement.
 
     Both sides must be non-empty: an empty ``source_stats`` against a populated
     grid would yield an all-zero histogram and a positive-but-meaningless JS
@@ -158,7 +186,7 @@ def distributional_fidelity(
             f"len(raw)={len(raw_stats)})"
         )
     per_stat: Dict[str, float] = {}
-    for key in _STAT_KEYS:
+    for key in keys:
         src = [float(s[key]) for s in source_stats]
         raw = [float(s[key]) for s in raw_stats]
         if ranges is not None:
@@ -169,8 +197,22 @@ def distributional_fidelity(
         p = _hist(src, lo, hi, bins)
         q = _hist(raw, lo, hi, bins)
         per_stat[key] = float(jensen_shannon_divergence(p, q))
-    aggregate = float(np.mean([per_stat[k] for k in _STAT_KEYS]))
+    aggregate = float(np.mean([per_stat[k] for k in keys]))
     return {"per_stat": per_stat, "aggregate": aggregate}
+
+
+def terminal_cell_distribution_js(
+    source_pickups, raw_pickups, *, n_cells: int = gc.N_CELLS,
+) -> float:
+    """JS divergence (bits) between two terminal-cell (pickup) distributions.
+
+    Each input is an iterable of (x, y, t_block) pickup tuples (only (x, y) is
+    used). Reuses transmission.terminal_cell_histogram + jensen_shannon_
+    divergence. 0.0 if the two distributions are identical; ~1.0 if disjoint.
+    """
+    p = terminal_cell_histogram(source_pickups, n_cells=n_cells)
+    q = terminal_cell_histogram(raw_pickups, n_cells=n_cells)
+    return float(jensen_shannon_divergence(p, q))
 
 
 # ------------------------------------------------- HuMID paired fidelity ----
