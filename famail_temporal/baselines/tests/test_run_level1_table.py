@@ -102,3 +102,20 @@ def test_curves_for_source_bc_has_null_adv_and_gan_has_both():
     assert gan["adv"]["g_batch_losses"] == [0.71, 0.69]
     assert gan["adv"]["d_epoch_losses"] == [1.3]
     assert gan["mle_epoch_losses"] == [2.0]
+
+
+def test_edited_fairness_from_metrics_reads_metrics_after(tmp_path):
+    import json as _json
+    (tmp_path / "metrics.json").write_text(_json.dumps({
+        "metrics_before": {"f_causal": 0.8052, "f_spatial": 0.0822},
+        "metrics_after":  {"f_causal": 0.8180, "f_spatial": 0.0824},
+    }))
+    out = r._edited_fairness_from_metrics(tmp_path)
+    assert out["f_causal"] == 0.8180
+    assert out["f_spatial"] == 0.0824
+
+
+def test_edited_fairness_from_metrics_missing_file_raises(tmp_path):
+    import pytest
+    with pytest.raises(SystemExit):
+        r._edited_fairness_from_metrics(tmp_path)

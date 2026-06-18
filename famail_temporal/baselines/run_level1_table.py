@@ -141,18 +141,23 @@ def _fairness_from_pickups(bundle, pickups) -> dict:
     return data_level_fairness(bundle, pickup_3d=grid)
 
 
-def _edited_pickups(histories) -> List[tuple]:
-    """Terminal-state pickups of each edited (.modified) trajectory.
+def _edited_fairness_from_metrics(edit_dir: Path) -> dict:
+    """Edited-source fairness = the edit pipeline's authoritative metrics_after.
 
-    t_block reuses the modified trajectory's context block
-    (``trajectory_context(h.modified)[1]``) -- the same block the editor used.
+    The edit relocates only k_modified pickups WITHIN the full corpus; its
+    after-grid fairness is already computed and persisted in metrics.json. We
+    read it directly rather than recomputing from the modified subset (which
+    would be a sparse, non-comparable grid). This is on the same basis as raw:
+    the edit's metrics_before.f_causal equals data_level_fairness(bundle).
+    Returns {"f_causal": float, "f_spatial": float}.
     """
-    pickups = []
-    for h in histories:
-        s = h.modified.states[-1]
-        t_block = trajectory_context(h.modified)[1]
-        pickups.append((int(s.x_grid), int(s.y_grid), t_block))
-    return pickups
+    mpath = edit_dir / "metrics.json"
+    if not mpath.exists():
+        raise SystemExit(f"edit metrics.json not found: {mpath}")
+    after = json.loads(mpath.read_text()).get("metrics_after")
+    if not after or "f_causal" not in after or "f_spatial" not in after:
+        raise SystemExit(f"{mpath} missing metrics_after.f_causal/f_spatial")
+    return {"f_causal": float(after["f_causal"]), "f_spatial": float(after["f_spatial"])}
 
 
 def _curves_for_source(src: dict) -> dict:
@@ -379,7 +384,7 @@ def main(argv: List[str] | None = None) -> int:
     # grid would not be comparable. This is the run's largest single compute cost.
     _log("[level1] scoring single-seed fairness")
     f_raw = data_level_fairness(bundle)
-    f_edited = _fairness_from_pickups(bundle, _edited_pickups(histories))
+    f_edited = _edited_fairness_from_metrics(Path(args.edit_dir))
     bc_pickups = generate_pickups(
         bc["model"], bc["contexts"], max_len=max_len, device=device,
         gen_batch_size=args.gen_batch_size, progress=False,
