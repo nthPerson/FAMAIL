@@ -83,3 +83,22 @@ def test_train_and_generate_alignment_contexts_match_filtered_train():
     assert len(ft) == len(expected)
     for i in range(len(ft)):
         assert ctx[i] == trajectory_context(ft[i])   # index alignment
+    # curve capture assertions
+    assert out["mle_curve"]["batch_losses"]            # non-empty per-batch curve
+    assert len(out["mle_curve"]["epoch_losses"]) == 1  # mle_epochs=1
+    assert out["adv_curve"] is None                    # adv_epochs=0 -> pure MLE
+
+
+def test_curves_for_source_bc_has_null_adv_and_gan_has_both():
+    bc_src = {"mle_curve": {"epoch_losses": [2.0, 1.0], "batch_losses": [2.1, 1.9, 1.1, 0.9]},
+              "adv_curve": None}
+    gan_src = {"mle_curve": {"epoch_losses": [2.0], "batch_losses": [2.0, 1.8]},
+               "adv_curve": {"g_losses": [0.7], "d_losses": [1.3],
+                             "g_batch_losses": [0.71, 0.69], "d_batch_losses": [1.30, 1.31, 1.29]}}
+    bc = r._curves_for_source(bc_src)
+    assert bc["adv"] is None
+    assert bc["mle_batch_losses"] == [2.1, 1.9, 1.1, 0.9]
+    gan = r._curves_for_source(gan_src)
+    assert gan["adv"]["g_batch_losses"] == [0.71, 0.69]
+    assert gan["adv"]["d_epoch_losses"] == [1.3]
+    assert gan["mle_epoch_losses"] == [2.0]

@@ -112,13 +112,14 @@ def _train_and_generate(
     contexts = [trajectory_context(t) for t in filtered_train]
 
     model = TrajectoryLSTM().to(device)
-    train_mle(
+    mle_curve = train_mle(
         model, sequences, contexts,
         epochs=mle_epochs, lr=gc.MLE_LR, batch_size=gc.MLE_BATCH_SIZE,
         device=device, progress=False,
     )
+    adv_curve = None
     if adv_epochs > 0:
-        adversarial_finetune(
+        adv_curve = adversarial_finetune(
             model, sequences, contexts,
             epochs=adv_epochs, lr_g=gc.ADV_LR_G, lr_d=gc.ADV_LR_D,
             batch_size=gc.ADV_BATCH_SIZE, max_len=max_len,
@@ -127,7 +128,10 @@ def _train_and_generate(
             gan_loss=gan_loss, gp_lambda=gc.WGAN_GP_LAMBDA, n_critic=n_critic,
             device=device, progress=False,
         )
-    return {"model": model, "filtered_train": filtered_train, "contexts": contexts}
+    return {
+        "model": model, "filtered_train": filtered_train, "contexts": contexts,
+        "mle_curve": mle_curve, "adv_curve": adv_curve,
+    }
 
 
 # ------------------------------------------------------------- fairness rows ----
@@ -149,6 +153,29 @@ def _edited_pickups(histories) -> List[tuple]:
         t_block = trajectory_context(h.modified)[1]
         pickups.append((int(s.x_grid), int(s.y_grid), t_block))
     return pickups
+
+
+def _curves_for_source(src: dict) -> dict:
+    """Flatten one source's captured training curves into a JSON-ready dict.
+
+    ``src`` is a ``_train_and_generate`` result. BC has ``adv_curve=None`` (pure
+    MLE), so its ``adv`` entry is null; the GAN source carries both phases.
+    """
+    mle = src["mle_curve"]
+    out = {
+        "mle_epoch_losses": mle["epoch_losses"],
+        "mle_batch_losses": mle["batch_losses"],
+        "adv": None,
+    }
+    adv = src.get("adv_curve")
+    if adv is not None:
+        out["adv"] = {
+            "g_epoch_losses": adv["g_losses"],
+            "d_epoch_losses": adv["d_losses"],
+            "g_batch_losses": adv["g_batch_losses"],
+            "d_batch_losses": adv["d_batch_losses"],
+        }
+    return out
 
 
 # ---------------------------------------------------------------- assembly ----
@@ -426,6 +453,10 @@ def main(argv: List[str] | None = None) -> int:
         raw=_stat_arr(raw_stats), edited=_stat_arr(edited_stats),
         bc=_stat_arr(bc_stats), gan=_stat_arr(gan_stats),
     )
+    training_curves = {"bc": _curves_for_source(bc), "gan": _curves_for_source(gan)}
+    (out_dir / "training_curves.json").write_text(
+        json.dumps(training_curves, indent=2, default=float)
+    )
 
     # ---- summary ----
     _log("")
@@ -437,6 +468,8 @@ def main(argv: List[str] | None = None) -> int:
     if not gate["passed"]:
         _log("[level1] Validation gate FAILED -> Fidelity-A is UNTRUSTED; "
              "Fidelity-B (distributional divergence) is the PRIMARY fidelity metric.")
+    _log(f"[level1] training curves: BC mle final={training_curves['bc']['mle_epoch_losses'][-1]:.3f}; "
+         f"GAN mle final={training_curves['gan']['mle_epoch_losses'][-1]:.3f}")
     _log(f"[level1] wrote {out_dir}")
     return 0
 
