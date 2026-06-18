@@ -172,6 +172,12 @@ def _gen_fidelity_pairs(model, filtered_train, contexts, *, n, max_len, device,
             n_empty += 1
             continue
         real = filtered_train[i]
+        # Synthesize the generated trajectory's time/day from the paired real
+        # seed's first state. We pass the raw `time_bucket` (domain ~[1,288]),
+        # NOT the coarse context `t_block`: the discriminator's FeatureNormalizer
+        # encodes time as 2*pi*time_bucket/288 and the real branch feeds raw
+        # buckets, so real and generated must meet in the SAME domain. Do not
+        # "fix" this toward spec §3.4's looser "time block" wording.
         pairs.append((
             fe.real_to_disc_tensor(real),
             fe.generated_to_disc_tensor(
@@ -367,6 +373,9 @@ def main(argv: List[str] | None = None) -> int:
             "raw": {
                 "f_causal": f_raw["f_causal"], "f_spatial": f_raw["f_spatial"],
                 "fidelity_a": float(gate["high_real_real"]),
+                # Raw is the anchor: fidelity_a is the gate's real-vs-real mean,
+                # which carries no std (validation_gate returns means only), so
+                # 0.0 is a placeholder, not a measured dispersion.
                 "fidelity_a_std": 0.0, "fidelity_a_n": len(real_pairs),
                 "fidelity_a_trusted": trusted,
                 "fidelity_b": 0.0, "fidelity_b_per_stat": b_raw_per_stat,
