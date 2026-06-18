@@ -102,7 +102,7 @@ def test_build_heatmap_figure_orientation_and_square():
                                   colorscale="RdBu_r", show_boundaries=True)
     hm = fig.data[0]
     assert hm.type == "heatmap"
-    assert hm.z.shape == (48, 90)             # row=x_grid (south at bottom, no reversal)
+    assert np.asarray(hm.z).shape == (48, 90)             # row=x_grid (south at bottom, no reversal)
     ya = fig.layout.yaxis
     assert ya.scaleanchor == "x" and ya.scaleratio == 1     # square cells
     assert ya.autorange in (True, None)        # row 0 = south stays at bottom

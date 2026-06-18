@@ -7,7 +7,7 @@ from __future__ import annotations
 import numpy as np
 
 from . import render as rd
-from .loader import DEFAULT_BUNDLE_PATH, load_bundle
+from .loader import load_bundle
 
 
 def build_views(bundle, state) -> dict:
