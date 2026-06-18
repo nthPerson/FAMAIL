@@ -61,3 +61,17 @@ def test_result_to_json_roundtrips_numpy_floats():
     blob = vs.result_to_json({"x": np.float64(1.5), "y": {"z": [1, 2]}})
     loaded = json.loads(blob)
     assert loaded["x"] == 1.5 and loaded["y"]["z"] == [1, 2]
+
+
+def test_adv_curve_or_none():
+    # adv_epochs=0 -> empty lists -> None
+    assert vs.adv_curve_or_none({"adv_losses": {"g_losses": [], "d_losses": [],
+                                                "g_batch_losses": [], "d_batch_losses": []}}) is None
+    assert vs.adv_curve_or_none({}) is None
+    # populated -> dict with float lists
+    out = vs.adv_curve_or_none({"adv_losses": {
+        "g_losses": [0.7], "d_losses": [1.3],
+        "g_batch_losses": [0.71, 0.69], "d_batch_losses": [1.3, 1.31]}})
+    assert out["g_epoch_losses"] == [0.7]
+    assert out["g_batch_losses"] == [0.71, 0.69]
+    assert out["d_batch_losses"] == [1.3, 1.31]

@@ -17,23 +17,29 @@ from famail_temporal.data.loader import DataBundle
 def sample_trajectory_cells(
     model: TrajectoryLSTM, ctx_cell: int, ctx_tblock: int,
     *, max_len: int, device: torch.device, temperature: float = 1.0,
+    driver_idx: int | None = None,
 ) -> List[int]:
     """Sample one trajectory's cell ids (BOS/EOS/specials stripped).
 
     Autoregressive multinomial decode from BOS; stops at EOS or max_len.
     Only in-vocabulary *cell* ids (< N_CELLS) are kept. Uses the generator's
     single-step decode (carried LSTM state) so cost is O(max_len), not
-    O(max_len^2).
+    O(max_len^2). ``driver_idx`` (optional) conditions the rollout on a driver
+    identity; ``None`` preserves the unconditioned numerics.
     """
     model.to(device).train(False)   # inference mode (no dropout/grad)
     cc = torch.tensor([ctx_cell], dtype=torch.long, device=device)
     tb = torch.tensor([ctx_tblock], dtype=torch.long, device=device)
+    di = (
+        torch.tensor([driver_idx], dtype=torch.long, device=device)
+        if driver_idx is not None else None
+    )
     prev = gc.BOS
     hidden = None
     cells: List[int] = []
     for _ in range(max_len):
         tok = torch.tensor([prev], dtype=torch.long, device=device)
-        logits, hidden = model.step(tok, cc, tb, hidden)  # (1, V), state
+        logits, hidden = model.step(tok, cc, tb, hidden, driver_idx=di)  # (1, V), state
         probs = torch.softmax(logits[0] / temperature, dim=-1)
         nxt = int(torch.multinomial(probs, 1).item())
         if nxt == gc.EOS:
@@ -48,6 +54,7 @@ def sample_trajectory_cells(
 def sample_terminal_cells_batched(
     model: TrajectoryLSTM, ctx_cells: torch.Tensor, ctx_tblocks: torch.Tensor,
     *, max_len: int, device: torch.device, temperature: float = 1.0,
+    driver_idx: torch.Tensor | None = None,
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     """Batched autoregressive decode -> (terminal cell, generated length) per row.
 
@@ -57,7 +64,8 @@ def sample_terminal_cells_batched(
     falls back to its start cell. Returns ``(terminal, gen_len)``, both (B,)
     long: ``terminal`` is the pickup cell, ``gen_len`` is the 1-based step of
     the first EOS (or ``max_len`` if none) — the free-running rollout length,
-    the real test of generation quality.
+    the real test of generation quality. ``driver_idx`` (optional, (B,) long)
+    conditions the rollout on a driver identity; ``None`` is unconditioned.
     """
     model.to(device).train(False)
     cc = ctx_cells.to(device)
@@ -69,7 +77,7 @@ def sample_terminal_cells_batched(
     gen_len = torch.full((B,), max_len, dtype=torch.long, device=device)
     done = torch.zeros(B, dtype=torch.bool, device=device)
     for t in range(max_len):
-        logits, hidden = model.step(prev, cc, tb, hidden)  # (B, V), state
+        logits, hidden = model.step(prev, cc, tb, hidden, driver_idx=driver_idx)  # (B, V), state
         probs = torch.softmax(logits / temperature, dim=-1)
         nxt = torch.multinomial(probs, 1).squeeze(1)       # (B,)
         is_eos = nxt == gc.EOS
@@ -84,10 +92,74 @@ def sample_terminal_cells_batched(
     return terminal, gen_len
 
 
+@torch.no_grad()
+def generate_trajectories(
+    model: "TrajectoryLSTM",
+    contexts: List[Tuple[int, int]],
+    *,
+    max_len: int,
+    device: torch.device,
+    gen_batch_size: int = 512,
+    temperature: float = 1.0,
+    progress: bool = False,
+    driver_idxs: List[int] | None = None,
+) -> List[List[int]]:
+    """One FULL cell-id sequence per context, index-aligned with ``contexts``.
+
+    Unlike ``generate_pickups`` (which keeps only the terminal cell), this
+    retains the entire rollout so downstream fidelity scoring can compare full
+    trajectories. Each context is ``(start flat-cell, start time-block)`` — the
+    tuple produced by ``sequences.trajectory_context``. Specials (BOS/EOS/PAD)
+    are stripped; only in-vocabulary cell ids (< N_CELLS) are kept. Batched
+    autoregressive decode mirrors ``sample_terminal_cells_batched``.
+    ``driver_idxs`` (optional) is a list index-aligned with ``contexts`` that
+    conditions each rollout on a driver identity; ``None`` is unconditioned.
+    """
+    model.to(device).train(False)
+    results: List[List[int]] = []
+    bar = Progress(len(contexts), "generating trajectories", enabled=progress)
+    for start in range(0, len(contexts), gen_batch_size):
+        chunk = contexts[start : start + gen_batch_size]
+        b = len(chunk)
+        cc = torch.tensor([c for c, _ in chunk], dtype=torch.long, device=device)
+        tb = torch.tensor([t for _, t in chunk], dtype=torch.long, device=device)
+        di = (
+            torch.tensor(driver_idxs[start : start + gen_batch_size],
+                         dtype=torch.long, device=device)
+            if driver_idxs is not None else None
+        )
+        prev = torch.full((b,), gc.BOS, dtype=torch.long, device=device)
+        hidden = None
+        done = torch.zeros(b, dtype=torch.bool, device=device)
+        seqs: List[List[int]] = [[] for _ in range(b)]
+        for _ in range(max_len):
+            logits, hidden = model.step(prev, cc, tb, hidden, driver_idx=di)   # (b, V)
+            probs = torch.softmax(logits / temperature, dim=-1)
+            nxt = torch.multinomial(probs, 1).squeeze(1)         # (b,)
+            nxt_cpu = nxt.tolist()
+            done_cpu = done.tolist()
+            for i in range(b):
+                if done_cpu[i]:
+                    continue
+                tok = nxt_cpu[i]
+                if tok == gc.EOS:
+                    done[i] = True
+                elif tok < gc.N_CELLS:
+                    seqs[i].append(tok)
+            prev = nxt
+            if bool(done.all()):
+                break
+        results.extend(seqs)
+        bar.update(b)
+    bar.close()
+    return results
+
+
 def generate_pickups(
     model: TrajectoryLSTM, contexts: List[Tuple[int, int]],
     *, max_len: int, device: torch.device,
     gen_batch_size: int = gc.GEN_BATCH_SIZE, progress: bool = False,
+    driver_idxs: List[int] | None = None,
 ) -> List[Tuple[int, int, int]]:
     """One rollout per context; pickup = terminal cell, t_block = context block.
 
@@ -96,6 +168,8 @@ def generate_pickups(
     the start cell, so every context yields a pickup (keeps the generated grid
     corpus-matched). ``progress=True`` shows a bar over contexts with an ETA and
     prints the mean free-running rollout length (vs real ~18) at the end.
+    ``driver_idxs`` (optional) is a list index-aligned with ``contexts`` that
+    conditions each rollout on a driver identity; ``None`` is unconditioned.
     """
     out: List[Tuple[int, int, int]] = []
     gen_len_sum = 0.0
@@ -105,8 +179,13 @@ def generate_pickups(
         chunk = contexts[start : start + gen_batch_size]
         cc = torch.tensor([c for c, _ in chunk], dtype=torch.long, device=device)
         tb = torch.tensor([t for _, t in chunk], dtype=torch.long, device=device)
+        di = (
+            torch.tensor(driver_idxs[start : start + gen_batch_size],
+                         dtype=torch.long, device=device)
+            if driver_idxs is not None else None
+        )
         terminals, gen_lens = sample_terminal_cells_batched(
-            model, cc, tb, max_len=max_len, device=device,
+            model, cc, tb, max_len=max_len, device=device, driver_idx=di,
         )
         for (_, ctx_tblock), term in zip(chunk, terminals.tolist()):
             x, y = unflat_cell(term)

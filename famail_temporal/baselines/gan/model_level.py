@@ -97,7 +97,7 @@ def fit_and_evaluate(
 
     model = TrajectoryLSTM().to(device)
     _phase(f"MLE pretrain: {mle_epochs} epochs, batch {mle_batch_size}")
-    mle_losses = train_mle(
+    mle = train_mle(
         model, sequences, contexts,
         epochs=mle_epochs, lr=gc.MLE_LR, batch_size=mle_batch_size,
         device=device, progress=progress,
@@ -131,7 +131,8 @@ def fit_and_evaluate(
         "corpus": data_level_fairness(bundle),
         "n_generated": len(pickups),
         "pickups": pickups,
-        "mle_losses": mle_losses,
+        "mle_losses": mle["epoch_losses"],          # per-epoch list (downstream consumers rely on it)
+        "mle_batch_losses": mle["batch_losses"],     # per-batch training curve (new)
         "adv_losses": adv_losses,
     }
     _phase(

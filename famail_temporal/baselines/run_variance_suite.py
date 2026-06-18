@@ -58,6 +58,24 @@ METRIC_KEYS = [
 
 # ---------------- pure helpers (unit-tested) ----------------
 
+def adv_curve_or_none(result: dict) -> dict | None:
+    """The adversarial training curve for a fit_and_evaluate result, or None.
+
+    Returns None when no adversarial phase ran (empty loss lists) -- the
+    variance suite uses adv_epochs=0, so B0/FAMAIL are pure-MLE and this is
+    None. Kept so a future adv_epochs>0 run persists g/d curves automatically.
+    """
+    adv = result.get("adv_losses") or {}
+    if not adv.get("g_losses") and not adv.get("d_losses"):
+        return None
+    return {
+        "g_epoch_losses": [float(x) for x in adv.get("g_losses", [])],
+        "d_epoch_losses": [float(x) for x in adv.get("d_losses", [])],
+        "g_batch_losses": [float(x) for x in adv.get("g_batch_losses", [])],
+        "d_batch_losses": [float(x) for x in adv.get("d_batch_losses", [])],
+    }
+
+
 def mean_std(values: List[float]) -> Dict[str, float]:
     """Sample statistics (ddof=1; std=0 for a single value; NaN for none).
 
@@ -127,6 +145,8 @@ def _seed_metrics(bundle, result, edited_units) -> Dict[str, float]:
         # Full per-epoch curve: the convergence evidence behind the
         # strengthened (20-epoch) pretraining choice (2026-06-10 direction).
         "mle_losses": [float(x) for x in result["mle_losses"]],
+        "mle_batch_losses": [float(x) for x in result.get("mle_batch_losses", [])],
+        "adv_curve": adv_curve_or_none(result),
     }
 
 

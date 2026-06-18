@@ -27,7 +27,7 @@ def test_fit_and_evaluate_returns_fairness_and_histories():
         assert 0.0 <= m["f_causal"] <= 1.0
     assert out["n_generated"] == len(bundle.trajectories)
     assert len(out["mle_losses"]) == 2
-    assert set(out["adv_losses"]) == {"g_losses", "d_losses"}
+    assert set(out["adv_losses"]) == {"g_losses", "d_losses", "g_batch_losses", "d_batch_losses"}
     assert len(out["adv_losses"]["g_losses"]) == 2
     assert len(out["adv_losses"]["d_losses"]) == 2
 

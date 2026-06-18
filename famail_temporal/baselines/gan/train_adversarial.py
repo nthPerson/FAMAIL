@@ -95,9 +95,22 @@ def adversarial_finetune(
     gp_lambda: float = gc.WGAN_GP_LAMBDA,
     n_critic: int = 1,
     progress: bool = False,
+    driver_idxs: List[int] | None = None,
 ) -> Dict[str, List[float]]:
     """Fine-tune `model` (in place) against a fresh critic. Returns per-epoch
-    mean generator (adversarial) and discriminator losses.
+    mean generator (adversarial) and discriminator losses, plus flat per-batch
+    g/d loss lists in global-step order.
+
+    Return keys:
+      - ``g_losses``: per-epoch mean adversarial generator loss (length = epochs).
+      - ``d_losses``: per-epoch mean discriminator/critic loss (length = epochs).
+      - ``g_batch_losses``: flat list of adversarial g loss at every generator
+        update step across all epochs (length = total g update count).
+      - ``d_batch_losses``: flat list of discriminator/critic loss at every d
+        update step across all epochs (length = total d update count).
+    The per-batch g and d series have different lengths because the d-step runs
+    every ``d_update_every`` batches while the g-step cadence differs (every
+    batch for BCE, every ``n_critic``-th for WGAN-GP).
 
     ``gan_loss`` selects the adversarial objective:
       - "bce" (default): non-saturating BCE GAN, exactly the historical
@@ -141,6 +154,8 @@ def adversarial_finetune(
     real_len_mean = sum(len(s) for s in sequences) / n
     g_losses: List[float] = []
     d_losses: List[float] = []
+    all_g_batch_losses: List[float] = []
+    all_d_batch_losses: List[float] = []
 
     for epoch in range(epochs):
         tau = _anneal(epoch, epochs, tau_start, tau_end)
@@ -164,6 +179,12 @@ def adversarial_finetune(
             tb = torch.tensor(
                 [contexts[i][1] for i in idx], dtype=torch.long, device=device,
             )
+            di = (
+                torch.tensor(
+                    [driver_idxs[i] for i in idx], dtype=torch.long, device=device,
+                )
+                if driver_idxs is not None else None
+            )
 
             # ----- Discriminator step (generator fixed; every d_update_every) -
             # no_grad detaches the fake, so the generator gets no gradient here;
@@ -173,7 +194,7 @@ def adversarial_finetune(
                 with torch.no_grad():
                     fake_soft, fake_len = gumbel_rollout(
                         model, cc, tb, max_len=max_len, tau=tau,
-                        device=device, hard=True,
+                        device=device, hard=True, driver_idx=di,
                     )
                 d_real = critic.forward_ids(real, real_lengths)
                 d_fake = critic.forward_soft(fake_soft, fake_len)
@@ -197,6 +218,7 @@ def adversarial_finetune(
                     nn.utils.clip_grad_norm_(critic.parameters(), grad_clip)
                 opt_d.step()
                 d_batch.append(float(loss_d.item()))
+                all_d_batch_losses.append(float(loss_d.item()))
 
             # ----- Generator step (gradients via Gumbel) -----
             g_step = gan_loss == "bce" or (batch_i % n_critic == n_critic - 1)
@@ -204,7 +226,7 @@ def adversarial_finetune(
             if g_step:
                 fake_soft, fake_len = gumbel_rollout(
                     model, cc, tb, max_len=max_len, tau=tau,
-                    device=device, hard=True,
+                    device=device, hard=True, driver_idx=di,
                 )
                 d_fake_g = critic.forward_soft(fake_soft, fake_len)
                 if gan_loss == "bce":
@@ -215,7 +237,7 @@ def adversarial_finetune(
                 if mle_lambda > 0:
                     # Teacher-forced NLL on the real batch anchors G to the data
                     # distribution, so it can't drift toward unrealistic lengths.
-                    logits = model(real[:, :-1], cc, tb)            # (b, L-1, V)
+                    logits = model(real[:, :-1], cc, tb, driver_idx=di)  # (b, L-1, V)
                     mle_nll = ce(
                         logits.reshape(-1, gc.VOCAB_SIZE), real[:, 1:].reshape(-1),
                     )
@@ -226,6 +248,7 @@ def adversarial_finetune(
                     nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
                 opt_g.step()
                 g_batch.append(float(adv_g.item()))   # adversarial component only
+                all_g_batch_losses.append(float(adv_g.item()))
                 fake_len_sum += float(fake_len.float().sum().item())
                 fake_len_cnt += int(fake_len.numel())
             postfix = {
@@ -248,4 +271,9 @@ def adversarial_finetune(
                 flush=True,
             )
 
-    return {"g_losses": g_losses, "d_losses": d_losses}
+    return {
+        "g_losses": g_losses,
+        "d_losses": d_losses,
+        "g_batch_losses": all_g_batch_losses,
+        "d_batch_losses": all_d_batch_losses,
+    }
