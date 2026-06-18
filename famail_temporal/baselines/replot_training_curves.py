@@ -167,13 +167,17 @@ def render_adversarial(
     out_png = Path(out_png)
     out_png.parent.mkdir(parents=True, exist_ok=True)
 
+    # NOT sharex: the generator and critic update on different cadences (g every
+    # n_critic batches, d every batch), so their step indices are different
+    # counters. A shared x-axis would leave the shorter g panel mostly empty and
+    # falsely imply a common timeline. Each panel scales to its own update count.
     fig, (ax_g, ax_d) = plt.subplots(
-        2, 1, figsize=(11, 7), sharex=True, constrained_layout=True
+        2, 1, figsize=(11, 7), constrained_layout=True
     )
 
-    for ax, vals, panel_title in [
-        (ax_g, g_values, "Generator (adversarial) loss"),
-        (ax_d, d_values, "Critic / discriminator loss"),
+    for ax, vals, panel_title, xlabel in [
+        (ax_g, g_values, "Generator (adversarial) loss", "Generator update step"),
+        (ax_d, d_values, "Critic / discriminator loss", "Critic update step"),
     ]:
         n = len(vals)
         steps = list(range(n))
@@ -183,6 +187,7 @@ def render_adversarial(
         ax.plot(steps, vals, alpha=0.25, linewidth=0.6, color="tab:blue", label="raw")
         ax.plot(steps, smoothed, linewidth=1.5, color="tab:blue", label="smooth")
         ax.set_title(panel_title)
+        ax.set_xlabel(xlabel)
         ax.set_ylabel("Loss")
         ax.grid(True, linewidth=0.4, alpha=0.5)
         ax.legend(fontsize=8)
@@ -211,7 +216,6 @@ def render_adversarial(
                         bbox=dict(boxstyle="round,pad=0.2", facecolor="lightyellow", alpha=0.7),
                     )
 
-    ax_d.set_xlabel("Step")
     fig.savefig(out_png, dpi=dpi)
     plt.close(fig)
     return out_png
