@@ -84,6 +84,7 @@ def sample_terminal_cells_batched(
     return terminal, gen_len
 
 
+@torch.no_grad()
 def generate_trajectories(
     model: "TrajectoryLSTM",
     contexts: List[Tuple[int, int]],
@@ -115,24 +116,23 @@ def generate_trajectories(
         hidden = None
         done = torch.zeros(b, dtype=torch.bool, device=device)
         seqs: List[List[int]] = [[] for _ in range(b)]
-        with torch.no_grad():
-            for _ in range(max_len):
-                logits, hidden = model.step(prev, cc, tb, hidden)   # (b, V)
-                probs = torch.softmax(logits / temperature, dim=-1)
-                nxt = torch.multinomial(probs, 1).squeeze(1)         # (b,)
-                nxt_cpu = nxt.tolist()
-                done_cpu = done.tolist()
-                for i in range(b):
-                    if done_cpu[i]:
-                        continue
-                    tok = nxt_cpu[i]
-                    if tok == gc.EOS:
-                        done[i] = True
-                    elif tok < gc.N_CELLS:
-                        seqs[i].append(tok)
-                prev = nxt
-                if bool(done.all()):
-                    break
+        for _ in range(max_len):
+            logits, hidden = model.step(prev, cc, tb, hidden)   # (b, V)
+            probs = torch.softmax(logits / temperature, dim=-1)
+            nxt = torch.multinomial(probs, 1).squeeze(1)         # (b,)
+            nxt_cpu = nxt.tolist()
+            done_cpu = done.tolist()
+            for i in range(b):
+                if done_cpu[i]:
+                    continue
+                tok = nxt_cpu[i]
+                if tok == gc.EOS:
+                    done[i] = True
+                elif tok < gc.N_CELLS:
+                    seqs[i].append(tok)
+            prev = nxt
+            if bool(done.all()):
+                break
         results.extend(seqs)
         bar.update(b)
     bar.close()
