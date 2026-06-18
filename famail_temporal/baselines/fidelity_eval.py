@@ -170,3 +170,108 @@ def distributional_fidelity(
         per_stat[key] = float(jensen_shannon_divergence(p, q))
     aggregate = float(np.mean([per_stat[k] for k in _STAT_KEYS]))
     return {"per_stat": per_stat, "aggregate": aggregate}
+
+
+# ------------------------------------------------- HuMID paired fidelity ----
+
+GATE_MARGIN = 0.2   # min (high_real_real - max low) for the gate to pass
+
+
+def _pad_pairs_to_batch(
+    pairs: List[Tuple[torch.Tensor, torch.Tensor]], device: torch.device,
+) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    """Stack (left[L,4], right[L',4]) pairs into padded [B, Lmax, 4] tensors
+    PLUS boolean masks [B, Lmax] (True = real step).
+
+    The mask is REQUIRED. The discriminator's seeking encoder only ignores
+    padding when a mask is supplied (it uses pack_padded_sequence); with
+    mask=None it runs the LSTM over zero-padded rows as if they were real
+    (0,0) steps, so a pair's score would depend on the longest trajectory in
+    its batch (non-deterministic w.r.t. batching). Mirrors the mask convention
+    in famail_temporal/fidelity/context.py (True = valid step). Verify shape/
+    dtype against that module when implementing.
+    """
+    lefts = [p[0] for p in pairs]
+    rights = [p[1] for p in pairs]
+    lmax = max(t.shape[0] for t in lefts)
+    rmax = max(t.shape[0] for t in rights)
+
+    def _stack(tensors: List[torch.Tensor], m: int) -> Tuple[torch.Tensor, torch.Tensor]:
+        out = torch.zeros(len(tensors), m, 4, dtype=torch.float32)
+        mask = torch.zeros(len(tensors), m, dtype=torch.bool)
+        for i, t in enumerate(tensors):
+            n = t.shape[0]
+            out[i, :n] = t
+            mask[i, :n] = True
+        return out, mask
+
+    x1, m1 = _stack(lefts, lmax)
+    x2, m2 = _stack(rights, rmax)
+    return x1.to(device), x2.to(device), m1.to(device), m2.to(device)
+
+
+def _score_pairs(
+    discriminator: torch.nn.Module,
+    pairs: List[Tuple[torch.Tensor, torch.Tensor]],
+    *,
+    batch_size: int,
+    device: torch.device,
+) -> np.ndarray:
+    """Forward the discriminator over all pairs; return per-pair probs (N,)."""
+    probs: List[float] = []
+    with torch.no_grad():
+        for start in range(0, len(pairs), batch_size):
+            chunk = pairs[start : start + batch_size]
+            x1, x2, m1, m2 = _pad_pairs_to_batch(chunk, device)
+            out = discriminator(x1, x2, mask1=m1, mask2=m2)
+            probs.extend(out.reshape(-1).detach().cpu().tolist())
+    return np.asarray(probs, dtype=np.float64)
+
+
+def humid_paired_fidelity(
+    discriminator: torch.nn.Module,
+    pairs: List[Tuple[torch.Tensor, torch.Tensor]],
+    *,
+    batch_size: int = 64,
+    device: torch.device | None = None,
+) -> Dict[str, float]:
+    """Mean same-agent probability over (left, right) trajectory-tensor pairs."""
+    device = device or torch.device("cpu")
+    if not pairs:
+        return {"mean": float("nan"), "std": float("nan"), "n": 0}
+    probs = _score_pairs(discriminator, pairs, batch_size=batch_size, device=device)
+    return {
+        "mean": float(probs.mean()),
+        "std": float(probs.std(ddof=1)) if probs.size > 1 else 0.0,
+        "n": int(probs.size),
+    }
+
+
+def validation_gate(
+    discriminator: torch.nn.Module,
+    *,
+    real_pairs: List[Tuple[torch.Tensor, torch.Tensor]],
+    collapsed_pairs: List[Tuple[torch.Tensor, torch.Tensor]],
+    shuffled_pairs: List[Tuple[torch.Tensor, torch.Tensor]],
+    batch_size: int = 64,
+    device: torch.device | None = None,
+    margin: float = GATE_MARGIN,
+) -> Dict[str, object]:
+    """Does the discriminator rank real-vs-real above real-vs-garbage?
+
+    Passes iff high_real_real - max(low_collapsed, low_shuffled) >= margin AND
+    high_real_real exceeds both lows. All three means are returned regardless.
+    """
+    device = device or torch.device("cpu")
+    high = humid_paired_fidelity(discriminator, real_pairs, batch_size=batch_size, device=device)["mean"]
+    low_c = humid_paired_fidelity(discriminator, collapsed_pairs, batch_size=batch_size, device=device)["mean"]
+    low_s = humid_paired_fidelity(discriminator, shuffled_pairs, batch_size=batch_size, device=device)["mean"]
+    worst_low = max(low_c, low_s)
+    passed = bool((high - worst_low) >= margin and high > low_c and high > low_s)
+    return {
+        "high_real_real": float(high),
+        "low_collapsed": float(low_c),
+        "low_shuffled": float(low_s),
+        "margin": float(margin),
+        "passed": passed,
+    }
