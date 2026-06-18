@@ -84,6 +84,61 @@ def sample_terminal_cells_batched(
     return terminal, gen_len
 
 
+def generate_trajectories(
+    model: "TrajectoryLSTM",
+    contexts: List[Tuple[int, int]],
+    *,
+    max_len: int,
+    device: torch.device,
+    gen_batch_size: int = 512,
+    temperature: float = 1.0,
+    progress: bool = False,
+) -> List[List[int]]:
+    """One FULL cell-id sequence per context, index-aligned with ``contexts``.
+
+    Unlike ``generate_pickups`` (which keeps only the terminal cell), this
+    retains the entire rollout so downstream fidelity scoring can compare full
+    trajectories. Each context is ``(start flat-cell, start time-block)`` — the
+    tuple produced by ``sequences.trajectory_context``. Specials (BOS/EOS/PAD)
+    are stripped; only in-vocabulary cell ids (< N_CELLS) are kept. Batched
+    autoregressive decode mirrors ``sample_terminal_cells_batched``.
+    """
+    model.to(device).train(False)
+    results: List[List[int]] = []
+    bar = Progress(len(contexts), "generating trajectories", enabled=progress)
+    for start in range(0, len(contexts), gen_batch_size):
+        chunk = contexts[start : start + gen_batch_size]
+        b = len(chunk)
+        cc = torch.tensor([c for c, _ in chunk], dtype=torch.long, device=device)
+        tb = torch.tensor([t for _, t in chunk], dtype=torch.long, device=device)
+        prev = torch.full((b,), gc.BOS, dtype=torch.long, device=device)
+        hidden = None
+        done = torch.zeros(b, dtype=torch.bool, device=device)
+        seqs: List[List[int]] = [[] for _ in range(b)]
+        with torch.no_grad():
+            for _ in range(max_len):
+                logits, hidden = model.step(prev, cc, tb, hidden)   # (b, V)
+                probs = torch.softmax(logits / temperature, dim=-1)
+                nxt = torch.multinomial(probs, 1).squeeze(1)         # (b,)
+                nxt_cpu = nxt.tolist()
+                done_cpu = done.tolist()
+                for i in range(b):
+                    if done_cpu[i]:
+                        continue
+                    tok = nxt_cpu[i]
+                    if tok == gc.EOS:
+                        done[i] = True
+                    elif tok < gc.N_CELLS:
+                        seqs[i].append(tok)
+                prev = nxt
+                if bool(done.all()):
+                    break
+        results.extend(seqs)
+        bar.update(b)
+    bar.close()
+    return results
+
+
 def generate_pickups(
     model: TrajectoryLSTM, contexts: List[Tuple[int, int]],
     *, max_len: int, device: torch.device,
