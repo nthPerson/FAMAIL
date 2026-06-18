@@ -42,6 +42,8 @@ def test_boundary_segments_separate_differing_regions():
     assert np.isfinite(xs[:2]).all()
     # at least one vertical edge at x=1.5 (between col1 and col2 on row0) exists
     assert np.any(np.isclose(xs[np.isfinite(xs)], 1.5))
+    # at least one horizontal edge at y=0.5 (between row0 and row1 at col1) exists
+    assert np.any(np.isclose(ys[np.isfinite(ys)], 0.5))
 
 
 def test_boundary_segments_empty_when_uniform():

@@ -28,7 +28,10 @@ def compute_boundary_segments(region_label_grid: np.ndarray):
 
     Returns (xs, ys) in DISPLAY coords (x=col=y_grid, y=row=x_grid). Each segment
     is two finite points followed by NaN, so a single Plotly/Matplotlib line trace
-    renders all segments with gaps between them.
+    renders all segments with gaps between them.  When callers pass
+    ``district_id_grid`` (which uses −1 for non-Shenzhen cells), the segments
+    include the Shenzhen outer perimeter — edges between valid district cells and
+    −1 non-Shenzhen cells — in addition to inter-district edges.
     """
     g = region_label_grid
     rows, cols = g.shape
@@ -66,11 +69,16 @@ def assert_canonical_orientation(district_id_grid: np.ndarray, district_names: l
     bao_row, bao_col = c["Bao'an"]
     dap_row, dap_col = c["Dapeng"]
     gua_row, gua_col = c["Guangming"]
-    assert nan_row < 20, f"Nanshan should be south (row<20), got {nan_row:.1f}"
-    assert nan_col < 25, f"Nanshan should be west (col<25), got {nan_col:.1f}"
-    assert bao_col < 18, f"Bao'an should be far west (col<18), got {bao_col:.1f}"
-    assert dap_col > 65, f"Dapeng should be far east (col>65), got {dap_col:.1f}"
-    assert gua_row > 30, f"Guangming should be north (row>30), got {gua_row:.1f}"
+    if not (nan_row < 20):
+        raise AssertionError(f"Nanshan should be south (row<20), got {nan_row:.1f}")
+    if not (nan_col < 25):
+        raise AssertionError(f"Nanshan should be west (col<25), got {nan_col:.1f}")
+    if not (bao_col < 18):
+        raise AssertionError(f"Bao'an should be far west (col<18), got {bao_col:.1f}")
+    if not (dap_col > 65):
+        raise AssertionError(f"Dapeng should be far east (col>65), got {dap_col:.1f}")
+    if not (gua_row > 30):
+        raise AssertionError(f"Guangming should be north (row>30), got {gua_row:.1f}")
 
 
 def load_district_geometry(mapping_path: Optional[Path] = None) -> DistrictGeometry:
