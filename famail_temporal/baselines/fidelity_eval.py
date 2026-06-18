@@ -6,6 +6,7 @@ forward-only (under torch.no_grad). See
 docs/superpowers/specs/2026-06-17-level1-data-quality-table-design.md.
 """
 from __future__ import annotations
+import random
 from typing import TYPE_CHECKING, Dict, List, Sequence, Tuple, Union
 
 import numpy as np
@@ -286,4 +287,139 @@ def validation_gate(
         "low_shuffled": float(low_s),
         "margin": float(margin),
         "passed": passed,
+    }
+
+
+# --------------------------------------------- identity (N-set) Fidelity-A ----
+# Mirrors fidelity/context.py: a HuMID branch is N=5 seeking trajectories ---
+# slot 0 = the trajectory under test, slots 1..N-1 = the SAME driver's real
+# context trajectories --- plus that driver's real 11-dim profile. Driving is
+# omitted from BOTH branches (symmetric graceful degradation: the model falls
+# back to its fixed zero driving_default_embedding). This is exactly how HuMID
+# scores fidelity inside the editing algorithm, so generated/edited trajectories
+# are evaluated near the discriminator's trained regime (unlike v1's single
+# seeking-only trajectory, which was deeply OOD and failed the gate).
+
+N_TRAJS_PER_BRANCH = 5
+
+
+def _pad_one_set(trajs: List[torch.Tensor]) -> Tuple[torch.Tensor, torch.Tensor]:
+    """Pad a list of [Li,4] trajectories to ([N, Lmax, 4], mask [N, Lmax])."""
+    n = len(trajs)
+    lmax = max(t.shape[0] for t in trajs)
+    out = torch.zeros(n, lmax, 4, dtype=torch.float32)
+    mask = torch.zeros(n, lmax, dtype=torch.bool)
+    for i, t in enumerate(trajs):
+        li = t.shape[0]
+        out[i, :li] = t
+        mask[i, :li] = True
+    return out, mask
+
+
+def build_identity_branch(
+    slot0: torch.Tensor,
+    context: List[torch.Tensor],
+    *,
+    n: int = N_TRAJS_PER_BRANCH,
+    rng: "random.Random",
+) -> Tuple[torch.Tensor, torch.Tensor]:
+    """Build one N-trajectory HuMID branch: ([N, Lmax, 4], mask [N, Lmax]).
+
+    slot 0 = ``slot0`` (the trajectory under test); slots 1..n-1 are sampled
+    from ``context`` (the driver's real trajectories). If fewer than n-1
+    context trajectories are available they are sampled WITH REPLACEMENT; if
+    ``context`` is empty a single zero step is used (the model masks it out).
+    ``rng`` is injected for determinism. Coordinate convention is the caller's:
+    pass tensors already built via real_to_disc_tensor / generated_to_disc_tensor.
+    """
+    need = n - 1
+    if len(context) == 0:
+        ctx = [torch.zeros(1, 4, dtype=torch.float32) for _ in range(need)]
+    elif len(context) >= need:
+        ctx = rng.sample(context, need)
+    else:
+        ctx = [context[rng.randrange(len(context))] for _ in range(need)]
+    return _pad_one_set([slot0] + ctx)
+
+
+def _pad_sets_to_batch(pairs, device):
+    """Stack identity-branch pairs into batched 4D HuMID inputs + profiles.
+
+    Each pair is ((set_l [N,Ll,4], mask_l [N,Ll], prof_l [11]),
+                  (set_r [N,Lr,4], mask_r [N,Lr], prof_r [11])).
+    Returns (x1 [B,N,Lmax,4], x2, m1 [B,N,Lmax], m2, p1 [B,11], p2).
+    """
+    n = pairs[0][0][0].shape[0]
+    lmax = max(
+        max(p[0][0].shape[1] for p in pairs),
+        max(p[1][0].shape[1] for p in pairs),
+    )
+    b = len(pairs)
+    x1 = torch.zeros(b, n, lmax, 4, dtype=torch.float32)
+    x2 = torch.zeros(b, n, lmax, 4, dtype=torch.float32)
+    m1 = torch.zeros(b, n, lmax, dtype=torch.bool)
+    m2 = torch.zeros(b, n, lmax, dtype=torch.bool)
+    p1 = torch.zeros(b, 11, dtype=torch.float32)
+    p2 = torch.zeros(b, 11, dtype=torch.float32)
+    for i, ((sl, ml, pl), (sr, mr, pr)) in enumerate(pairs):
+        x1[i, :, : sl.shape[1]] = sl
+        m1[i, :, : ml.shape[1]] = ml
+        x2[i, :, : sr.shape[1]] = sr
+        m2[i, :, : mr.shape[1]] = mr
+        p1[i] = torch.as_tensor(pl, dtype=torch.float32)
+        p2[i] = torch.as_tensor(pr, dtype=torch.float32)
+    return (x1.to(device), x2.to(device), m1.to(device), m2.to(device),
+            p1.to(device), p2.to(device))
+
+
+def _score_identity_pairs(disc, pairs, *, batch_size, device) -> np.ndarray:
+    probs: List[float] = []
+    with torch.no_grad():
+        for start in range(0, len(pairs), batch_size):
+            chunk = pairs[start : start + batch_size]
+            x1, x2, m1, m2, p1, p2 = _pad_sets_to_batch(chunk, device)
+            out = disc(x1, x2, mask1=m1, mask2=m2, profile_1=p1, profile_2=p2)
+            probs.extend(out.reshape(-1).detach().cpu().tolist())
+    return np.asarray(probs, dtype=np.float64)
+
+
+def humid_identity_fidelity(
+    disc, pairs, *, batch_size: int = 64, device: torch.device | None = None,
+) -> Dict[str, float]:
+    """Mean same-agent probability over N-set identity-branch pairs."""
+    device = device or torch.device("cpu")
+    if not pairs:
+        return {"mean": float("nan"), "std": float("nan"), "n": 0}
+    disc.train(False)   # defensive inference mode (see humid_paired_fidelity)
+    probs = _score_identity_pairs(disc, pairs, batch_size=batch_size, device=device)
+    return {
+        "mean": float(probs.mean()),
+        "std": float(probs.std(ddof=1)) if probs.size > 1 else 0.0,
+        "n": int(probs.size),
+    }
+
+
+def identity_validation_gate(
+    disc, *, matched_pairs, mismatched_pairs,
+    batch_size: int = 64, device: torch.device | None = None,
+    margin: float = GATE_MARGIN,
+) -> Dict[str, object]:
+    """Real-anchored well-posedness gate for identity Fidelity-A.
+
+    Passes iff high_matched - low_mismatched >= margin AND high_matched >
+    low_mismatched. ``matched_pairs`` are same-driver branch pairs (expected
+    high); ``mismatched_pairs`` are different-driver pairs (expected low). All
+    means are returned regardless (an empty list -> NaN mean -> passed=False).
+    """
+    device = device or torch.device("cpu")
+    high = humid_identity_fidelity(disc, matched_pairs, batch_size=batch_size, device=device)
+    low = humid_identity_fidelity(disc, mismatched_pairs, batch_size=batch_size, device=device)
+    passed = bool((high["mean"] - low["mean"]) >= margin and high["mean"] > low["mean"])
+    return {
+        "high_matched": float(high["mean"]),
+        "low_mismatched": float(low["mean"]),
+        "margin": float(margin),
+        "passed": passed,
+        "n_matched": high["n"],
+        "n_mismatched": low["n"],
     }
