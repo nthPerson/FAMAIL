@@ -35,7 +35,10 @@ def build_views(bundle, state) -> dict:
     if state["contour_overlay"]:
         rd.build_contour_overlay(main, bundle.pickup[:, :, hour])
 
+    cmap = "RdBu_r" if cs == "RdBu_r" else "viridis"
     out = {"main": main}
+    out["main_export"] = {"slice2d": slice2d, "vmin": zmin, "vmax": zmax,
+                          "cmap": cmap, "title": title}
     if state["show_concentration_panel"]:
         csrc = bundle.pickup if state["shared_scale"] else bundle.pickup[:, :, hour]
         czmin, czmax, _, ccs = rd.color_range(csrc, signed=False, clip_pct=state["clip_pct"])
@@ -63,12 +66,13 @@ def main() -> None:  # pragma: no cover - Streamlit UI
         st.caption(f"Source: {m.get('source', '?')}  |  created {m.get('created', '?')}")
         quantity = st.radio("Quantity", rd.QUANTITIES, index=0)
         term = st.selectbox("Term / filter", rd.TERMS, index=1)
-        hour = st.slider("Hour (0–23)", 0, 23, 8)
-        cols = st.columns(2)
-        if cols[0].button("◀ prev"):
-            hour = (hour - 1) % 24
-        if cols[1].button("next ▶"):
-            hour = (hour + 1) % 24
+        st.session_state.setdefault("hour", 8)
+        bcols = st.columns(2)
+        if bcols[0].button("◀ prev"):
+            st.session_state.hour = (st.session_state.hour - 1) % 24
+        if bcols[1].button("next ▶"):
+            st.session_state.hour = (st.session_state.hour + 1) % 24
+        hour = st.slider("Hour (0–23)", 0, 23, key="hour")
         st.markdown("**Display**")
         magnitude = st.checkbox("|magnitude|", value=False)
         shared_scale = st.checkbox("Shared scale across 24 hours", value=True)
@@ -103,18 +107,12 @@ def main() -> None:  # pragma: no cover - Streamlit UI
     else:
         st.plotly_chart(views["main"], use_container_width=True)
 
-    field = rd.select_field(bundle, quantity, term, a_sp, a_ca, a_fi)
-    signed = rd.is_signed(quantity) and not (magnitude and rd.is_signed(quantity))
-    scale_src = field if shared_scale else field[:, :, hour]
-    if magnitude and rd.is_signed(quantity):
-        scale_src = np.abs(scale_src)
-    vmin, vmax, _, _ = rd.color_range(scale_src, signed, clip_pct)
-    slice2d = np.abs(field[:, :, hour]) if (magnitude and rd.is_signed(quantity)) else field[:, :, hour]
-    png = rd.export_png(slice2d, bundle.geometry,
-                        title=f"{quantity} — {term} — hour {hour:02d}",
-                        vmin=vmin, vmax=vmax,
-                        cmap="RdBu_r" if signed else "viridis",
-                        show_boundaries=show_boundaries)
+    exp = views["main_export"]
+    png = rd.export_png(
+        exp["slice2d"], bundle.geometry, title=exp["title"],
+        vmin=exp["vmin"], vmax=exp["vmax"], cmap=exp["cmap"],
+        show_boundaries=show_boundaries,
+    )
     st.download_button("Download publication PNG", data=png,
                        file_name=f"gradient_{quantity}_{term}_h{hour:02d}.png",
                        mime="image/png")

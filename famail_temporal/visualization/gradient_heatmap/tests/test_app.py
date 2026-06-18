@@ -47,3 +47,12 @@ def test_contour_overlay_adds_trace_to_main():
 def test_magnitude_mode_makes_scale_nonnegative():
     out = app.build_views(_bundle(), _state(magnitude=True))
     assert out["main"].data[0].zmin == 0.0
+
+
+def test_main_export_matches_main_figure():
+    out = app.build_views(_bundle(), _state())
+    exp = out["main_export"]
+    hm = out["main"].data[0]
+    assert exp["vmin"] == hm.zmin and exp["vmax"] == hm.zmax
+    assert exp["slice2d"].shape == (48, 90)
+    assert exp["cmap"] in ("RdBu_r", "viridis")
