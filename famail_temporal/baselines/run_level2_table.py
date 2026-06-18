@@ -314,6 +314,11 @@ def main(argv: List[str] | None = None) -> int:
     ap.add_argument("--max-batch-tokens", type=int,
                     default=gc.MLE_BATCH_SIZE * gc.MAX_TRAIN_TOKENS,
                     help="Token-budget cap per MLE minibatch for full-corpus training.")
+    ap.add_argument("--gen-max-tokens", type=int, default=gc.MAX_TRAIN_TOKENS,
+                    help="Max token length for the BC/GAN GENERATOR pretraining "
+                         "corpus (matches Level-1 v2; filters the ~0.7%% long "
+                         "outliers the adversarial trainer cannot batch). The "
+                         "downstream policies still train on the full corpus.")
     ap.add_argument("--device", type=str, default="auto")
     ap.add_argument("--out-dir", type=Path, default=None)
     ap.add_argument("--quiet", action="store_true")
@@ -359,15 +364,25 @@ def main(argv: List[str] | None = None) -> int:
     profiles = bundle.multi_stream.profile_features
     zeros11 = np.zeros(11, dtype=np.float32)
 
-    # ---- Build the L1 generators ONCE (full corpus; max_tokens=None) ----
+    # ---- Build the L1 generators ONCE (token-capped, matching Level-1 v2) ----
     # These supply the bcgen / gangen TRAINING data (one rollout per real seed),
     # not the policies under test. They are trained on the first seed so the
     # generated training corpora are fixed across the paired loop.
+    #
+    # The generators are pretrained on the --gen-max-tokens-capped corpus (256,
+    # identical to Level-1 v2) -- NOT the full corpus. The ~0.7% long outliers
+    # (up to 1654 tokens) cannot be batched by the adversarial GAN trainer (no
+    # token-budget guard there) and the generators emit at most MAX_GEN_LEN=64
+    # tokens regardless, so capping is lossless and keeps these generators
+    # consistent with the validated Level-1 table. The full-corpus property the
+    # fairness claim rests on lives on the DOWNSTREAM training data: D_bcgen /
+    # D_gangen are still full-corpus-SIZED (one rollout per real seed across all
+    # 105,401 trajectories) and trained with the --max-batch-tokens budget.
     _log(f"[level2] training BC generator (MLE-only, {args.mle_epochs} epochs, "
          f"n_drivers={len(driver_to_idx)})")
     bc = _train_and_generate_cond(
         raw_trajs, driver_to_idx, adv_epochs=0, gan_loss="bce", n_critic=1,
-        mle_epochs=args.mle_epochs, max_len=max_len, max_tokens=None,
+        mle_epochs=args.mle_epochs, max_len=max_len, max_tokens=args.gen_max_tokens,
         device=device, seed=seeds[0],
     )
     _log(f"[level2] training GAN generator ({args.gan_loss}, mle={args.mle_epochs}, "
@@ -375,7 +390,7 @@ def main(argv: List[str] | None = None) -> int:
     gan = _train_and_generate_cond(
         raw_trajs, driver_to_idx, adv_epochs=args.adv_epochs, gan_loss=args.gan_loss,
         n_critic=args.n_critic, mle_epochs=args.mle_epochs, max_len=max_len,
-        max_tokens=None, device=device, seed=seeds[0],
+        max_tokens=args.gen_max_tokens, device=device, seed=seeds[0],
     )
 
     # ---- Build the four matched, full-corpus TRAINING datasets ----
@@ -538,6 +553,9 @@ def main(argv: List[str] | None = None) -> int:
         "gate": gate,
         "n_eval_drivers": len(drivers),
         "trusted": trusted,
+        "gen_max_tokens": args.gen_max_tokens,
+        "max_batch_tokens": args.max_batch_tokens,
+        "mle_epochs": args.mle_epochs,
         "per_source": per_source,
         "paired": paired,
     }
