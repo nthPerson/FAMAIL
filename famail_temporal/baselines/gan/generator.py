@@ -21,23 +21,44 @@ class TrajectoryLSTM(nn.Module):
         embed_dim: int = gc.EMBED_DIM,
         hidden_dim: int = gc.HIDDEN_DIM,
         n_layers: int = gc.N_LAYERS,
+        n_drivers: int | None = None,
     ):
         super().__init__()
-        self.cell_embed = nn.Embedding(vocab_size, embed_dim, padding_idx=gc.PAD)
+        self.cell_embed = nn.Embedding(
+            vocab_size, embed_dim,
+            padding_idx=gc.PAD if gc.PAD < vocab_size else None,
+        )
         self.tblock_embed = nn.Embedding(n_tblocks, embed_dim)
+        # Optional additive driver conditioning. Absent (n_drivers=None) -> the
+        # model is bit-for-bit the original unconditioned generator.
+        if n_drivers is not None:
+            self.driver_embed = nn.Embedding(n_drivers, embed_dim)
         self.lstm = nn.LSTM(
             embed_dim, hidden_dim, num_layers=n_layers, batch_first=True,
         )
         self.head = nn.Linear(hidden_dim, vocab_size)
+
+    def _ctx(self, ctx_cell, ctx_tblock, driver_idx=None):
+        """Additive conditioning context (B, E): cell + tblock [+ driver]."""
+        ctx = self.cell_embed(ctx_cell) + self.tblock_embed(ctx_tblock)
+        if driver_idx is not None:
+            if not hasattr(self, "driver_embed"):
+                raise ValueError(
+                    "driver_idx was supplied but this TrajectoryLSTM was built "
+                    "without n_drivers (no driver embedding exists)."
+                )
+            ctx = ctx + self.driver_embed(driver_idx)
+        return ctx
 
     def forward(
         self,
         tokens: torch.Tensor,      # (B, L) long input token ids
         ctx_cell: torch.Tensor,    # (B,) long start-cell ids
         ctx_tblock: torch.Tensor,  # (B,) long start time-block ids
+        driver_idx: torch.Tensor | None = None,  # (B,) long driver ids
     ) -> torch.Tensor:
         x = self.cell_embed(tokens)                                   # (B, L, E)
-        ctx = self.cell_embed(ctx_cell) + self.tblock_embed(ctx_tblock)  # (B, E)
+        ctx = self._ctx(ctx_cell, ctx_tblock, driver_idx)            # (B, E)
         x = x + ctx.unsqueeze(1)                                      # broadcast
         out, _ = self.lstm(x)                                         # (B, L, H)
         return self.head(out)                                        # (B, L, V)
@@ -48,6 +69,7 @@ class TrajectoryLSTM(nn.Module):
         ctx_cell: torch.Tensor,     # (B,) long start-cell ids
         ctx_tblock: torch.Tensor,   # (B,) long start time-block ids
         hidden=None,                # (h, c) LSTM state from the previous step
+        driver_idx: torch.Tensor | None = None,
     ):
         """Single-step decode from a precomputed input embedding.
 
@@ -59,7 +81,7 @@ class TrajectoryLSTM(nn.Module):
         (it only zeros a hard-index lookup); callers are responsible for
         masking PAD positions if they matter.
         """
-        ctx = self.cell_embed(ctx_cell) + self.tblock_embed(ctx_tblock)  # (B, E)
+        ctx = self._ctx(ctx_cell, ctx_tblock, driver_idx)            # (B, E)
         x = (input_embed + ctx).unsqueeze(1)                          # (B, 1, E)
         out, hidden = self.lstm(x, hidden)                            # (B, 1, H)
         return self.head(out[:, -1]), hidden                          # (B, V), state
@@ -70,6 +92,7 @@ class TrajectoryLSTM(nn.Module):
         ctx_cell: torch.Tensor,    # (B,) long start-cell ids
         ctx_tblock: torch.Tensor,  # (B,) long start time-block ids
         hidden=None,               # (h, c) LSTM state from the previous step
+        driver_idx: torch.Tensor | None = None,
     ):
         """Single-step decode from a token id: next-token logits + LSTM state.
 
@@ -77,4 +100,7 @@ class TrajectoryLSTM(nn.Module):
         prefix (LSTM is a recurrence), with the same per-step additive
         conditioning. Delegates to step_embed after embedding the token.
         """
-        return self.step_embed(self.cell_embed(token), ctx_cell, ctx_tblock, hidden)
+        return self.step_embed(
+            self.cell_embed(token), ctx_cell, ctx_tblock, hidden,
+            driver_idx=driver_idx,
+        )
