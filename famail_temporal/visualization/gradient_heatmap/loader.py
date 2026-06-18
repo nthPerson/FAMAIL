@@ -27,12 +27,13 @@ class VizBundle:
 
 def load_bundle(path=DEFAULT_BUNDLE_PATH) -> VizBundle:
     path = Path(path)
-    if not path.exists():
+    try:
+        z = np.load(path, allow_pickle=False)
+    except FileNotFoundError as exc:
         raise FileNotFoundError(
             f"viz bundle not found at {path}; run "
             f"`python -m famail_temporal.visualization.gradient_heatmap.precompute` first"
-        )
-    z = np.load(path, allow_pickle=False)
+        ) from exc
     geometry = DistrictGeometry(
         district_id_grid=z["district_id_grid"],
         valid_mask=z["valid_mask"].astype(bool),
@@ -40,7 +41,7 @@ def load_bundle(path=DEFAULT_BUNDLE_PATH) -> VizBundle:
         boundary_x=z["boundary_x"],
         boundary_y=z["boundary_y"],
     )
-    for key in ("grad_spatial", "grad_causal", "attr_spatial", "attr_causal", "pickup"):
+    for key in ("grad_spatial", "grad_causal", "attr_spatial", "attr_causal", "pickup", "active_mask"):
         if z[key].shape != (48, 90, 24):
             raise ValueError(f"{key} has shape {z[key].shape}, expected (48,90,24)")
     return VizBundle(

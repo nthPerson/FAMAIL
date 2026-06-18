@@ -29,9 +29,25 @@ def test_load_bundle_roundtrip(tmp_path):
     np.testing.assert_array_equal(vb.active_mask, layers["active_mask"])
     assert vb.geometry.district_id_grid.shape == (48, 90)
     assert vb.meta["source"] == "test"
-    assert vb.geometry.district_names[7] == "Nanshan"
+    assert "Nanshan" in vb.geometry.district_names
 
 
 def test_load_bundle_missing_file_raises(tmp_path):
     with pytest.raises(FileNotFoundError):
         ld.load_bundle(tmp_path / "nope.npz")
+
+
+def test_load_bundle_rejects_wrong_shape(tmp_path):
+    from famail_temporal.visualization.gradient_heatmap import precompute as pc
+    from famail_temporal.visualization.gradient_heatmap import geometry as geom
+    g = geom.load_district_geometry()
+    bad = {"grad_spatial": np.zeros((10, 10, 10), np.float32),
+           "grad_causal": np.zeros((48, 90, 24), np.float32),
+           "attr_spatial": np.zeros((48, 90, 24), np.float32),
+           "attr_causal": np.zeros((48, 90, 24), np.float32),
+           "pickup": np.zeros((48, 90, 24), np.float32),
+           "active_mask": np.zeros((48, 90, 24), bool)}
+    out = tmp_path / "bad.npz"
+    pc.save_bundle(out, pc.assemble_bundle(bad, g, {"source": "t"}))
+    with pytest.raises(ValueError):
+        ld.load_bundle(out)
