@@ -123,6 +123,8 @@ def stat_ranges(stat_lists: List[List[Dict[str, float]]]) -> Dict[str, tuple]:
     ranges: Dict[str, tuple] = {}
     for key in _STAT_KEYS:
         vals = [float(s[key]) for stats in stat_lists for s in stats]
+        # No values pooled -> degenerate (0,0) grid -> _hist returns a uniform
+        # histogram -> JS divergence 0 (the only sensible answer with no data).
         ranges[key] = (min(vals), max(vals)) if vals else (0.0, 0.0)
     return ranges
 
@@ -142,7 +144,18 @@ def distributional_fidelity(
     statistic — the orchestrator computes it once via ``stat_ranges`` over ALL
     sources (spec §7) so per-source numbers are comparable. If None, falls back
     to the per-call pooled src+raw range (used by the unit tests).
+
+    Both sides must be non-empty: an empty ``source_stats`` against a populated
+    grid would yield an all-zero histogram and a positive-but-meaningless JS
+    (divergence from a distribution that has no samples). The orchestrator
+    excludes empty rollouts upstream (``n_empty``), so this is a contract guard.
     """
+    if not source_stats or not raw_stats:
+        raise ValueError(
+            "distributional_fidelity requires non-empty source_stats and "
+            f"raw_stats (got len(source)={len(source_stats)}, "
+            f"len(raw)={len(raw_stats)})"
+        )
     per_stat: Dict[str, float] = {}
     for key in _STAT_KEYS:
         src = [float(s[key]) for s in source_stats]

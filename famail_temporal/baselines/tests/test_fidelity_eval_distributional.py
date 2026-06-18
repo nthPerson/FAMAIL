@@ -40,3 +40,37 @@ def test_aggregate_is_mean_of_three():
         (ps["length"] + ps["mean_displacement"] + ps["coverage"]) / 3.0,
         rel_tol=1e-9,
     )
+
+
+def test_stat_ranges_pools_min_max_across_all_sources():
+    raw = _stats([10, 13], [1.0, 1.0], [8, 8])
+    gen = _stats([50, 56], [0.5, 2.0], [3, 20])
+    ranges = fe.stat_ranges([raw, gen])
+    assert ranges["length"] == (10.0, 56.0)         # pooled across both sources
+    assert ranges["mean_displacement"] == (0.5, 2.0)
+    assert ranges["coverage"] == (3.0, 20.0)
+
+
+def test_shared_grid_path_identical_is_zero_and_values_bounded():
+    # Exercises the PRODUCTION path: a precomputed shared grid passed via
+    # ranges=, as the orchestrator does (the ranges=None fallback is test-only).
+    raw = _stats([10, 11, 12, 13], [1.0]*4, [8, 8, 8, 8])
+    gen = _stats([50, 52, 54, 56], [1.0]*4, [8, 8, 8, 8])
+    ranges = fe.stat_ranges([raw, gen])             # one grid spanning both
+    # Identical distributions on the shared grid -> 0 divergence.
+    same = fe.distributional_fidelity(raw, raw, bins=20, ranges=ranges)
+    assert math.isclose(same["aggregate"], 0.0, abs_tol=1e-9)
+    # Disjoint lengths on the shared grid -> high length JS, all values in [0,1].
+    out = fe.distributional_fidelity(gen, raw, bins=20, ranges=ranges)
+    assert out["per_stat"]["length"] > 0.9
+    for v in out["per_stat"].values():
+        assert 0.0 <= v <= 1.0 + 1e-9
+
+
+def test_distributional_fidelity_rejects_empty_inputs():
+    raw = _stats([10, 20], [1.0, 2.0], [5, 6])
+    import pytest
+    with pytest.raises(ValueError):
+        fe.distributional_fidelity([], raw)
+    with pytest.raises(ValueError):
+        fe.distributional_fidelity(raw, [])
