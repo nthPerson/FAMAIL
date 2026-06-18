@@ -50,7 +50,7 @@ def color_range(values: np.ndarray, signed: bool, clip_pct: float = 99.0):
     """Return (zmin, zmax, zmid_or_None, colorscale) using a robust percentile clip."""
     finite = values[np.isfinite(values)]
     if finite.size == 0:
-        return (0.0, 1.0, None, "Viridis")
+        return (-1.0, 1.0, 0.0, "RdBu_r") if signed else (0.0, 1.0, None, "Viridis")
     if signed:
         v = float(np.percentile(np.abs(finite), clip_pct))
         if v <= 0:
