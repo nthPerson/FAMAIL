@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import numpy as np
+import plotly.graph_objects as go
 
 QUANTITIES = ["Gradient", "Attribution", "Concentration"]
 TERMS = ["F_spatial", "F_causal", "F_fidelity", "Combined", "Spatial+Causal"]
@@ -60,3 +61,61 @@ def color_range(values: np.ndarray, signed: bool, clip_pct: float = 99.0):
     if hi <= 0:
         hi = float(finite.max()) or 1.0
     return (0.0, hi, None, "Viridis")
+
+
+def build_heatmap_figure(slice2d, geometry, *, title, zmin, zmax, zmid,
+                         colorscale, show_boundaries=True):
+    """Square-cell heatmap, South at the bottom, West at the left, with optional
+    district boundary overlay. slice2d is (48,90) indexed [row=x_grid][col=y_grid]."""
+    rows, cols = slice2d.shape
+    fig = go.Figure(
+        go.Heatmap(
+            z=slice2d, x=np.arange(cols), y=np.arange(rows),
+            zmin=zmin, zmax=zmax, zmid=zmid, colorscale=colorscale,
+            colorbar=dict(title="value"),
+            hovertemplate="y_grid(col)=%{x}<br>x_grid(row)=%{y}<br>value=%{z}<extra></extra>",
+        )
+    )
+    if show_boundaries:
+        fig.add_trace(go.Scatter(
+            x=geometry.boundary_x, y=geometry.boundary_y, mode="lines",
+            line=dict(color="black", width=1), hoverinfo="skip", showlegend=False,
+        ))
+    fig.update_xaxes(title="y_grid (West → East)", constrain="domain")
+    fig.update_yaxes(title="x_grid (South → North)",
+                     scaleanchor="x", scaleratio=1, constrain="domain")
+    fig.update_layout(title=title, margin=dict(l=40, r=20, t=50, b=40))
+    return fig
+
+
+def build_contour_overlay(fig, pickup_slice):
+    """Overlay pickup-concentration iso-lines on an existing figure."""
+    rows, cols = pickup_slice.shape
+    fig.add_trace(go.Contour(
+        z=pickup_slice, x=np.arange(cols), y=np.arange(rows),
+        showscale=False, contours_coloring="lines", line_width=1,
+        colorscale="Greys", hoverinfo="skip", opacity=0.6,
+    ))
+    return fig
+
+
+def export_png(slice2d, geometry, *, title, vmin, vmax, cmap, show_boundaries=True):
+    """Render a publication-quality PNG (Matplotlib, origin='lower'); return bytes."""
+    import io
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    fig, ax = plt.subplots(figsize=(13, 7))
+    im = ax.imshow(slice2d, origin="lower", cmap=cmap, vmin=vmin, vmax=vmax,
+                   aspect="equal", interpolation="nearest")
+    if show_boundaries:
+        ax.plot(geometry.boundary_x, geometry.boundary_y, color="black", lw=0.8)
+    ax.set_xlabel("y_grid (West → East)")
+    ax.set_ylabel("x_grid (South → North)")
+    ax.set_title(title)
+    fig.colorbar(im, ax=ax, fraction=0.025)
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", dpi=130, bbox_inches="tight")
+    plt.close(fig)
+    return buf.getvalue()
