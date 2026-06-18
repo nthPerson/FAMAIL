@@ -63,7 +63,7 @@ def test_wgan_adversarial_finetune_smoke():
         tau_start=1.0, tau_end=0.5, device=torch.device("cpu"),
         gan_loss="wgan-gp", n_critic=2, mle_lambda=0.0,
     )
-    assert set(out) == {"g_losses", "d_losses"}
+    assert set(out) == {"g_losses", "d_losses", "g_batch_losses", "d_batch_losses"}
     assert len(out["g_losses"]) == 1 and len(out["d_losses"]) == 1
     assert all(map(torch.isfinite, map(torch.tensor, out["g_losses"])))
     assert all(map(torch.isfinite, map(torch.tensor, out["d_losses"])))

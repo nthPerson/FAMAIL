@@ -28,9 +28,13 @@ def test_finetune_runs_and_updates_generator():
         device=torch.device("cpu"),
     )
 
-    assert set(history) == {"g_losses", "d_losses"}
+    assert set(history) == {"g_losses", "d_losses", "g_batch_losses", "d_batch_losses"}
     assert len(history["g_losses"]) == 2 and len(history["d_losses"]) == 2
     assert all(math.isfinite(x) for x in history["g_losses"] + history["d_losses"])
+    # Per-batch loss lists: non-empty, all finite, and d_batch_losses has >= #epochs entries.
+    assert len(history["g_batch_losses"]) > 0
+    assert len(history["d_batch_losses"]) >= len(history["d_losses"])
+    assert all(math.isfinite(x) for x in history["g_batch_losses"] + history["d_batch_losses"])
     # The generator's parameters moved (fine-tune actually stepped G).
     after = model.state_dict()
     assert any(
@@ -60,7 +64,7 @@ def test_finetune_with_stabilization_knobs_runs():
         device=torch.device("cpu"),
     )
 
-    assert set(history) == {"g_losses", "d_losses"}
+    assert set(history) == {"g_losses", "d_losses", "g_batch_losses", "d_batch_losses"}
     assert all(math.isfinite(x) for x in history["g_losses"] + history["d_losses"])
     # d_update_every=2 with 2 batches/epoch -> the critic updates on batch 0
     # only, so d_losses is still populated (no divide-by-zero).
@@ -85,5 +89,5 @@ def test_finetune_mle_lambda_disabled_runs():
         max_len=8, tau_start=1.0, tau_end=0.5, mle_lambda=0.0,
         device=torch.device("cpu"),
     )
-    assert set(history) == {"g_losses", "d_losses"}
+    assert set(history) == {"g_losses", "d_losses", "g_batch_losses", "d_batch_losses"}
     assert all(math.isfinite(x) for x in history["g_losses"] + history["d_losses"])
