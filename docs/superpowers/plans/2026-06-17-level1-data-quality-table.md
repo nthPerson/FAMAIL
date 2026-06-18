@@ -22,6 +22,7 @@
 - **Fairness convention:** higher = fairer (F_causal, F_spatial). Fidelity-A: higher = more realistic. Fidelity-B: a divergence, **lower = more faithful**.
 - **Edit source default:** `famail_temporal/results/2026-05-28T08-51-32_k-10000_causal_emphasis_no-dedup` (the no-dedup k=10000 edit, ΔF_causal +0.0128).
 - **Discriminator checkpoint:** `famail_temporal/discriminator_checkpoints/default/best.pt`.
+- **`Progress` API:** `Progress(total, desc, enabled=...)` then `.update(n, **postfix)` / `.close()` — the second arg is `desc` (pass it positionally; do NOT use `label=`).
 
 > **Noted refinement of spec §3.4 (flag for reviewers):** the spec says generated per-step `time_bucket` = the generation context's time block. The generation context carries `t_block` (a coarse model-level block from `hour_to_block_index`), whereas the discriminator was trained on raw `time_bucket` (30-min index) — a units mismatch. To avoid feeding the discriminator an out-of-units value, the converter takes an explicit `time_bucket` and `day_index`, and the orchestrator supplies the **paired real seed trajectory's first-state `time_bucket` and `day_index`**. This is more realistic than fabricating from `t_block` and keeps the generated trajectory's temporal context in-distribution. Same intent as the spec (a fixed synthesized temporal context per generated trajectory); cleaner units.
 
@@ -348,7 +349,7 @@ git commit -m "feat(baselines): fidelity tensor builders + trajectory statistics
 
 **Interfaces:**
 - Consumes: `trajectory_statistics` (Task 2), `jensen_shannon_divergence` (existing).
-- Produces: `distributional_fidelity(source_stats, raw_stats, *, bins=50) -> dict{"per_stat": {"length", "mean_displacement", "coverage"}, "aggregate": float}` where each value is the JS divergence (bits, lower=better) between the source's and raw's histogram of that statistic; `aggregate` = mean of the three.
+- Produces: `BINS = 50` (module constant); `stat_ranges(stat_lists) -> dict{stat -> (lo, hi)}` (pooled range across ALL sources); `distributional_fidelity(source_stats, raw_stats, *, bins=BINS, ranges=None) -> dict{"per_stat": {"length", "mean_displacement", "coverage"}, "aggregate": float}` where each value is the JS divergence (bits, lower=better) between the source's and raw's histogram of that statistic; `aggregate` = mean of the three.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -412,6 +413,7 @@ Append to `famail_temporal/baselines/fidelity_eval.py`:
 # -------------------------------------------------- distributional fidelity ----
 
 _STAT_KEYS = ("length", "mean_displacement", "coverage")
+BINS = 50   # shared histogram bin count (spec §7: "Bin spec is a module constant")
 
 
 def _hist(values: List[float], lo: float, hi: float, bins: int) -> np.ndarray:
@@ -427,30 +429,53 @@ def _hist(values: List[float], lo: float, hi: float, bins: int) -> np.ndarray:
     return counts.astype(np.float64) / total
 
 
+def stat_ranges(stat_lists: List[List[Dict[str, float]]]) -> Dict[str, tuple]:
+    """Pooled (lo, hi) per statistic across ALL given sources (spec §7).
+
+    Pass ``[raw_stats, edited_stats, bc_stats, gan_stats]`` so every source is
+    histogrammed on ONE shared grid and the per-source JS values are mutually
+    comparable.
+    """
+    ranges: Dict[str, tuple] = {}
+    for key in _STAT_KEYS:
+        vals = [float(s[key]) for stats in stat_lists for s in stats]
+        ranges[key] = (min(vals), max(vals)) if vals else (0.0, 0.0)
+    return ranges
+
+
 def distributional_fidelity(
     source_stats: List[Dict[str, float]],
     raw_stats: List[Dict[str, float]],
     *,
-    bins: int = 50,
+    bins: int = BINS,
+    ranges: Dict[str, tuple] | None = None,
 ) -> Dict[str, object]:
     """Per-statistic JS divergence (bits, lower=better) of source vs raw.
 
-    For each of {length, mean_displacement, coverage}, histogram the source
-    values and the raw values on a SHARED bin grid (pooled min..max of both),
-    then take the Jensen-Shannon divergence. aggregate = mean of the three.
+    For each of {length, mean_displacement, coverage}, histogram the source and
+    raw values on a shared bin grid, then take the Jensen-Shannon divergence.
+    aggregate = mean of the three. ``ranges`` supplies the shared (lo, hi) per
+    statistic — the orchestrator computes it once via ``stat_ranges`` over ALL
+    sources (spec §7) so per-source numbers are comparable. If None, falls back
+    to the per-call pooled src+raw range (used by the unit tests).
     """
     per_stat: Dict[str, float] = {}
     for key in _STAT_KEYS:
         src = [float(s[key]) for s in source_stats]
         raw = [float(s[key]) for s in raw_stats]
-        pooled = src + raw
-        lo, hi = (min(pooled), max(pooled)) if pooled else (0.0, 0.0)
+        if ranges is not None:
+            lo, hi = ranges[key]
+        else:
+            pooled = src + raw
+            lo, hi = (min(pooled), max(pooled)) if pooled else (0.0, 0.0)
         p = _hist(src, lo, hi, bins)
         q = _hist(raw, lo, hi, bins)
         per_stat[key] = float(jensen_shannon_divergence(p, q))
     aggregate = float(np.mean([per_stat[k] for k in _STAT_KEYS]))
     return {"per_stat": per_stat, "aggregate": aggregate}
 ```
+
+The unit tests above pass `ranges=None` (per-call pooling) and remain valid; the orchestrator (Task 5) calls `stat_ranges([raw, edited, bc, gan])` once and passes the result to every `distributional_fidelity` call so all four sources share one grid (spec §7).
 
 - [ ] **Step 4: Run the tests to verify they pass**
 
@@ -576,20 +601,35 @@ GATE_MARGIN = 0.2   # min (high_real_real - max low) for the gate to pass
 
 def _pad_pairs_to_batch(
     pairs: List[Tuple[torch.Tensor, torch.Tensor]], device: torch.device,
-) -> Tuple[torch.Tensor, torch.Tensor]:
-    """Stack a list of (left[L,4], right[L',4]) into padded [B, Lmax, 4] tensors."""
+) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    """Stack (left[L,4], right[L',4]) pairs into padded [B, Lmax, 4] tensors
+    PLUS boolean masks [B, Lmax] (True = real step).
+
+    The mask is REQUIRED. The discriminator's seeking encoder only ignores
+    padding when a mask is supplied (it uses pack_padded_sequence); with
+    mask=None it runs the LSTM over zero-padded rows as if they were real
+    (0,0) steps, so a pair's score would depend on the longest trajectory in
+    its batch (non-deterministic w.r.t. batching). Mirrors the mask convention
+    in famail_temporal/fidelity/context.py (True = valid step). Verify shape/
+    dtype against that module when implementing.
+    """
     lefts = [p[0] for p in pairs]
     rights = [p[1] for p in pairs]
     lmax = max(t.shape[0] for t in lefts)
     rmax = max(t.shape[0] for t in rights)
 
-    def _stack(tensors: List[torch.Tensor], lmax: int) -> torch.Tensor:
-        out = torch.zeros(len(tensors), lmax, 4, dtype=torch.float32)
+    def _stack(tensors: List[torch.Tensor], m: int) -> Tuple[torch.Tensor, torch.Tensor]:
+        out = torch.zeros(len(tensors), m, 4, dtype=torch.float32)
+        mask = torch.zeros(len(tensors), m, dtype=torch.bool)
         for i, t in enumerate(tensors):
-            out[i, : t.shape[0]] = t
-        return out
+            n = t.shape[0]
+            out[i, :n] = t
+            mask[i, :n] = True
+        return out, mask
 
-    return _stack(lefts, lmax).to(device), _stack(rights, rmax).to(device)
+    x1, m1 = _stack(lefts, lmax)
+    x2, m2 = _stack(rights, rmax)
+    return x1.to(device), x2.to(device), m1.to(device), m2.to(device)
 
 
 def _score_pairs(
@@ -604,8 +644,8 @@ def _score_pairs(
     with torch.no_grad():
         for start in range(0, len(pairs), batch_size):
             chunk = pairs[start : start + batch_size]
-            x1, x2 = _pad_pairs_to_batch(chunk, device)
-            out = discriminator(x1, x2)
+            x1, x2, m1, m2 = _pad_pairs_to_batch(chunk, device)
+            out = discriminator(x1, x2, mask1=m1, mask2=m2)
             probs.extend(out.reshape(-1).detach().cpu().tolist())
     return np.asarray(probs, dtype=np.float64)
 
@@ -690,14 +730,20 @@ git commit -m "feat(baselines): HuMID paired fidelity + validation gate (Fidelit
 - Produces: `run_level1_table.py` CLI; unit-testable pure helpers `result_to_json(result) -> str` and `render_table(result) -> str`.
 
 **Design notes for the implementer (the full run is GPU + manual; only the pure helpers are unit-tested here):**
-- **Sources & trajectories:** raw = `bundle.trajectories`; edited = `load_edited_trajectories(bundle, edit_dir)`; BC + GAN = re-train via `fit_and_evaluate(...)` then re-build the model is not returned by `fit_and_evaluate`, so generation must happen INSIDE a dedicated train+generate path. Use this approach: call a new private `_train_and_generate(bundle, train_trajectories, *, gan_loss, n_critic, mle_epochs, adv_epochs, max_len, device, seed, fidelity_sample_size)` that mirrors `fit_and_evaluate`'s training (MLE [+ adversarial for GAN]) but returns the trained `model` so the orchestrator can call `generate_trajectories`. To avoid duplicating training logic, import and reuse the training functions `train_mle` and `adversarial_finetune` directly (both are public in `gan/train_mle.py` / `gan/train_adversarial.py`), exactly as `model_level.fit_and_evaluate` does.
-- **Fidelity sample:** full-trajectory generation for fidelity uses a context SAMPLE of size `fidelity_sample_size` (default 5000) — the first N filtered contexts — for tractability (looped/batched full decode over all ~105k is unnecessary for a mean realism estimate; the fairness columns still use full terminal-cell generation via `generate_pickups`). This is a v1 performance choice consistent with spec §3.3 (single-seed, coarse fidelity); document it in the results doc.
-- **Pairing:** for BC/GAN, `contexts = [trajectory_context(t) for t in filtered_train][:N]` and `real_pairs_source = filtered_train[:N]`; `gen_cells = generate_trajectories(model, contexts, ...)`; pair `(real_to_disc_tensor(filtered_train[i]), generated_to_disc_tensor(gen_cells[i], time_bucket=filtered_train[i].states[0].time_bucket, day_index=filtered_train[i].states[0].day_index))`. Skip pairs whose `gen_cells[i]` is empty (count as `n_empty`). `filtered_train` = trajectories surviving the same `max_tokens` filter `fit_and_evaluate` applies (replicate it: `[t for t in train if len(trajectory_to_tokens(t)) <= max_tokens]`).
-- **Edited pairing:** read `histories.pkl`; pair `(real_to_disc_tensor(h.original), real_to_disc_tensor(h.modified))` over a sample.
-- **Validation gate inputs:** `real_pairs` = `(real_to_disc_tensor(t_i), real_to_disc_tensor(t_i))` self-pairs over a raw sample; `collapsed_pairs` = `(real_to_disc_tensor(real_i), generated_to_disc_tensor(gan_cells_i, ...))` drawn from the GAN source's longest rollouts; `shuffled_pairs` = `(real_to_disc_tensor(real_i), generated_to_disc_tensor(shuffle(real_i cells), ...))` where the real cells are randomly permuted.
-- **Fairness columns:** per source, terminal cells → `pickups_to_pickup_3d` → `data_level_fairness`. Raw uses `data_level_fairness(bundle)`; edited uses the edit's terminal cells; BC/GAN use their full generation's terminal cells (last cell of each rollout via `generate_pickups`, kept separate from the fidelity sample). Label all as single-seed.
-- **Gate → trust:** set each source's `fidelity_a_trusted = gate["passed"]`.
-- **Persistence:** per-run dir `Path(config.PACKAGE_ROOT)/"results"/"level1_table"/<timestamp>/` with `level1_metrics.json`, `level1_table.md`, `trajectory_stats.npz`; print a summary.
+- **Imports (the shown snippet omits these — add them):** `from famail_temporal.baselines.gan import config as gc`, `trajectory_context`/`trajectory_to_tokens` from `gan.sequences`, `load_edited_trajectories` from `gan.variants`, `generate_trajectories`/`generate_pickups`/`pickups_to_pickup_3d` from `gan.rollout`, `data_level_fairness` from `baselines.metrics`, `train_mle` from `gan.train_mle`, `adversarial_finetune` from `gan.train_adversarial`, `load_discriminator` from `famail_temporal.fidelity.checkpoint`, and all of `baselines.fidelity_eval`. (`gc` is needed before `argparse` defaults reference `gc.MAX_TRAIN_TOKENS`, else `--help` fails.)
+- **Train+generate (the model is needed, but `fit_and_evaluate` does NOT return it):** add a private `_train_and_generate(bundle, train_trajectories, *, adv_epochs, gan_loss, n_critic, mle_epochs, max_len, max_tokens, device, seed, fidelity_sample_size, gen_batch_size) -> dict` that replicates the proven pattern in **`famail_temporal/baselines/gan/model_level.py`** (note the `gan/` path) `fit_and_evaluate` (lines ~77-123): build `pairs` via the SAME `max_tokens` filter, `train_mle(model, sequences, contexts, ...)`, then for the GAN source `adversarial_finetune(model, ..., gan_loss=gan_loss, n_critic=n_critic, epochs=adv_epochs)`. Returns `{model, filtered_train, contexts}` so the orchestrator can both `generate_pickups` (full terminal cells → fairness) and `generate_trajectories` (sampled full rollouts → fidelity). Reuse `train_mle`/`adversarial_finetune` directly (both public).
+- **BC IS MLE-ONLY (B0).** The BC source calls `_train_and_generate(..., adv_epochs=0)` — it must NEVER receive adversarial fine-tuning, or it is not the B0 baseline the table claims. Only the GAN source passes `adv_epochs = args.adv_epochs` + `gan_loss`/`n_critic`.
+- **ONE filtered list (alignment — spec §10; "silently wrong" otherwise):** compute `filtered_train = [t for t in bundle.trajectories if len(trajectory_to_tokens(t)) <= max_tokens]` ONCE per source, and derive BOTH `contexts = [trajectory_context(t) for t in filtered_train]` and the real-pair source FROM THE SAME `filtered_train`. The i-th generated trajectory pairs with `filtered_train[i]`. `_train_and_generate` must return the exact `filtered_train` it used so the orchestrator pairs against the identical ordering (do NOT recompute the filter separately for pairing). **Task 5b below adds a test locking this alignment.**
+- **Fidelity sample:** full-trajectory generation for fidelity uses the first `fidelity_sample_size` (default 5000) of `filtered_train`/`contexts` for tractability; the fairness columns still use full terminal-cell generation (`generate_pickups`) over all contexts. v1 single-seed coarse-fidelity choice (spec §3.3); state it in the results doc.
+- **BC/GAN pairing:** for `i` in the sample, `gen_cells = generate_trajectories(model, contexts[:N], ...)`; pair `(real_to_disc_tensor(filtered_train[i]), generated_to_disc_tensor(gen_cells[i], time_bucket=filtered_train[i].states[0].time_bucket, day_index=filtered_train[i].states[0].day_index))`. **Skip pairs whose `gen_cells[i]` is empty; count them in `n_empty` (per source).**
+- **Edited pairing:** read `histories.pkl` (`pickle.load`); each entry has `.original` and `.modified` (both `Trajectory`); pair `(real_to_disc_tensor(h.original), real_to_disc_tensor(h.modified))` over a sample.
+- **Validation gate inputs:** `real_pairs` = `(real_to_disc_tensor(t_i), real_to_disc_tensor(t_i))` self-pairs over a raw sample; `collapsed_pairs` = `(real_to_disc_tensor(real_i), generated_to_disc_tensor(gan_cells_i, ...))` selected as the GAN source's **longest** rollouts (`sorted(gan_cells, key=len, reverse=True)[:K]`, paired with their own `filtered_train[i]`); `shuffled_pairs` = `(real_to_disc_tensor(real_i), generated_to_disc_tensor(random.sample(real_i_cells, len), ...))` (real cells randomly permuted). If the GAN run did NOT collapse (max gen length not meaningfully above the real ~18), the gate's `low_collapsed` is not a true degraded case — record `gan_max_len` in the metrics and note this caveat; the gate still runs (it is non-fatal by design).
+- **EXPECTED: the gate will likely FAIL on the real discriminator.** Measured on the real checkpoint: real-vs-real ≈ 0.71 vs real-vs-collapsed ≈ 0.66 (gap ≈ 0.05 ≪ the 0.2 margin). This is the **designed fallback** (spec §6): mark Fidelity-A `trusted: false` and lead with Fidelity-B. Not a bug — the results doc (Task 6) must present Fidelity-B as primary in that case.
+- **Fairness columns (single-seed):** per source, terminal cells → `pickups_to_pickup_3d(bundle, pickups)` → `data_level_fairness(bundle, pickup_3d=grid)`. Raw uses `data_level_fairness(bundle)`; edited uses the edited trajectories' terminal cells; BC/GAN use `generate_pickups` over all contexts. All single-seed — `render_table` annotates the fairness columns "(single-seed)".
+- **Shared Fidelity-B grid (spec §7):** after building all four sources' `trajectory_statistics` lists, compute `ranges = stat_ranges([raw_stats, edited_stats, bc_stats, gan_stats])` ONCE and pass `ranges=ranges` to every `distributional_fidelity` call so all sources share one grid.
+- **Per-source result fields:** `f_causal`, `f_spatial` (single-seed), `fidelity_a` (= `humid_paired_fidelity(...)["mean"]`), `fidelity_a_std`, `fidelity_a_n`, `fidelity_a_trusted` (= `gate["passed"]`), `fidelity_b` (= `distributional_fidelity(...)["aggregate"]`), `fidelity_b_per_stat`, `n_empty`. (Raw: `fidelity_a = high_real_real` from the gate; `fidelity_b = 0.0`; `n_empty = 0`.)
+- **Checkpoint:** `ckpt = Path(config.PACKAGE_ROOT)/"discriminator_checkpoints"/"default"/"best.pt"`; if not `ckpt.exists()`, raise `SystemExit` with a message naming the expected path; else `disc = load_discriminator(ckpt)`.
+- **Persistence:** per-run dir `Path(config.PACKAGE_ROOT)/"results"/"level1_table"/<timestamp>/` with `level1_metrics.json` (full `result` incl. `gate`, per-source fields, `gan_max_len`), `level1_table.md` (`render_table`), `trajectory_stats.npz` (per-source statistic arrays); print a summary.
 
 - [ ] **Step 1: Write the failing test (pure helpers only)**
 
@@ -716,18 +762,19 @@ def _fake_result():
                  "low_shuffled": 0.39, "margin": 0.2, "passed": True},
         "sources": {
             "raw":    {"f_causal": 0.8052, "f_spatial": 0.0822,
-                       "fidelity_a": 1.0, "fidelity_a_trusted": True,
-                       "fidelity_b": 0.0},
+                       "fidelity_a": 1.0, "fidelity_a_std": 0.0, "fidelity_a_n": 500,
+                       "fidelity_a_trusted": True, "fidelity_b": 0.0, "n_empty": 0},
             "edited": {"f_causal": 0.8180, "f_spatial": 0.0824,
-                       "fidelity_a": 0.79, "fidelity_a_trusted": True,
-                       "fidelity_b": 0.03},
+                       "fidelity_a": 0.79, "fidelity_a_std": 0.05, "fidelity_a_n": 500,
+                       "fidelity_a_trusted": True, "fidelity_b": 0.03, "n_empty": 0},
             "bc":     {"f_causal": 0.8062, "f_spatial": 0.0828,
-                       "fidelity_a": 0.71, "fidelity_a_trusted": True,
-                       "fidelity_b": 0.05},
+                       "fidelity_a": 0.71, "fidelity_a_std": 0.06, "fidelity_a_n": 498,
+                       "fidelity_a_trusted": True, "fidelity_b": 0.05, "n_empty": 2},
             "gan":    {"f_causal": 0.8198, "f_spatial": 0.0843,
-                       "fidelity_a": 0.22, "fidelity_a_trusted": True,
-                       "fidelity_b": 0.61},
+                       "fidelity_a": 0.22, "fidelity_a_std": 0.04, "fidelity_a_n": 495,
+                       "fidelity_a_trusted": True, "fidelity_b": 0.61, "n_empty": 5},
         },
+        "gan_max_len": 52,
         "edit_dir": "famail_temporal/results/2026-05-28T08-51-32_k-10000_causal_emphasis_no-dedup",
     }
 
@@ -737,6 +784,8 @@ def test_result_to_json_roundtrips():
     loaded = json.loads(blob)
     assert loaded["sources"]["edited"]["f_causal"] == 0.8180
     assert loaded["gate"]["passed"] is True
+    assert loaded["sources"]["gan"]["n_empty"] == 5          # diagnostic persisted
+    assert loaded["sources"]["bc"]["fidelity_a_n"] == 498
 
 
 def test_render_table_contains_sources_and_gate_verdict():
@@ -746,7 +795,43 @@ def test_render_table_contains_sources_and_gate_verdict():
         assert label in md
     assert "0.8180" in md          # edited f_causal rendered
     assert "PASSED" in md or "passed" in md
+    assert "single-seed" in md     # fairness columns annotated
 ```
+
+- [ ] **Step 1b: Add the max_tokens alignment test (spec §10 — "silently wrong" guard)**
+
+Append to `famail_temporal/baselines/tests/test_run_level1_table.py` a test that locks the gen-context / real-pair alignment. It builds a synthetic bundle, runs the BC train+generate path with a tiny model, and asserts the returned `filtered_train` and `contexts` are the SAME length and index-aligned (`contexts[i] == trajectory_context(filtered_train[i])`), and that the `max_tokens` filter applied matches a recomputation:
+
+```python
+import torch
+from famail_temporal.tests.test_objective import _make_synthetic_bundle
+from famail_temporal.baselines.tests._helpers import active_units, make_traj_at
+from famail_temporal.baselines.gan.sequences import (
+    trajectory_context, trajectory_to_tokens,
+)
+
+
+def test_train_and_generate_alignment_contexts_match_filtered_train():
+    bundle = _make_synthetic_bundle()
+    units = active_units(bundle, 12)
+    bundle.trajectories.extend(
+        make_traj_at(cx, cy, tb, traj_id=i) for i, (cx, cy, tb) in enumerate(units)
+    )
+    out = r._train_and_generate(
+        bundle, bundle.trajectories, adv_epochs=0, gan_loss="bce", n_critic=1,
+        mle_epochs=1, max_len=8, max_tokens=256, device=torch.device("cpu"),
+        seed=0, fidelity_sample_size=10, gen_batch_size=4,
+    )
+    ft, ctx = out["filtered_train"], out["contexts"]
+    assert len(ft) == len(ctx)
+    expected = [t for t in bundle.trajectories
+                if len(trajectory_to_tokens(t)) <= 256]
+    assert len(ft) == len(expected)
+    for i in range(len(ft)):
+        assert ctx[i] == trajectory_context(ft[i])   # index alignment
+```
+
+(This test trains a tiny CPU model for 1 epoch — slower than the pure helpers but the decisive guard against the silent pairing-desync hazard. If the suite must stay GPU-free and fast, mark it `@pytest.mark.slow`.)
 
 - [ ] **Step 2: Run the test to verify it fails**
 
@@ -782,6 +867,11 @@ import torch
 
 from famail_temporal import config
 from famail_temporal.data.loader import DataBundle
+# Implementer: also import gc (gan.config), the gan.sequences/variants/rollout
+# helpers, baselines.metrics.data_level_fairness, gan.train_mle.train_mle,
+# gan.train_adversarial.adversarial_finetune, fidelity.checkpoint.load_discriminator,
+# and baselines.fidelity_eval — see Design notes "Imports". `gc` MUST be imported
+# before the argparse defaults reference gc.MAX_TRAIN_TOKENS / gc.GEN_BATCH_SIZE.
 
 
 _SOURCE_ORDER = ["raw", "edited", "bc", "gan"]
@@ -811,7 +901,11 @@ def render_table(result: dict) -> str:
         "# Level-1 Data-Quality Table\n\n"
         f"Edit source: `{result['edit_dir']}`\n\n"
         f"{gate_line}\n\n"
-        "| Source | F_causal | F_spatial | Fidelity-A (HuMID, higher=better) "
+        "_Fairness columns are single-seed (this table's internal coherence); the "
+        "authoritative multi-seed fairness figures are the variance-suite 5-seed "
+        "mean ± std._\n\n"
+        "| Source | F_causal (single-seed) | F_spatial (single-seed) "
+        "| Fidelity-A (HuMID, higher=better) "
         "| Fidelity-B (divergence, lower=better) |\n"
         "|---|---:|---:|---:|---:|\n"
         + "\n".join(rows) + "\n"
@@ -821,7 +915,7 @@ def render_table(result: dict) -> str:
 # ... main() and helpers (_train_and_generate, source assembly, gate, persist) ...
 ```
 
-The implementer completes `main(argv)` and the private helpers per the design notes above. `main` must: parse args (`--edit-dir`, `--mle-epochs` default 20, `--adv-epochs` default 3, `--gan-loss` default `wgan-gp`, `--n-critic` default 5, `--max-tokens` default `gc.MAX_TRAIN_TOKENS`, `--fidelity-sample-size` default 5000, `--gen-batch-size`, `--seed` default 0, `--device` default `auto`, `--out-dir`, `--quiet`); build the four sources; run the gate; compute Fidelity-A/B + fairness per source; assemble `result` with the exact key shape the tests expect (`gate`, `sources[<key>]` with `f_causal/f_spatial/fidelity_a/fidelity_a_trusted/fidelity_b`, `edit_dir`); persist `level1_metrics.json` + `level1_table.md` (via `render_table`) + `trajectory_stats.npz`; print a summary. Resolve the discriminator path as `Path(config.PACKAGE_ROOT)/"discriminator_checkpoints"/"default"/"best.pt"` and load via `load_discriminator(path)`.
+The implementer completes `main(argv)` and the private helpers per the design notes above. `main` must: parse args (`--edit-dir`, `--mle-epochs` default 20, `--adv-epochs` default 3 [GAN source only — BC is always `adv_epochs=0`], `--gan-loss` default `wgan-gp`, `--n-critic` default 5, `--max-tokens` default `gc.MAX_TRAIN_TOKENS`, `--fidelity-sample-size` default 5000, `--gen-batch-size` default `gc.GEN_BATCH_SIZE`, `--seed` default 0, `--device` default `auto`, `--out-dir`, `--quiet`); build the four sources (BC via `_train_and_generate(..., adv_epochs=0)`, GAN via `_train_and_generate(..., adv_epochs=args.adv_epochs, gan_loss=args.gan_loss, n_critic=args.n_critic)`); run the gate (collapsed sample = GAN's longest rollouts); compute Fidelity-A (gated) + Fidelity-B (shared `stat_ranges`) + single-seed fairness per source; assemble `result` with the field set from the design notes (`gate`; `sources[<key>]` with `f_causal/f_spatial/fidelity_a/fidelity_a_std/fidelity_a_n/fidelity_a_trusted/fidelity_b/fidelity_b_per_stat/n_empty`; `gan_max_len`; `edit_dir`); persist `level1_metrics.json` + `level1_table.md` (via `render_table`) + `trajectory_stats.npz`; print a summary including the gate verdict and, if the gate failed, a "Fidelity-B is primary" line. Resolve the discriminator path as `Path(config.PACKAGE_ROOT)/"discriminator_checkpoints"/"default"/"best.pt"`; if it does not exist, raise `SystemExit` naming the path; else `load_discriminator(path)`.
 
 - [ ] **Step 4: Run the test to verify it passes**
 
@@ -863,7 +957,9 @@ Expected: writes a timestamped dir under `famail_temporal/results/level1_table/`
 
 - [ ] **Step 2: Write `LEVEL1_RESULTS.md`**
 
-Create `famail_temporal/baselines/LEVEL1_RESULTS.md` (paper-ready) with: the filled 4×4 table (copied from the run's `level1_metrics.json`); the validation-gate verdict and what it implies (if failed, lead with Fidelity-B and say so); one interpretation paragraph per metric; the headline finding (does FAM-AIL edited data win on causal fairness among faithful sources, and does fidelity disqualify the collapsed GAN?); a "single-seed v1" caveat; and the exact reproduction command + per-run dir path. Cross-link the spec and `MEETING_38_PREP.md`.
+Create `famail_temporal/baselines/LEVEL1_RESULTS.md` (paper-ready) with: the filled 4×4 table (copied from the run's `level1_metrics.json`); the validation-gate verdict and what it implies; one interpretation paragraph per metric; the headline finding (does FAM-AIL edited data win on causal fairness among faithful sources, and does fidelity disqualify the collapsed GAN?); a "single-seed v1" caveat; and the exact reproduction command + per-run dir path. Cross-link the spec and `MEETING_38_PREP.md`.
+
+**Expect the gate to FAIL** (measured on the real checkpoint during planning: real-vs-real ≈ 0.71 vs real-vs-collapsed ≈ 0.66, gap ≈ 0.05 ≪ the 0.2 margin). That is the spec's designed fallback, not a defect: when the gate fails, **lead the results doc with Fidelity-B** (the discriminator-free distributional metric — which cleanly separates sources via the length axis) and report Fidelity-A as a flagged, untrusted secondary. If the gate unexpectedly passes, present Fidelity-A as primary. Either way the headline data-quality claim rests on F_causal + Fidelity-B, where the collapsed GAN is disqualified by its length-distribution divergence.
 
 - [ ] **Step 3: Commit the results doc**
 
@@ -901,3 +997,14 @@ git commit -m "docs(baselines): Level-1 data-quality results (first real-data ru
 - `result` dict shape (`gate`, `sources[key]{f_causal,f_spatial,fidelity_a,fidelity_a_trusted,fidelity_b}`, `edit_dir`) consistent between Task 5 impl, its test, and `render_table`. ✓
 
 **4. Standing constraints:** branch `two-level-paper`; named-file staging; no `eval(` literal; baselines-only (no algorithm/fairness/fidelity edits); forward-only `no_grad`; +1 coords; flat-cell un-flatten; edit-source + checkpoint paths pinned in Global Constraints. ✓
+
+**5. Adversarial-review fixes applied (two reviewers, 2026-06-17):**
+- **Discriminator mask (Critical):** `_pad_pairs_to_batch` now builds boolean masks and `_score_pairs` passes `mask1`/`mask2` — without them the encoder consumes zero-padding as real steps and scores become batch-dependent (Task 4).
+- **`model_level` path (Critical):** corrected to `famail_temporal/baselines/gan/model_level.py`; `train_mle`/`adversarial_finetune` imported from `gan.train_mle`/`gan.train_adversarial` (Task 5 notes).
+- **BC is MLE-only (Critical):** BC source uses `adv_epochs=0`; only GAN gets adversarial fine-tuning (Task 5 notes + main prose).
+- **max_tokens alignment (Critical):** one `filtered_train` drives both contexts and real-pairs; Task 5b adds the alignment test (spec §10).
+- **Shared Fidelity-B grid (Important):** `stat_ranges` over all four sources; orchestrator passes `ranges=` to every `distributional_fidelity` call (spec §7) — corrects the earlier per-source pooling.
+- **Collapsed-gate sample (Important):** selected as the GAN's longest rollouts; `gan_max_len` recorded; caveat if no collapse (Task 5 notes).
+- **`n_empty` diagnostic (Important):** per-source field, persisted, asserted in the Task 5 test.
+- **Gate expected to fail (Important heads-up):** measured real-real 0.71 vs collapsed 0.66 (gap ≪ 0.2) → Fidelity-B leads; designed fallback, surfaced in Task 5 notes + Task 6.
+- **Minors:** `gc` import note (so `--help` works); `fidelity_a_std`/`fidelity_a_n` persisted; single-seed annotation in `render_table` + its test; checkpoint-missing `SystemExit` with named path; `BINS` module constant.

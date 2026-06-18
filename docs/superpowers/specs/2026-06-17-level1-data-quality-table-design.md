@@ -133,7 +133,7 @@ Pure-ish evaluation functions (take trajectory data + a discriminator; no traini
 - `generate_trajectories(model, contexts, *, max_len, device, gen_batch_size, temperature=1.0, progress=False) -> List[List[int]]` — one full cell sequence per context, index-aligned with `contexts`. Reuses the existing autoregressive decode (`sample_trajectory_cells` logic or a batched equivalent). Existing `generate_pickups` / `sample_terminal_cells_batched` unchanged.
 
 ### 8.3 `baselines/run_level1_table.py` (new)
-Orchestrator CLI. Flags: `--edit-dir` (default canonical no-dedup k-10000), `--mle-epochs` (default 20), `--gan-config` (which WGAN schedule, default critic-heavy n_critic=5), `--bc-seed`/`--gan-seed` (default 0), `--max-tokens`, `--gen-batch-size`, `--device`, `--out-dir`, `--quiet`.
+Orchestrator CLI. Flags: `--edit-dir` (default canonical no-dedup k-10000), `--mle-epochs` (default 20), `--adv-epochs` (default 3, applies to the GAN source ONLY; BC is always MLE-only / `adv_epochs=0`), `--gan-loss` (default `wgan-gp`), `--n-critic` (default 5, the critic-heavy WGAN schedule), `--fidelity-sample-size` (default 5000), `--seed` (default 0, shared by both generated sources in single-seed v1), `--max-tokens`, `--gen-batch-size`, `--device`, `--out-dir`, `--quiet`. **BC source is strictly MLE-only (B0); it never receives adversarial fine-tuning.**
 Flow:
 1. `DataBundle.load()`; load edited trajectories (`load_edited_trajectories`) + histories pairs.
 2. Build the four source trajectory lists (raw, edited; BC + GAN via re-train + `generate_trajectories`).
