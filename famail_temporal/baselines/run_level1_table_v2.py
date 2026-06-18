@@ -147,19 +147,26 @@ def _real_context_tensors(real_trajs) -> List[torch.Tensor]:
 
 def _build_source_pairs(
     *, real_slot0: List[torch.Tensor], source_slot0: List[torch.Tensor],
+    source_slot0_other: List[torch.Tensor],
     real_context: List[torch.Tensor], source_context_other: List[torch.Tensor],
     profile_d, profile_dp, rng: random.Random,
 ) -> Tuple[list, list]:
     """Build matched + mismatched identity-branch pair lists for one driver.
 
     matched[i] = ( branch(real_slot0[i], real_context, prof d),
-                   branch(source_slot0[i], real_context, prof d) )    # same driver
+                   branch(source_slot0[i], real_context, prof d) )      # same driver d
     mismatched[i] = ( branch(real_slot0[i], real_context, prof d),
-                      branch(source_slot0[i], source_context_other, prof d') )  # diff driver
+                      branch(source_slot0_other[i], source_context_other, prof d') )  # diff driver
 
-    For raw, source_slot0 are other real-d trajectories. For edited/bc/gan,
-    source_slot0 are edited/generated-for-d trajectories. ``source_context_other``
-    is the OTHER driver d''s real context (used only in the mismatched branch).
+    The mismatched branch must be a CLEAN different-driver branch: its slot-0 is
+    the source's trajectory FOR THE OTHER DRIVER d' (``source_slot0_other``),
+    framed with d''s real context + d''s profile (plan decisions 4/5). Using
+    d's own slot-0 reframed as d' would leave the same driver-d trajectory in
+    slot 0 of both branches, which is not a same-vs-different-driver test.
+
+    For raw, source_slot0 / source_slot0_other are real-d / real-d' trajectories.
+    For edited/bc/gan they are edited/generated-for-d / -for-d'. The matched and
+    mismatched lists are sized independently (d and d' may have different counts).
     Pure given pre-built tensors + an injected rng.
     """
     matched, mismatched = [], []
@@ -170,8 +177,10 @@ def _build_source_pairs(
             (real_branch[0], real_branch[1], profile_d),
             (src_branch_d[0], src_branch_d[1], profile_d),
         ))
+    for i in range(min(len(real_slot0), len(source_slot0_other))):
+        real_branch = fe.build_identity_branch(real_slot0[i], real_context, rng=rng)
         src_branch_dp = fe.build_identity_branch(
-            source_slot0[i], source_context_other, rng=rng,
+            source_slot0_other[i], source_context_other, rng=rng,
         )
         mismatched.append((
             (real_branch[0], real_branch[1], profile_d),
@@ -410,82 +419,86 @@ def main(argv: List[str] | None = None) -> int:
     for h in histories:
         edited_by_driver.setdefault(int(h.modified.driver_id), []).append(h.modified)
 
-    # Accumulate matched + mismatched pairs per source across eval drivers.
-    matched: Dict[str, list] = {k: [] for k in _SOURCE_ORDER}
-    mismatched: Dict[str, list] = {k: [] for k in _SOURCE_ORDER}
+    # ---- Pass 1: precompute each eval driver's per-source slot-0 sets + context.
+    # We need EVERY driver's sets in hand before pairing, because the mismatched
+    # branch for driver d pairs against the next driver d' (real-d', edited-d',
+    # gen-for-d'), so a single forward pass cannot supply d' before it is built.
+    _log(f"[level1-v2] building per-driver slot-0 sets ({len(eval_drivers)} drivers)")
+    real_slot0_by_d: Dict[int, list] = {}
+    real_context_by_d: Dict[int, list] = {}
+    prof_by_d: Dict[int, object] = {}
+    raw_slot0_by_d: Dict[int, list] = {}
+    edited_slot0_by_d: Dict[int, list] = {}
+    gen_slot0_by_d: Dict[str, Dict[int, list]] = {"bc": {}, "gan": {}}
 
-    for k, d in enumerate(eval_drivers):
-        dprime = eval_drivers[(k + 1) % len(eval_drivers)]  # mismatch partner
+    for d in eval_drivers:
         real_d = groups[d]
-        real_dp = groups[dprime]
-        # Context pools: ALL of each driver's real trajectories (build_identity_
-        # branch samples slots 1..N-1 from these).
-        real_context_d = _real_context_tensors(real_d)
-        real_context_dp = _real_context_tensors(real_dp)
+        # Context pool: ALL of d's real trajectories (build_identity_branch
+        # samples slots 1..N-1 from these).
+        real_context_by_d[d] = _real_context_tensors(real_d)
         prof_d = profiles.get(d)
-        prof_dp = profiles.get(dprime)
         if prof_d is None:
             _log(f"[level1-v2] WARN driver {d} has no profile -> zero profile")
             prof_d = zeros11
-        if prof_dp is None:
-            _log(f"[level1-v2] WARN driver {dprime} has no profile -> zero profile")
-            prof_dp = zeros11
+        prof_by_d[d] = prof_d
 
-        # REAL branch slot-0: up to ppd of d's real trajectories (the
-        # trajectory-under-test for the REAL/anchor branch).
-        real_slot0 = [fe.real_to_disc_tensor(t) for t in real_d[:ppd]]
-        if not real_slot0:
-            continue
+        # REAL/anchor branch slot-0: up to ppd of d's real trajectories.
+        real_slot0_by_d[d] = [fe.real_to_disc_tensor(t) for t in real_d[:ppd]]
 
-        # ---- raw source: source_slot0 = a DISJOINT sample of d's real trajs
-        # (real-d vs another real-d). If d has too few for a disjoint second
-        # half, sample WITH REPLACEMENT (note: degrades to overlapping pairs).
+        # raw source slot-0: a DISJOINT second sample of d's real trajectories
+        # (so raw "matched" = real-d vs another real-d). Too few for a disjoint
+        # half -> sample WITH REPLACEMENT (note: degrades to overlapping pairs).
+        n_take = len(real_slot0_by_d[d])
         n_avail = len(real_d)
-        if n_avail >= 2 * len(real_slot0):
-            raw_slot0 = [
-                fe.real_to_disc_tensor(t)
-                for t in real_d[len(real_slot0):len(real_slot0) + len(real_slot0)]
+        if n_take and n_avail >= 2 * n_take:
+            raw_slot0_by_d[d] = [
+                fe.real_to_disc_tensor(t) for t in real_d[n_take:2 * n_take]
+            ]
+        elif n_take:
+            raw_slot0_by_d[d] = [
+                fe.real_to_disc_tensor(real_d[rng.randrange(n_avail)])
+                for _ in range(n_take)
             ]
         else:
-            # too few for disjoint -> sample with replacement
-            raw_slot0 = [
-                fe.real_to_disc_tensor(real_d[rng.randrange(n_avail)])
-                for _ in range(len(real_slot0))
-            ]
-        m, mm = _build_source_pairs(
-            real_slot0=real_slot0, source_slot0=raw_slot0,
-            real_context=real_context_d, source_context_other=real_context_dp,
-            profile_d=prof_d, profile_dp=prof_dp, rng=rng,
-        )
-        matched["raw"].extend(m)
-        mismatched["raw"].extend(mm)
+            raw_slot0_by_d[d] = []
 
-        # ---- edited source: source_slot0 = edited-d modified trajectories
-        ed_d = edited_by_driver.get(d, [])
-        if ed_d:
-            edited_slot0 = [fe.real_to_disc_tensor(t) for t in ed_d[:ppd]]
-            m, mm = _build_source_pairs(
-                real_slot0=real_slot0, source_slot0=edited_slot0,
-                real_context=real_context_d, source_context_other=real_context_dp,
-                profile_d=prof_d, profile_dp=prof_dp, rng=rng,
-            )
-            matched["edited"].extend(m)
-            mismatched["edited"].extend(mm)
-        # (driver with no edited trajectories is skipped for the edited source only)
+        # edited source slot-0: d's own modified trajectories (may be empty).
+        edited_slot0_by_d[d] = [
+            fe.real_to_disc_tensor(t) for t in edited_by_driver.get(d, [])[:ppd]
+        ]
 
-        # ---- bc / gan sources: driver-conditioned generated slot-0
+        # bc / gan source slot-0: driver-conditioned generated trajectories.
         for name, src in (("bc", bc), ("gan", gan)):
-            gen_slot0 = _gen_cond_slot0(
+            gen_slot0_by_d[name][d] = _gen_cond_slot0(
                 src["model"], real_d, driver_to_idx[d],
                 pairs_per_driver=ppd, max_len=max_len, device=device,
                 gen_batch_size=args.gen_batch_size,
             )
-            if not gen_slot0:
-                continue
+
+    # ---- Pass 2: pair each driver d against mismatch partner d' = next driver.
+    # matched = (real-d, source-of-d) both profile d; mismatched = (real-d,
+    # source-of-d' + d' context + d' profile). _build_source_pairs tolerates
+    # empty source lists (e.g. a driver with no edited trajectories) by
+    # contributing nothing for that (source, driver) pairing.
+    matched: Dict[str, list] = {k: [] for k in _SOURCE_ORDER}
+    mismatched: Dict[str, list] = {k: [] for k in _SOURCE_ORDER}
+    source_slot0_by_d = {
+        "raw": raw_slot0_by_d, "edited": edited_slot0_by_d,
+        "bc": gen_slot0_by_d["bc"], "gan": gen_slot0_by_d["gan"],
+    }
+    for k, d in enumerate(eval_drivers):
+        dprime = eval_drivers[(k + 1) % len(eval_drivers)]  # mismatch partner
+        real_slot0 = real_slot0_by_d[d]
+        if not real_slot0:
+            continue
+        for name in _SOURCE_ORDER:
             m, mm = _build_source_pairs(
-                real_slot0=real_slot0, source_slot0=gen_slot0,
-                real_context=real_context_d, source_context_other=real_context_dp,
-                profile_d=prof_d, profile_dp=prof_dp, rng=rng,
+                real_slot0=real_slot0,
+                source_slot0=source_slot0_by_d[name][d],
+                source_slot0_other=source_slot0_by_d[name][dprime],
+                real_context=real_context_by_d[d],
+                source_context_other=real_context_by_d[dprime],
+                profile_d=prof_by_d[d], profile_dp=prof_by_d[dprime], rng=rng,
             )
             matched[name].extend(m)
             mismatched[name].extend(mm)

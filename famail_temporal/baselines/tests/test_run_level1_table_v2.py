@@ -54,7 +54,8 @@ def test_build_source_pairs_alignment_smoke():
     prof_dp = np.ones(11, dtype=np.float32)
     matched, mismatched = r2._build_source_pairs(
         real_slot0=[_tt(0), _tt(1)],
-        source_slot0=[_tt(5), _tt(6)],
+        source_slot0=[_tt(5), _tt(6)],            # source-of-d (matched)
+        source_slot0_other=[_tt(7), _tt(8)],      # source-of-d' (mismatched)
         real_context=real_ctx,
         source_context_other=real_ctx,
         profile_d=prof_d, profile_dp=prof_dp, rng=rng,
@@ -63,3 +64,26 @@ def test_build_source_pairs_alignment_smoke():
     # each pair is ((set,mask,prof),(set,mask,prof))
     (sl, ml, pl), (sr, mr, pr) = matched[0]
     assert sl.shape[0] == fe.N_TRAJS_PER_BRANCH
+
+
+def test_build_source_pairs_mismatched_uses_other_slot0():
+    """mismatched length tracks source_slot0_other, independent of source_slot0."""
+    rng = random.Random(0)
+    def _tt(base, L=4):
+        return torch.tensor(
+            [[base + i + 1.0, base + i + 1.0, 10.0, 1.0] for i in range(L)],
+            dtype=torch.float32,
+        )
+    import numpy as np
+    real_ctx = [_tt(10), _tt(20), _tt(30), _tt(40)]
+    matched, mismatched = r2._build_source_pairs(
+        real_slot0=[_tt(0), _tt(1)],
+        source_slot0=[_tt(5), _tt(6)],            # 2 -> matched length 2
+        source_slot0_other=[_tt(7)],              # 1 -> mismatched length 1
+        real_context=real_ctx,
+        source_context_other=real_ctx,
+        profile_d=np.zeros(11, dtype=np.float32),
+        profile_dp=np.ones(11, dtype=np.float32),
+        rng=rng,
+    )
+    assert len(matched) == 2 and len(mismatched) == 1
