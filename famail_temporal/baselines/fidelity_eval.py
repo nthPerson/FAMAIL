@@ -92,3 +92,68 @@ def trajectory_statistics(
         ]
         mean_disp = float(np.mean(dists))
     return {"length": length, "mean_displacement": mean_disp, "coverage": coverage}
+
+
+# -------------------------------------------------- distributional fidelity ----
+
+_STAT_KEYS = ("length", "mean_displacement", "coverage")
+BINS = 50   # shared histogram bin count (spec §7: "Bin spec is a module constant")
+
+
+def _hist(values: List[float], lo: float, hi: float, bins: int) -> np.ndarray:
+    """Normalized histogram over [lo, hi]; uniform if the range is degenerate."""
+    arr = np.asarray(values, dtype=np.float64)
+    if hi <= lo:
+        h = np.ones(bins, dtype=np.float64)
+        return h / h.sum()
+    counts, _ = np.histogram(arr, bins=bins, range=(lo, hi))
+    total = counts.sum()
+    if total == 0:
+        return np.zeros(bins, dtype=np.float64)
+    return counts.astype(np.float64) / total
+
+
+def stat_ranges(stat_lists: List[List[Dict[str, float]]]) -> Dict[str, tuple]:
+    """Pooled (lo, hi) per statistic across ALL given sources (spec §7).
+
+    Pass ``[raw_stats, edited_stats, bc_stats, gan_stats]`` so every source is
+    histogrammed on ONE shared grid and the per-source JS values are mutually
+    comparable.
+    """
+    ranges: Dict[str, tuple] = {}
+    for key in _STAT_KEYS:
+        vals = [float(s[key]) for stats in stat_lists for s in stats]
+        ranges[key] = (min(vals), max(vals)) if vals else (0.0, 0.0)
+    return ranges
+
+
+def distributional_fidelity(
+    source_stats: List[Dict[str, float]],
+    raw_stats: List[Dict[str, float]],
+    *,
+    bins: int = BINS,
+    ranges: Dict[str, tuple] | None = None,
+) -> Dict[str, object]:
+    """Per-statistic JS divergence (bits, lower=better) of source vs raw.
+
+    For each of {length, mean_displacement, coverage}, histogram the source and
+    raw values on a shared bin grid, then take the Jensen-Shannon divergence.
+    aggregate = mean of the three. ``ranges`` supplies the shared (lo, hi) per
+    statistic — the orchestrator computes it once via ``stat_ranges`` over ALL
+    sources (spec §7) so per-source numbers are comparable. If None, falls back
+    to the per-call pooled src+raw range (used by the unit tests).
+    """
+    per_stat: Dict[str, float] = {}
+    for key in _STAT_KEYS:
+        src = [float(s[key]) for s in source_stats]
+        raw = [float(s[key]) for s in raw_stats]
+        if ranges is not None:
+            lo, hi = ranges[key]
+        else:
+            pooled = src + raw
+            lo, hi = (min(pooled), max(pooled)) if pooled else (0.0, 0.0)
+        p = _hist(src, lo, hi, bins)
+        q = _hist(raw, lo, hi, bins)
+        per_stat[key] = float(jensen_shannon_divergence(p, q))
+    aggregate = float(np.mean([per_stat[k] for k in _STAT_KEYS]))
+    return {"per_stat": per_stat, "aggregate": aggregate}
