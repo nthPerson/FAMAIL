@@ -6,13 +6,16 @@ forward-only (under torch.no_grad). See
 docs/superpowers/specs/2026-06-17-level1-data-quality-table-design.md.
 """
 from __future__ import annotations
-from typing import Dict, List, Sequence, Tuple, Union
+from typing import TYPE_CHECKING, Dict, List, Sequence, Tuple, Union
 
 import numpy as np
 import torch
 
 from famail_temporal.baselines.gan import config as gc
 from famail_temporal.baselines.transmission import jensen_shannon_divergence
+
+if TYPE_CHECKING:  # annotation-only; runtime dispatch is duck-typed (see below)
+    from famail_temporal.utils.trajectory import Trajectory
 
 
 # ---------------------------------------------------------------- builders ----
@@ -27,7 +30,14 @@ def _xy_from_traj(traj) -> List[Tuple[int, int]]:
 
 
 def real_to_disc_tensor(traj) -> torch.Tensor:
-    """Trajectory -> discriminator input [L, 4]: (x+1, y+1, time_bucket, day)."""
+    """Trajectory -> discriminator input [L, 4]: (x+1, y+1, time_bucket, day).
+
+    NOT equivalent to ``Trajectory.to_tensor()`` / ``to_discriminator_format()``
+    (utils/trajectory.py): those return RAW 0-indexed coords. The HuMID
+    discriminator expects 1-indexed coords (spec §3.7, mirrors
+    fidelity/context.py), so this adds +1 to x and y. Always build discriminator
+    inputs through this function, never the raw Trajectory methods.
+    """
     rows = [
         [float(s.x_grid) + 1.0, float(s.y_grid) + 1.0,
          float(s.time_bucket), float(s.day_index)]
@@ -55,15 +65,18 @@ def generated_to_disc_tensor(
 # ------------------------------------------------------------- statistics ----
 
 def trajectory_statistics(
-    traj_or_cells: Union[object, Sequence[int]],
+    traj_or_cells: Union["Trajectory", Sequence[int]],
 ) -> Dict[str, float]:
     """{'length', 'mean_displacement', 'coverage'} for a Trajectory or cell list.
 
-    - length: number of steps.
+    - length: number of steps (0 for an empty cell list).
     - mean_displacement: mean Euclidean distance between consecutive (x, y)
       cells (0.0 if length < 2).
     - coverage: count of unique (x, y) cells visited.
     """
+    # Deliberate duck-typed dispatch (not isinstance): a real ``Trajectory`` has
+    # ``.states``; anything else is treated as a flat cell-id sequence. This lets
+    # callers and tests pass lightweight stand-ins without importing Trajectory.
     if hasattr(traj_or_cells, "states"):
         xy = _xy_from_traj(traj_or_cells)
     else:

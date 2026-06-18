@@ -51,3 +51,12 @@ def test_trajectory_statistics_from_trajectory_and_short_len():
     assert s["length"] == 1
     assert s["coverage"] == 1
     assert s["mean_displacement"] == 0.0          # len < 2 -> 0
+
+
+def test_trajectory_statistics_empty_cell_list():
+    # An empty rollout (0 in-vocab cells before EOS) must not crash; the
+    # orchestrator relies on these zeros when summarizing such trajectories.
+    s = fe.trajectory_statistics([])
+    assert s["length"] == 0
+    assert s["coverage"] == 0
+    assert s["mean_displacement"] == 0.0
