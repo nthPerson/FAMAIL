@@ -1,7 +1,14 @@
 """run_level1_table pure helpers: JSON round-trip + table rendering + alignment."""
 import json
 
+import torch
+
 from famail_temporal.baselines import run_level1_table as r
+from famail_temporal.tests.test_objective import _make_synthetic_bundle
+from famail_temporal.baselines.tests._helpers import active_units, make_traj_at
+from famail_temporal.baselines.gan.sequences import (
+    trajectory_context, trajectory_to_tokens,
+)
 
 
 def _fake_result():
@@ -46,12 +53,16 @@ def test_render_table_contains_sources_and_gate_verdict():
     assert "single-seed" in md     # fairness columns annotated
 
 
-import torch
-from famail_temporal.tests.test_objective import _make_synthetic_bundle
-from famail_temporal.baselines.tests._helpers import active_units, make_traj_at
-from famail_temporal.baselines.gan.sequences import (
-    trajectory_context, trajectory_to_tokens,
-)
+def test_render_table_gate_failed_marks_untrusted():
+    # The gate is EXPECTED to fail on the real discriminator (planning-measured
+    # gap << margin), so the failed/untrusted render path is the one that ships.
+    res = _fake_result()
+    res["gate"]["passed"] = False
+    for s in res["sources"].values():
+        s["fidelity_a_trusted"] = False
+    md = r.render_table(res)
+    assert "FAILED" in md
+    assert "(untrusted)" in md      # every Fidelity-A cell flagged
 
 
 def test_train_and_generate_alignment_contexts_match_filtered_train():
@@ -61,9 +72,9 @@ def test_train_and_generate_alignment_contexts_match_filtered_train():
         make_traj_at(cx, cy, tb, traj_id=i) for i, (cx, cy, tb) in enumerate(units)
     )
     out = r._train_and_generate(
-        bundle, bundle.trajectories, adv_epochs=0, gan_loss="bce", n_critic=1,
+        bundle.trajectories, adv_epochs=0, gan_loss="bce", n_critic=1,
         mle_epochs=1, max_len=8, max_tokens=256, device=torch.device("cpu"),
-        seed=0, fidelity_sample_size=10, gen_batch_size=4,
+        seed=0,
     )
     ft, ctx = out["filtered_train"], out["contexts"]
     assert len(ft) == len(ctx)

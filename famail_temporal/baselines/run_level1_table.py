@@ -83,9 +83,9 @@ def render_table(result: dict) -> str:
 # --------------------------------------------------------- train + generate ----
 
 def _train_and_generate(
-    bundle, train_trajectories, *,
+    train_trajectories, *,
     adv_epochs, gan_loss, n_critic, mle_epochs, max_len, max_tokens,
-    device, seed, fidelity_sample_size, gen_batch_size,
+    device, seed,
 ) -> dict:
     """Train a generator (MLE + optional adversarial) and return the model plus
     the index-aligned filtered training trajectories and their contexts.
@@ -226,7 +226,10 @@ def main(argv: List[str] | None = None) -> int:
             f"discriminator checkpoint not found: {ckpt}\n"
             "Level-1 Fidelity-A (HuMID) requires the trained discriminator."
         )
-    disc = load_discriminator(ckpt)
+    # load_discriminator maps weights to CPU; move to the run device so the
+    # CUDA input tensors built in fidelity_eval meet on-device weights (else a
+    # device-mismatch RuntimeError on the first forward — the validation gate).
+    disc = load_discriminator(ckpt).to(device)
 
     # ---- data ----
     _log(f"[level1] loading bundle (device={device})")
@@ -243,18 +246,16 @@ def main(argv: List[str] | None = None) -> int:
     # ---- train the two generative sources ----
     _log(f"[level1] training BC (MLE-only, {args.mle_epochs} epochs)")
     bc = _train_and_generate(
-        bundle, raw_trajs, adv_epochs=0, gan_loss="bce", n_critic=1,
+        raw_trajs, adv_epochs=0, gan_loss="bce", n_critic=1,
         mle_epochs=args.mle_epochs, max_len=max_len, max_tokens=args.max_tokens,
-        device=device, seed=args.seed, fidelity_sample_size=fss,
-        gen_batch_size=args.gen_batch_size,
+        device=device, seed=args.seed,
     )
     _log(f"[level1] training GAN ({args.gan_loss}, mle={args.mle_epochs}, "
          f"adv={args.adv_epochs}, n_critic={args.n_critic})")
     gan = _train_and_generate(
-        bundle, raw_trajs, adv_epochs=args.adv_epochs, gan_loss=args.gan_loss,
+        raw_trajs, adv_epochs=args.adv_epochs, gan_loss=args.gan_loss,
         n_critic=args.n_critic, mle_epochs=args.mle_epochs, max_len=max_len,
         max_tokens=args.max_tokens, device=device, seed=args.seed,
-        fidelity_sample_size=fss, gen_batch_size=args.gen_batch_size,
     )
 
     # ---- BC/GAN fidelity pairs + gen cells (full-trajectory, first N) ----
@@ -339,6 +340,10 @@ def main(argv: List[str] | None = None) -> int:
     b_raw_per_stat = {k: 0.0 for k in ("length", "mean_displacement", "coverage")}
 
     # ---- single-seed fairness per source ----
+    # Fairness is a CORPUS-SCALE demand-grid metric, so BC/GAN fairness rollouts
+    # deliberately cover the FULL filtered corpus (not the fidelity sample `fss`):
+    # raw/edited fairness already use every trajectory, and a sub-sampled demand
+    # grid would not be comparable. This is the run's largest single compute cost.
     _log("[level1] scoring single-seed fairness")
     f_raw = data_level_fairness(bundle)
     f_edited = _fairness_from_pickups(bundle, _edited_pickups(histories))
