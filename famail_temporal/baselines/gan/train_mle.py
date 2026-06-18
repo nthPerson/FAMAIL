@@ -10,6 +10,29 @@ from famail_temporal.baselines.gan.generator import TrajectoryLSTM
 from famail_temporal.baselines.gan.progress import Progress
 
 
+def _token_budget_batches(perm, lengths, *, batch_size, max_batch_tokens):
+    """Yield index batches from `perm` (a list of indices) so that, per batch,
+    len(batch) * max(lengths in batch) <= max_batch_tokens, with at most
+    batch_size indices per batch. A single trajectory longer than the budget
+    forms its own batch (never dropped). `lengths[i]` is the token length of
+    sequence i. Deterministic given `perm`.
+    """
+    i = 0
+    n = len(perm)
+    while i < n:
+        batch = []
+        cur_max = 0
+        while i < n and len(batch) < batch_size:
+            cand = perm[i]
+            new_max = max(cur_max, lengths[cand])
+            if batch and new_max * (len(batch) + 1) > max_batch_tokens:
+                break
+            batch.append(cand)
+            cur_max = new_max
+            i += 1
+        yield batch
+
+
 def _pad_batch(
     seqs: List[List[int]], device: torch.device,
 ) -> torch.Tensor:
@@ -32,6 +55,7 @@ def train_mle(
     device: torch.device,
     progress: bool = False,
     driver_idxs: List[int] | None = None,
+    max_batch_tokens: int | None = None,
 ) -> Dict[str, List[float]]:
     """Train `model` by next-token cross-entropy.
 
@@ -44,23 +68,39 @@ def train_mle(
 
     Teacher forcing: predict tokens[1:] from tokens[:-1]. PAD positions are
     ignored by the loss. ``progress=True`` shows a per-epoch loss bar.
+
+    When ``max_batch_tokens`` is set, minibatches are formed greedily from the
+    shuffled permutation so that ``len(batch) * max_len_in_batch <=
+    max_batch_tokens`` (a single over-budget trajectory forms its own batch);
+    ``batch_size`` remains an upper cap on count. When ``None`` (default), the
+    original fixed-``batch_size`` slicing is used unchanged.
     """
     model.to(device).train()
     opt = torch.optim.Adam(model.parameters(), lr=lr)
     loss_fn = nn.CrossEntropyLoss(ignore_index=gc.PAD)
     n = len(sequences)
-    n_batches = (n + batch_size - 1) // batch_size
+    lengths = [len(s) for s in sequences]
     epoch_losses: List[float] = []
     all_batch_losses: List[float] = []
 
     for epoch in range(epochs):
         perm = torch.randperm(n)
         batch_losses: List[float] = []
+        if max_batch_tokens is None:
+            perm_list = perm.tolist()
+            batches = [
+                perm_list[start : start + batch_size]
+                for start in range(0, n, batch_size)
+            ]
+        else:
+            batches = list(_token_budget_batches(
+                perm.tolist(), lengths,
+                batch_size=batch_size, max_batch_tokens=max_batch_tokens,
+            ))
         with Progress(
-            n_batches, f"MLE epoch {epoch + 1}/{epochs}", enabled=progress,
+            len(batches), f"MLE epoch {epoch + 1}/{epochs}", enabled=progress,
         ) as bar:
-            for start in range(0, n, batch_size):
-                idx = perm[start : start + batch_size].tolist()
+            for idx in batches:
                 batch = _pad_batch([sequences[i] for i in idx], device)
                 ctx_cell = torch.tensor(
                     [contexts[i][0] for i in idx], dtype=torch.long, device=device,
