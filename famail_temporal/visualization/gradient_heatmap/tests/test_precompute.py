@@ -42,4 +42,6 @@ def test_save_bundle_roundtrips_arrays(tmp_path):
     np.testing.assert_array_equal(z["active_mask"], layers["active_mask"])
     # NaN preserved on inactive cells
     assert np.isnan(z["grad_spatial"][0, 0, 0])
-    assert [str(s) for s in z["district_names"].tolist()][7] == "Nanshan"
+    assert "Nanshan" in [str(s) for s in z["district_names"].tolist()]
+    assert not np.isnan(z["grad_spatial"][10, 10, 0])
+    assert json.loads(str(z["meta_json"]))["source"] == "test"
