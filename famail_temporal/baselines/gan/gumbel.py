@@ -25,6 +25,7 @@ def gumbel_rollout(
     tau: float,
     device: torch.device,
     hard: bool = True,
+    driver_idx: torch.Tensor | None = None,
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     """Return (soft_onehots, lengths).
 
@@ -35,6 +36,9 @@ def gumbel_rollout(
     The model must already reside on `device` (its parameters, incl.
     cell_embed.weight, are used directly); callers in this package call
     model.to(device) before rolling out.
+
+    ``driver_idx`` (optional, (B,) long, already on `device`) conditions the
+    rollout on a driver identity; ``None`` preserves the unconditioned numerics.
     """
     cc = ctx_cell.to(device)
     tb = ctx_tblock.to(device)
@@ -49,7 +53,9 @@ def gumbel_rollout(
     lengths = torch.full((B,), max_len, dtype=torch.long, device=device)
 
     for t in range(max_len):
-        logits, hidden = model.step_embed(prev_embed, cc, tb, hidden)   # (B, V)
+        logits, hidden = model.step_embed(
+            prev_embed, cc, tb, hidden, driver_idx=driver_idx,
+        )                                                              # (B, V)
         y = F.gumbel_softmax(logits, tau=tau, hard=hard, dim=-1)        # (B, V)
         steps.append(y)
         nxt = y.argmax(dim=-1)                                          # (B,)

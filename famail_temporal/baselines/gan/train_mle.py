@@ -31,6 +31,7 @@ def train_mle(
     batch_size: int,
     device: torch.device,
     progress: bool = False,
+    driver_idxs: List[int] | None = None,
 ) -> Dict[str, List[float]]:
     """Train `model` by next-token cross-entropy.
 
@@ -67,9 +68,15 @@ def train_mle(
                 ctx_tblock = torch.tensor(
                     [contexts[i][1] for i in idx], dtype=torch.long, device=device,
                 )
+                di = (
+                    torch.tensor(
+                        [driver_idxs[i] for i in idx], dtype=torch.long, device=device,
+                    )
+                    if driver_idxs is not None else None
+                )
                 inp = batch[:, :-1]
                 tgt = batch[:, 1:]
-                logits = model(inp, ctx_cell, ctx_tblock)         # (B, L-1, V)
+                logits = model(inp, ctx_cell, ctx_tblock, driver_idx=di)  # (B, L-1, V)
                 loss = loss_fn(
                     logits.reshape(-1, gc.VOCAB_SIZE), tgt.reshape(-1),
                 )
