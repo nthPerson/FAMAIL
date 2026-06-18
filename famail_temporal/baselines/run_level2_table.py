@@ -96,3 +96,33 @@ def gen_training_data(model, raw_trajs, driver_to_idx, *, max_len, device,
         "sequences": sequences, "contexts": contexts,
         "driver_idxs": driver_idxs, "trajs": raw_trajs, "n_empty": n_empty,
     }
+
+
+def _paired_diff_stats(per_seed: Dict[str, List[float]], *, baseline: str = "edited") -> dict:
+    """Paired per-seed differences baseline - other, per other source.
+
+    Returns {other: {diffs, mean, std, n, wilcoxon_p}}. wilcoxon_p is None when
+    SciPy is unavailable, n < 1, or all differences are zero (no signed-rank
+    test is defined).
+    """
+    try:
+        from scipy.stats import wilcoxon  # optional dependency
+    except Exception:
+        wilcoxon = None
+    base = per_seed[baseline]
+    out: Dict[str, dict] = {}
+    for other, vals in per_seed.items():
+        if other == baseline:
+            continue
+        diffs = [float(b - o) for b, o in zip(base, vals)]
+        n = len(diffs)
+        mean = float(np.mean(diffs)) if n else float("nan")
+        std = float(np.std(diffs, ddof=1)) if n > 1 else 0.0
+        p = None
+        if wilcoxon is not None and n >= 1 and any(d != 0.0 for d in diffs):
+            try:
+                p = float(wilcoxon(diffs).pvalue)
+            except Exception:
+                p = None
+        out[other] = {"diffs": diffs, "mean": mean, "std": std, "n": n, "wilcoxon_p": p}
+    return out
