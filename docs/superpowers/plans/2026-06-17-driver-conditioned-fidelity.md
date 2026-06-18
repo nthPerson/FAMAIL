@@ -305,8 +305,11 @@ def test_group_by_driver_counts():
 
 
 def test_driver_idxs_for_aligned():
+    # Map built from the full 3-driver corpus, then applied to a 2-driver
+    # subset (verifies an externally-built map is applied index-aligned).
+    full = [_Stub(7), _Stub(2), _Stub(7), _Stub(5)]
+    m = build_driver_index(full)            # {2: 0, 5: 1, 7: 2}
     trajs = [_Stub(7), _Stub(2), _Stub(7)]
-    m = build_driver_index(trajs)
     assert driver_idxs_for(trajs, m) == [2, 0, 2]
 
 
