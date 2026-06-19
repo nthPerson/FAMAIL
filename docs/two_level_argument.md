@@ -12,6 +12,8 @@ This document is the brief top-level outline of how the FAMAIL paper argues its 
 
 The argument deliberately separates **what the data is** (Level 1) from **what the data is good for** (Level 2).
 
+> **Empirical status (2026-06-18):** Level 1 holds — the edited *data* is fairer and faithful. Level 2's transfer clause (the second half of the umbrella claim) is **not supported**: a vanilla driver-conditioned BC model trained on the edited data does **not** inherit the fairness advantage (paired `edited − raw` F_causal −0.0022 ± 0.0016, n=5). The data-quality claim stands; the model-inheritance claim does not, for this downstream model. See Level 2 below.
+
 ---
 
 ## Level 1 — Data quality (DONE)
@@ -34,21 +36,21 @@ At Level 1, BC and GAN are **data generators** whose emitted data is compared �
 
 ---
 
-## Level 2 — Usability (IN DESIGN)
+## Level 2 — Usability (DONE — negative result)
 
 **Question:** Does the edited data's quality advantage **survive downstream model training** — i.e., does fairness *transfer* from data into a model trained on it?
 
-**Design (planned):** train a downstream behavior-cloning policy on each data source (the core contrast being **raw vs edited**, with **BC-generated and GAN-generated training data** as the comparison baselines that make the claim viable for the paper), then evaluate each *trained policy's* generated demand on the same Level-1 axes (`F_causal`, `F_spatial`, Fidelity-A/B). If the policy trained on edited data produces fairer demand than the policy trained on raw (or on generated) data while staying faithful, fairness has propagated from dataset to model — the usability payoff.
+**Design:** train a driver-conditioned behavior-cloning (BC) policy on each of four matched, full-corpus data sources — **raw**, **edited**, **BC-generated**, **GAN-generated** — across 5 paired seeds, then evaluate each *trained policy's* generated demand on the same Level-1 axes (`F_causal`, `F_spatial`, Fidelity-A/B) and report paired per-seed differences. Pairing (`set_all_seeds(s)` before each arm) removes shared seed noise, essential because the data-fairness gap (~0.013 `F_causal`) sits near the seed-noise floor (~0.012 bits).
 
-**Key statistical caveat (carried into the spec):** the data-fairness gap to propagate is ~0.013 in `F_causal`, near the seed-noise floor (~0.012 bits) measured in the GAN-baseline work. So Level-2 must be **multi-seed and paired**, reported as mean ± std with a paired test — powered to distinguish "BC preserves the gap" from "BC washes it out."
+**Result (2026-06-18):** the gate passes (Fidelity-A trusted), but **fairness does not transfer.** The +0.0128 data-level F_causal advantage of edited over raw is absent in the trained policies: every policy — whatever it trained on — lands near the *raw-data* fairness level (~0.806–0.814), nowhere near edited's data-level 0.818. The headline paired `edited − raw` difference is **−0.0022 ± 0.0016** (edited marginally *lower*, negative in all 5 seeds; Wilcoxon p=0.0625; 95% CI [−0.0042, −0.0003]). It is not a fidelity trade-off (edited-trained Fidelity-A 0.8408 ≈ raw; Fidelity-B 0.0120 ≈ raw). GAN-generated again posts the highest F_causal (0.8143) purely via distributional collapse (Fidelity-B 0.3507) — the Level-1 artifact propagating into the trained policy. **Vanilla behavior cloning imitates the aggregate demand distribution and averages away the targeted edits (3,773 / 105,401 trajectories); data-level fairness is not inherited by a BC model trained on the data.**
 
-**Status:** brainstorming the spec (scope: raw, edited, BC-gen, GAN-gen as training sources). Spec/plan will live under `docs/superpowers/`.
+**Details:** [`famail_temporal/baselines/LEVEL2_RESULTS.md`](../famail_temporal/baselines/LEVEL2_RESULTS.md). Spec/plan under `docs/superpowers/`.
 
 ---
 
 ## How the levels connect
 
-Level 1 establishes that the edited *dataset* is fairer and faithful. Level 2 asks whether that property is *inherited* by a model trained on it. Together they support the umbrella claim: editing real data is a better route to fair, usable behavioral data than generating it. The previously-explored **model-level** intervention (editing *inside* the imitation-learning loop) is set aside — its effect was null at n=5 — and is reframed as the Level-2 usability question (train *on* fair data rather than edit *during* training).
+Level 1 establishes that the edited *dataset* is fairer and faithful. Level 2 asked whether that property is *inherited* by a model trained on it — and the answer, for a vanilla driver-conditioned BC policy, is **no**: the data-level fairness advantage does not transfer (paired `edited − raw` F_causal −0.0022 ± 0.0016, n=5). So the umbrella claim holds at the **data** level (L1: editing yields fairer, faithful data than generating it) but **not** at the model level under behavior cloning (L2): a BC model trained on the edited data does not inherit the fairness advantage. The previously-explored **model-level** intervention (editing *inside* the imitation-learning loop) remains set aside — its effect was null at n=5. The Level-2 negative is reported as-is; what training procedure *would* realize the data-level fairness in a model is left open.
 
 ---
 
@@ -56,6 +58,7 @@ Level 1 establishes that the edited *dataset* is fairer and faithful. Level 2 as
 
 | Artifact | Location |
 |---|---|
+| Level-2 results (fairness transfer) | `famail_temporal/baselines/LEVEL2_RESULTS.md` |
 | Level-1 v2 results | `famail_temporal/baselines/LEVEL1_V2_RESULTS.md` |
 | Level-1 v2 methodology / architectures | `famail_temporal/baselines/LEVEL1_V2_METHODOLOGY.md` |
 | Level-1 v1 results + training curves | `famail_temporal/baselines/LEVEL1_RESULTS.md`, `TRAINING_CURVES.md` |
