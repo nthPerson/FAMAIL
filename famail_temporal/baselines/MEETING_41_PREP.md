@@ -220,6 +220,57 @@ stronger p. None of these change the verdict.
 
 ---
 
+## 7. Data-quality finding (2026-06-25) — per-driver stuck-GPS pickup "sinks"
+
+Surfaced while building the gradient-heatmap concentration-contour overlay (an hour-6 slice collapsed to a
+single cell-sized blob), then chased to the raw-trip level.
+
+**Finding.** The raw taxi GPS (`raw_data/taxi_record_0{7,8,9}_50drivers.pkl`; 8.1M points, 50 drivers, 3 months)
+contains **6 per-driver "stuck-GPS" pickup sinks**: 6 specific drivers' meter-on (pickup) coordinate is frozen
+at one exact lat/lon, each emitting ~10k–12k phantom pickups. Confirmed each sink coordinate's pickups are
+**100% from a single driver (1/50)**, ≥99% at one identical 6-dp coordinate. Dropoffs (meter-off) geocode
+normally, so it's a **pickup-only** spatial skew (global pickups 325,997 ≈ dropoffs 325,992 — conservation
+holds; only the pickup side is corrupted). The six together ≈ **20% of all raw pickup events.**
+
+**These are NOT the cGAIL PoIs.** By true lat/lon, only one sink (S6) is within ~2 km of a PoI (Shenzhen East
+Stn); S2/S4 are ~4.5–5 km from North Stn / the Airport; S1/S3/S5 have no PoI within 8–17 km. The genuine
+downtown PoIs (深圳站, 福田站, coco park, Mixc, kk mall, the CBDs, hospitals) appear in our data as **normal
+balanced cells** (pickup ≈ dropoff, ratio ~1.0–1.5 vs global median 1.06). Real hubs are fine; the sinks are a
+separate per-driver artifact, and the pipeline does not strip them: `data/source_generation/removal.py` runs
+only trajectory-invariant checks (out-of-bounds, degenerate-length, …) with **no stuck-GPS detection**, so they
+propagate into `pickup_dropoff_counts.pkl` → `pickup_counts` artifact → metrics, gradient viz, and the editor.
+
+**Metric impact — concentrated in ONE cell, and spatial-only.** F_spatial keys on DSR = pickup/active_taxis, so
+a sink distorts fairness only in a low-supply cell. Only **S1 = cell (28,52)** qualifies (peak DSR **67** vs
+dataset p99 = 0.4):
+
+| Scenario | F_spatial | Δ |
+|---|---|---|
+| Baseline | 0.0822 | — |
+| Remove (28,52) only | 0.1013 | **+0.0192 (+23%)** |
+| Remove all 6 sinks | 0.1039 | +0.0217 (+26%) |
+| Cap all 6 @ p99 | 0.0968 | +0.0146 |
+| **F_causal (cap)** | **0.8057** | **+0.0004 (negligible)** |
+
+S1 alone = 88% of the effect; cross-checked via the per-cell spatial-attribution decomposition (Σα over the 6
+sink cells = **−0.115**, sign-consistent with the Gini recomputation).
+
+**Bottom line for the paper.** **F_causal — our headline metric under α=(0.2, 0.7, 0.1) — is unaffected
+(Δ +0.0004), so the L1/L2 causal results are robust to this artifact.** The distortion is confined to F_spatial
+(the secondary, α=0.2 axis), where reported unfairness is ~23% inflated by a single driver's stuck GPS (true
+F_spatial ≈ 0.10, not 0.082).
+
+**Open (Dr. Zhang's call — not actioned):** exclude/cap cell (28,52) [minimum] or all 6 sink coords before
+metrics/editing; optionally add stuck-GPS detection to `source_generation`; decide whether to re-baseline
+F_spatial or footnote it as a known limitation. Trajectory-attribution impact (the editor selects trajectories
+by attribution; (28,52)'s DSR-67 makes it the likely #1 edit target) analyzed separately — see the conversation
+log / a follow-up addendum.
+
+Sink cells (famail 0-indexed = artifact index): **S1 (28,52) — DSR 67, the only one that moves the metric**;
+S2 (20,28); S3 (28,28); S4 (24,5); S5 (22,46); S6 (17,38). Full writeup: memory `project_pickup_gps_sinks`.
+
+---
+
 ## Reproduction
 
 ```bash
