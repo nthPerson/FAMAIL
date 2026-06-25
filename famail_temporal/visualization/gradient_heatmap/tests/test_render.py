@@ -110,6 +110,19 @@ def test_build_heatmap_figure_orientation_and_square():
     assert any(getattr(t, "mode", None) == "lines" for t in fig.data)
 
 
+def test_build_heatmap_figure_decimal_colorbar_and_wide_height():
+    g = load_district_geometry()
+    z = np.zeros((48, 90), dtype=float)
+    fig = rd.build_heatmap_figure(z, g, title="t", zmin=-1e-4, zmax=1e-4, zmid=0,
+                                  colorscale="RdBu_r", show_boundaries=False)
+    hm = fig.data[0]
+    # colorbar ticks shown as fixed decimals (>= 6 dp), not SI prefixes (µ, m, ...)
+    assert hm.colorbar.tickformat == ".6f"
+    # figure tall enough that square cells fill a wide container width (not the
+    # default ~450px, which leaves ~half the panel as horizontal whitespace)
+    assert fig.layout.height is not None and fig.layout.height >= 900
+
+
 def test_contour_overlay_adds_trace():
     g = load_district_geometry()
     fig = rd.build_heatmap_figure(np.zeros((48, 90)), g, title="t", zmin=0, zmax=1,

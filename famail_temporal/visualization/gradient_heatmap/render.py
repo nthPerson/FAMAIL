@@ -72,8 +72,11 @@ def build_heatmap_figure(slice2d, geometry, *, title, zmin, zmax, zmid,
         go.Heatmap(
             z=slice2d, x=np.arange(cols), y=np.arange(rows),
             zmin=zmin, zmax=zmax, zmid=zmid, colorscale=colorscale,
-            colorbar=dict(title=dict(text="value")),
-            hovertemplate="y_grid(col)=%{x}<br>x_grid(row)=%{y}<br>value=%{z}<extra></extra>",
+            # Fixed-decimal colorbar ticks (>= 6 dp) — the gradient values are
+            # tiny (~1e-5), so the default SI-prefix ticks (e.g. "50µ") read as
+            # decimals like "0.000050" instead.
+            colorbar=dict(title=dict(text="value"), tickformat=".6f", thickness=14),
+            hovertemplate="y_grid(col)=%{x}<br>x_grid(row)=%{y}<br>value=%{z:.6f}<extra></extra>",
         )
     )
     if show_boundaries:
@@ -84,7 +87,15 @@ def build_heatmap_figure(slice2d, geometry, *, title, zmin, zmax, zmid,
     fig.update_xaxes(title="y_grid (West → East)", constrain="domain")
     fig.update_yaxes(title="x_grid (South → North)",
                      scaleanchor="x", scaleratio=1, constrain="domain")
-    fig.update_layout(title=title, margin=dict(l=40, r=20, t=50, b=40))
+    # With square cells (scaleanchor), Plotly fills the container WIDTH only when
+    # the figure is "taller" than the grid's aspect (cols/rows = 90/48 ≈ 1.875);
+    # otherwise it fills height and leaves horizontal whitespace. The default
+    # ~450px height made the heatmap occupy only ~half a wide main panel. Size the
+    # height for a wide target plotting width so square cells fill the width on a
+    # wide screen (and fill the column width in the two-up concentration view).
+    height = round(rows / cols * 1600) + 130  # ≈ 983px for the 48×90 grid
+    fig.update_layout(title=title, height=height, autosize=True,
+                      margin=dict(l=40, r=20, t=50, b=40))
     return fig
 
 
