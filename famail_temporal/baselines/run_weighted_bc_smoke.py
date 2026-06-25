@@ -59,6 +59,38 @@ def weight_vector(trajs, ids: set, w: float) -> List[float]:
     return [float(w) if int(t.trajectory_id) in ids else 1.0 for t in trajs]
 
 
+def random_subset_weight_vector(
+    trajs, edited_id_set: set, w: float, *, k: int | None = None, seed: int = 12345,
+) -> List[float]:
+    """Placebo control: w on a random, size-matched subset of the NON-edited
+    trajectories, 1.0 everywhere else (index-aligned).
+
+    This is the decisive control for the weighted-BC fairness claim. The edited
+    arm upweights the ~3.6% EDITED trajectories and F_causal rises; a reviewer
+    can object that upweighting *any* small subset reshapes the effective
+    training distribution and can move a 1/N global metric. Applying this vector
+    to the RAW corpus tests exactly that: if F_causal does NOT rise, the gain is
+    edit-specific (not an oversampling artifact).
+
+    ``k`` defaults to ``len(edited_id_set)`` so the placebo subset is the same
+    size as the edited set. The subset is drawn with an INDEPENDENT RNG
+    (``random.Random(seed)``) so it never touches the global torch/numpy/random
+    state that ``set_all_seeds`` controls -- otherwise it would perturb the
+    paired-seed training determinism and the raw/edited arms would stop
+    reproducing the locked Level-2 baseline. Build it ONCE before the seed loop.
+    """
+    k = len(edited_id_set) if k is None else k
+    non_edited = [
+        i for i, t in enumerate(trajs) if int(t.trajectory_id) not in edited_id_set
+    ]
+    if k > len(non_edited):
+        raise ValueError(
+            f"requested random subset of {k} > {len(non_edited)} non-edited trajs"
+        )
+    chosen = set(random.Random(seed).sample(non_edited, k))
+    return [float(w) if i in chosen else 1.0 for i in range(len(trajs))]
+
+
 def _paired_vs_raw(per_seed: Dict[str, List[float]], arm: str) -> dict:
     """Paired per-seed (arm - raw) stats for one metric."""
     try:
@@ -88,6 +120,16 @@ def main(argv: List[str] | None = None) -> int:
     ap.add_argument("--seeds", type=str, default="0,1,2,3,4")
     ap.add_argument("--weights", type=str, default="10,30",
                     help="Comma-separated upweight doses for the edited arms (w=1 always run).")
+    ap.add_argument("--placebo", type=str, default="",
+                    help="Comma-separated doses for the random-subset PLACEBO arms: "
+                         "upweight a random, size-matched NON-edited subset of the RAW "
+                         "corpus. Decisive control -- if F_causal does NOT rise here, the "
+                         "edited arms' gain is edit-specific, not an oversampling artifact. "
+                         "Empty (default) = no placebo arms (preserves prior sweeps).")
+    ap.add_argument("--placebo-seed", type=int, default=12345,
+                    help="Fixed RNG seed for the placebo subset, INDEPENDENT of the per-seed "
+                         "training RNG: one fixed subset reused across all training seeds, so "
+                         "the placebo arm differs from raw only by the fixed random weighting.")
     ap.add_argument("--mle-epochs", type=int, default=20)
     ap.add_argument("--max-eval-drivers", type=int, default=50)
     ap.add_argument("--pairs-per-driver", type=int, default=20)
@@ -102,6 +144,7 @@ def main(argv: List[str] | None = None) -> int:
 
     seeds = [int(s) for s in str(args.seeds).split(",") if s.strip()]
     up_weights = [float(w) for w in str(args.weights).split(",") if w.strip()]
+    placebo_weights = [float(w) for w in str(args.placebo).split(",") if w.strip()]
     device = (
         torch.device("cuda" if torch.cuda.is_available() else "cpu")
         if args.device == "auto" else torch.device(args.device)
@@ -143,7 +186,22 @@ def main(argv: List[str] | None = None) -> int:
         if w == 1.0:
             continue
         arms.append((f"edited_w{int(w)}", D_edited, weight_vector(edited_corpus, eids, w)))
+    # Placebo arms: upweight a random, size-matched NON-edited subset of the RAW
+    # corpus. Built ONCE here (independent RNG) so it never perturbs the per-seed
+    # training determinism the paired design depends on.
+    for w in placebo_weights:
+        if w == 1.0:
+            continue
+        arms.append((
+            f"random_w{int(w)}", D_raw,
+            random_subset_weight_vector(raw_trajs, eids, w, seed=args.placebo_seed),
+        ))
     arm_names = [a[0] for a in arms]
+    if placebo_weights:
+        n_pl = len(eids)
+        print(f"[wbc] placebo: upweighting a fixed random {n_pl}-traj NON-edited "
+              f"subset of RAW (seed={args.placebo_seed}) at doses {placebo_weights}",
+              flush=True)
 
     # ---- Evaluation fixtures (policy-independent), mirroring run_level2_table.main ----
     rng = random.Random(seeds[0])
@@ -262,6 +320,7 @@ def main(argv: List[str] | None = None) -> int:
 
     result = {
         "edit_dir": args.edit_dir, "seeds": seeds, "weights": up_weights,
+        "placebo_weights": placebo_weights, "placebo_seed": args.placebo_seed,
         "mle_epochs": args.mle_epochs, "n_edited": len(eids), "n_corpus": len(raw_trajs),
         "n_eval_drivers": len(drivers), "gate": gate, "trusted": bool(gate["passed"]),
         "per_arm": per_arm, "paired_vs_raw": paired,
