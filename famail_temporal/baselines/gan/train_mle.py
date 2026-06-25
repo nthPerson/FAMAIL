@@ -56,6 +56,7 @@ def train_mle(
     progress: bool = False,
     driver_idxs: List[int] | None = None,
     max_batch_tokens: int | None = None,
+    sample_weights: List[float] | None = None,
 ) -> Dict[str, List[float]]:
     """Train `model` by next-token cross-entropy.
 
@@ -79,6 +80,11 @@ def train_mle(
     opt = torch.optim.Adam(model.parameters(), lr=lr)
     loss_fn = nn.CrossEntropyLoss(ignore_index=gc.PAD)
     n = len(sequences)
+    if sample_weights is not None and len(sample_weights) != n:
+        raise ValueError(
+            f"sample_weights length {len(sample_weights)} != "
+            f"number of sequences {n}"
+        )
     lengths = [len(s) for s in sequences]
     epoch_losses: List[float] = []
     all_batch_losses: List[float] = []
@@ -117,9 +123,26 @@ def train_mle(
                 inp = batch[:, :-1]
                 tgt = batch[:, 1:]
                 logits = model(inp, ctx_cell, ctx_tblock, driver_idx=di)  # (B, L-1, V)
-                loss = loss_fn(
-                    logits.reshape(-1, gc.VOCAB_SIZE), tgt.reshape(-1),
-                )
+                if sample_weights is None:
+                    loss = loss_fn(
+                        logits.reshape(-1, gc.VOCAB_SIZE), tgt.reshape(-1),
+                    )
+                else:
+                    # Per-sequence weighted mean per-token CE. At unit weights
+                    # this reduces exactly to loss_fn (the unweighted mean), so
+                    # weights=None and weights=[1,...] train identically.
+                    per_tok = nn.functional.cross_entropy(
+                        logits.reshape(-1, gc.VOCAB_SIZE), tgt.reshape(-1),
+                        ignore_index=gc.PAD, reduction="none",
+                    ).reshape(tgt.shape)            # (B, L-1), PAD positions = 0
+                    valid = (tgt != gc.PAD).to(per_tok.dtype)
+                    w = torch.tensor(
+                        [sample_weights[i] for i in idx],
+                        dtype=per_tok.dtype, device=device,
+                    )                                # (B,)
+                    num = (per_tok.sum(dim=1) * w).sum()
+                    den = (valid.sum(dim=1) * w).sum().clamp_min(1.0)
+                    loss = num / den
                 opt.zero_grad()
                 loss.backward()
                 opt.step()
