@@ -68,3 +68,59 @@ def detect_stuck_gps_sinks(
         & (distribution["cell_share"] >= coord_dominance)
     ].reset_index(drop=True)
     return flagged, distribution
+
+
+def filter_stuck_gps_sinks(
+    df: pd.DataFrame, *, min_pickups: int, coord_dominance: float,
+    coord_precision: int, expected_cells: set | None, drop: bool = True,
+) -> tuple[pd.DataFrame, dict]:
+    """Filter out flagged stuck-GPS pickup sinks. Returns (cleaned_df, audit).
+
+    Args:
+        df: Input DataFrame with pickup events.
+        min_pickups: Minimum pickups to flag a sink.
+        coord_dominance: Minimum cell_share to flag a sink.
+        coord_precision: Decimal places for coordinate rounding.
+        expected_cells: If provided, assert flagged cells match this set.
+        drop: If True, remove flagged pickups; if False, return df unchanged.
+
+    Returns:
+        (cleaned_df, audit) where audit keys: sinks, flagged_cells, n_pickups_removed, n_rows_removed.
+    """
+    flagged, _dist = detect_stuck_gps_sinks(
+        df, min_pickups=min_pickups, coord_dominance=coord_dominance,
+        coord_precision=coord_precision,
+    )
+    flagged_cells = sorted({(int(r.x_grid), int(r.y_grid)) for r in flagged.itertuples()})
+    if expected_cells is not None:
+        assert set(flagged_cells) == set(expected_cells), (
+            f"stuck-GPS filter flagged {set(flagged_cells)} != expected {set(expected_cells)}"
+        )
+
+    audit = {
+        "sinks": [
+            {"plate_id": r.plate_id, "lat": float(r.lat_r), "lon": float(r.lon_r),
+             "x_grid": int(r.x_grid), "y_grid": int(r.y_grid),
+             "n_pickups": int(r.n_pickups), "cell_share": float(r.cell_share),
+             "driver_total": int(r.driver_total)}
+            for r in flagged.itertuples()
+        ],
+        "flagged_cells": flagged_cells,
+        "n_pickups_removed": int(flagged["n_pickups"].sum()) if len(flagged) else 0,
+    }
+
+    if not drop or len(flagged) == 0:
+        audit["n_rows_removed"] = 0
+        return df.reset_index(drop=True), audit
+
+    pk = pickup_mask(df)
+    lat_r = df["latitude"].round(coord_precision)
+    lon_r = df["longitude"].round(coord_precision)
+    key = list(zip(df["plate_id"], lat_r, lon_r))
+    flagged_keys = {(r.plate_id, float(r.lat_r), float(r.lon_r)) for r in flagged.itertuples()}
+    is_flagged_pickup = pk.values & pd.Series(
+        [k in flagged_keys for k in key], index=df.index
+    ).values
+    cleaned = df[~is_flagged_pickup].reset_index(drop=True)
+    audit["n_rows_removed"] = int(is_flagged_pickup.sum())
+    return cleaned, audit
