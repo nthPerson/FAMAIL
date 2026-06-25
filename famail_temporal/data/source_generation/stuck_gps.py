@@ -21,12 +21,40 @@ def detect_stuck_gps_sinks(
     """Flag (driver, exact-coord) pickup groups that are large AND dominate
     their grid cell's pickups. Returns (flagged, distribution)."""
     pk = df[pickup_mask(df)].copy()
+
+    out_cols = [
+        "plate_id", "lat_r", "lon_r", "x_grid", "y_grid",
+        "n_pickups", "cell_total", "cell_share", "driver_total",
+    ]
+    if pk.empty:
+        # No pickups -> nothing to group. Return empty, well-typed frames
+        # rather than relying on empty-groupby behaviour (which can drop the
+        # expected columns or error on the downstream merges).
+        empty = pd.DataFrame(columns=out_cols)
+        return empty.copy(), empty.copy()
+
     pk["lat_r"] = pk["latitude"].round(coord_precision)
     pk["lon_r"] = pk["longitude"].round(coord_precision)
 
     grp = pk.groupby(["plate_id", "lat_r", "lon_r"], sort=False)
     sizes = grp.size().rename("n_pickups").reset_index()
-    cells = grp[["x_grid", "y_grid"]].first().reset_index()
+    # A frozen coordinate that rounds to lat_r/lon_r can still straddle a grid-
+    # cell boundary and map to >1 (x_grid, y_grid). Assign each group its MODAL
+    # cell (the most frequent), tie-broken deterministically by cell coords, so
+    # the flagged cell is reproducible run-to-run instead of an arbitrary pick.
+    cell_counts = (
+        pk.groupby(["plate_id", "lat_r", "lon_r", "x_grid", "y_grid"])
+        .size()
+        .rename("cell_count")
+        .reset_index()
+        .sort_values(
+            ["plate_id", "lat_r", "lon_r", "cell_count", "x_grid", "y_grid"],
+            ascending=[True, True, True, False, True, True],
+        )
+    )
+    cells = cell_counts.drop_duplicates(
+        subset=["plate_id", "lat_r", "lon_r"], keep="first",
+    )[["plate_id", "lat_r", "lon_r", "x_grid", "y_grid"]]
     sizes = sizes.merge(cells, on=["plate_id", "lat_r", "lon_r"])
 
     cell_total = pk.groupby(["x_grid", "y_grid"]).size().rename("cell_total").reset_index()
