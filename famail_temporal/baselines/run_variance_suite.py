@@ -321,6 +321,10 @@ def main(argv: Optional[List[str]] = None) -> int:
             "mle_batch_size": args.mle_batch_size, "max_tokens": args.max_tokens,
             "edit_dir": str(args.edit_dir),
         },
+        "per_seed_values": {
+            arm: {k: [float(e[arm][k]) for e in per_seed] for k in METRIC_KEYS}
+            for arm in ("b0", "famail")
+        },
     }
     (out_dir / "aggregate.json").write_text(result_to_json(agg))
     np.savez(
