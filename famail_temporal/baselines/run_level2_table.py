@@ -15,6 +15,7 @@ import argparse
 import json
 import pickle
 import random
+import sys
 import time
 from pathlib import Path
 from typing import Dict, List, Tuple
@@ -40,6 +41,7 @@ from famail_temporal.baselines.gan.train_mle import train_mle
 from famail_temporal.baselines.metrics import data_level_fairness
 from famail_temporal.fidelity.checkpoint import load_discriminator
 from famail_temporal.baselines import fidelity_eval as fe
+from famail_temporal.baselines._manifest import write_run_manifest, append_timing, sha256_file
 from famail_temporal.baselines.run_level1_table_v2 import (
     _select_eval_drivers, _real_context_tensors, _build_source_pairs,
     _train_and_generate_cond, _gen_cond_slot0, _gen_fidelity_full,
@@ -323,6 +325,7 @@ def main(argv: List[str] | None = None) -> int:
     ap.add_argument("--out-dir", type=Path, default=None)
     ap.add_argument("--quiet", action="store_true")
     args = ap.parse_args(argv)
+    t0 = time.time()
 
     seeds = [int(s) for s in str(args.seeds).split(",") if s.strip() != ""]
     if not seeds:
@@ -572,6 +575,17 @@ def main(argv: List[str] | None = None) -> int:
     (out_dir / "driver_index.json").write_text(
         json.dumps({str(k): v for k, v in driver_to_idx.items()}, indent=2)
     )
+
+    # ---- provenance ----
+    _gate_extra = {
+        "discriminator_sha256": sha256_file(ckpt),
+        "gate_matched": float(gate["high_matched"]),
+        "gate_mismatched": float(gate["low_mismatched"]),
+        "gate_passed": bool(gate["passed"]),
+    }
+    write_run_manifest(out_dir, argv=sys.argv, seeds=seeds, edit_dir=str(args.edit_dir),
+                       extra=_gate_extra)
+    append_timing(out_dir / "timings.jsonl", "level2", time.time() - t0)
 
     # ---- summary ----
     _log("")

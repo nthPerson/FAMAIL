@@ -20,6 +20,7 @@ Example:
 from __future__ import annotations
 import argparse
 import json
+import sys
 import time
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -41,6 +42,7 @@ from famail_temporal.baselines.district_metrics import di_from_bundle_and_pickup
 from famail_temporal.baselines.localized_metrics import (
     edited_units_from_histories, localized_f_causal,
 )
+from famail_temporal.baselines._manifest import write_run_manifest, append_timing
 
 
 DEFAULT_EDIT_DIR = (
@@ -230,6 +232,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     ap.add_argument("--out-dir", type=Path, default=None)
     ap.add_argument("--quiet", action="store_true")
     args = ap.parse_args(argv)
+    t0 = time.time()
 
     seeds = [int(s) for s in args.seeds.split(",") if s.strip() != ""]
     if not seeds:
@@ -327,6 +330,11 @@ def main(argv: Optional[List[str]] = None) -> int:
         **{f"p_famail_seed{s}": h for s, h in zip(seeds, hists_fam)},
     )
     _write_report(out_dir, agg, seeds)
+
+    # ---- provenance ----
+    write_run_manifest(out_dir, argv=sys.argv, seeds=seeds, edit_dir=str(args.edit_dir),
+                       extra={})
+    append_timing(out_dir / "timings.jsonl", "variance_suite", time.time() - t0)
 
     print("\n=== Variance suite summary ===")
     for key in ("f_causal", "f_spatial"):

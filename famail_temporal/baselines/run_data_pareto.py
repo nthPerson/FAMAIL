@@ -11,6 +11,8 @@ Example:
 from __future__ import annotations
 import argparse
 import json
+import sys
+import time
 from pathlib import Path
 from typing import List
 
@@ -20,6 +22,7 @@ from famail_temporal.baselines.pareto import (
     ParetoPoint, raw_point, filtered_points, edited_point, points_to_json,
 )
 from famail_temporal.baselines.figure import plot_pareto
+from famail_temporal.baselines._manifest import write_run_manifest, append_timing
 
 
 def edited_point_from_result(result) -> ParetoPoint:
@@ -82,6 +85,7 @@ def main(argv: List[str] | None = None) -> int:
     ap.add_argument("--out-dir", type=Path,
                     default=Path(config.PACKAGE_ROOT) / "results" / "data_pareto")
     args = ap.parse_args(argv)
+    t0 = time.time()
 
     bundle = DataBundle.load()
     points: List[ParetoPoint] = [raw_point(bundle)]
@@ -94,6 +98,13 @@ def main(argv: List[str] | None = None) -> int:
     args.out_dir.mkdir(parents=True, exist_ok=True)
     (args.out_dir / "pareto_points.json").write_text(points_to_json(points))
     plot_pareto(points, args.out_dir / "pareto.png", metric="f_causal")
+
+    # ---- provenance ----
+    edit_dir = str(args.edit_from_dir) if args.edit_from_dir is not None else None
+    write_run_manifest(args.out_dir, argv=sys.argv, seeds=None, edit_dir=edit_dir,
+                       extra={})
+    append_timing(args.out_dir / "timings.jsonl", "data_pareto", time.time() - t0)
+
     print(f"wrote {args.out_dir / 'pareto_points.json'}")
     print(f"wrote {args.out_dir / 'pareto.png'}")
     return 0

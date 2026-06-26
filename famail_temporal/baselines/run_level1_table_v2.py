@@ -19,6 +19,7 @@ import argparse
 import json
 import pickle
 import random
+import sys
 import time
 from pathlib import Path
 from typing import Dict, List, Tuple
@@ -47,6 +48,7 @@ from famail_temporal.baselines.gan.train_adversarial import adversarial_finetune
 from famail_temporal.baselines.metrics import data_level_fairness
 from famail_temporal.fidelity.checkpoint import load_discriminator
 from famail_temporal.baselines import fidelity_eval as fe
+from famail_temporal.baselines._manifest import write_run_manifest, append_timing, sha256_file
 
 _SOURCE_ORDER = ["raw", "edited", "bc", "gan"]
 
@@ -341,6 +343,7 @@ def main(argv: List[str] | None = None) -> int:
     ap.add_argument("--out-dir", type=Path, default=None)
     ap.add_argument("--quiet", action="store_true")
     args = ap.parse_args(argv)
+    t0 = time.time()
 
     def _log(msg: str) -> None:
         if not args.quiet:
@@ -674,6 +677,17 @@ def main(argv: List[str] | None = None) -> int:
     (out_dir / "driver_index.json").write_text(
         json.dumps({str(k): v for k, v in driver_to_idx.items()}, indent=2)
     )
+
+    # ---- provenance ----
+    _gate_extra = {
+        "discriminator_sha256": sha256_file(ckpt),
+        "gate_matched": float(result["gate"]["high_matched"]),
+        "gate_mismatched": float(result["gate"]["low_mismatched"]),
+        "gate_passed": bool(result["gate"]["passed"]),
+    }
+    write_run_manifest(out_dir, argv=sys.argv, seeds=None, edit_dir=str(args.edit_dir),
+                       extra=_gate_extra)
+    append_timing(out_dir / "timings.jsonl", "level1_v2", time.time() - t0)
 
     # ---- summary ----
     _log("")
