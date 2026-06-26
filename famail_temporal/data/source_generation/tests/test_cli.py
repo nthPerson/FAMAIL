@@ -38,7 +38,7 @@ def _minimal_raw_fixture(tmp_path):
 def test_cli_runs_end_to_end(tmp_path):
     raw = _minimal_raw_fixture(tmp_path)
     out = tmp_path / "out"
-    result = run_generation(input_dir=raw, output_dir=out)
+    result = run_generation(input_dir=raw, output_dir=out, apply_sink_filter=False)
     expected = [
         "pickup_dropoff_counts.pkl",
         "active_taxis_5x5_hourly.pkl",

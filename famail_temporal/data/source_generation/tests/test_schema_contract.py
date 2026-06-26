@@ -34,7 +34,7 @@ def test_calendar_days_are_parallel_to_trajectories(tmp_path):
     silently mis-aligns if this breaks."""
     raw = _minimal_raw_fixture(tmp_path)
     out = tmp_path / "out"
-    run_generation(raw, out)
+    run_generation(raw, out, apply_sink_filter=False)
 
     seeking = _load_pkl(out / "ms_seeking_trajs.pkl")
     driving = _load_pkl(out / "ms_driving_trajs.pkl")
@@ -56,7 +56,7 @@ def test_every_calendar_day_idx_resolves_to_a_date(tmp_path):
     calendar_day_map."""
     raw = _minimal_raw_fixture(tmp_path)
     out = tmp_path / "out"
-    run_generation(raw, out)
+    run_generation(raw, out, apply_sink_filter=False)
 
     cal_map = _load_pkl(out / "calendar_day_map.pkl")
     for filename in ("ms_seeking_calendar_days.pkl",
@@ -75,7 +75,7 @@ def test_profile_features_raw_differs_from_normalized(tmp_path):
     two must not be identical (else discriminator training double-normalizes)."""
     raw = _minimal_raw_fixture(tmp_path)
     out = tmp_path / "out"
-    run_generation(raw, out)
+    run_generation(raw, out, apply_sink_filter=False)
 
     bundle = _load_pkl(out / "ms_profile_features.pkl")
     assert "features" in bundle and "features_normalized" in bundle

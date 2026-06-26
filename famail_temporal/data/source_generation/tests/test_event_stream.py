@@ -43,7 +43,7 @@ def tiny_raw(tmp_path):
 
 
 def test_build_event_stream_returns_dataframe(tiny_raw):
-    es = build_event_stream(tiny_raw)
+    es = build_event_stream(tiny_raw, apply_sink_filter=False)
     assert isinstance(es.df, pd.DataFrame)
     for col in ("plate_id", "x_grid", "y_grid", "time_bucket",
                 "hour", "day_index", "is_pickup", "is_dropoff",
@@ -60,20 +60,20 @@ def test_build_event_stream_drops_weekends(tmp_path):
     })
     _write_pkl(tmp_path / "taxi_record_08_50drivers.pkl", {})
     _write_pkl(tmp_path / "taxi_record_09_50drivers.pkl", {})
-    es = build_event_stream(tmp_path)
+    es = build_event_stream(tmp_path, apply_sink_filter=False)
     assert len(es.df) == 1
     assert es.df.iloc[0]["day_index"] == 1
 
 
 def test_build_event_stream_is_sorted_per_driver(tiny_raw):
-    es = build_event_stream(tiny_raw)
+    es = build_event_stream(tiny_raw, apply_sink_filter=False)
     for plate, group in es.df.groupby("plate_id"):
         ts = list(group["timestamp"])
         assert ts == sorted(ts)
 
 
 def test_build_event_stream_has_correct_transitions(tiny_raw):
-    es = build_event_stream(tiny_raw)
+    es = build_event_stream(tiny_raw, apply_sink_filter=False)
     A = es.df[es.df["plate_id"] == "A"].reset_index(drop=True)
     assert A.loc[2, "is_dropoff"] == True
     assert A.loc[6, "is_pickup"] == True
@@ -83,11 +83,17 @@ def test_build_event_stream_has_correct_transitions(tiny_raw):
 
 
 def test_build_event_stream_computes_n_days(tiny_raw):
-    es = build_event_stream(tiny_raw)
+    es = build_event_stream(tiny_raw, apply_sink_filter=False)
     assert es.n_days >= 1
 
 
 def test_build_event_stream_computes_global_bounds(tiny_raw):
-    es = build_event_stream(tiny_raw)
+    es = build_event_stream(tiny_raw, apply_sink_filter=False)
     assert es.bounds.lat_min == pytest.approx(22.5)
     assert es.bounds.lat_max == pytest.approx(22.6)
+
+
+def test_build_event_stream_sink_audit_empty_when_filter_off(tiny_raw):
+    """When apply_sink_filter=False, sink_audit should be an empty dict."""
+    es = build_event_stream(tiny_raw, apply_sink_filter=False)
+    assert es.sink_audit == {}

@@ -59,15 +59,18 @@ def run_generation(
     input_dir: Path,
     output_dir: Path,
     expect_n_drivers: int | None = None,
+    apply_sink_filter: bool = True,
 ) -> RunResult:
     """Run the full pipeline end-to-end.
 
     expect_n_drivers: override to relax the driver-count invariant
     (useful for testing with fewer than 50 synthetic drivers).
+    apply_sink_filter: pass False when running on synthetic data without real
+    sinks (e.g. in tests) to skip the expected-cells assertion guard.
     """
     expect_n_drivers = expect_n_drivers or config.EXPECTED_N_DRIVERS
     log.info("Building event stream from %s", input_dir)
-    es = build_event_stream(Path(input_dir))
+    es = build_event_stream(Path(input_dir), apply_sink_filter=apply_sink_filter)
 
     log.info("Building views…")
     pickup_dropoff_raw = build_pickup_dropoff_counts(es.df)

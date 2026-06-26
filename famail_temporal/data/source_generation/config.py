@@ -77,3 +77,10 @@ OUT_METADATA: str = "processing_metadata.json"
 
 RANDOM_SEED: int = 0
 OUTPUT_FORMAT_VERSION: str = "1.0.0"
+
+# --- stuck-GPS sink filter (provisional; finalize from Stage-0 dry-run) ---
+STUCK_GPS_MIN_PICKUPS: int = 1000        # absolute phantom-pickup floor
+STUCK_GPS_COORD_DOMINANCE: float = 0.99  # one exact coord's share of its cell's pickups
+STUCK_GPS_COORD_PRECISION: int = 6       # lat/lon rounding (decimals)
+STUCK_GPS_DROP: bool = True              # drop flagged pickup pings (vs suppress)
+STUCK_GPS_EXPECTED_CELLS: frozenset = frozenset({(28, 52), (20, 28), (28, 28), (24, 5), (22, 46), (17, 38)})

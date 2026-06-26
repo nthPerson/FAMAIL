@@ -22,7 +22,7 @@ def test_golden_end_to_end(tmp_path):
     out = tmp_path / "out"
     build_raw_fixture(raw)
 
-    result = run_generation(raw, out, expect_n_drivers=2)
+    result = run_generation(raw, out, expect_n_drivers=2, apply_sink_filter=False)
 
     seeking = _load_pkl(out / "passenger_seeking_trajs.pkl")
     expected = expected_seeking_trajectories()
@@ -63,7 +63,10 @@ def test_smoke_on_real_raw_if_present(tmp_path):
             pytest.skip(f"Missing real raw file: {real_raw / name}")
 
     out = tmp_path / "smoke_out"
-    result = run_generation(real_raw, out, expect_n_drivers=50)
+    # apply_sink_filter=False: STUCK_GPS_* constants are provisional until the
+    # Stage-0 dry-run (Task 6) calibrates them against real raw data. Flip to
+    # True (the production default) once Task 6 is merged and constants finalized.
+    result = run_generation(real_raw, out, expect_n_drivers=50, apply_sink_filter=False)
     assert result.n_seeking_kept >= 100
     assert result.n_driving_kept >= 100
     for name in [
