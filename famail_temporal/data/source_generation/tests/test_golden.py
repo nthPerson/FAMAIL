@@ -63,12 +63,19 @@ def test_smoke_on_real_raw_if_present(tmp_path):
             pytest.skip(f"Missing real raw file: {real_raw / name}")
 
     out = tmp_path / "smoke_out"
-    # apply_sink_filter=False: STUCK_GPS_* constants are provisional until the
-    # Stage-0 dry-run (Task 6) calibrates them against real raw data. Flip to
-    # True (the production default) once Task 6 is merged and constants finalized.
-    result = run_generation(real_raw, out, expect_n_drivers=50, apply_sink_filter=False)
+    # apply_sink_filter=True (production default): the STUCK_GPS_* constants are
+    # now calibrated from the Stage-0 dry-run, so this exercises the real-data
+    # hybrid guard (the run aborts if the flagged set drifts from EXPECTED_CELLS).
+    result = run_generation(real_raw, out, expect_n_drivers=50, apply_sink_filter=True)
     assert result.n_seeking_kept >= 100
     assert result.n_driving_kept >= 100
+    # the production guard flagged exactly the calibrated sink cells
+    import json
+    from famail_temporal.data.source_generation import config as _cfg
+    meta = json.loads((out / "processing_metadata.json").read_text())
+    flagged = {tuple(c) for c in meta["stuck_gps_sinks"]["flagged_cells"]}
+    assert flagged == set(_cfg.STUCK_GPS_EXPECTED_CELLS)
+    assert meta["stuck_gps_sinks"]["n_pickups_removed"] > 0
     for name in [
         "pickup_dropoff_counts.pkl", "active_taxis_5x5_hourly.pkl",
         "passenger_seeking_trajs.pkl", "ms_seeking_trajs.pkl",
