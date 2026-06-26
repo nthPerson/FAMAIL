@@ -670,6 +670,25 @@ def main(argv: List[str] | None = None) -> int:
         raw=_stat_arr(raw_stats), edited=_stat_arr(edited_stats),
         bc=_stat_arr(bc_stats), gan=_stat_arr(gan_stats),
     )
+
+    # E13 — terminal-cell histogram vectors (one N_CELLS-length array per source)
+    from famail_temporal.baselines.transmission import terminal_cell_histogram
+    np.savez(
+        out_dir / "terminal_cell_histograms.npz",
+        raw=terminal_cell_histogram(raw_pickups, n_cells=gc.N_CELLS),
+        edited=terminal_cell_histogram(edited_pickups, n_cells=gc.N_CELLS),
+        bc=terminal_cell_histogram(bc_pickups_term, n_cells=gc.N_CELLS),
+        gan=terminal_cell_histogram(gan_pickups_term, n_cells=gc.N_CELLS),
+    )
+
+    # E12 — gate per-pair HuMID score arrays (matched / mismatched raw pairs)
+    m_scores = fe._score_identity_pairs(disc, matched["raw"], batch_size=64, device=device)
+    mm_scores = fe._score_identity_pairs(disc, mismatched["raw"], batch_size=64, device=device)
+    np.savez(
+        out_dir / "gate_pair_scores.npz",
+        matched=np.asarray(m_scores), mismatched=np.asarray(mm_scores),
+    )
+
     training_curves = {"bc": _curves_for_source(bc), "gan": _curves_for_source(gan)}
     (out_dir / "training_curves.json").write_text(
         json.dumps(training_curves, indent=2, default=float)
