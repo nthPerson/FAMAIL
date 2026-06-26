@@ -43,6 +43,7 @@ from famail_temporal.baselines._manifest import write_run_manifest, append_timin
 from famail_temporal.baselines.run_level2_table import (
     build_edited_corpus, traj_training_data, _evaluate_policy,
 )
+from famail_temporal.baselines import _enrich
 from famail_temporal.baselines.run_level1_table_v2 import (
     _select_eval_drivers, _real_context_tensors, _build_source_pairs,
     _terminal_pickups_from_trajs,
@@ -272,6 +273,16 @@ def main(argv: List[str] | None = None) -> int:
         m: {a: [] for a in arm_names} for m in _METRICS
     }
     per_arm_empty: Dict[str, List[int]] = {a: [] for a in arm_names}
+    _FB_COMPONENTS = ("length", "mean_displacement", "coverage",
+                      "radius_of_gyration", "net_displacement", "terminal_cell")
+    _DEGEN_KEYS = ("terminal_cell_entropy_bits", "mean_trip_length", "std_trip_length")
+    per_arm_fb: Dict[str, Dict[str, List[float]]] = {
+        a: {c: [] for c in _FB_COMPONENTS} for a in arm_names
+    }
+    per_arm_sep: Dict[str, List[float]] = {a: [] for a in arm_names}
+    per_arm_degen: Dict[str, Dict[str, List[float]]] = {
+        a: {k: [] for k in _DEGEN_KEYS} for a in arm_names
+    }
     for s in seeds:
         for name, D, sw in arms:
             t0 = time.time()
@@ -297,6 +308,11 @@ def main(argv: List[str] | None = None) -> int:
             for metric in _METRICS:
                 per_seed[metric][name].append(float(m[metric]))
             per_arm_empty[name].append(int(m["n_empty"]))
+            for c in _FB_COMPONENTS:
+                per_arm_fb[name][c].append(float(m["fidelity_b_per_component"][c]))
+            per_arm_sep[name].append(float(m["fidelity_a_separation"]))
+            for k in _DEGEN_KEYS:
+                per_arm_degen[name][k].append(float(m[k]))
             print(f"[wbc]   {name}: f_causal={m['f_causal']:.4f} "
                   f"f_spatial={m['f_spatial']:.4f} fid_a={m['fidelity_a']:.4f} "
                   f"fid_b={m['fidelity_b']:.4f} ({round(time.time() - t0, 1)}s)", flush=True)
@@ -313,7 +329,17 @@ def main(argv: List[str] | None = None) -> int:
         }
 
     per_arm = {
-        a: {m: _ms(per_seed[m][a]) for m in _METRICS} | {"n_empty": per_arm_empty[a]}
+        a: (
+            {m: _ms(per_seed[m][a]) for m in _METRICS}
+            | {"n_empty": per_arm_empty[a]}
+            | {"fidelity_b_per_component": {
+                c: {"values": [round(float(v), 4) for v in per_arm_fb[a][c]]}
+                for c in _FB_COMPONENTS
+            }}
+            | {"fidelity_a_separation": {"values": [round(float(v), 4) for v in per_arm_sep[a]]}}
+            | {k: {"values": [round(float(v), 4) for v in per_arm_degen[a][k]]}
+               for k in _DEGEN_KEYS}
+        )
         for a in arm_names
     }
     paired = {
@@ -327,6 +353,10 @@ def main(argv: List[str] | None = None) -> int:
         "mle_epochs": args.mle_epochs, "n_edited": len(eids), "n_corpus": len(raw_trajs),
         "n_eval_drivers": len(drivers), "gate": gate, "trusted": bool(gate["passed"]),
         "per_arm": per_arm, "paired_vs_raw": paired,
+        "effective_edited_fraction": {
+            str(int(w)): _enrich.effective_edited_fraction(len(eids), len(raw_trajs), w)
+            for w in ([1.0] + up_weights)
+        },
     }
 
     out_dir = args.out_dir or (
@@ -336,6 +366,26 @@ def main(argv: List[str] | None = None) -> int:
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "sweep.json").write_text(json.dumps(result, indent=2, default=float))
+
+    # ---- E10 dose-response table ----
+    (out_dir / "dose_response.json").write_text(json.dumps(
+        _enrich.dose_response_table(per_arm, paired, up_weights), indent=2, default=float))
+
+    # ---- E26 paired_stats with t_ci ----
+    import copy
+    paired_ci = copy.deepcopy(paired)
+    for metric, by_arm in paired_ci.items():
+        for arm, leaf in by_arm.items():
+            if isinstance(leaf, dict) and "diffs" in leaf:
+                leaf["t_ci"] = list(_enrich.t_ci(leaf["diffs"]))
+    (out_dir / "paired_stats.json").write_text(json.dumps(paired_ci, indent=2, default=float))
+
+    # ---- E27 chosen id sets (edited + placebo per weight) ----
+    raw_ids = [int(t.trajectory_id) for t in raw_trajs]
+    chosen = {"edited_ids": sorted(int(i) for i in eids)}
+    for w in placebo_weights:
+        chosen[f"random_w{int(w)}"] = _enrich.chosen_placebo_ids(raw_ids, eids, args.placebo_seed)
+    (out_dir / "chosen_ids.json").write_text(json.dumps(chosen, indent=2))
 
     # ---- provenance ----
     _gate_extra = {
