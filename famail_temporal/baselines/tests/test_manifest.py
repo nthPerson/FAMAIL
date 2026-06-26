@@ -26,3 +26,21 @@ def test_capture_env_never_raises_and_has_keys():
     for k in ("python", "torch", "cuda", "gpu_name", "numpy", "pandas",
               "cudnn_deterministic", "cudnn_benchmark"):
         assert k in env  # value may be "unknown"
+
+
+def test_append_timing_writes_jsonl(tmp_path):
+    p = tmp_path / "timings.jsonl"
+    _manifest.append_timing(p, "stage1", 12.5, now="t1")
+    _manifest.append_timing(p, "stage2", 3.0, now="t2")
+    lines = [json.loads(x) for x in p.read_text().splitlines()]
+    assert lines == [
+        {"stage": "stage1", "seconds": 12.5, "timestamp": "t1"},
+        {"stage": "stage2", "seconds": 3.0, "timestamp": "t2"},
+    ]
+
+
+def test_sha256_file_stable_and_missing(tmp_path):
+    f = tmp_path / "a.bin"; f.write_bytes(b"hello")
+    h1 = _manifest.sha256_file(f); h2 = _manifest.sha256_file(f)
+    assert h1 == h2 and len(h1) == 64
+    assert _manifest.sha256_file(tmp_path / "nope.bin") == "missing"

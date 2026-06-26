@@ -1,6 +1,7 @@
 """Per-run provenance: a manifest.json + env capture for every re-run artifact.
 Kept import-light and crash-proof — provenance must never break a run."""
 from __future__ import annotations
+import hashlib
 import json
 import platform
 import socket
@@ -61,3 +62,23 @@ def write_run_manifest(out_dir, *, argv, seeds, edit_dir, extra=None, now=None) 
     path = out_dir / "manifest.json"
     path.write_text(json.dumps(manifest, indent=2, default=str))
     return path
+
+
+def append_timing(path, stage, seconds, *, now=None) -> None:
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    rec = {"stage": stage, "seconds": float(seconds),
+           "timestamp": now or datetime.now(timezone.utc).isoformat()}
+    with path.open("a") as f:
+        f.write(json.dumps(rec, default=str) + "\n")
+
+
+def sha256_file(path) -> str:
+    path = Path(path)
+    if not path.exists():
+        return "missing"
+    h = hashlib.sha256()
+    with path.open("rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
