@@ -86,6 +86,19 @@ def _sensitivity_payload(grid: np.ndarray, active_mask: np.ndarray) -> dict:
     }
 
 
+def _origin_dest_fairness(grid_before, grid_after, orig, dest, tb) -> list:
+    """E7: spatial(ch0)+causal(ch1) αᵢ at the origin and destination cells,
+    before and after the edit. Values may be NaN if a cell is inactive at tb."""
+    ox, oy = int(orig[0]), int(orig[1])
+    dx, dy = int(dest[0]), int(dest[1])
+    return [
+        float(grid_before[ox, oy, tb, 0]), float(grid_after[ox, oy, tb, 0]),
+        float(grid_before[ox, oy, tb, 1]), float(grid_after[ox, oy, tb, 1]),
+        float(grid_before[dx, dy, tb, 0]), float(grid_after[dx, dy, tb, 0]),
+        float(grid_before[dx, dy, tb, 1]), float(grid_after[dx, dy, tb, 1]),
+    ]
+
+
 def _attribution_distribution_payload(all_scores, edited_scores) -> dict:
     """E6: full per-trajectory attribution distribution + the editable-pool counts.
 
@@ -160,6 +173,10 @@ def _write_trajectories_csv(result: ExperimentResult, path: Path) -> None:
         "frac_iters_spatial_dominant", "frac_iters_causal_dominant", "frac_iters_fidelity_dominant",
         "mean_cos_spatial_causal", "mean_cos_fairness_fidelity",
         "sign_flip_rate",
+        "origin_spatial_attr_before", "origin_spatial_attr_after",
+        "origin_causal_attr_before",  "origin_causal_attr_after",
+        "dest_spatial_attr_before",   "dest_spatial_attr_after",
+        "dest_causal_attr_before",    "dest_causal_attr_after",
     ]
     with open(path, "w", newline="") as f:
         writer = csv.writer(f)
@@ -201,6 +218,7 @@ def _write_trajectories_csv(result: ExperimentResult, path: Path) -> None:
                 _mean_none("grad_cosine_spatial_causal"),
                 _mean_none("grad_cosine_fairness_fidelity"),
                 sign_flip_rate,
+                *_origin_dest_fairness(result.grid_before, result.grid_after, orig, modc, tb),
             ])
 
 
