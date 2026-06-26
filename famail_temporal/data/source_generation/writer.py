@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+import hashlib
 import json
 import pickle
 
@@ -23,6 +24,15 @@ class OutputPaths:
     calendar_day_map: Path
     driver_mapping: Path
     metadata: Path
+
+
+def _sha256_file(path: Path) -> str:
+    """Return the hex SHA-256 digest of a file, read in streaming chunks."""
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(65536), b""):
+            h.update(chunk)
+    return h.hexdigest()
 
 
 def _pickle_write(path: Path, obj: Any) -> None:
@@ -149,5 +159,15 @@ def write_all_outputs(
     _pickle_write(paths.ms_driving_days, ms_calendars["driving"])
     _pickle_write(paths.calendar_day_map, ms_calendars["calendar_day_map"])
     _pickle_write(paths.driver_mapping, driver_mapping)
+    # Compute byte-level fingerprints of all 10 data .pkl outputs (not metadata itself)
+    pkl_paths = [
+        paths.pickup_dropoff, paths.active_taxis, paths.passenger_seeking,
+        paths.ms_seeking, paths.ms_driving, paths.ms_profile,
+        paths.ms_seeking_days, paths.ms_driving_days,
+        paths.calendar_day_map, paths.driver_mapping,
+    ]
+    data_sha256 = {p.name: _sha256_file(p) for p in pkl_paths}
+    # Build a new dict so we don't mutate the caller's metadata_extras
+    metadata_extras = {**metadata_extras, "data_sha256": data_sha256}
     write_metadata_json(paths.metadata, removal_summary, metadata_extras)
     return paths
