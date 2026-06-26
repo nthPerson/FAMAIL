@@ -1,5 +1,6 @@
 import pandas as pd
 import pytest
+from famail_temporal.data.source_generation import config as sgconfig
 from famail_temporal.data.source_generation.stuck_gps import (
     pickup_mask, detect_stuck_gps_sinks, filter_stuck_gps_sinks, threshold_sensitivity,
 )
@@ -130,11 +131,10 @@ def test_threshold_sensitivity_plateaus_then_drops():
     assert by_t[1] >= by_t[10] >= by_t[60]
 
 
-from famail_temporal.data.source_generation import config as sgconfig
-
-
 def test_config_has_stuck_gps_constants():
     assert isinstance(sgconfig.STUCK_GPS_EXPECTED_CELLS, (set, frozenset))
     assert (28, 52) in sgconfig.STUCK_GPS_EXPECTED_CELLS
     assert sgconfig.STUCK_GPS_COORD_PRECISION == 6
     assert sgconfig.STUCK_GPS_DROP is True
+    assert hasattr(sgconfig, "STUCK_GPS_MIN_PICKUPS")
+    assert hasattr(sgconfig, "STUCK_GPS_COORD_DOMINANCE")
