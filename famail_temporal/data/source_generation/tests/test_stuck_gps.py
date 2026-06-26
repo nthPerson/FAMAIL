@@ -1,7 +1,7 @@
 import pandas as pd
 import pytest
 from famail_temporal.data.source_generation.stuck_gps import (
-    pickup_mask, detect_stuck_gps_sinks, filter_stuck_gps_sinks,
+    pickup_mask, detect_stuck_gps_sinks, filter_stuck_gps_sinks, threshold_sensitivity,
 )
 
 def _df(rows):
@@ -117,3 +117,12 @@ def test_filter_is_noop_on_clean_data():
     )
     assert len(cleaned) == len(df)
     assert audit["n_rows_removed"] == 0
+
+
+def test_threshold_sensitivity_plateaus_then_drops():
+    df = _sink_df()  # one 50-pickup sink + one 1-pickup normal cell
+    curve = threshold_sensitivity(df, thresholds=[1, 10, 60], coord_dominance=0.9, coord_precision=6)
+    by_t = {c["min_pickups"]: c["n_flagged_cells"] for c in curve}
+    assert by_t[10] == 1     # only the sink
+    assert by_t[60] == 0     # threshold above the sink size -> nothing
+    assert by_t[1] >= 1

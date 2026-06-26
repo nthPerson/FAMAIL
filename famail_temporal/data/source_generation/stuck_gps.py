@@ -124,3 +124,31 @@ def filter_stuck_gps_sinks(
     cleaned = df[~is_flagged_pickup].reset_index(drop=True)
     audit["n_rows_removed"] = int(is_flagged_pickup.sum())
     return cleaned, audit
+
+
+def threshold_sensitivity(
+    df: pd.DataFrame, thresholds: list[int], *, coord_dominance: float, coord_precision: int,
+) -> list[dict]:
+    """Compute threshold-sensitivity curve for stuck-GPS sink detection.
+
+    For each threshold, returns the number of unique cells flagged as sinks.
+    Backs the "the 6-sink set is stable across a wide threshold band" figure.
+
+    Args:
+        df: Input DataFrame with pickup events.
+        thresholds: List of min_pickups thresholds to probe.
+        coord_dominance: Minimum cell_share to flag a sink.
+        coord_precision: Decimal places for coordinate rounding.
+
+    Returns:
+        List of dicts [{"min_pickups": t, "n_flagged_cells": k}, ...].
+    """
+    _, dist = detect_stuck_gps_sinks(
+        df, min_pickups=1, coord_dominance=coord_dominance, coord_precision=coord_precision,
+    )
+    out = []
+    for t in thresholds:
+        hit = dist[(dist["n_pickups"] >= t) & (dist["cell_share"] >= coord_dominance)]
+        n_cells = hit.drop_duplicates(["x_grid", "y_grid"]).shape[0]
+        out.append({"min_pickups": int(t), "n_flagged_cells": int(n_cells)})
+    return out
