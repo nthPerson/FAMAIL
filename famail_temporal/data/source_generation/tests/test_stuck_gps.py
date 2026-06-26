@@ -126,3 +126,5 @@ def test_threshold_sensitivity_plateaus_then_drops():
     assert by_t[10] == 1     # only the sink
     assert by_t[60] == 0     # threshold above the sink size -> nothing
     assert by_t[1] >= 1
+    # curve is monotone non-increasing in the threshold (the stability property)
+    assert by_t[1] >= by_t[10] >= by_t[60]

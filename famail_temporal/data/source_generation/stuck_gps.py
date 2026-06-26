@@ -138,7 +138,9 @@ def threshold_sensitivity(
         df: Input DataFrame with pickup events.
         thresholds: List of min_pickups thresholds to probe.
         coord_dominance: Minimum cell_share to flag a sink.
-        coord_precision: Decimal places for coordinate rounding.
+        coord_precision: Decimal places for coordinate rounding. Must match the
+            value passed to filter_stuck_gps_sinks so the swept distribution
+            reflects what the filter would actually flag.
 
     Returns:
         List of dicts [{"min_pickups": t, "n_flagged_cells": k}, ...].
