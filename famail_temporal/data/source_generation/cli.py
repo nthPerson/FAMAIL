@@ -84,7 +84,7 @@ def report_stuck_gps(
     _cleaned, audit = stuck_gps.filter_stuck_gps_sinks(
         df,
         min_pickups=min_pickups,
-        coord_dominance=config.STUCK_GPS_COORD_DOMINANCE,
+        max_dropoff_ratio=config.STUCK_GPS_MAX_DROPOFF_RATIO,
         coord_precision=config.STUCK_GPS_COORD_PRECISION,
         expected_cells=expected_cells,
         drop=False,   # report-only: never mutate data here
@@ -92,13 +92,13 @@ def report_stuck_gps(
     _flagged, dist = stuck_gps.detect_stuck_gps_sinks(
         df,
         min_pickups=1,
-        coord_dominance=config.STUCK_GPS_COORD_DOMINANCE,
+        max_dropoff_ratio=config.STUCK_GPS_MAX_DROPOFF_RATIO,
         coord_precision=config.STUCK_GPS_COORD_PRECISION,
     )
     curve = stuck_gps.threshold_sensitivity(
         df,
         thresholds=[100, 250, 500, 1000, 2000, 5000, 10000],
-        coord_dominance=config.STUCK_GPS_COORD_DOMINANCE,
+        max_dropoff_ratio=config.STUCK_GPS_MAX_DROPOFF_RATIO,
         coord_precision=config.STUCK_GPS_COORD_PRECISION,
     )
     return {

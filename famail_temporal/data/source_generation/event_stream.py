@@ -65,7 +65,7 @@ def build_event_stream(raw_dir: Path, *, apply_sink_filter: bool = True) -> Even
         df, sink_audit = filter_stuck_gps_sinks(
             df,
             min_pickups=config.STUCK_GPS_MIN_PICKUPS,
-            coord_dominance=config.STUCK_GPS_COORD_DOMINANCE,
+            max_dropoff_ratio=config.STUCK_GPS_MAX_DROPOFF_RATIO,
             coord_precision=config.STUCK_GPS_COORD_PRECISION,
             expected_cells=config.STUCK_GPS_EXPECTED_CELLS,
             drop=config.STUCK_GPS_DROP,

@@ -26,6 +26,8 @@ def test_pickup_mask_flags_0_to_1_transitions_per_driver():
 def test_detect_flags_a_concentrated_single_coord_sink():
     rows = []
     # driver SINK: 50 pickups frozen at one exact coord in cell (28,52)
+    # The frozen coord has 0 dropoffs (all dropoffs are at indicator=0 rows which
+    # are NOT the pickup coord). With max_dropoff_ratio=0.02, n_dropoffs=0 -> ratio=0.0 < 0.02 -> flagged.
     for _ in range(50):
         rows.append(("SINK", 0, 0.0, 0.0, 28, 52))
         rows.append(("SINK", 1, 12.345678, 98.765432, 28, 52))  # frozen pickup coord
@@ -40,7 +42,7 @@ def test_detect_flags_a_concentrated_single_coord_sink():
     rows.append(("NORM", 1, 1.111111, 2.222222, 5, 5))
     df = _df(rows)
     flagged, dist = detect_stuck_gps_sinks(
-        df, min_pickups=10, coord_dominance=0.9, coord_precision=6,
+        df, min_pickups=10, max_dropoff_ratio=0.02, coord_precision=6,
     )
     assert len(flagged) == 1
     row = flagged.iloc[0]
@@ -53,6 +55,14 @@ def test_detect_flags_a_concentrated_single_coord_sink():
     # distribution is sorted desc; SINK has 2 coord groups + NORM has 1
     assert int(dist.iloc[0].n_pickups) == 50
     assert len(dist) == 3
+    # new columns: n_dropoffs and dropoff_ratio present in both frames
+    assert "n_dropoffs" in flagged.columns
+    assert "dropoff_ratio" in flagged.columns
+    assert "n_dropoffs" in dist.columns
+    assert "dropoff_ratio" in dist.columns
+    # frozen sink coord has 0 dropoffs -> ratio 0.0
+    assert int(row.n_dropoffs) == 0
+    assert float(row.dropoff_ratio) == 0.0
 
 
 def test_detect_returns_empty_frames_when_no_pickups():
@@ -63,12 +73,13 @@ def test_detect_returns_empty_frames_when_no_pickups():
         ("B", 0, 9.0, 9.0, 1, 1),
     ])
     flagged, dist = detect_stuck_gps_sinks(
-        df, min_pickups=10, coord_dominance=0.9, coord_precision=6,
+        df, min_pickups=10, max_dropoff_ratio=0.02, coord_precision=6,
     )
     assert len(flagged) == 0
     assert len(dist) == 0
     # frames are well-typed (expected columns present) even when empty.
-    for col in ("n_pickups", "cell_share", "driver_total", "x_grid", "y_grid"):
+    for col in ("n_pickups", "cell_share", "driver_total", "x_grid", "y_grid",
+                "n_dropoffs", "dropoff_ratio"):
         assert col in flagged.columns
         assert col in dist.columns
 
@@ -86,7 +97,7 @@ def _sink_df():
 def test_filter_drops_flagged_pickups_and_keeps_drivers():
     df = _sink_df()
     cleaned, audit = filter_stuck_gps_sinks(
-        df, min_pickups=10, coord_dominance=0.9, coord_precision=6, expected_cells=None,
+        df, min_pickups=10, max_dropoff_ratio=0.02, coord_precision=6, expected_cells=None,
     )
     # the 50 frozen pickup rows are gone; the SINK driver still exists (its 50 indicator-0 rows remain)
     assert cleaned["plate_id"].nunique() == 2
@@ -95,16 +106,21 @@ def test_filter_drops_flagged_pickups_and_keeps_drivers():
     assert audit["sinks"][0]["n_pickups"] == 50
     # normal pickup survives
     assert ((cleaned["plate_id"] == "NORM") & (cleaned["passenger_indicator"] == 1)).sum() == 1
+    # audit sinks carry n_dropoffs and dropoff_ratio
+    assert "n_dropoffs" in audit["sinks"][0]
+    assert "dropoff_ratio" in audit["sinks"][0]
+    assert audit["sinks"][0]["n_dropoffs"] == 0
+    assert audit["sinks"][0]["dropoff_ratio"] == 0.0
 
 
 def test_hybrid_guard_asserts_expected_cells():
     df = _sink_df()
     # correct expectation passes
-    filter_stuck_gps_sinks(df, min_pickups=10, coord_dominance=0.9, coord_precision=6,
+    filter_stuck_gps_sinks(df, min_pickups=10, max_dropoff_ratio=0.02, coord_precision=6,
                            expected_cells={(28, 52)})
     # wrong expectation raises
     with pytest.raises(AssertionError):
-        filter_stuck_gps_sinks(df, min_pickups=10, coord_dominance=0.9, coord_precision=6,
+        filter_stuck_gps_sinks(df, min_pickups=10, max_dropoff_ratio=0.02, coord_precision=6,
                                expected_cells={(1, 1)})
 
 
@@ -114,7 +130,7 @@ def test_filter_is_noop_on_clean_data():
         ("B", 0, 3.0, 3.0, 7, 7), ("B", 1, 3.1, 4.1, 7, 7),
     ])
     cleaned, audit = filter_stuck_gps_sinks(
-        df, min_pickups=10, coord_dominance=0.9, coord_precision=6, expected_cells=set(),
+        df, min_pickups=10, max_dropoff_ratio=0.02, coord_precision=6, expected_cells=set(),
     )
     assert len(cleaned) == len(df)
     assert audit["n_rows_removed"] == 0
@@ -122,7 +138,7 @@ def test_filter_is_noop_on_clean_data():
 
 def test_threshold_sensitivity_plateaus_then_drops():
     df = _sink_df()  # one 50-pickup sink + one 1-pickup normal cell
-    curve = threshold_sensitivity(df, thresholds=[1, 10, 60], coord_dominance=0.9, coord_precision=6)
+    curve = threshold_sensitivity(df, thresholds=[1, 10, 60], max_dropoff_ratio=0.02, coord_precision=6)
     by_t = {c["min_pickups"]: c["n_flagged_cells"] for c in curve}
     assert by_t[10] == 1     # only the sink
     assert by_t[60] == 0     # threshold above the sink size -> nothing
@@ -137,7 +153,49 @@ def test_config_has_stuck_gps_constants():
     assert sgconfig.STUCK_GPS_COORD_PRECISION == 6
     assert sgconfig.STUCK_GPS_DROP is True
     assert hasattr(sgconfig, "STUCK_GPS_MIN_PICKUPS")
-    assert hasattr(sgconfig, "STUCK_GPS_COORD_DOMINANCE")
+    assert hasattr(sgconfig, "STUCK_GPS_MAX_DROPOFF_RATIO")
+    assert not hasattr(sgconfig, "STUCK_GPS_COORD_DOMINANCE")
+
+
+def test_real_hub_with_balanced_dropoffs_is_not_flagged():
+    """A high-count coord with balanced dropoffs is NOT a stuck-GPS sink.
+
+    The old cell-dominance rule could have wrongly caught real high-volume hubs.
+    The new signature rule (near-zero dropoffs) correctly spares them.
+
+    We build a "hub" driver with 200 pickups AND 200 dropoffs at the SAME exact
+    coordinate. The sequence cycles:
+        (0 @ offcoord) -> (1 @ HUB) -> (0 @ HUB) -> (1 @ offcoord) -> ...
+    so HUB receives both 0->1 (pickup) and 1->0 (dropoff) transitions.
+    With n_pickups=200 and n_dropoffs=200, dropoff_ratio=1.0 >= 0.02 -> NOT flagged.
+    """
+    HUB_LAT, HUB_LON = 12.345678, 98.765432
+    OFF_LAT, OFF_LON = 0.0, 0.0
+    rows = []
+    # Cycle: off->HUB (pickup at HUB), HUB->off (dropoff at HUB)
+    # Each pair = 1 pickup at HUB + 1 dropoff at HUB
+    for _ in range(200):
+        rows.append(("HUB", 0, OFF_LAT, OFF_LON, 5, 5))   # seeking at off-coord
+        rows.append(("HUB", 1, HUB_LAT, HUB_LON, 28, 52)) # pickup at HUB (0->1)
+        rows.append(("HUB", 0, HUB_LAT, HUB_LON, 28, 52)) # dropoff at HUB (1->0)
+        rows.append(("HUB", 1, OFF_LAT, OFF_LON, 5, 5))   # pickup at off (0->1, NOT HUB)
+    df = _df(rows)
+
+    flagged, dist = detect_stuck_gps_sinks(
+        df, min_pickups=10, max_dropoff_ratio=0.02, coord_precision=6,
+    )
+    # HUB coord has 200 pickups but also 200 dropoffs -> ratio=1.0 -> NOT flagged
+    assert len(flagged) == 0, (
+        f"Real hub with balanced dropoffs was wrongly flagged: {flagged.to_dict(orient='records')}"
+    )
+    # Verify the hub group IS in the distribution (with n_dropoffs > 0)
+    hub_rows = dist[
+        (dist["lat_r"] == round(HUB_LAT, 6)) & (dist["lon_r"] == round(HUB_LON, 6))
+    ]
+    assert len(hub_rows) == 1
+    assert int(hub_rows.iloc[0]["n_pickups"]) == 200
+    assert int(hub_rows.iloc[0]["n_dropoffs"]) == 200
+    assert float(hub_rows.iloc[0]["dropoff_ratio"]) == pytest.approx(1.0)
 
 
 from famail_temporal.data.source_generation import cli as sgcli
