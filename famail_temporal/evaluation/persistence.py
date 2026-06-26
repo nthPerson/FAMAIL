@@ -117,6 +117,41 @@ def _attribution_distribution_payload(all_scores, edited_scores) -> dict:
     }
 
 
+def _convergence_curve(histories) -> dict:
+    """E8/E35: mean per-iteration F_causal / F_spatial / fidelity / objective
+    across all edited trajectories. Iteration counts are ragged (patience fires
+    at different points); each iteration averages only the trajectories that
+    reached it, and n_contributing records how many that was."""
+    fields = ("f_causal", "f_spatial", "f_fidelity", "objective_value")
+    out_keys = ("mean_f_causal", "mean_f_spatial", "mean_f_fidelity", "mean_objective")
+    if not histories:
+        empty_i = np.zeros(0, dtype=np.int64)
+        empty_f = np.zeros(0, dtype=np.float64)
+        return {"iteration": empty_i, "n_contributing": empty_i.copy(),
+                **{k: empty_f.copy() for k in out_keys}}
+    max_iters = max(len(h.iterations) for h in histories)
+    means = {f: [] for f in fields}
+    n_contrib = []
+    for it in range(max_iters):
+        vals = {f: [] for f in fields}
+        for h in histories:
+            if it < len(h.iterations):
+                r = h.iterations[it]
+                for f in fields:
+                    vals[f].append(getattr(r, f))
+        n_contrib.append(len(vals["f_causal"]))
+        for f in fields:
+            means[f].append(float(np.mean(vals[f])) if vals[f] else float("nan"))
+    return {
+        "iteration": np.arange(max_iters, dtype=np.int64),
+        "mean_f_causal":   np.asarray(means["f_causal"],       dtype=np.float64),
+        "mean_f_spatial":  np.asarray(means["f_spatial"],      dtype=np.float64),
+        "mean_f_fidelity": np.asarray(means["f_fidelity"],     dtype=np.float64),
+        "mean_objective":  np.asarray(means["objective_value"], dtype=np.float64),
+        "n_contributing":  np.asarray(n_contrib,               dtype=np.int64),
+    }
+
+
 def _diagnostics_summary(result: ExperimentResult) -> dict | None:
     if not result.diagnostics_enabled or not result.histories:
         return None
@@ -361,6 +396,11 @@ def write(result: ExperimentResult, output_root: Path, bundle=None) -> Path:
             result.all_trajectory_scores, result.top_k_scores))
         artifact_paths["attribution_distribution"] = path.name
         file_sizes["attribution_distribution"] = path.stat().st_size
+
+    path = out_dir / "convergence_curve.npz"
+    np.savez(path, **_convergence_curve(result.histories))
+    artifact_paths["convergence_curve"] = path.name
+    file_sizes["convergence_curve"] = path.stat().st_size
 
     metrics = {
         "experiment_id": result.experiment_id,
