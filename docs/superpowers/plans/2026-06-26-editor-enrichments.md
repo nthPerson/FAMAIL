@@ -378,6 +378,61 @@ def test_write_emits_convergence_curve_npz(tmp_path):
 Run: `python -m pytest famail_temporal/tests/test_editor_enrichments.py -q`
 Expected: PASS (all tests in the file).
 
+- [ ] **Step 4b: Add the consolidated real-history end-to-end test**
+
+This closes the `histories=[]` coverage gap flagged in P3T2's review: a REAL `ModificationHistory` must flow a data row through `trajectories.csv` (the E7 columns) AND into a non-empty `convergence_curve.npz` (E8/E35), so the write-site wiring is exercised end-to-end, not just the helpers in isolation. It uses real `Trajectory`/`ModificationResult`/`ModificationHistory` objects (correct defaults; no fragile stubs). Append to `test_editor_enrichments.py`:
+
+```python
+def test_end_to_end_real_history_csv_and_convergence(tmp_path):
+    """A real ModificationHistory flows a DATA ROW through trajectories.csv
+    (E7 cols) and into a non-empty convergence_curve.npz (E8/E35)."""
+    import csv
+    from dataclasses import replace
+    from famail_temporal.tests.test_persistence import _fake_result
+    from famail_temporal.tests.test_modifier import _make_test_trajectory
+    from famail_temporal.algorithm.modifier import ModificationResult, ModificationHistory
+
+    orig = _make_test_trajectory(driver_id=7, pickup_xy=(1, 1), time_bucket=10)
+    modc = _make_test_trajectory(driver_id=7, pickup_xy=(2, 2), time_bucket=10)
+    iters = [
+        ModificationResult(iteration=0, objective_value=1.0, f_spatial=0.30,
+                           f_causal=0.50, f_fidelity=0.10, gradient_norm=0.0,
+                           cumulative_delta=np.zeros(2, dtype=np.float32)),
+        ModificationResult(iteration=1, objective_value=0.9, f_spatial=0.35,
+                           f_causal=0.55, f_fidelity=0.10, gradient_norm=0.0,
+                           cumulative_delta=np.zeros(2, dtype=np.float32)),
+    ]
+    hist = ModificationHistory(original=orig, modified=modc, iterations=iters,
+                               converged=True, total_iterations=2)
+    # grid sized to contain the pickup cells at any t_block (T=24 covers hourly)
+    gb = np.zeros((8, 8, 24, 4), dtype=np.float32)
+    ga = np.zeros((8, 8, 24, 4), dtype=np.float32)
+    result = replace(
+        _fake_result(), histories=[hist], top_k_scores=[-1.0],
+        grid_before=gb, grid_after=ga,
+        all_trajectory_scores=np.array([-1.0, 0.25], dtype=np.float32),
+    )
+    out_dir = P.write(result, output_root=tmp_path)
+
+    # E7: one real data row carrying the 8 origin/dest fairness columns
+    with open(out_dir / "trajectories.csv") as f:
+        rows = list(csv.DictReader(f))
+    assert len(rows) == 1
+    for col in ("origin_causal_attr_before", "origin_causal_attr_after",
+                "dest_causal_attr_before", "dest_causal_attr_after"):
+        assert col in rows[0]
+
+    # E8/E35: convergence curve aggregates the 2 iterations of the 1 history
+    npz = np.load(out_dir / "convergence_curve.npz")
+    assert list(npz["iteration"]) == [0, 1]
+    assert int(npz["n_contributing"][0]) == 1
+    assert npz["mean_f_causal"][0] == pytest.approx(0.50)
+    assert npz["mean_f_causal"][1] == pytest.approx(0.55)
+```
+
+Run: `python -m pytest famail_temporal/tests/test_editor_enrichments.py -q`
+Expected: PASS (all tests in the file, including the end-to-end test).
+
 - [ ] **Step 5: Confirm no regression across the editor suite**
 
 Run: `python -m pytest famail_temporal/tests/test_persistence.py famail_temporal/tests/test_runner.py famail_temporal/tests/test_modifier.py -q`
