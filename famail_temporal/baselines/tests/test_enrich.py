@@ -69,3 +69,13 @@ def test_paired_stats_t_ci_augmentation_shape():
     leaf = paired["f_causal"]["raw"]
     leaf["t_ci"] = list(E.t_ci(leaf["diffs"]))
     assert len(leaf["t_ci"]) == 2 and leaf["t_ci"][0] < 0.02 < leaf["t_ci"][1]
+
+
+def test_l1v2_mean_std_ci_single_and_multi():
+    from famail_temporal.baselines.run_level1_table_v2 import _mean_std_ci
+    one = _mean_std_ci([0.81])
+    assert one["mean"] == pytest.approx(0.81) and one["std"] == 0.0
+    assert one["values"] == [0.81]
+    multi = _mean_std_ci([0.80, 0.82, 0.81, 0.83, 0.79])
+    assert multi["mean"] == pytest.approx(0.81)
+    assert len(multi["t_ci"]) == 2 and multi["t_ci"][0] < 0.81 < multi["t_ci"][1]

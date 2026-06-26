@@ -53,6 +53,14 @@ from famail_temporal.baselines._manifest import write_run_manifest, append_timin
 _SOURCE_ORDER = ["raw", "edited", "bc", "gan"]
 
 
+def _mean_std_ci(vals):
+    from famail_temporal.baselines._enrich import t_ci
+    return {"mean": float(np.mean(vals)) if vals else float("nan"),
+            "std": float(np.std(vals, ddof=1)) if len(vals) > 1 else 0.0,
+            "values": [float(v) for v in vals],
+            "t_ci": list(t_ci(vals))}
+
+
 def result_to_json(result: dict) -> str:
     return json.dumps(result, indent=2, default=float)
 
@@ -339,10 +347,14 @@ def main(argv: List[str] | None = None) -> int:
     ap.add_argument("--min-driver-trajs", type=int, default=6,
                     help="Min real trajectories for a driver to be eligible.")
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--seeds", type=str, default=None,
+                    help="Comma-separated seeds for multi-seed error bars (E18). "
+                         "When given, also writes level1_v2_multiseed.json. Defaults to [--seed].")
     ap.add_argument("--device", type=str, default="auto")
     ap.add_argument("--out-dir", type=Path, default=None)
     ap.add_argument("--quiet", action="store_true")
     args = ap.parse_args(argv)
+    seeds = [int(s) for s in args.seeds.split(",") if s.strip()] if args.seeds else [args.seed]
     t0 = time.time()
 
     def _log(msg: str) -> None:
@@ -383,28 +395,7 @@ def main(argv: List[str] | None = None) -> int:
     profiles = bundle.multi_stream.profile_features
     zeros11 = np.zeros(11, dtype=np.float32)
 
-    # ---- train the two driver-conditioned generative sources ----
-    _log(f"[level1-v2] training BC (MLE-only, {args.mle_epochs} epochs, "
-         f"n_drivers={len(driver_to_idx)})")
-    bc = _train_and_generate_cond(
-        raw_trajs, driver_to_idx, adv_epochs=0, gan_loss="bce", n_critic=1,
-        mle_epochs=args.mle_epochs, max_len=max_len, max_tokens=args.max_tokens,
-        device=device, seed=args.seed,
-    )
-    _log(f"[level1-v2] training GAN ({args.gan_loss}, mle={args.mle_epochs}, "
-         f"adv={args.adv_epochs}, n_critic={args.n_critic})")
-    gan = _train_and_generate_cond(
-        raw_trajs, driver_to_idx, adv_epochs=args.adv_epochs, gan_loss=args.gan_loss,
-        n_critic=args.n_critic, mle_epochs=args.mle_epochs, max_len=max_len,
-        max_tokens=args.max_tokens, device=device, seed=args.seed,
-    )
-
-    # ====================================================================
-    # Fidelity-A: identity-aware, real-anchored gate + per-source matched
-    # ====================================================================
-    # A single rng drives ALL identity-branch sampling for determinism.
-    rng = random.Random(args.seed)
-
+    # ---- deterministic setup (outside the closure; not seed-dependent) ----
     eval_drivers = _select_eval_drivers(
         groups, min_trajs=args.min_driver_trajs, max_drivers=args.max_eval_drivers,
     )
@@ -414,7 +405,6 @@ def main(argv: List[str] | None = None) -> int:
             "cannot build identity Fidelity-A pairs."
         )
     _log(f"[level1-v2] identity Fidelity-A over {len(eval_drivers)} eval drivers")
-    ppd = args.pairs_per_driver
 
     # Group edited histories by their (preserved) driver_id so each driver's
     # edited slot-0 set draws from its own modified trajectories.
@@ -422,196 +412,225 @@ def main(argv: List[str] | None = None) -> int:
     for h in histories:
         edited_by_driver.setdefault(int(h.modified.driver_id), []).append(h.modified)
 
-    # ---- Pass 1: precompute each eval driver's per-source slot-0 sets + context.
-    # We need EVERY driver's sets in hand before pairing, because the mismatched
-    # branch for driver d pairs against the next driver d' (real-d', edited-d',
-    # gen-for-d'), so a single forward pass cannot supply d' before it is built.
-    _log(f"[level1-v2] building per-driver slot-0 sets ({len(eval_drivers)} drivers)")
-    real_slot0_by_d: Dict[int, list] = {}
-    real_context_by_d: Dict[int, list] = {}
-    prof_by_d: Dict[int, object] = {}
-    raw_slot0_by_d: Dict[int, list] = {}
-    edited_slot0_by_d: Dict[int, list] = {}
-    gen_slot0_by_d: Dict[str, Dict[int, list]] = {"bc": {}, "gan": {}}
-
-    for d in eval_drivers:
-        real_d = groups[d]
-        # Context pool: ALL of d's real trajectories (build_identity_branch
-        # samples slots 1..N-1 from these).
-        real_context_by_d[d] = _real_context_tensors(real_d)
-        prof_d = profiles.get(d)
-        if prof_d is None:
-            _log(f"[level1-v2] WARN driver {d} has no profile -> zero profile")
-            prof_d = zeros11
-        prof_by_d[d] = prof_d
-
-        # REAL/anchor branch slot-0: up to ppd of d's real trajectories.
-        real_slot0_by_d[d] = [fe.real_to_disc_tensor(t) for t in real_d[:ppd]]
-
-        # raw source slot-0: a DISJOINT second sample of d's real trajectories
-        # (so raw "matched" = real-d vs another real-d). Too few for a disjoint
-        # half -> sample WITH REPLACEMENT (note: degrades to overlapping pairs).
-        n_take = len(real_slot0_by_d[d])
-        n_avail = len(real_d)
-        if n_take and n_avail >= 2 * n_take:
-            raw_slot0_by_d[d] = [
-                fe.real_to_disc_tensor(t) for t in real_d[n_take:2 * n_take]
-            ]
-        elif n_take:
-            raw_slot0_by_d[d] = [
-                fe.real_to_disc_tensor(real_d[rng.randrange(n_avail)])
-                for _ in range(n_take)
-            ]
-        else:
-            raw_slot0_by_d[d] = []
-
-        # edited source slot-0: d's own modified trajectories (may be empty).
-        edited_slot0_by_d[d] = [
-            fe.real_to_disc_tensor(t) for t in edited_by_driver.get(d, [])[:ppd]
-        ]
-
-        # bc / gan source slot-0: driver-conditioned generated trajectories.
-        for name, src in (("bc", bc), ("gan", gan)):
-            gen_slot0_by_d[name][d] = _gen_cond_slot0(
-                src["model"], real_d, driver_to_idx[d],
-                pairs_per_driver=ppd, max_len=max_len, device=device,
-                gen_batch_size=args.gen_batch_size,
-            )
-
-    # ---- Pass 2: pair each driver d against mismatch partner d' = next driver.
-    # matched = (real-d, source-of-d) both profile d; mismatched = (real-d,
-    # source-of-d' + d' context + d' profile). _build_source_pairs tolerates
-    # empty source lists (e.g. a driver with no edited trajectories) by
-    # contributing nothing for that (source, driver) pairing.
-    matched: Dict[str, list] = {k: [] for k in _SOURCE_ORDER}
-    mismatched: Dict[str, list] = {k: [] for k in _SOURCE_ORDER}
-    source_slot0_by_d = {
-        "raw": raw_slot0_by_d, "edited": edited_slot0_by_d,
-        "bc": gen_slot0_by_d["bc"], "gan": gen_slot0_by_d["gan"],
-    }
-    for k, d in enumerate(eval_drivers):
-        dprime = eval_drivers[(k + 1) % len(eval_drivers)]  # mismatch partner
-        real_slot0 = real_slot0_by_d[d]
-        if not real_slot0:
-            continue
-        for name in _SOURCE_ORDER:
-            m, mm = _build_source_pairs(
-                real_slot0=real_slot0,
-                source_slot0=source_slot0_by_d[name][d],
-                source_slot0_other=source_slot0_by_d[name][dprime],
-                real_context=real_context_by_d[d],
-                source_context_other=real_context_by_d[dprime],
-                profile_d=prof_by_d[d], profile_dp=prof_by_d[dprime], rng=rng,
-            )
-            matched[name].extend(m)
-            mismatched[name].extend(mm)
-
-    # ---- gate (real-anchored): raw matched vs raw mismatched ----
-    _log("[level1-v2] running real-anchored validation gate")
-    gate = fe.identity_validation_gate(
-        disc, matched_pairs=matched["raw"], mismatched_pairs=mismatched["raw"],
-        device=device,
-    )
-    trusted = bool(gate["passed"])
-
-    # ---- per-source Fidelity-A + separation ----
-    _log("[level1-v2] scoring per-source identity Fidelity-A")
-    fidelity_a: Dict[str, float] = {}
-    separation: Dict[str, float] = {}
-    for key in _SOURCE_ORDER:
-        a_match = fe.humid_identity_fidelity(disc, matched[key], device=device)
-        a_mis = fe.humid_identity_fidelity(disc, mismatched[key], device=device)
-        fidelity_a[key] = float(a_match["mean"])
-        separation[key] = float(a_match["mean"] - a_mis["mean"])
-
-    # ====================================================================
-    # Fidelity-B: enriched 5-key distributional + terminal-cell JS
-    # ====================================================================
-    bc_n = min(fss, len(bc["contexts"]))
-    gan_n = min(fss, len(gan["contexts"]))
-    _log(f"[level1-v2] generating BC Fidelity-B rollouts (N={bc_n})")
-    bc_cells, bc_empty = _gen_fidelity_full(
-        bc["model"], bc["filtered_train"], bc["contexts"], bc["driver_idxs"],
-        n=bc_n, max_len=max_len, device=device, gen_batch_size=args.gen_batch_size,
-    )
-    _log(f"[level1-v2] generating GAN Fidelity-B rollouts (N={gan_n})")
-    gan_cells, gan_empty = _gen_fidelity_full(
-        gan["model"], gan["filtered_train"], gan["contexts"], gan["driver_idxs"],
-        n=gan_n, max_len=max_len, device=device, gen_batch_size=args.gen_batch_size,
-    )
-
-    _log("[level1-v2] scoring Fidelity-B (5-key distributional + terminal-cell JS)")
-    raw_sample = raw_trajs[:fss]
-    edited_sample = histories[:fss]
-    raw_stats = [fe.trajectory_statistics(t) for t in raw_sample]
-    edited_stats = [fe.trajectory_statistics(h.modified) for h in edited_sample]
-    bc_stats = [fe.trajectory_statistics(c) for c in bc_cells if c]
-    gan_stats = [fe.trajectory_statistics(c) for c in gan_cells if c]
-    ranges = fe.stat_ranges(
-        [raw_stats, edited_stats, bc_stats, gan_stats], keys=fe._STAT_KEYS_V2,
-    )
-    b_edited = fe.distributional_fidelity(
-        edited_stats, raw_stats, ranges=ranges, keys=fe._STAT_KEYS_V2,
-    )
-    b_bc = fe.distributional_fidelity(
-        bc_stats, raw_stats, ranges=ranges, keys=fe._STAT_KEYS_V2,
-    )
-    b_gan = fe.distributional_fidelity(
-        gan_stats, raw_stats, ranges=ranges, keys=fe._STAT_KEYS_V2,
-    )
-
-    # ---- terminal-cell JS per source (vs raw terminal cells) ----
-    raw_pickups = _terminal_pickups_from_trajs(raw_sample)
-    edited_pickups = _terminal_pickups_from_trajs([h.modified for h in edited_sample])
-    bc_pickups_term = _terminal_pickups_from_cells(bc_cells)
-    gan_pickups_term = _terminal_pickups_from_cells(gan_cells)
-    tjs_edited = fe.terminal_cell_distribution_js(edited_pickups, raw_pickups)
-    tjs_bc = fe.terminal_cell_distribution_js(bc_pickups_term, raw_pickups)
-    tjs_gan = fe.terminal_cell_distribution_js(gan_pickups_term, raw_pickups)
-
-    def _b_component(dist: dict, terminal_js: float) -> Tuple[dict, float]:
-        """per-component dict (5 stat JS + terminal_cell) + aggregate mean."""
-        comp = dict(dist["per_stat"])
-        comp["terminal_cell"] = float(terminal_js)
-        agg = float(np.mean(list(dist["per_stat"].values()) + [terminal_js]))
-        return comp, agg
-
-    comp_edited, fb_edited = _b_component(b_edited, tjs_edited)
-    comp_bc, fb_bc = _b_component(b_bc, tjs_bc)
-    comp_gan, fb_gan = _b_component(b_gan, tjs_gan)
-    # Raw vs raw is 0.0 by definition; avoid a degenerate self-call.
-    comp_raw = {k: 0.0 for k in fe._STAT_KEYS_V2}
-    comp_raw["terminal_cell"] = 0.0
-
-    # ====================================================================
-    # Fairness: identical to v1 (driver-conditioned pickups for bc/gan)
-    # ====================================================================
-    # Fairness is a CORPUS-SCALE demand-grid metric, so BC/GAN fairness rollouts
-    # deliberately cover the FULL filtered corpus (not the fidelity sample): raw/
-    # edited fairness already use every trajectory, and a sub-sampled demand grid
-    # would not be comparable. This is the run's largest single compute cost.
-    _log("[level1-v2] scoring single-seed fairness")
+    # Deterministic fairness (read from persisted edit metrics; not seed-dependent).
+    _log("[level1-v2] loading deterministic fairness values")
     f_raw = data_level_fairness(bundle)
     f_edited = _edited_fairness_from_metrics(Path(args.edit_dir))
-    bc_pickups = generate_pickups(
-        bc["model"], bc["contexts"], max_len=max_len, device=device,
-        gen_batch_size=args.gen_batch_size, progress=False,
-        driver_idxs=bc["driver_idxs"],
-    )
-    f_bc = data_level_fairness(bundle, pickup_3d=pickups_to_pickup_3d(bundle, bc_pickups))
-    gan_pickups = generate_pickups(
-        gan["model"], gan["contexts"], max_len=max_len, device=device,
-        gen_batch_size=args.gen_batch_size, progress=False,
-        driver_idxs=gan["driver_idxs"],
-    )
-    f_gan = data_level_fairness(bundle, pickup_3d=pickups_to_pickup_3d(bundle, gan_pickups))
 
-    # ---- assemble result ----
-    result = {
-        "edit_dir": args.edit_dir,
-        "gate": gate,
-        "n_eval_drivers": len(eval_drivers),
-        "sources": {
+    # ====================================================================
+    # Seed-dependent closure: encapsulates everything that varies per seed.
+    # Closes over: disc, bundle, raw_trajs, driver_to_idx, groups, profiles,
+    #   zeros11, histories, eval_drivers, edited_by_driver, f_raw, f_edited,
+    #   args, max_len, fss, device, _log.
+    # ====================================================================
+    def _score_one_seed(seed: int) -> dict:
+        # ---- train the two driver-conditioned generative sources ----
+        _log(f"[level1-v2] training BC (MLE-only, {args.mle_epochs} epochs, "
+             f"n_drivers={len(driver_to_idx)}, seed={seed})")
+        bc = _train_and_generate_cond(
+            raw_trajs, driver_to_idx, adv_epochs=0, gan_loss="bce", n_critic=1,
+            mle_epochs=args.mle_epochs, max_len=max_len, max_tokens=args.max_tokens,
+            device=device, seed=seed,
+        )
+        _log(f"[level1-v2] training GAN ({args.gan_loss}, mle={args.mle_epochs}, "
+             f"adv={args.adv_epochs}, n_critic={args.n_critic}, seed={seed})")
+        gan = _train_and_generate_cond(
+            raw_trajs, driver_to_idx, adv_epochs=args.adv_epochs, gan_loss=args.gan_loss,
+            n_critic=args.n_critic, mle_epochs=args.mle_epochs, max_len=max_len,
+            max_tokens=args.max_tokens, device=device, seed=seed,
+        )
+
+        # ====================================================================
+        # Fidelity-A: identity-aware, real-anchored gate + per-source matched
+        # ====================================================================
+        # A single rng drives ALL identity-branch sampling for determinism.
+        rng = random.Random(seed)
+
+        ppd = args.pairs_per_driver
+
+        # ---- Pass 1: precompute each eval driver's per-source slot-0 sets + context.
+        # We need EVERY driver's sets in hand before pairing, because the mismatched
+        # branch for driver d pairs against the next driver d' (real-d', edited-d',
+        # gen-for-d'), so a single forward pass cannot supply d' before it is built.
+        _log(f"[level1-v2] building per-driver slot-0 sets ({len(eval_drivers)} drivers)")
+        real_slot0_by_d: Dict[int, list] = {}
+        real_context_by_d: Dict[int, list] = {}
+        prof_by_d: Dict[int, object] = {}
+        raw_slot0_by_d: Dict[int, list] = {}
+        edited_slot0_by_d: Dict[int, list] = {}
+        gen_slot0_by_d: Dict[str, Dict[int, list]] = {"bc": {}, "gan": {}}
+
+        for d in eval_drivers:
+            real_d = groups[d]
+            # Context pool: ALL of d's real trajectories (build_identity_branch
+            # samples slots 1..N-1 from these).
+            real_context_by_d[d] = _real_context_tensors(real_d)
+            prof_d = profiles.get(d)
+            if prof_d is None:
+                _log(f"[level1-v2] WARN driver {d} has no profile -> zero profile")
+                prof_d = zeros11
+            prof_by_d[d] = prof_d
+
+            # REAL/anchor branch slot-0: up to ppd of d's real trajectories.
+            real_slot0_by_d[d] = [fe.real_to_disc_tensor(t) for t in real_d[:ppd]]
+
+            # raw source slot-0: a DISJOINT second sample of d's real trajectories
+            # (so raw "matched" = real-d vs another real-d). Too few for a disjoint
+            # half -> sample WITH REPLACEMENT (note: degrades to overlapping pairs).
+            n_take = len(real_slot0_by_d[d])
+            n_avail = len(real_d)
+            if n_take and n_avail >= 2 * n_take:
+                raw_slot0_by_d[d] = [
+                    fe.real_to_disc_tensor(t) for t in real_d[n_take:2 * n_take]
+                ]
+            elif n_take:
+                raw_slot0_by_d[d] = [
+                    fe.real_to_disc_tensor(real_d[rng.randrange(n_avail)])
+                    for _ in range(n_take)
+                ]
+            else:
+                raw_slot0_by_d[d] = []
+
+            # edited source slot-0: d's own modified trajectories (may be empty).
+            edited_slot0_by_d[d] = [
+                fe.real_to_disc_tensor(t) for t in edited_by_driver.get(d, [])[:ppd]
+            ]
+
+            # bc / gan source slot-0: driver-conditioned generated trajectories.
+            for name, src in (("bc", bc), ("gan", gan)):
+                gen_slot0_by_d[name][d] = _gen_cond_slot0(
+                    src["model"], real_d, driver_to_idx[d],
+                    pairs_per_driver=ppd, max_len=max_len, device=device,
+                    gen_batch_size=args.gen_batch_size,
+                )
+
+        # ---- Pass 2: pair each driver d against mismatch partner d' = next driver.
+        # matched = (real-d, source-of-d) both profile d; mismatched = (real-d,
+        # source-of-d' + d' context + d' profile). _build_source_pairs tolerates
+        # empty source lists (e.g. a driver with no edited trajectories) by
+        # contributing nothing for that (source, driver) pairing.
+        matched: Dict[str, list] = {k: [] for k in _SOURCE_ORDER}
+        mismatched: Dict[str, list] = {k: [] for k in _SOURCE_ORDER}
+        source_slot0_by_d = {
+            "raw": raw_slot0_by_d, "edited": edited_slot0_by_d,
+            "bc": gen_slot0_by_d["bc"], "gan": gen_slot0_by_d["gan"],
+        }
+        for k, d in enumerate(eval_drivers):
+            dprime = eval_drivers[(k + 1) % len(eval_drivers)]  # mismatch partner
+            real_slot0 = real_slot0_by_d[d]
+            if not real_slot0:
+                continue
+            for name in _SOURCE_ORDER:
+                m, mm = _build_source_pairs(
+                    real_slot0=real_slot0,
+                    source_slot0=source_slot0_by_d[name][d],
+                    source_slot0_other=source_slot0_by_d[name][dprime],
+                    real_context=real_context_by_d[d],
+                    source_context_other=real_context_by_d[dprime],
+                    profile_d=prof_by_d[d], profile_dp=prof_by_d[dprime], rng=rng,
+                )
+                matched[name].extend(m)
+                mismatched[name].extend(mm)
+
+        # ---- gate (real-anchored): raw matched vs raw mismatched ----
+        _log("[level1-v2] running real-anchored validation gate")
+        gate = fe.identity_validation_gate(
+            disc, matched_pairs=matched["raw"], mismatched_pairs=mismatched["raw"],
+            device=device,
+        )
+        trusted = bool(gate["passed"])
+
+        # ---- per-source Fidelity-A + separation ----
+        _log("[level1-v2] scoring per-source identity Fidelity-A")
+        fidelity_a: Dict[str, float] = {}
+        separation: Dict[str, float] = {}
+        for key in _SOURCE_ORDER:
+            a_match = fe.humid_identity_fidelity(disc, matched[key], device=device)
+            a_mis = fe.humid_identity_fidelity(disc, mismatched[key], device=device)
+            fidelity_a[key] = float(a_match["mean"])
+            separation[key] = float(a_match["mean"] - a_mis["mean"])
+
+        # ====================================================================
+        # Fidelity-B: enriched 5-key distributional + terminal-cell JS
+        # ====================================================================
+        bc_n = min(fss, len(bc["contexts"]))
+        gan_n = min(fss, len(gan["contexts"]))
+        _log(f"[level1-v2] generating BC Fidelity-B rollouts (N={bc_n})")
+        bc_cells, bc_empty = _gen_fidelity_full(
+            bc["model"], bc["filtered_train"], bc["contexts"], bc["driver_idxs"],
+            n=bc_n, max_len=max_len, device=device, gen_batch_size=args.gen_batch_size,
+        )
+        _log(f"[level1-v2] generating GAN Fidelity-B rollouts (N={gan_n})")
+        gan_cells, gan_empty = _gen_fidelity_full(
+            gan["model"], gan["filtered_train"], gan["contexts"], gan["driver_idxs"],
+            n=gan_n, max_len=max_len, device=device, gen_batch_size=args.gen_batch_size,
+        )
+
+        _log("[level1-v2] scoring Fidelity-B (5-key distributional + terminal-cell JS)")
+        raw_sample = raw_trajs[:fss]
+        edited_sample = histories[:fss]
+        raw_stats = [fe.trajectory_statistics(t) for t in raw_sample]
+        edited_stats = [fe.trajectory_statistics(h.modified) for h in edited_sample]
+        bc_stats = [fe.trajectory_statistics(c) for c in bc_cells if c]
+        gan_stats = [fe.trajectory_statistics(c) for c in gan_cells if c]
+        ranges = fe.stat_ranges(
+            [raw_stats, edited_stats, bc_stats, gan_stats], keys=fe._STAT_KEYS_V2,
+        )
+        b_edited = fe.distributional_fidelity(
+            edited_stats, raw_stats, ranges=ranges, keys=fe._STAT_KEYS_V2,
+        )
+        b_bc = fe.distributional_fidelity(
+            bc_stats, raw_stats, ranges=ranges, keys=fe._STAT_KEYS_V2,
+        )
+        b_gan = fe.distributional_fidelity(
+            gan_stats, raw_stats, ranges=ranges, keys=fe._STAT_KEYS_V2,
+        )
+
+        # ---- terminal-cell JS per source (vs raw terminal cells) ----
+        raw_pickups = _terminal_pickups_from_trajs(raw_sample)
+        edited_pickups = _terminal_pickups_from_trajs([h.modified for h in edited_sample])
+        bc_pickups_term = _terminal_pickups_from_cells(bc_cells)
+        gan_pickups_term = _terminal_pickups_from_cells(gan_cells)
+        tjs_edited = fe.terminal_cell_distribution_js(edited_pickups, raw_pickups)
+        tjs_bc = fe.terminal_cell_distribution_js(bc_pickups_term, raw_pickups)
+        tjs_gan = fe.terminal_cell_distribution_js(gan_pickups_term, raw_pickups)
+
+        def _b_component(dist: dict, terminal_js: float) -> Tuple[dict, float]:
+            """per-component dict (5 stat JS + terminal_cell) + aggregate mean."""
+            comp = dict(dist["per_stat"])
+            comp["terminal_cell"] = float(terminal_js)
+            agg = float(np.mean(list(dist["per_stat"].values()) + [terminal_js]))
+            return comp, agg
+
+        comp_edited, fb_edited = _b_component(b_edited, tjs_edited)
+        comp_bc, fb_bc = _b_component(b_bc, tjs_bc)
+        comp_gan, fb_gan = _b_component(b_gan, tjs_gan)
+        # Raw vs raw is 0.0 by definition; avoid a degenerate self-call.
+        comp_raw = {k: 0.0 for k in fe._STAT_KEYS_V2}
+        comp_raw["terminal_cell"] = 0.0
+
+        # ====================================================================
+        # Fairness: identical to v1 (driver-conditioned pickups for bc/gan)
+        # ====================================================================
+        # Fairness is a CORPUS-SCALE demand-grid metric, so BC/GAN fairness rollouts
+        # deliberately cover the FULL filtered corpus (not the fidelity sample): raw/
+        # edited fairness already use every trajectory, and a sub-sampled demand grid
+        # would not be comparable. This is the run's largest single compute cost.
+        _log("[level1-v2] scoring fairness")
+        bc_pickups = generate_pickups(
+            bc["model"], bc["contexts"], max_len=max_len, device=device,
+            gen_batch_size=args.gen_batch_size, progress=False,
+            driver_idxs=bc["driver_idxs"],
+        )
+        f_bc = data_level_fairness(bundle, pickup_3d=pickups_to_pickup_3d(bundle, bc_pickups))
+        gan_pickups = generate_pickups(
+            gan["model"], gan["contexts"], max_len=max_len, device=device,
+            gen_batch_size=args.gen_batch_size, progress=False,
+            driver_idxs=gan["driver_idxs"],
+        )
+        f_gan = data_level_fairness(bundle, pickup_3d=pickups_to_pickup_3d(bundle, gan_pickups))
+
+        sources = {
             "raw": {
                 "f_causal": f_raw["f_causal"], "f_spatial": f_raw["f_spatial"],
                 # Raw is the anchor: Fidelity-A is the gate's matched mean, the
@@ -646,7 +665,29 @@ def main(argv: List[str] | None = None) -> int:
                 "fidelity_b": fb_gan, "fidelity_b_per_component": comp_gan,
                 "n_empty": gan_empty,
             },
-        },
+        }
+        return {
+            "sources": sources,
+            "gate": gate, "trusted": trusted,
+            "bc": bc, "gan": gan,
+            "stats": {"raw": raw_stats, "edited": edited_stats, "bc": bc_stats, "gan": gan_stats},
+            "artifacts": {
+                "raw_pickups": raw_pickups, "edited_pickups": edited_pickups,
+                "bc_pickups_term": bc_pickups_term, "gan_pickups_term": gan_pickups_term,
+                "matched_raw": matched["raw"], "mismatched_raw": mismatched["raw"],
+            },
+        }
+
+    # ---- drive: canonical run (byte-identical to single-seed) + optional multiseed ----
+    per_seed = [_score_one_seed(s) for s in seeds]
+    canonical = per_seed[0]               # seeds[0] == args.seed when --seeds absent
+
+    result = {
+        "edit_dir": args.edit_dir,
+        "gate": canonical["gate"],
+        "n_eval_drivers": len(eval_drivers),
+        "sources": canonical["sources"],
+        "seeds": seeds,                    # additive provenance; harmless when single
     }
 
     # ---- persistence ----
@@ -667,29 +708,33 @@ def main(argv: List[str] | None = None) -> int:
 
     np.savez(
         out_dir / "trajectory_stats.npz",
-        raw=_stat_arr(raw_stats), edited=_stat_arr(edited_stats),
-        bc=_stat_arr(bc_stats), gan=_stat_arr(gan_stats),
+        raw=_stat_arr(canonical["stats"]["raw"]), edited=_stat_arr(canonical["stats"]["edited"]),
+        bc=_stat_arr(canonical["stats"]["bc"]), gan=_stat_arr(canonical["stats"]["gan"]),
     )
 
     # E13 — terminal-cell histogram vectors (one N_CELLS-length array per source)
+    # E12 — gate per-pair HuMID score arrays (matched / mismatched raw pairs)
+    # Both re-sourced from canonical["artifacts"] (the P4T4a writes).
     from famail_temporal.baselines.transmission import terminal_cell_histogram
+    art = canonical["artifacts"]
     np.savez(
         out_dir / "terminal_cell_histograms.npz",
-        raw=terminal_cell_histogram(raw_pickups, n_cells=gc.N_CELLS),
-        edited=terminal_cell_histogram(edited_pickups, n_cells=gc.N_CELLS),
-        bc=terminal_cell_histogram(bc_pickups_term, n_cells=gc.N_CELLS),
-        gan=terminal_cell_histogram(gan_pickups_term, n_cells=gc.N_CELLS),
+        raw=terminal_cell_histogram(art["raw_pickups"], n_cells=gc.N_CELLS),
+        edited=terminal_cell_histogram(art["edited_pickups"], n_cells=gc.N_CELLS),
+        bc=terminal_cell_histogram(art["bc_pickups_term"], n_cells=gc.N_CELLS),
+        gan=terminal_cell_histogram(art["gan_pickups_term"], n_cells=gc.N_CELLS),
     )
-
-    # E12 — gate per-pair HuMID score arrays (matched / mismatched raw pairs)
-    m_scores = fe._score_identity_pairs(disc, matched["raw"], batch_size=64, device=device)
-    mm_scores = fe._score_identity_pairs(disc, mismatched["raw"], batch_size=64, device=device)
+    m_scores = fe._score_identity_pairs(disc, art["matched_raw"], batch_size=64, device=device)
+    mm_scores = fe._score_identity_pairs(disc, art["mismatched_raw"], batch_size=64, device=device)
     np.savez(
         out_dir / "gate_pair_scores.npz",
         matched=np.asarray(m_scores), mismatched=np.asarray(mm_scores),
     )
 
-    training_curves = {"bc": _curves_for_source(bc), "gan": _curves_for_source(gan)}
+    training_curves = {
+        "bc": _curves_for_source(canonical["bc"]),
+        "gan": _curves_for_source(canonical["gan"]),
+    }
     (out_dir / "training_curves.json").write_text(
         json.dumps(training_curves, indent=2, default=float)
     )
@@ -704,14 +749,30 @@ def main(argv: List[str] | None = None) -> int:
         "gate_mismatched": float(result["gate"]["low_mismatched"]),
         "gate_passed": bool(result["gate"]["passed"]),
     }
-    write_run_manifest(out_dir, argv=sys.argv, seeds=None, edit_dir=str(args.edit_dir),
+    write_run_manifest(out_dir, argv=sys.argv, seeds=seeds, edit_dir=str(args.edit_dir),
                        extra=_gate_extra)
     append_timing(out_dir / "timings.jsonl", "level1_v2", time.time() - t0)
+
+    # ---- E18/E36 multiseed aggregation (ADDITIVE; only when >1 seed) ----
+    if len(seeds) > 1:
+        _METRICS = ("f_causal", "f_spatial", "fidelity_a", "fidelity_a_separation", "fidelity_b")
+        _COMPS = (*fe._STAT_KEYS_V2, "terminal_cell")
+        per_source = {}
+        for src in _SOURCE_ORDER:
+            per_source[src] = {
+                m: _mean_std_ci([r["sources"][src][m] for r in per_seed]) for m in _METRICS
+            }
+            per_source[src]["fidelity_b_per_component"] = {
+                c: _mean_std_ci([r["sources"][src]["fidelity_b_per_component"][c] for r in per_seed])
+                for c in _COMPS
+            }
+        (out_dir / "level1_v2_multiseed.json").write_text(
+            json.dumps({"seeds": seeds, "per_source": per_source}, indent=2, default=float))
 
     # ---- summary ----
     _log("")
     _log(render_table_v2(result))
-    if not gate["passed"]:
+    if not canonical["gate"]["passed"]:
         _log("[level1-v2] Validation gate FAILED -> Fidelity-A is UNTRUSTED; "
              "Fidelity-B (distributional divergence) is the PRIMARY fidelity metric.")
     _log(f"[level1-v2] training curves: "
