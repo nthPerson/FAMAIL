@@ -138,3 +138,15 @@ def test_config_has_stuck_gps_constants():
     assert sgconfig.STUCK_GPS_DROP is True
     assert hasattr(sgconfig, "STUCK_GPS_MIN_PICKUPS")
     assert hasattr(sgconfig, "STUCK_GPS_COORD_DOMINANCE")
+
+
+from famail_temporal.data.source_generation import cli as sgcli
+
+def test_report_stuck_gps_returns_audit_and_curve(monkeypatch):
+    df = _sink_df()
+    # stub the heavy load step so the dry-run runs on synthetic data
+    monkeypatch.setattr(sgcli, "_load_event_df_for_report", lambda _in: df)
+    rep = sgcli.report_stuck_gps("ignored", expected_cells=None)
+    assert rep["audit"]["flagged_cells"] == [(28, 52)]
+    assert rep["distribution_top"][0]["n_pickups"] == 50
+    assert any(c["min_pickups"] for c in rep["threshold_curve"])
