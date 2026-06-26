@@ -67,6 +67,7 @@ def report_stuck_gps(
     input_dir,
     *,
     expected_cells=config.STUCK_GPS_EXPECTED_CELLS,
+    min_pickups: int = config.STUCK_GPS_MIN_PICKUPS,
     top_k: int = 50,
 ) -> dict:
     """Run the stuck-GPS audit (report-only) and return a summary dict.
@@ -74,17 +75,15 @@ def report_stuck_gps(
     Writes no files; the caller decides where to persist the result.
     Pass expected_cells=None to skip the assertion guard (use this when
     running on real data before thresholds have been calibrated).
+    The audit floor defaults to config.STUCK_GPS_MIN_PICKUPS so the dry-run
+    mirrors what run_generation actually filters; callers (e.g. tests) can
+    override min_pickups. The distribution and threshold_curve below always
+    sweep the full range as the calibration views.
     """
     df = _load_event_df_for_report(input_dir)
-    # Use a low absolute floor (10) for the report-mode audit so the report
-    # surfaces every meaningful candidate regardless of whether the production
-    # min_pickups threshold (config.STUCK_GPS_MIN_PICKUPS) has been calibrated
-    # yet.  The threshold_curve sweeps the full range so Task 6 can choose the
-    # right production value.  expected_cells=None is passed from the CLI
-    # dry-run so no assertion fires before calibration.
     _cleaned, audit = stuck_gps.filter_stuck_gps_sinks(
         df,
-        min_pickups=10,
+        min_pickups=min_pickups,
         coord_dominance=config.STUCK_GPS_COORD_DOMINANCE,
         coord_precision=config.STUCK_GPS_COORD_PRECISION,
         expected_cells=expected_cells,
@@ -281,7 +280,7 @@ def main(argv: list[str] | None = None) -> int:
         import json
         rep = report_stuck_gps(args.input_dir, expected_cells=None)  # report-only: don't assert
         out = Path(args.output_dir) / "stuck_gps_report.json"
-        out.write_text(json.dumps(rep, indent=2, default=float))
+        out.write_text(json.dumps(rep, indent=2, default=str))
         log.info(
             "Wrote stuck-GPS dry-run report to %s (flagged cells: %s)",
             out, rep["audit"]["flagged_cells"],

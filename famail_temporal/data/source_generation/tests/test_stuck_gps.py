@@ -146,7 +146,9 @@ def test_report_stuck_gps_returns_audit_and_curve(monkeypatch):
     df = _sink_df()
     # stub the heavy load step so the dry-run runs on synthetic data
     monkeypatch.setattr(sgcli, "_load_event_df_for_report", lambda _in: df)
-    rep = sgcli.report_stuck_gps("ignored", expected_cells=None)
+    # inject min_pickups=10 so the 50-pickup synthetic sink flags but the
+    # 1-pickup NORM cell does not (production default is config.STUCK_GPS_MIN_PICKUPS).
+    rep = sgcli.report_stuck_gps("ignored", expected_cells=None, min_pickups=10)
     assert rep["audit"]["flagged_cells"] == [(28, 52)]
     assert rep["distribution_top"][0]["n_pickups"] == 50
     assert any(c["min_pickups"] for c in rep["threshold_curve"])
