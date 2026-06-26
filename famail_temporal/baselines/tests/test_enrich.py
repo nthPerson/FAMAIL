@@ -61,3 +61,11 @@ def test_chosen_placebo_ids_deterministic():
     assert all(i not in edited for i in a)         # never picks edited ids
     # default k = len(edited)
     assert len(E.chosen_placebo_ids(raw_ids, edited, placebo_seed=1)) == 3
+
+
+def test_paired_stats_t_ci_augmentation_shape():
+    # mirrors the in-runner augmentation: every leaf with 'diffs' gains a 't_ci' pair
+    paired = {"f_causal": {"raw": {"diffs": [0.01, 0.02, 0.03, 0.015, 0.025], "mean": 0.02}}}
+    leaf = paired["f_causal"]["raw"]
+    leaf["t_ci"] = list(E.t_ci(leaf["diffs"]))
+    assert len(leaf["t_ci"]) == 2 and leaf["t_ci"][0] < 0.02 < leaf["t_ci"][1]

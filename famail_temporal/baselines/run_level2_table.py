@@ -41,6 +41,7 @@ from famail_temporal.baselines.gan.train_mle import train_mle
 from famail_temporal.baselines.metrics import data_level_fairness
 from famail_temporal.fidelity.checkpoint import load_discriminator
 from famail_temporal.baselines import fidelity_eval as fe
+from famail_temporal.baselines import _enrich
 from famail_temporal.baselines._manifest import write_run_manifest, append_timing, sha256_file
 from famail_temporal.baselines.run_level1_table_v2 import (
     _select_eval_drivers, _real_context_tensors, _build_source_pairs,
@@ -263,8 +264,9 @@ def _evaluate_policy(
     per = fe.distributional_fidelity(
         src_stats, raw_stats, keys=fe._STAT_KEYS_V2,
     )["per_stat"]
+    gen_terminal_pickups = _terminal_pickups_from_cells(gen_cells)
     tj = fe.terminal_cell_distribution_js(
-        _terminal_pickups_from_cells(gen_cells), raw_pickups,
+        gen_terminal_pickups, raw_pickups,
     )
     fidelity_b = float(np.mean(list(per.values()) + [tj]))
     per_component = {**per, "terminal_cell": float(tj)}
@@ -277,6 +279,7 @@ def _evaluate_policy(
         "fidelity_b": fidelity_b,
         "fidelity_b_per_component": per_component,
         "n_empty": int(n_empty),
+        **_enrich.degeneracy_scalars(gen_terminal_pickups, gen_cells, n_cells=gc.N_CELLS),
     }
 
 
@@ -499,6 +502,9 @@ def main(argv: List[str] | None = None) -> int:
         for m in ("f_causal", "f_spatial", "fidelity_a", "fidelity_b")
     }
     per_source_empty: Dict[str, List[int]] = {src: [] for src in _SOURCE_ORDER}
+    per_seed_components = {src: {c: [] for c in (*fe._STAT_KEYS_V2, "terminal_cell")} for src in _SOURCE_ORDER}
+    per_seed_sep = {src: [] for src in _SOURCE_ORDER}
+    per_seed_degen = {src: {k: [] for k in ("terminal_cell_entropy_bits", "mean_trip_length", "std_trip_length")} for src in _SOURCE_ORDER}
     for s in seeds:
         for src in _SOURCE_ORDER:
             _log(f"[level2] seed={s} source={src}: train + evaluate policy")
@@ -525,6 +531,11 @@ def main(argv: List[str] | None = None) -> int:
             for metric in ("f_causal", "f_spatial", "fidelity_a", "fidelity_b"):
                 per_seed_metric[metric][src].append(float(m[metric]))
             per_source_empty[src].append(int(m["n_empty"]))
+            for c in (*fe._STAT_KEYS_V2, "terminal_cell"):
+                per_seed_components[src][c].append(float(m["fidelity_b_per_component"][c]))
+            per_seed_sep[src].append(float(m["fidelity_a_separation"]))
+            for k in ("terminal_cell_entropy_bits", "mean_trip_length", "std_trip_length"):
+                per_seed_degen[src][k].append(float(m[k]))
             del model
             if device.type == "cuda":
                 torch.cuda.empty_cache()
@@ -561,6 +572,9 @@ def main(argv: List[str] | None = None) -> int:
         "mle_epochs": args.mle_epochs,
         "per_source": per_source,
         "paired": paired,
+        "per_source_fidelity_b_components": per_seed_components,
+        "per_source_fidelity_a_separation": per_seed_sep,
+        "per_source_degeneracy": per_seed_degen,
     }
 
     # ---- persistence (default out-dir lives under results/, which is gitignored) ----
@@ -571,6 +585,13 @@ def main(argv: List[str] | None = None) -> int:
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "level2_metrics.json").write_text(result_to_json(result))
+    import copy
+    paired_ci = copy.deepcopy(result["paired"])
+    for metric, by_other in paired_ci.items():
+        for other, leaf in by_other.items():
+            if isinstance(leaf, dict) and "diffs" in leaf:
+                leaf["t_ci"] = list(_enrich.t_ci(leaf["diffs"]))
+    (out_dir / "paired_stats.json").write_text(json.dumps(paired_ci, indent=2, default=float))
     (out_dir / "level2_table.md").write_text(render_level2_table(result))
     (out_dir / "driver_index.json").write_text(
         json.dumps({str(k): v for k, v in driver_to_idx.items()}, indent=2)
