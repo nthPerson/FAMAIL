@@ -110,6 +110,9 @@ class ExperimentResult:
     augmented_trajs_after: Dict[int, list]
 
     rounds: List[RoundRecord] = field(default_factory=list)
+    # E6: every trajectory's selection αᵢ (ascending), for the attribution
+    # distribution figure. Optional so synthetic constructions stay valid.
+    all_trajectory_scores: Optional[np.ndarray] = None
 
 
 def _parse_override_value(s: str) -> Any:
@@ -445,6 +448,7 @@ def run_experiment(
             augmented_trajs_before=augmented_before,
             augmented_trajs_after=augmented_after,
             rounds=rounds,
+            all_trajectory_scores=np.asarray([s for _, s in scored], dtype=np.float32),
         )
     finally:
         restore_config()

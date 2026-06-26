@@ -86,6 +86,24 @@ def _sensitivity_payload(grid: np.ndarray, active_mask: np.ndarray) -> dict:
     }
 
 
+def _attribution_distribution_payload(all_scores, edited_scores) -> dict:
+    """E6: full per-trajectory attribution distribution + the editable-pool counts.
+
+    `all_scores` is every trajectory's selection αᵢ (sorted ascending);
+    `edited_scores` is the subset actually edited (result.top_k_scores).
+    n_negative counts strictly-negative αᵢ (the editable pool under the
+    F-decomposition convention)."""
+    all_scores = np.asarray(all_scores, dtype=np.float32)
+    edited_scores = np.asarray(edited_scores, dtype=np.float32)
+    return {
+        "all_scores": all_scores,
+        "edited_scores": edited_scores,
+        "n_total": np.int64(all_scores.size),
+        "n_negative": np.int64(int((all_scores < 0).sum())),
+        "n_edited": np.int64(edited_scores.size),
+    }
+
+
 def _diagnostics_summary(result: ExperimentResult) -> dict | None:
     if not result.diagnostics_enabled or not result.histories:
         return None
@@ -318,6 +336,13 @@ def write(result: ExperimentResult, output_root: Path, bundle=None) -> Path:
     _write_per_unit_attribution_csv(result, path, active_mask)
     artifact_paths["per_unit_attribution_csv"] = path.name
     file_sizes["per_unit_attribution_csv"] = path.stat().st_size
+
+    if result.all_trajectory_scores is not None:
+        path = out_dir / "attribution_distribution.npz"
+        np.savez(path, **_attribution_distribution_payload(
+            result.all_trajectory_scores, result.top_k_scores))
+        artifact_paths["attribution_distribution"] = path.name
+        file_sizes["attribution_distribution"] = path.stat().st_size
 
     metrics = {
         "experiment_id": result.experiment_id,
