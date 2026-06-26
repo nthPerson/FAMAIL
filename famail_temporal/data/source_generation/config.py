@@ -78,9 +78,18 @@ OUT_METADATA: str = "processing_metadata.json"
 RANDOM_SEED: int = 0
 OUTPUT_FORMAT_VERSION: str = "1.0.0"
 
-# --- stuck-GPS sink filter (provisional; finalize from Stage-0 dry-run) ---
+# --- stuck-GPS sink filter (calibrated from the 2026-06-25 Stage-0 dry-run) ---
+# Signature rule: flag (driver, exact-coord) groups with many pickups and ~zero
+# dropoffs at that coord. The dry-run flagged 11 frozen-pickup groups across the
+# 10 distinct cells below (106,677 pickups, ~32.7% of all pickups; every group
+# dropoff_ratio <= 0.001). NOTE: these are PIPELINE grid cells, which sit +1 in
+# each axis from the originally-documented famail-0-indexed sinks (e.g. the
+# documented (28,52) sink is pipeline cell (29,53)).
 STUCK_GPS_MIN_PICKUPS: int = 1000        # absolute phantom-pickup floor
 STUCK_GPS_MAX_DROPOFF_RATIO: float = 0.02  # near-zero dropoffs at the frozen coord
 STUCK_GPS_COORD_PRECISION: int = 6       # lat/lon rounding (decimals)
 STUCK_GPS_DROP: bool = True              # drop flagged pickup pings (vs suppress)
-STUCK_GPS_EXPECTED_CELLS: frozenset = frozenset({(28, 52), (20, 28), (28, 28), (24, 5), (22, 46), (17, 38)})
+STUCK_GPS_EXPECTED_CELLS: frozenset = frozenset({
+    (17, 39), (17, 40), (18, 29), (18, 39), (19, 10),
+    (21, 29), (23, 47), (25, 6), (29, 29), (29, 53),
+})

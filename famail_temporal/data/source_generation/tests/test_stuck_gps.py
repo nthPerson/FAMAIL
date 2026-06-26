@@ -149,7 +149,10 @@ def test_threshold_sensitivity_plateaus_then_drops():
 
 def test_config_has_stuck_gps_constants():
     assert isinstance(sgconfig.STUCK_GPS_EXPECTED_CELLS, (set, frozenset))
-    assert (28, 52) in sgconfig.STUCK_GPS_EXPECTED_CELLS
+    # dry-run-confirmed pipeline cells (10 distinct; +1 axis offset from the
+    # documented famail-0-indexed sinks, e.g. documented (28,52) -> (29,53)).
+    assert len(sgconfig.STUCK_GPS_EXPECTED_CELLS) == 10
+    assert (29, 53) in sgconfig.STUCK_GPS_EXPECTED_CELLS
     assert sgconfig.STUCK_GPS_COORD_PRECISION == 6
     assert sgconfig.STUCK_GPS_DROP is True
     assert hasattr(sgconfig, "STUCK_GPS_MIN_PICKUPS")
