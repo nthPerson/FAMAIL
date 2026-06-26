@@ -94,6 +94,15 @@ def random_subset_weight_vector(
     return [float(w) if i in chosen else 1.0 for i in range(len(trajs))]
 
 
+def most_fair_weight_vector(trajs, bundle, w: float, *, n: int | None = None) -> List[float]:
+    """Baseline: w on the n MOST-FAIR trajectories (highest finite per-cell αᵢ),
+    1.0 elsewhere (index-aligned). The 'select already-fair data' counterpart to
+    editing the unfair ones; n defaults to the edited-set size (equal-N)."""
+    from famail_temporal.baselines.datasets import rank_fair_trajectory_indices
+    chosen = set(rank_fair_trajectory_indices(bundle, n))
+    return [float(w) if i in chosen else 1.0 for i in range(len(trajs))]
+
+
 def _paired_vs_raw(per_seed: Dict[str, List[float]], arm: str) -> dict:
     """Paired per-seed (arm - raw) stats for one metric."""
     try:
@@ -133,6 +142,11 @@ def main(argv: List[str] | None = None) -> int:
                     help="Fixed RNG seed for the placebo subset, INDEPENDENT of the per-seed "
                          "training RNG: one fixed subset reused across all training seeds, so "
                          "the placebo arm differs from raw only by the fixed random weighting.")
+    ap.add_argument("--most-fair", type=str, default="",
+                    help="Comma-separated doses for the MOST-FAIR baseline arms: upweight the "
+                         "N most-fair trajectories (highest αᵢ) of the RAW corpus, equal-N to "
+                         "the edited set. The 'select already-fair data' counterpart to FAMAIL "
+                         "editing. Empty (default) = no most-fair arms.")
     ap.add_argument("--mle-epochs", type=int, default=20)
     ap.add_argument("--max-eval-drivers", type=int, default=50)
     ap.add_argument("--pairs-per-driver", type=int, default=20)
@@ -149,6 +163,7 @@ def main(argv: List[str] | None = None) -> int:
     seeds = [int(s) for s in str(args.seeds).split(",") if s.strip()]
     up_weights = [float(w) for w in str(args.weights).split(",") if w.strip()]
     placebo_weights = [float(w) for w in str(args.placebo).split(",") if w.strip()]
+    most_fair_weights = [float(w) for w in str(args.most_fair).split(",") if w.strip()]
     device = (
         torch.device("cuda" if torch.cuda.is_available() else "cpu")
         if args.device == "auto" else torch.device(args.device)
@@ -200,6 +215,18 @@ def main(argv: List[str] | None = None) -> int:
             f"random_w{int(w)}", D_raw,
             random_subset_weight_vector(raw_trajs, eids, w, seed=args.placebo_seed),
         ))
+    # Most-fair baseline arms: upweight the N most-fair (highest αᵢ) RAW trajectories,
+    # equal-N to the edited set. Built ONCE here (deterministic selection).
+    for w in most_fair_weights:
+        if w == 1.0:
+            continue
+        arms.append((
+            f"most_fair_w{int(w)}", D_raw,
+            most_fair_weight_vector(raw_trajs, bundle, w, n=len(eids)),
+        ))
+    if most_fair_weights:
+        print(f"[wbc] most-fair: upweighting the {len(eids)} most-fair RAW trajectories "
+              f"at doses {most_fair_weights}", flush=True)
     arm_names = [a[0] for a in arms]
     if placebo_weights:
         n_pl = len(eids)
@@ -385,6 +412,10 @@ def main(argv: List[str] | None = None) -> int:
     chosen = {"edited_ids": sorted(int(i) for i in eids)}
     for w in placebo_weights:
         chosen[f"random_w{int(w)}"] = _enrich.chosen_placebo_ids(raw_ids, eids, args.placebo_seed)
+    if most_fair_weights:
+        from famail_temporal.baselines.datasets import rank_fair_trajectory_indices
+        mf_idx = rank_fair_trajectory_indices(bundle, len(eids))
+        chosen["most_fair_ids"] = sorted(int(raw_trajs[i].trajectory_id) for i in mf_idx)
     (out_dir / "chosen_ids.json").write_text(json.dumps(chosen, indent=2))
 
     # ---- provenance ----

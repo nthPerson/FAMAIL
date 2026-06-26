@@ -58,6 +58,26 @@ def rank_unfair_trajectory_indices(bundle: DataBundle) -> List[int]:
     return [idx for idx, score in scored if score < 0]
 
 
+def _most_fair_from_scored(scored, n=None):
+    """From rank_trajectories output [(idx, score), ...], return indices ordered
+    MOST-FAIR first (highest FINITE αᵢ), excluding inactive (+inf) cells.
+    Top-n if n given."""
+    import math
+    finite = [(idx, s) for idx, s in scored if math.isfinite(s)]
+    finite.sort(key=lambda x: x[1], reverse=True)   # highest (most-fair) first
+    idxs = [idx for idx, _ in finite]
+    return idxs[:n] if n is not None else idxs
+
+
+def rank_fair_trajectory_indices(bundle: DataBundle, n=None) -> List[int]:
+    """Indices into bundle.trajectories ordered MOST-FAIR first (highest finite
+    per-cell attribution αᵢ; inactive +inf cells excluded). The mirror of
+    rank_unfair_trajectory_indices — the 'select already-fair data' baseline."""
+    attribution = compute_per_unit_attribution(bundle)
+    scored = rank_trajectories(bundle.trajectories, attribution, bundle.unit_map)
+    return _most_fair_from_scored(scored, n)
+
+
 def build_filtered_pickup_3d(
     bundle: DataBundle, removed_trajs: List[Trajectory],
 ) -> np.ndarray:
