@@ -10,6 +10,7 @@ Example:
 """
 from __future__ import annotations
 import argparse
+import csv
 import json
 import sys
 import time
@@ -19,7 +20,8 @@ from typing import List
 from famail_temporal import config
 from famail_temporal.data.loader import DataBundle
 from famail_temporal.baselines.pareto import (
-    ParetoPoint, raw_point, filtered_points, edited_point, points_to_json,
+    ParetoPoint, raw_point, filtered_points, filtered_points_with_removed_ids,
+    edited_point, points_to_json, points_to_csv_rows,
 )
 from famail_temporal.baselines.figure import plot_pareto
 from famail_temporal.baselines._manifest import write_run_manifest, append_timing
@@ -89,15 +91,35 @@ def main(argv: List[str] | None = None) -> int:
 
     bundle = DataBundle.load()
     points: List[ParetoPoint] = [raw_point(bundle)]
-    points.extend(filtered_points(bundle, args.k_levels))
+    filter_pts, removed_ids = filtered_points_with_removed_ids(bundle, args.k_levels)
+    points.extend(filter_pts)
     if args.edit_from_dir is not None:
         points.append(edited_point_from_dir(args.edit_from_dir))
     elif args.with_edit:
         points.append(_run_edit(args.edit_k))
 
     args.out_dir.mkdir(parents=True, exist_ok=True)
+
+    # --- existing outputs (kept for back-compat) ---
     (args.out_dir / "pareto_points.json").write_text(points_to_json(points))
     plot_pareto(points, args.out_dir / "pareto.png", metric="f_causal")
+
+    # --- E17: CSV mirror ---
+    rows = points_to_csv_rows(points)
+    csv_path = args.out_dir / "pareto_points.csv"
+    with csv_path.open("w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=list(rows[0]))
+        writer.writeheader()
+        writer.writerows(rows)
+
+    # --- E15: dual-metric Pareto figures ---
+    plot_pareto(points, args.out_dir / "pareto_causal.png", metric="f_causal")
+    plot_pareto(points, args.out_dir / "pareto_spatial.png", metric="f_spatial")
+
+    # --- E15: per-K removed trajectory ids ---
+    (args.out_dir / "pareto_removed_ids.json").write_text(
+        json.dumps(removed_ids, indent=2)
+    )
 
     # ---- provenance ----
     edit_dir = str(args.edit_from_dir) if args.edit_from_dir is not None else None
@@ -106,7 +128,11 @@ def main(argv: List[str] | None = None) -> int:
     append_timing(args.out_dir / "timings.jsonl", "data_pareto", time.time() - t0)
 
     print(f"wrote {args.out_dir / 'pareto_points.json'}")
-    print(f"wrote {args.out_dir / 'pareto.png'}")
+    print(f"wrote {args.out_dir / 'pareto_points.csv'}")
+    print(f"wrote {args.out_dir / 'pareto_causal.png'}")
+    print(f"wrote {args.out_dir / 'pareto_spatial.png'}")
+    print(f"wrote {args.out_dir / 'pareto_removed_ids.json'}")
+    print(f"wrote {args.out_dir / 'pareto.png'}  (back-compat alias)")
     return 0
 
 

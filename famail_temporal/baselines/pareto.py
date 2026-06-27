@@ -78,3 +78,36 @@ def edited_point(
 
 def points_to_json(points: List[ParetoPoint]) -> str:
     return json.dumps([asdict(pt) for pt in points], indent=2)
+
+
+def points_to_csv_rows(points: List[ParetoPoint]) -> List[dict]:
+    """Return a list of flat dicts (one per point) suitable for csv.DictWriter (E17)."""
+    return [asdict(p) for p in points]
+
+
+def filtered_points_with_removed_ids(
+    bundle: "DataBundle", k_levels: List[int],
+) -> tuple:
+    """Like filtered_points but also returns a parallel dict mapping label -> removed traj ids.
+
+    Returns (List[ParetoPoint], dict[str, list[int]]) where the dict keys are
+    "filter@{k}" and values are the trajectory ids of the ranked[:k_eff] removed
+    trajectories.  ParetoPoint is kept frozen/unchanged (ids carried out-of-band).
+    """
+    n = len(bundle.trajectories)
+    if n == 0:
+        raise ValueError("bundle has no trajectories to filter")
+    ranked = rank_unfair_trajectory_indices(bundle)
+    pts: List[ParetoPoint] = []
+    removed_ids: dict = {}
+    for k in k_levels:
+        k_eff = min(k, len(ranked))
+        removed = [bundle.trajectories[i] for i in ranked[:k_eff]]
+        pickup_3d = build_filtered_pickup_3d(bundle, removed)
+        retention = (n - k_eff) / n
+        label = f"filter@{k}"
+        pts.append(_point(label, bundle, pickup_3d, retention, k_eff))
+        # Collect trajectory ids (int-safe) for the driver to persist
+        removed_ids[label] = [int(bundle.trajectories[i].traj_id)
+                               for i in ranked[:k_eff]]
+    return pts, removed_ids
