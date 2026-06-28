@@ -41,11 +41,21 @@ ACTIVE_SUPPLY_THRESHOLD: float = 0.5
 DEMAND_FLOOR: float = 0.5
 SUPPLY_FLOOR: float = 0.1
 
-# Demographics
+# Demographics. Selected via the feature-set sensitivity analysis (2026-06-28,
+# famail_temporal/analysis/fcausal_feature_sensitivity.py): spans four distinct,
+# low-co-linearity axes — SES (housing), income (comp), population-structure
+# (migrant), and density (log pop-density). Dominates the prior {housing, gdp,
+# comp}: captures more demographic-driven demand inequity (before-edit F_causal
+# 0.807 -> 0.725 on cleaned data) at max VIF 4.51 (< the <10 policy) while
+# preserving editor targeting (top-2293 Jaccard 0.93). GDPperCapita was dropped
+# because it is r=-0.90 collinear with MigrantRatio (an inverse-income proxy);
+# CompPerCapita is the retained, less-redundant income axis. Capped at 4 features
+# given only 10 district-level demographic profiles (DOF limit).
 DEMOGRAPHIC_FEATURES: List[str] = [
     "AvgHousingPricePerSqM",
-    "GDPperCapita",
     "CompPerCapita",
+    "MigrantRatio",
+    "LogPopDensity",
 ]
 
 # Objective weights
