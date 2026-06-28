@@ -42,3 +42,10 @@ def test_sink_with_no_active_t_returns_zero():
     out = sink_spatial_contributions(dense, mask, [(3, 3)])
     assert out["per_sink"]["(3, 3)"] == 0.0
     assert out["total"] == 0.0
+
+
+def test_default_sink_cells_match_config_source_of_truth():
+    from famail_temporal.analysis.sink_decomposition import DEFAULT_SINK_CELLS
+    from famail_temporal.data.source_generation import config as sg
+    assert set(DEFAULT_SINK_CELLS) == set(sg.STUCK_GPS_EXPECTED_CELLS)
+    assert (29, 53) in DEFAULT_SINK_CELLS  # the headline sink
