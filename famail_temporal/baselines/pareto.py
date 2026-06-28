@@ -108,6 +108,6 @@ def filtered_points_with_removed_ids(
         label = f"filter@{k}"
         pts.append(_point(label, bundle, pickup_3d, retention, k_eff))
         # Collect trajectory ids (int-safe) for the driver to persist
-        removed_ids[label] = [int(bundle.trajectories[i].traj_id)
+        removed_ids[label] = [int(bundle.trajectories[i].trajectory_id)
                                for i in ranked[:k_eff]]
     return pts, removed_ids
