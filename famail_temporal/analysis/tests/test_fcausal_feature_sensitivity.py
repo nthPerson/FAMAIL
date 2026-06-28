@@ -82,3 +82,48 @@ def test_vif_collinear_features_blow_up():
     assert vifs["a"] > 50.0
     assert vifs["b"] > 50.0
     assert vifs["c"] == pytest.approx(1.0, abs=0.3)
+
+
+def test_max_abs_offdiag_corr():
+    rng = np.random.default_rng(4)
+    a = rng.normal(size=400)
+    x = np.column_stack([a, 0.9 * a + 0.1 * rng.normal(size=400),
+                         rng.normal(size=400)])
+    m = F._max_abs_offdiag_corr(x)
+    assert 0.9 < m <= 1.0  # cols 0,1 strongly correlated
+    # single column → 0
+    assert F._max_abs_offdiag_corr(x[:, :1]) == 0.0
+
+
+def test_redundant_pairs_flags_near_duplicates():
+    names = ["h", "logh", "indep"]
+    corr = {
+        "h": {"h": 1.0, "logh": 0.999, "indep": 0.1},
+        "logh": {"h": 0.999, "logh": 1.0, "indep": 0.05},
+        "indep": {"h": 0.1, "logh": 0.05, "indep": 1.0},
+    }
+    pairs = F._redundant_pairs(corr, names, thresh=0.95)
+    assert pairs == [("h", "logh", 0.999)]
+
+
+def test_pareto_domination_and_verdicts():
+    base_f = 0.80
+    rows = [
+        {"set": "baseline_h-g-c", "n_features": 3, "max_vif": 2.5,
+         "max_abs_corr": 0.7, "topk_jaccard": 1.0, "spearman_alpha": 1.0,
+         "f_causal": 0.80, "axes": ["housing", "income"]},
+        {"set": "better", "n_features": 4, "max_vif": 4.0,
+         "max_abs_corr": 0.8, "topk_jaccard": 0.93, "spearman_alpha": 0.87,
+         "f_causal": 0.72, "axes": ["housing", "income", "pop_structure"]},
+        {"set": "highvif", "n_features": 4, "max_vif": 15.0,
+         "max_abs_corr": 0.9, "topk_jaccard": 0.95, "spearman_alpha": 0.9,
+         "f_causal": 0.71, "axes": ["housing", "income", "pop_structure"]},
+    ]
+    out, summary = F._pareto_and_verdicts(rows, base_f)
+    by = {r["set"]: r for r in out}
+    assert by["better"]["verdict"] == "ROBUST-AND-BETTER"
+    assert by["highvif"]["verdict"] == "HIGH-VIF/UNSTABLE"
+    assert by["baseline_h-g-c"]["verdict"] == "ROBUST-EQUIVALENT"
+    assert "better" in summary["sets_dominating_base3"]
+    assert "highvif" not in summary["sets_dominating_base3"]  # VIF>=10 excluded
+    assert summary["any_low_vif_pop_axis_beats_base3"] == "better"
