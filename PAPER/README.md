@@ -79,8 +79,9 @@ shifts. See `feature_selection/` for the side-by-side and the selection analysis
   residual on observational **district-level** demographics — no instrument, no counterfactual, no unconfoundedness.
   It measures demographic *predictability* of service, not a causal effect. The demographics have only **10 distinct
   district profiles** (an ecological-resolution limit), so cell-level attribution via district covariates carries a
-  standard ecological-fallacy caveat. See `feature_selection/README.md` and each per-set Limitations note. *(The
-  paper-facing rename of "F_causal" to an explicitly associational label is a pending PI decision.)*
+  standard ecological-fallacy caveat. See `feature_selection/README.md` and each per-set Limitations note. *(Decision
+  2026-06-29: keep the `F_causal` name + this associational caveat now; a paper-wide rename to `F_demo` — which the RA
+  favors — is held as an agenda item for the next PI meeting. See `reviews/README.md`.)*
 
 ## Reproducibility
 

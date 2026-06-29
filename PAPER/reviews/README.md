@@ -16,5 +16,10 @@ the cleanup-table fixes (data-driven sink caption, removal-rate denominator, unw
 `analysis/{experiment_delta,dataset_summary}.py`; and the statistical / feature-choice caveats (n=6 Wilcoxon floor,
 multiple-comparison, n=5 null framing, deterministic L1 gap, edit-dominant-not-edit-specific, density-drives-the-scale,
 co-dominance, housing-retaining/FRAGILE scope, 10-district ecological resolution, associational-not-causal) are baked
-into the per-set READMEs, `feature_selection/`, and `shared_cleanup/`. One item — renaming "F_causal" to an explicitly
-associational construct name in paper-facing text — is a **pending PI decision**, not yet applied.
+into the per-set READMEs, `feature_selection/`, and `shared_cleanup/`.
+
+**One item is held as a PI-meeting agenda item, not yet applied:** renaming "F_causal" / "causal fairness" to an
+explicitly associational construct — the RA favors **`F_demo`** (demand-adjusted demographic independence). Decision
+(2026-06-29): **keep the `F_causal` name + add the associational methods caveat now** (done throughout this bundle);
+**raise the `F_demo` rename with Dr. Zhang at the next meeting** before any paper-wide rename. The metric and all
+numbers are unaffected either way — it is purely a naming/framing choice.
