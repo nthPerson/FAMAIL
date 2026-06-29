@@ -46,7 +46,10 @@ class _ScriptedModel:
     def train(self, mode):
         return self
 
-    def step(self, prev, cc, tb, hidden):
+    def step(self, prev, cc, tb, hidden, driver_idx=None):
+        # ``driver_idx`` accepts the optional driver-conditioning kwarg that
+        # rollout.generate_trajectories threads through (added when driver_idxs
+        # were wired into rollout); this deterministic stub ignores it.
         b = cc.shape[0]
         step_idx = 0 if hidden is None else hidden
         logits = torch.full((b, gc.VOCAB_SIZE), -1e9)
