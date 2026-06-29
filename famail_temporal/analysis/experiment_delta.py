@@ -45,6 +45,34 @@ def _delta(dirty_val, clean_val):
     return clean_val - dirty_val
 
 
+def _cleanup_caption(sinks: dict | None) -> str:
+    """Build the cleanup one-liner from the real stuck_gps_sinks metadata.
+
+    Replaces a previously hardcoded "6 drivers, cell (28,52)" string that did
+    NOT match the on-disk filter (the PI-decided filter removed 10 calibrated
+    sink cells across multiple driver plates, and (28,52) is not among them).
+    Derives the counts from ``processing_metadata.json -> stuck_gps_sinks`` so
+    the caption can never drift from the actual filter again. Falls back to a
+    metadata-free but still-correct generic description when ``sinks`` is None.
+    """
+    if not sinks:
+        return (
+            "Data cleanup = per-driver stuck-GPS pickup-sink filter "
+            "(signature rule on the calibrated sink cells; see "
+            "source_data/processing_metadata.json -> stuck_gps_sinks)."
+        )
+    flagged = sinks.get("flagged_cells", []) or []
+    n_cells = len(flagged)
+    sink_rows = sinks.get("sinks", []) or []
+    n_drivers = len({s.get("plate_id") for s in sink_rows if isinstance(s, dict)})
+    n_removed = sinks.get("n_pickups_removed", sinks.get("n_rows_removed", 0)) or 0
+    driver_str = f"{n_drivers} driver{'s' if n_drivers != 1 else ''}" if n_drivers else "per-driver"
+    return (
+        f"Data cleanup = stuck-GPS sink filter ({driver_str}, "
+        f"{n_cells} flagged cells; {n_removed:,} phantom pickups removed)."
+    )
+
+
 # ---------------------------------------------------------------------------
 # Pure comparison functions (TDD'd)
 # ---------------------------------------------------------------------------
@@ -223,13 +251,26 @@ def _verdict_l1(l1: dict) -> str:
     return "PRESERVED — edited stays fairest faithful" if (dirty_ok and clean_ok) else "CHANGED"
 
 
-def render_report(l1: dict, l2: dict, wbc: dict, var: dict) -> str:
-    """Render a readable Markdown report summarising all four stage deltas."""
+def render_report(l1: dict, l2: dict, wbc: dict, var: dict,
+                  cleanup_caption: str | None = None) -> str:
+    """Render a readable Markdown report summarising all four stage deltas.
+
+    ``cleanup_caption`` describes the data filter; when None a metadata-free
+    (but correct) generic caption is used. Callers should pass the real caption
+    built from ``stuck_gps_sinks`` via :func:`_cleanup_caption`.
+    """
     lines = [
         "# E22: Experiment-level dirty-vs-clean robustness",
         "",
-        "Data cleanup = stuck-GPS sink filter (6 drivers, cell (28,52) removed).",
+        cleanup_caption or _cleanup_caption(None),
         "All four stages of the argument are compared below.",
+        "",
+        "_Note: F_causal here uses the 3-feature set "
+        "{AvgHousingPricePerSqM, GDPperCapita, CompPerCapita} under which the "
+        "cleanup was validated; the dirty-vs-clean conclusions are an "
+        "apples-to-apples comparison at constant feature set and are "
+        "feature-set-invariant. Absolute F_causal values are NOT comparable to "
+        "other feature sets' headline tables._",
         "",
     ]
 
@@ -279,9 +320,23 @@ def render_report(l1: dict, l2: dict, wbc: dict, var: dict) -> str:
         for a in key_arms
     )
     new_arms = [a for a in wbc if wbc[a]["status"] == "clean_only"]
-    verdict_wbc = "PRESERVED — weighted arms stay significant in both dirty & clean"
+    verdict_wbc = "PRESERVED — weighted (wN) arms stay significant in both dirty & clean"
     if not sig_ok:
-        verdict_wbc = "CHANGED — some arms changed significance"
+        verdict_wbc = "CHANGED — some weighted arms changed significance"
+    # The unweighted 'edited' (w=1) arm is non-load-bearing (the recovery story
+    # rests on the upweighted arms), but disclose any significance flip rather
+    # than silently filtering it out of the key-arm set above.
+    ua = wbc.get("edited")
+    if (ua and ua.get("status") == "compared"
+            and ua.get("p_dirty") is not None and ua.get("p_clean") is not None):
+        if (ua["p_dirty"] < 0.05) != (ua["p_clean"] < 0.05):
+            verdict_wbc += (
+                f"; NOTE unweighted 'edited' (w=1) arm significance flipped "
+                f"(p {ua['p_dirty']}→{ua['p_clean']}), direction preserved "
+                f"(Δ {ua['dirty_delta_vs_raw']:+.4f}→{ua['clean_delta_vs_raw']:+.4f}, "
+                f"both ≤0; the dirty p=0.03125 is the n=6 Wilcoxon floor, n.s. in "
+                f"the dedicated L2 5-seed run)"
+            )
     if new_arms:
         verdict_wbc += f"; new clean-only arms: {', '.join(new_arms)}"
     lines += ["", f"**Conclusion preserved?** {verdict_wbc}", ""]
@@ -339,12 +394,23 @@ def write_experiment_cleanup_delta(
     wbc = wbc_delta(d_wbc, c_wbc)
     var = variance_delta(d_var, c_var)
 
+    # Build the cleanup caption from the real on-disk filter metadata so the
+    # report can never drift from what was actually removed.
+    cleanup_caption = None
+    try:
+        from famail_temporal import config as _cfg
+        from famail_temporal.analysis import _io as _io_mod
+        clean_meta = _io_mod.processing_metadata(_cfg.SOURCE_DATA_DIR)
+        cleanup_caption = _cleanup_caption(clean_meta.get("stuck_gps_sinks"))
+    except Exception:
+        cleanup_caption = None  # fall back to the generic correct caption
+
     full = {"l1_delta": l1, "l2_delta": l2, "wbc_delta": wbc, "variance_delta": var}
     (out_dir / "experiment_cleanup_delta.json").write_text(
         json.dumps(full, indent=2, default=float)
     )
     (out_dir / "experiment_cleanup_delta.md").write_text(
-        render_report(l1, l2, wbc, var)
+        render_report(l1, l2, wbc, var, cleanup_caption=cleanup_caption)
     )
     print(f"[E22] wrote {out_dir / 'experiment_cleanup_delta.json'}")
     print(f"[E22] wrote {out_dir / 'experiment_cleanup_delta.md'}")

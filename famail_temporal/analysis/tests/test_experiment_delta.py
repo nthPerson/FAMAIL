@@ -222,6 +222,36 @@ class TestWbcDelta:
         assert set(result.keys()) == {"a", "b"}
 
 
+# ── _cleanup_caption ──────────────────────────────────────────────────────────
+
+class TestCleanupCaption:
+    """_cleanup_caption(sinks) builds the filter description from real metadata."""
+
+    def test_counts_drivers_cells_and_pickups(self):
+        from famail_temporal.analysis.experiment_delta import _cleanup_caption
+        sinks = {
+            "flagged_cells": [[17, 39], [29, 53], [21, 29]],
+            "sinks": [
+                {"plate_id": "A", "x_grid": 17, "y_grid": 39},
+                {"plate_id": "B", "x_grid": 29, "y_grid": 53},
+                {"plate_id": "A", "x_grid": 21, "y_grid": 29},  # same driver again
+            ],
+            "n_pickups_removed": 106677,
+        }
+        cap = _cleanup_caption(sinks)
+        assert "2 drivers" in cap          # distinct plate_ids A,B
+        assert "3 flagged cells" in cap
+        assert "106,677" in cap
+        # Must NOT carry the stale hardcoded claim.
+        assert "(28,52)" not in cap
+
+    def test_none_falls_back_without_wrong_cell_claim(self):
+        from famail_temporal.analysis.experiment_delta import _cleanup_caption
+        cap = _cleanup_caption(None)
+        assert "(28,52)" not in cap
+        assert "stuck-GPS" in cap
+
+
 # ── variance_delta ────────────────────────────────────────────────────────────
 
 class TestVarianceDelta:

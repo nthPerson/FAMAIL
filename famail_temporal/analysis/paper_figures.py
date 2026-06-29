@@ -12,7 +12,8 @@ Figures (all written to ``results/analysis/figures_4feat/``):
                                  + Fidelity-A; GAN disqualified by Fidelity-B).
   3. fig_l2_negative_transfer -- vanilla BC averages it away; upweighting recovers.
   4. fig_fidb_components.png  -- Fidelity-B component breakdown (E9/E36).
-  5. fig_feature_robustness   -- 3-feature vs 4-feature: scale shifts, conclusions hold.
+  5. fig_feature_robustness   -- two feature sets: scale shifts, directional
+                                 conclusions hold (null rows marked as nulls).
 
 Pure, unit-tested helper: :func:`t_ci_from_values`.
 
@@ -142,6 +143,25 @@ def _ci_halfwidth(values, confidence: float = 0.95) -> float:
     return (hi - lo) / 2.0
 
 
+def _ci_half_from_std(std, n, confidence: float = 0.95) -> float:
+    """t-CI half-width of the mean from a summary (std, n). nan-safe.
+
+    Used when only aggregate {mean, std, n} is available (e.g. the variance
+    suite's paired_delta) rather than per-seed values.
+    """
+    try:
+        std = float(std)
+        n = int(n)
+    except (TypeError, ValueError):
+        return float("nan")
+    if n < 2 or not math.isfinite(std):
+        return float("nan")
+    from scipy.stats import t
+
+    sem = std / math.sqrt(n)
+    return sem * float(t.ppf(0.5 + confidence / 2.0, n - 1))
+
+
 def _p_stars(p) -> str:
     """Significance marker. '*' p<=0.05, '**' p<=0.01, 'n.s.' otherwise / None."""
     if p is None or (isinstance(p, float) and math.isnan(p)):
@@ -220,14 +240,31 @@ def fig_dose_response(bundle: ResultBundle, out_path: Path) -> Path:
             xs, ys, yerr=errs, ls=ls, marker=marker, color=color,
             label=label, markersize=6, zorder=3,
         )
+        is_random = prefix == "random"
         for x, y, e, p in zip(xs, ys, errs, ps):
             star = _p_stars(p)
-            if star:
-                off = (e if math.isfinite(e) else 0.0) + 0.0012
-                ax.annotate(
-                    star, (x, y + off), ha="center", va="bottom",
-                    fontsize=9, color=color,
-                )
+            if not star:
+                continue
+            ehw = e if math.isfinite(e) else 0.0
+            if star == "n.s.":
+                # Place the (always-n.s.) random placebo's label BELOW its point
+                # so it never occludes the significant most-fair '*' that shares
+                # the same x at w=10/w=30. Non-random n.s. labels go above, small.
+                if is_random:
+                    ax.annotate(star, (x, y - ehw), textcoords="offset points",
+                                xytext=(0, -9), ha="center", va="top",
+                                fontsize=8, color=color, zorder=4)
+                else:
+                    ax.annotate(star, (x, y + ehw), textcoords="offset points",
+                                xytext=(0, 6), ha="center", va="bottom",
+                                fontsize=8, color=color, zorder=4)
+            else:
+                # Significant markers: larger + bold in the series color, drawn
+                # last (high zorder) so a real effect is never hidden under a
+                # null label that happens to share the same x.
+                ax.annotate(star, (x, y + ehw), textcoords="offset points",
+                            xytext=(0, 6), ha="center", va="bottom",
+                            fontsize=13, fontweight="bold", color=color, zorder=6)
 
     ax.set_xticks([1, 10, 20, 30])
     ax.set_xticklabels(["1\n(no upweight)", "10", "20", "30"])
@@ -310,11 +347,17 @@ def fig_l1_data_quality(bundle: ResultBundle, out_path: Path) -> Path:
     axR.set_xticks(x)
     axR.set_xticklabels([labels[s] for s in sources])
     axR.set_ylabel("Fidelity-A (identity faithfulness)")
-    axR.set_title("Identity faithfulness per source\n(Fidelity-B distributional gap annotated)")
-    axR.set_ylim(0.80, 0.86)
+    axR.set_title(
+        "Identity faithfulness per source\n"
+        "(zero-baseline: all sources within 0.006 — edited is faithful)"
+    )
+    # Zero baseline (matches the left panel). A truncated [0.80,0.86] window
+    # exaggerated the <0.006 spread ~17x and made edited (the thesis bar) read
+    # as least faithful; on a 0-1 axis the four sources are correctly ~identical.
+    axR.set_ylim(0, 1.0)
     for xi, (m, _), (fbm, _fbs) in zip(x, fa, fb):
         axR.annotate(
-            f"Fid-B\n{fbm:.3f}", xy=(xi, m), xytext=(xi, 0.806),
+            f"Fid-B\n{fbm:.3f}", xy=(xi, m), xytext=(xi, m + 0.02),
             ha="center", va="bottom", fontsize=7.5,
             color=(COLORS["gan"] if fbm > 0.1 else "black"),
         )
@@ -322,7 +365,7 @@ def fig_l1_data_quality(bundle: ResultBundle, out_path: Path) -> Path:
     gan_fb = mean_std("gan", "fidelity_b")[0]
     axR.annotate(
         f"GAN distributionally\ndisqualified (Fid-B={gan_fb:.2f})",
-        xy=(3, fa[3][0]), xytext=(2.0, 0.852), ha="center", fontsize=8,
+        xy=(3, fa[3][0]), xytext=(2.0, 0.55), ha="center", fontsize=8,
         color=COLORS["gan"],
         arrowprops=dict(arrowstyle="->", color=COLORS["gan"]),
     )
@@ -399,9 +442,13 @@ def fig_fidb_components(bundle: ResultBundle, out_path: Path) -> Path:
     """Per-source Fidelity-B component breakdown.
 
     Sources edited/bc/gan; the six Fid-B components as grouped bars (mean over
-    seeds, std error bars). Story: editing relocates pickups (high terminal_cell
-    JS) but preserves trajectory shape (low length/coverage/RoG). GAN blows up
-    every shape component (note the broken/clipped y-range annotation).
+    seeds, std error bars). Story: editing concentrates its distributional shift
+    in terminal_cell (relocated pickups, ~0.55) — the next-largest component
+    (net_disp ~0.13) is ~4x smaller. Only ``length`` (~0.01) is genuinely low;
+    coverage (~0.09) and RoG (~0.10) are mid-range (comparable to GAN's
+    net_disp/RoG), and edited net_disp slightly exceeds GAN's — so the claim is
+    shift-concentrated-in-terminal_cell, NOT shape preservation per se. GAN
+    inflates the shape components (length/coverage/RoG) on top of that.
     """
     import matplotlib.pyplot as plt
 
@@ -459,63 +506,96 @@ def fig_fidb_components(bundle: ResultBundle, out_path: Path) -> Path:
 # Figure 5 -- 3-feature vs 4-feature demographic robustness
 # ---------------------------------------------------------------------------
 def _robustness_numbers(bundle: ResultBundle) -> dict:
-    """Extract the four headline numbers for a feature variant."""
-    editor = bundle.var["paired_delta"]["f_causal"]["mean"]
+    """Extract the four headline numbers (value, CI half-width, flags) per set.
+
+    Each entry is {"val", "err", "deterministic", "null"}. ``err`` is a 95%
+    t-CI half-width (nan if not estimable); ``deterministic`` marks data-level
+    gaps with no sampling variance (the L1 edited-raw gap is a static rescore,
+    std=0 by construction, so no CI applies); ``null`` marks rows whose CI
+    straddles zero (so the figure does not present a null as a conclusion).
+    """
+    # Model-level variance-suite paired delta (b0 vs FAMAIL) — NOT the editor
+    # before->after delta. This row is a known model-level null.
+    var_fc = bundle.var["paired_delta"]["f_causal"]
+    var_err = _ci_half_from_std(var_fc.get("std"), var_fc.get("n", 5))
+
     l1_gap = (
         bundle.l1["per_source"]["edited"]["f_causal"]["mean"]
         - bundle.l1["per_source"]["raw"]["f_causal"]["mean"]
     )
-    w30 = bundle.sweep["paired_vs_raw"]["f_causal"]["edited_w30"]["mean"]
-    l2_gap = bundle.l2["paired"]["f_causal"]["raw"]["mean"]  # edited - raw
+
+    w30 = bundle.sweep["paired_vs_raw"]["f_causal"]["edited_w30"]
+    w30_err = _ci_halfwidth(w30["diffs"])
+
+    l2 = bundle.l2["paired"]["f_causal"]["raw"]  # edited - raw, vanilla BC
+    l2_err = _ci_halfwidth(l2["diffs"])
+
+    def _entry(val, err, deterministic=False):
+        is_null = (not deterministic) and math.isfinite(err) and abs(val) < err
+        return {"val": val, "err": err, "deterministic": deterministic, "null": is_null}
+
     return {
-        "editor_delta": editor,
-        "l1_edited_minus_raw": l1_gap,
-        "weighted_bc_w30": w30,
-        "l2_edited_minus_raw": l2_gap,
+        "model_level_delta": _entry(var_fc["mean"], var_err),
+        "l1_edited_minus_raw": _entry(l1_gap, 0.0, deterministic=True),
+        "weighted_bc_w30": _entry(w30["mean"], w30_err),
+        "l2_edited_minus_raw": _entry(l2["mean"], l2_err),
     }
 
 
 def fig_feature_robustness(b4: ResultBundle, b3: ResultBundle, out_path: Path) -> Path:
-    """Dumbbell comparison of the four headline numbers under 3- vs 4-feature.
+    """Dumbbell comparison of the four headline numbers under two feature sets.
 
-    Story: the absolute F_causal scale shifts with demographic granularity, but
-    every directional conclusion holds (targeting was Jaccard ~0.93).
+    Story: the absolute F_causal scale shifts with the demographic feature set,
+    but the DIRECTIONAL conclusions hold (targeting was Jaccard ~0.93). Two of
+    the four rows (model-level variance-suite delta, and vanilla-BC L2 transfer)
+    are nulls by design and are marked as such — they are not "conclusions that
+    hold", they are nulls that reproduce.
     """
     import matplotlib.pyplot as plt
 
     n3 = _robustness_numbers(b3)
     n4 = _robustness_numbers(b4)
 
-    keys = ["editor_delta", "l1_edited_minus_raw", "weighted_bc_w30", "l2_edited_minus_raw"]
+    keys = ["model_level_delta", "l1_edited_minus_raw", "weighted_bc_w30", "l2_edited_minus_raw"]
     nice = {
-        "editor_delta": r"Editor $\Delta F_{causal}$" + "\n(variance suite)",
-        "l1_edited_minus_raw": "L1 edited$-$raw\n" + r"$F_{causal}$ gap",
+        "model_level_delta": r"Model-level $\Delta F_{causal}$" + "\n(variance suite, b0 vs FAMAIL; null)",
+        "l1_edited_minus_raw": "L1 edited$-$raw\n" + r"$F_{causal}$ gap (deterministic)",
         "weighted_bc_w30": r"Weighted-BC $\Delta F_{causal}$" + "\n(edited, w=30)",
-        "l2_edited_minus_raw": "L2 edited$-$raw\n(vanilla BC)",
+        "l2_edited_minus_raw": "L2 edited$-$raw\n(vanilla BC; null)",
     }
     y = np.arange(len(keys))[::-1]  # top-to-bottom in listed order
 
-    fig, ax = plt.subplots(figsize=(7.2, 4.4))
+    fig, ax = plt.subplots(figsize=(7.6, 4.6))
     ax.axvline(0.0, color=_WONG["grey"], lw=1.0, zorder=0)
 
+    def _xerr(entry):
+        e = entry["err"]
+        return 0.0 if (not math.isfinite(e)) else e
+
     for yi, k in zip(y, keys):
-        v3, v4 = n3[k], n4[k]
-        ax.plot([v3, v4], [yi, yi], color=_WONG["grey"], lw=1.4, zorder=1)
-        ax.scatter([v3], [yi], color=COLORS["3feat"], s=70, zorder=3,
-                   label="3-feature" if k == keys[0] else None)
-        ax.scatter([v4], [yi], color=COLORS["4feat"], s=70, zorder=3,
-                   label="4-feature" if k == keys[0] else None)
+        e3, e4 = n3[k], n4[k]
+        v3, v4 = e3["val"], e4["val"]
+        ax.plot([v3, v4], [yi, yi], color=_WONG["grey"], lw=1.2, ls=":", zorder=1)
+        ax.errorbar([v3], [yi], xerr=[_xerr(e3)], fmt="o", color=COLORS["3feat"],
+                    markersize=8, zorder=3, label="3-feature" if k == keys[0] else None)
+        ax.errorbar([v4], [yi], xerr=[_xerr(e4)], fmt="s", color=COLORS["4feat"],
+                    markersize=8, zorder=3, label="4-feature" if k == keys[0] else None)
         ax.annotate(f"{v3:+.4f}", (v3, yi), textcoords="offset points",
-                    xytext=(0, 9), ha="center", fontsize=7.5, color=COLORS["3feat"])
+                    xytext=(0, 10), ha="center", fontsize=7.5, color=COLORS["3feat"])
         ax.annotate(f"{v4:+.4f}", (v4, yi), textcoords="offset points",
-                    xytext=(0, -14), ha="center", fontsize=7.5, color=COLORS["4feat"])
+                    xytext=(0, -15), ha="center", fontsize=7.5, color=COLORS["4feat"])
+        # Shade null rows so a CI-straddles-zero row is not read as a result.
+        if e3["null"] or e4["null"]:
+            ax.annotate("null (CI ∋ 0)", (0.0, yi), textcoords="offset points",
+                        xytext=(6, 0), ha="left", va="center", fontsize=7,
+                        color=_WONG["grey"], style="italic")
 
     ax.set_yticks(y)
     ax.set_yticklabels([nice[k] for k in keys])
-    ax.set_xlabel(r"$\Delta\,F_{\mathrm{causal}}$ (paired/gap)")
+    ax.set_xlabel(r"$\Delta\,F_{\mathrm{causal}}$ (paired/gap, mean $\pm$ 95% CI)")
     ax.set_title(
-        "Demographic robustness: scale shifts, every conclusion holds\n"
-        "(3-feature vs 4-feature; edit targeting Jaccard ~0.93)"
+        "Demographic robustness: scale shifts; directional conclusions hold\n"
+        "(model-level & vanilla-BC rows are null/within noise; edit targeting Jaccard ~0.93)"
     )
     ax.legend(loc="lower right")
     fig.tight_layout()

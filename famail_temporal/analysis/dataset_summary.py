@@ -21,15 +21,30 @@ def dataset_summary(dirty_meta: dict, clean_meta: dict) -> dict:
     flagged = sinks.get("flagged_cells", [])
     phantom = sinks.get("n_pickups_removed", 0)
 
+    # removal_rate denominates over total_extracted (seeking + driving), NOT
+    # seeking alone. Surface total_driving_extracted and total_extracted so the
+    # rate's true denominator is visible and a reader cannot misread it as
+    # "~39% of seeking trajectories removed" (the seeking-only fraction is ~90%).
+    def _total_extracted(rs):
+        if "total_extracted" in rs:
+            return rs["total_extracted"]
+        return rs.get("total_seeking_extracted", 0) + rs.get("total_driving_extracted", 0)
+
     dirty_block = {
         "n_removed": dirty_rs["n_removed"],
         "removal_rate": dirty_rs["removal_rate"],
+        "removal_rate_denominator": "total_extracted (seeking + driving)",
         "total_seeking_extracted": dirty_rs["total_seeking_extracted"],
+        "total_driving_extracted": dirty_rs.get("total_driving_extracted"),
+        "total_extracted": _total_extracted(dirty_rs),
     }
     clean_block = {
         "n_removed": clean_rs["n_removed"],
         "removal_rate": clean_rs["removal_rate"],
+        "removal_rate_denominator": "total_extracted (seeking + driving)",
         "total_seeking_extracted": clean_rs["total_seeking_extracted"],
+        "total_driving_extracted": clean_rs.get("total_driving_extracted"),
+        "total_extracted": _total_extracted(clean_rs),
         "n_sink_cells": len(flagged),
         "phantom_pickups_removed": phantom,
     }
@@ -39,6 +54,7 @@ def dataset_summary(dirty_meta: dict, clean_meta: dict) -> dict:
         "total_seeking_extracted": (
             clean_rs["total_seeking_extracted"] - dirty_rs["total_seeking_extracted"]
         ),
+        "total_extracted": _total_extracted(clean_rs) - _total_extracted(dirty_rs),
     }
     return {"dirty": dirty_block, "clean": clean_block, "delta": delta_block}
 
@@ -64,13 +80,22 @@ def write_dataset_summary(
     d = summary["dirty"]
     c = summary["clean"]
     delta = summary["delta"]
+    def _i(v):
+        return f"{v:,}" if isinstance(v, (int, float)) else "—"
+
     md = (
         "# Dataset Cleanup Summary (E31)\n\n"
+        "`removal_rate = n_removed / total_extracted`, where `total_extracted = "
+        "seeking + driving` trajectories. The rate is over **all** extracted "
+        "trajectories, not seeking alone — do not read it as the fraction of "
+        "*seeking* trips removed (that fraction is ~90%).\n\n"
         "| Metric | Dirty | Clean | Delta |\n"
         "|--------|-------|-------|-------|\n"
         f"| n_removed | {d['n_removed']:,} | {c['n_removed']:,} | {delta['n_removed']:,} |\n"
-        f"| removal_rate | {d['removal_rate']:.4f} | {c['removal_rate']:.4f} | {delta['removal_rate']:.4f} |\n"
+        f"| removal_rate (= n_removed / total_extracted) | {d['removal_rate']:.4f} | {c['removal_rate']:.4f} | {delta['removal_rate']:.4f} |\n"
+        f"| total_extracted (seeking + driving) | {_i(d['total_extracted'])} | {_i(c['total_extracted'])} | {_i(delta.get('total_extracted'))} |\n"
         f"| total_seeking_extracted | {d['total_seeking_extracted']:,} | {c['total_seeking_extracted']:,} | {delta['total_seeking_extracted']:,} |\n"
+        f"| total_driving_extracted | {_i(d['total_driving_extracted'])} | {_i(c['total_driving_extracted'])} | — |\n"
         f"| n_sink_cells | — | {c['n_sink_cells']} | — |\n"
         f"| phantom_pickups_removed | — | {c['phantom_pickups_removed']:,} | — |\n"
     )
