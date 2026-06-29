@@ -44,6 +44,19 @@ REL_L1_3FEAT = "level1_table_v2/cleaned_5seed/level1_v2_multiseed.json"
 REL_L2_3FEAT = "level2_table/cleaned_5seed/level2_metrics.json"
 REL_VAR_3FEAT = "variance_suite/cleaned_5seed/aggregate.json"
 
+# PRIMARY equity set {housing, comp, migrant} ("hcm").
+REL_SWEEP_HCM = "weighted_bc_sweep/cleaned_hcm_6seed/sweep.json"
+REL_L1_HCM = "level1_table_v2/cleaned_hcm_5seed/level1_v2_multiseed.json"
+REL_L2_HCM = "level2_table/cleaned_hcm_5seed/level2_metrics.json"
+REL_VAR_HCM = "variance_suite/cleaned_hcm_5seed/aggregate.json"
+
+# feat key -> (sweep, l1, l2, var) relative paths.
+_FEAT_RELS = {
+    "4feat": (REL_SWEEP_4FEAT, REL_L1_4FEAT, REL_L2_4FEAT, REL_VAR_4FEAT),
+    "3feat": (REL_SWEEP_3FEAT, REL_L1_3FEAT, REL_L2_3FEAT, REL_VAR_3FEAT),
+    "hcm": (REL_SWEEP_HCM, REL_L1_HCM, REL_L2_HCM, REL_VAR_HCM),
+}
+
 DEFAULT_RESULTS_ROOT = Path(__file__).resolve().parents[1] / "results"
 DEFAULT_OUT_DIR = DEFAULT_RESULTS_ROOT / "analysis" / "figures_4feat"
 
@@ -188,12 +201,10 @@ class ResultBundle:
     @classmethod
     def load(cls, root, *, feat: str) -> "ResultBundle":
         root = Path(root)
-        if feat == "4feat":
-            rels = (REL_SWEEP_4FEAT, REL_L1_4FEAT, REL_L2_4FEAT, REL_VAR_4FEAT)
-        elif feat == "3feat":
-            rels = (REL_SWEEP_3FEAT, REL_L1_3FEAT, REL_L2_3FEAT, REL_VAR_3FEAT)
-        else:
-            raise ValueError(f"unknown feat variant: {feat!r}")
+        try:
+            rels = _FEAT_RELS[feat]
+        except KeyError:
+            raise ValueError(f"unknown feat variant: {feat!r}") from None
         return cls(*(read_json(root / r) for r in rels))
 
 
@@ -617,6 +628,14 @@ def main(argv=None) -> int:
         "--out-dir", default=str(DEFAULT_OUT_DIR),
         help="Output directory for PNGs (default: results/analysis/figures_4feat).",
     )
+    parser.add_argument(
+        "--feat", default="4feat", choices=sorted(_FEAT_RELS),
+        help="Primary feature set for the four single-set figures.",
+    )
+    parser.add_argument(
+        "--compare-feat", default="3feat", choices=sorted(_FEAT_RELS) + ["none"],
+        help="Second set for the cross-set robustness dumbbell ('none' to skip).",
+    )
     args = parser.parse_args(argv)
 
     root = Path(args.results_root)
@@ -625,15 +644,24 @@ def main(argv=None) -> int:
 
     setup_style()
 
-    b4 = ResultBundle.load(root, feat="4feat")
-    b3 = ResultBundle.load(root, feat="3feat")
+    primary = ResultBundle.load(root, feat=args.feat)
 
     written = []
-    written.append(fig_dose_response(b4, out_dir / "fig_dose_response.png"))
-    written.append(fig_l1_data_quality(b4, out_dir / "fig_l1_data_quality.png"))
-    written.append(fig_l2_negative_transfer(b4, out_dir / "fig_l2_negative_transfer.png"))
-    written.append(fig_fidb_components(b4, out_dir / "fig_fidb_components.png"))
-    written.append(fig_feature_robustness(b4, b3, out_dir / "fig_feature_robustness.png"))
+    written.append(fig_dose_response(primary, out_dir / "fig_dose_response.png"))
+    written.append(fig_l1_data_quality(primary, out_dir / "fig_l1_data_quality.png"))
+    written.append(fig_l2_negative_transfer(primary, out_dir / "fig_l2_negative_transfer.png"))
+    written.append(fig_fidb_components(primary, out_dir / "fig_fidb_components.png"))
+
+    # Cross-set robustness dumbbell (skip gracefully if the comparison set's
+    # results are not on disk yet).
+    if args.compare_feat != "none":
+        try:
+            other = ResultBundle.load(root, feat=args.compare_feat)
+            written.append(
+                fig_feature_robustness(primary, other, out_dir / "fig_feature_robustness.png")
+            )
+        except FileNotFoundError:
+            print(f"[skip] robustness fig: feat={args.compare_feat!r} results not found")
 
     for p in written:
         print(f"wrote {p}")

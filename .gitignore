@@ -66,3 +66,8 @@ logs/
 
 # Discriminator training outputs (per-run timestamped dirs)
 checkpoints/
+
+# PAPER/ is the curated, committed paper deliverable: force-track its data
+# tables (the global *.json/*.csv ignores above would otherwise drop them).
+!PAPER/**/*.json
+!PAPER/**/*.csv

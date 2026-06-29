@@ -1,0 +1,26 @@
+{
+  "dirty": {
+    "n_removed": 195840,
+    "removal_rate": 0.49747250234968377,
+    "removal_rate_denominator": "total_extracted (seeking + driving)",
+    "total_seeking_extracted": 214286,
+    "total_driving_extracted": 179384,
+    "total_extracted": 393670
+  },
+  "clean": {
+    "n_removed": 119290,
+    "removal_rate": 0.38949420280864205,
+    "removal_rate_denominator": "total_extracted (seeking + driving)",
+    "total_seeking_extracted": 133091,
+    "total_driving_extracted": 173178,
+    "total_extracted": 306269,
+    "n_sink_cells": 10,
+    "phantom_pickups_removed": 106677
+  },
+  "delta": {
+    "n_removed": -76550,
+    "removal_rate": -0.108,
+    "total_seeking_extracted": -81195,
+    "total_extracted": -87401
+  }
+}

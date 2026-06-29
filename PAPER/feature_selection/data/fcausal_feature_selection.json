@@ -1,0 +1,792 @@
+{
+  "analysis": "F_causal demographic feature-SELECTION (cleaned, before-edit)",
+  "base3_f_causal": 0.8069278597831726,
+  "top_k": 2293,
+  "n_units": 34524,
+  "vif_limit": 10.0,
+  "max_features": 5,
+  "marginal_contribution": [
+    {
+      "feature": "EmployeeCompensation100MYuan",
+      "axis": "income",
+      "skipped": false,
+      "f_causal": 0.7167216539382935,
+      "delta_f_causal": -0.09020620584487915,
+      "max_vif": 2.8986929733595037,
+      "added_feature_vif": 2.6801038562237482
+    },
+    {
+      "feature": "AvgEmployedPersons",
+      "axis": "scale",
+      "skipped": false,
+      "f_causal": 0.7222815155982971,
+      "delta_f_causal": -0.08464634418487549,
+      "max_vif": 2.592931389539787,
+      "added_feature_vif": 1.9209292499735016
+    },
+    {
+      "feature": "LogPopDensity",
+      "axis": "density",
+      "skipped": false,
+      "f_causal": 0.725318193435669,
+      "delta_f_causal": -0.08160966634750366,
+      "max_vif": 2.8668356297123267,
+      "added_feature_vif": 1.9537342864939553
+    },
+    {
+      "feature": "PopDensityPerKm2",
+      "axis": "density",
+      "skipped": false,
+      "f_causal": 0.7363485097885132,
+      "delta_f_causal": -0.07057934999465942,
+      "max_vif": 3.6841160007144946,
+      "added_feature_vif": 2.5950484387212294
+    },
+    {
+      "feature": "GDPin10000Yuan",
+      "axis": "income",
+      "skipped": false,
+      "f_causal": 0.7385826706886292,
+      "delta_f_causal": -0.06834518909454346,
+      "max_vif": 2.5446425078481596,
+      "added_feature_vif": 1.2001590302714025
+    },
+    {
+      "feature": "LogGDP",
+      "axis": "income",
+      "skipped": false,
+      "f_causal": 0.7439346313476562,
+      "delta_f_causal": -0.06299322843551636,
+      "max_vif": 2.5781587219747064,
+      "added_feature_vif": 1.1004945507331787
+    },
+    {
+      "feature": "LogCompensation",
+      "axis": "income",
+      "skipped": false,
+      "f_causal": 0.7457830905914307,
+      "delta_f_causal": -0.06114476919174194,
+      "max_vif": 2.761787740048659,
+      "added_feature_vif": 1.9504226486680634
+    },
+    {
+      "feature": "YearEndPermanentPop10k",
+      "axis": "scale",
+      "skipped": false,
+      "f_causal": 0.7472385168075562,
+      "delta_f_causal": -0.059689342975616455,
+      "max_vif": 4.170600246195368,
+      "added_feature_vif": 1.8070869401284815
+    },
+    {
+      "feature": "NonRegisteredPermanentPop10k",
+      "axis": "pop_structure",
+      "skipped": false,
+      "f_causal": 0.7563971281051636,
+      "delta_f_causal": -0.05053073167800903,
+      "max_vif": 5.839548729750727,
+      "added_feature_vif": 2.9783606339997313
+    },
+    {
+      "feature": "MigrantRatio",
+      "axis": "pop_structure",
+      "skipped": false,
+      "f_causal": 0.7722560167312622,
+      "delta_f_causal": -0.0346718430519104,
+      "max_vif": 15.151910175472858,
+      "added_feature_vif": 15.151910175472858
+    },
+    {
+      "feature": "LogHousingPrice",
+      "axis": "housing",
+      "skipped": false,
+      "f_causal": 0.7812249660491943,
+      "delta_f_causal": -0.02570289373397827,
+      "max_vif": 14084.28114849625,
+      "added_feature_vif": 14007.064273836539
+    },
+    {
+      "feature": "SexRatio100",
+      "axis": "pop_structure",
+      "skipped": false,
+      "f_causal": 0.791323184967041,
+      "delta_f_causal": -0.015604674816131592,
+      "max_vif": 2.844620682152942,
+      "added_feature_vif": 2.159682592915359
+    }
+  ],
+  "candidate_pool": [
+    "AvgHousingPricePerSqM",
+    "LogHousingPrice",
+    "GDPperCapita",
+    "CompPerCapita",
+    "EmployeeCompensation100MYuan",
+    "GDPin10000Yuan",
+    "LogGDP",
+    "LogCompensation",
+    "MigrantRatio",
+    "NonRegisteredPermanentPop10k",
+    "SexRatio100",
+    "PopDensityPerKm2",
+    "LogPopDensity",
+    "YearEndPermanentPop10k",
+    "AvgEmployedPersons"
+  ],
+  "pool_vifs": {
+    "AvgHousingPricePerSqM": Infinity,
+    "LogHousingPrice": Infinity,
+    "GDPperCapita": Infinity,
+    "CompPerCapita": Infinity,
+    "EmployeeCompensation100MYuan": Infinity,
+    "GDPin10000Yuan": Infinity,
+    "LogGDP": Infinity,
+    "LogCompensation": Infinity,
+    "MigrantRatio": Infinity,
+    "NonRegisteredPermanentPop10k": Infinity,
+    "SexRatio100": Infinity,
+    "PopDensityPerKm2": Infinity,
+    "LogPopDensity": Infinity,
+    "YearEndPermanentPop10k": Infinity,
+    "AvgEmployedPersons": Infinity
+  },
+  "pool_vif_note": "Whole-pool VIFs are inf by design: the pool contains alternative encodings of the same axis (e.g. AvgHousingPricePerSqM\u2248LogHousingPrice, GDPin10000Yuan\u2248LogGDP), which makes the pooled design singular. Judge collinearity per candidate SET (set_search.max_vif), not over the pool.",
+  "redundant_pairs": [
+    {
+      "a": "AvgHousingPricePerSqM",
+      "b": "LogHousingPrice",
+      "r": 0.9999553934115919
+    },
+    {
+      "a": "EmployeeCompensation100MYuan",
+      "b": "AvgEmployedPersons",
+      "r": 0.9606211535695919
+    },
+    {
+      "a": "GDPin10000Yuan",
+      "b": "LogGDP",
+      "r": 0.9695099003723859
+    },
+    {
+      "a": "NonRegisteredPermanentPop10k",
+      "b": "YearEndPermanentPop10k",
+      "r": 0.9591867220413612
+    }
+  ],
+  "correlation_matrix": {
+    "AvgHousingPricePerSqM": {
+      "AvgHousingPricePerSqM": 1.0,
+      "LogHousingPrice": 0.9999553934115919,
+      "GDPperCapita": -0.5751967400512481,
+      "CompPerCapita": -0.4249027299821584,
+      "EmployeeCompensation100MYuan": -0.6254788939974479,
+      "GDPin10000Yuan": -0.13909713622939185,
+      "LogGDP": -0.15321331032317176,
+      "LogCompensation": -0.5204353661242388,
+      "MigrantRatio": 0.7983490238935165,
+      "NonRegisteredPermanentPop10k": 0.46792816082801125,
+      "SexRatio100": 0.13900557856833007,
+      "PopDensityPerKm2": -0.7424473313610243,
+      "LogPopDensity": -0.6339305202414476,
+      "YearEndPermanentPop10k": 0.30467481910414373,
+      "AvgEmployedPersons": -0.6220185819271762
+    },
+    "LogHousingPrice": {
+      "AvgHousingPricePerSqM": 0.9999553934115919,
+      "LogHousingPrice": 1.0,
+      "GDPperCapita": -0.5720257983518928,
+      "CompPerCapita": -0.42143947381409064,
+      "EmployeeCompensation100MYuan": -0.6209236051997615,
+      "GDPin10000Yuan": -0.13673897913921393,
+      "LogGDP": -0.15171718410813448,
+      "LogCompensation": -0.5173733859313523,
+      "MigrantRatio": 0.7970232909904785,
+      "NonRegisteredPermanentPop10k": 0.4679849015689811,
+      "SexRatio100": 0.1444711807500914,
+      "PopDensityPerKm2": -0.7423649525396513,
+      "LogPopDensity": -0.6331263405762156,
+      "YearEndPermanentPop10k": 0.30518347340203617,
+      "AvgEmployedPersons": -0.61833496449184
+    },
+    "GDPperCapita": {
+      "AvgHousingPricePerSqM": -0.5751967400512481,
+      "LogHousingPrice": -0.5720257983518928,
+      "GDPperCapita": 1.0,
+      "CompPerCapita": 0.7200435231932844,
+      "EmployeeCompensation100MYuan": 0.7279224737700576,
+      "GDPin10000Yuan": 0.2902015212701375,
+      "LogGDP": 0.14291977807791445,
+      "LogCompensation": 0.47770391188512745,
+      "MigrantRatio": -0.9041169251736946,
+      "NonRegisteredPermanentPop10k": -0.7361133510157002,
+      "SexRatio100": 0.40166615547316054,
+      "PopDensityPerKm2": 0.22327424034214283,
+      "LogPopDensity": 0.12879506586714054,
+      "YearEndPermanentPop10k": -0.5480441711913511,
+      "AvgEmployedPersons": 0.5714030816582041
+    },
+    "CompPerCapita": {
+      "AvgHousingPricePerSqM": -0.4249027299821584,
+      "LogHousingPrice": -0.42143947381409064,
+      "GDPperCapita": 0.7200435231932845,
+      "CompPerCapita": 1.0,
+      "EmployeeCompensation100MYuan": 0.6536988954389841,
+      "GDPin10000Yuan": 0.40646225651478324,
+      "LogGDP": 0.27868372015770476,
+      "LogCompensation": 0.6330458886560473,
+      "MigrantRatio": -0.6754045101025911,
+      "NonRegisteredPermanentPop10k": -0.2909882310733888,
+      "SexRatio100": 0.5701813753266751,
+      "PopDensityPerKm2": 0.1449864580064564,
+      "LogPopDensity": 0.06265310853561333,
+      "YearEndPermanentPop10k": -0.1292492524107757,
+      "AvgEmployedPersons": 0.5243288157417942
+    },
+    "EmployeeCompensation100MYuan": {
+      "AvgHousingPricePerSqM": -0.6254788939974479,
+      "LogHousingPrice": -0.6209236051997616,
+      "GDPperCapita": 0.7279224737700576,
+      "CompPerCapita": 0.6536988954389841,
+      "EmployeeCompensation100MYuan": 1.0,
+      "GDPin10000Yuan": 0.6878981161155229,
+      "LogGDP": 0.577116329315247,
+      "LogCompensation": 0.8239054821320178,
+      "MigrantRatio": -0.8392519389282828,
+      "NonRegisteredPermanentPop10k": -0.2454110585945368,
+      "SexRatio100": 0.37227099846207484,
+      "PopDensityPerKm2": 0.60423850599508,
+      "LogPopDensity": 0.5664728228016551,
+      "YearEndPermanentPop10k": 0.012117656991586049,
+      "AvgEmployedPersons": 0.9606211535695919
+    },
+    "GDPin10000Yuan": {
+      "AvgHousingPricePerSqM": -0.13909713622939185,
+      "LogHousingPrice": -0.13673897913921393,
+      "GDPperCapita": 0.2902015212701375,
+      "CompPerCapita": 0.4064622565147833,
+      "EmployeeCompensation100MYuan": 0.6878981161155229,
+      "GDPin10000Yuan": 0.9999999999999998,
+      "LogGDP": 0.9695099003723859,
+      "LogCompensation": 0.8680448871059987,
+      "MigrantRatio": -0.45076394248008045,
+      "NonRegisteredPermanentPop10k": 0.35333984389237083,
+      "SexRatio100": 0.37098068175677407,
+      "PopDensityPerKm2": 0.39151419049517877,
+      "LogPopDensity": 0.5714927296733708,
+      "YearEndPermanentPop10k": 0.5932477023726668,
+      "AvgEmployedPersons": 0.7055257235796104
+    },
+    "LogGDP": {
+      "AvgHousingPricePerSqM": -0.1532133103231718,
+      "LogHousingPrice": -0.15171718410813448,
+      "GDPperCapita": 0.14291977807791442,
+      "CompPerCapita": 0.27868372015770476,
+      "EmployeeCompensation100MYuan": 0.577116329315247,
+      "GDPin10000Yuan": 0.9695099003723858,
+      "LogGDP": 1.0,
+      "LogCompensation": 0.8373573464805484,
+      "MigrantRatio": -0.35930101636235484,
+      "NonRegisteredPermanentPop10k": 0.45801001517683654,
+      "SexRatio100": 0.27517452421345145,
+      "PopDensityPerKm2": 0.45933041138512887,
+      "LogPopDensity": 0.6827007370989912,
+      "YearEndPermanentPop10k": 0.678618511234365,
+      "AvgEmployedPersons": 0.6229768748809678
+    },
+    "LogCompensation": {
+      "AvgHousingPricePerSqM": -0.5204353661242388,
+      "LogHousingPrice": -0.5173733859313523,
+      "GDPperCapita": 0.47770391188512745,
+      "CompPerCapita": 0.6330458886560473,
+      "EmployeeCompensation100MYuan": 0.8239054821320178,
+      "GDPin10000Yuan": 0.8680448871059987,
+      "LogGDP": 0.8373573464805485,
+      "LogCompensation": 1.0,
+      "MigrantRatio": -0.6654601066418944,
+      "NonRegisteredPermanentPop10k": 0.17815432915648607,
+      "SexRatio100": 0.24750661602779053,
+      "PopDensityPerKm2": 0.5881761210599881,
+      "LogPopDensity": 0.6832727705320877,
+      "YearEndPermanentPop10k": 0.4293939676366044,
+      "AvgEmployedPersons": 0.8429644692240187
+    },
+    "MigrantRatio": {
+      "AvgHousingPricePerSqM": 0.7983490238935165,
+      "LogHousingPrice": 0.7970232909904785,
+      "GDPperCapita": -0.9041169251736945,
+      "CompPerCapita": -0.675404510102591,
+      "EmployeeCompensation100MYuan": -0.8392519389282828,
+      "GDPin10000Yuan": -0.45076394248008045,
+      "LogGDP": -0.35930101636235484,
+      "LogCompensation": -0.6654601066418944,
+      "MigrantRatio": 0.9999999999999999,
+      "NonRegisteredPermanentPop10k": 0.599275279120883,
+      "SexRatio100": -0.22904852068205078,
+      "PopDensityPerKm2": -0.5475070626928171,
+      "LogPopDensity": -0.46023972501410015,
+      "YearEndPermanentPop10k": 0.3578922021313778,
+      "AvgEmployedPersons": -0.7540302852559051
+    },
+    "NonRegisteredPermanentPop10k": {
+      "AvgHousingPricePerSqM": 0.46792816082801125,
+      "LogHousingPrice": 0.46798490156898115,
+      "GDPperCapita": -0.7361133510157002,
+      "CompPerCapita": -0.29098823107338884,
+      "EmployeeCompensation100MYuan": -0.24541105859453682,
+      "GDPin10000Yuan": 0.35333984389237083,
+      "LogGDP": 0.4580100151768365,
+      "LogCompensation": 0.17815432915648607,
+      "MigrantRatio": 0.5992752791208831,
+      "NonRegisteredPermanentPop10k": 0.9999999999999999,
+      "SexRatio100": -0.09707155793174946,
+      "PopDensityPerKm2": -0.04704883063384947,
+      "LogPopDensity": 0.17822093451313392,
+      "YearEndPermanentPop10k": 0.9591867220413612,
+      "AvgEmployedPersons": -0.09847108381994078
+    },
+    "SexRatio100": {
+      "AvgHousingPricePerSqM": 0.13900557856833004,
+      "LogHousingPrice": 0.1444711807500914,
+      "GDPperCapita": 0.40166615547316054,
+      "CompPerCapita": 0.5701813753266751,
+      "EmployeeCompensation100MYuan": 0.37227099846207484,
+      "GDPin10000Yuan": 0.37098068175677407,
+      "LogGDP": 0.27517452421345145,
+      "LogCompensation": 0.24750661602779056,
+      "MigrantRatio": -0.22904852068205078,
+      "NonRegisteredPermanentPop10k": -0.09707155793174946,
+      "SexRatio100": 1.0,
+      "PopDensityPerKm2": -0.27541926857923066,
+      "LogPopDensity": -0.13515696950196057,
+      "YearEndPermanentPop10k": -0.02352254940998728,
+      "AvgEmployedPersons": 0.1554266829227349
+    },
+    "PopDensityPerKm2": {
+      "AvgHousingPricePerSqM": -0.7424473313610244,
+      "LogHousingPrice": -0.7423649525396512,
+      "GDPperCapita": 0.22327424034214285,
+      "CompPerCapita": 0.14498645800645638,
+      "EmployeeCompensation100MYuan": 0.6042385059950799,
+      "GDPin10000Yuan": 0.39151419049517877,
+      "LogGDP": 0.45933041138512887,
+      "LogCompensation": 0.5881761210599881,
+      "MigrantRatio": -0.547507062692817,
+      "NonRegisteredPermanentPop10k": -0.04704883063384947,
+      "SexRatio100": -0.2754192685792307,
+      "PopDensityPerKm2": 1.0,
+      "LogPopDensity": 0.9068005689962674,
+      "YearEndPermanentPop10k": 0.13164024951265857,
+      "AvgEmployedPersons": 0.7419888101769682
+    },
+    "LogPopDensity": {
+      "AvgHousingPricePerSqM": -0.6339305202414476,
+      "LogHousingPrice": -0.6331263405762155,
+      "GDPperCapita": 0.12879506586714054,
+      "CompPerCapita": 0.06265310853561333,
+      "EmployeeCompensation100MYuan": 0.5664728228016551,
+      "GDPin10000Yuan": 0.5714927296733708,
+      "LogGDP": 0.6827007370989912,
+      "LogCompensation": 0.6832727705320876,
+      "MigrantRatio": -0.4602397250141002,
+      "NonRegisteredPermanentPop10k": 0.17822093451313392,
+      "SexRatio100": -0.1351569695019606,
+      "PopDensityPerKm2": 0.9068005689962673,
+      "LogPopDensity": 1.0,
+      "YearEndPermanentPop10k": 0.36307162063713877,
+      "AvgEmployedPersons": 0.6786800752305362
+    },
+    "YearEndPermanentPop10k": {
+      "AvgHousingPricePerSqM": 0.30467481910414373,
+      "LogHousingPrice": 0.30518347340203617,
+      "GDPperCapita": -0.5480441711913511,
+      "CompPerCapita": -0.1292492524107757,
+      "EmployeeCompensation100MYuan": 0.012117656991586049,
+      "GDPin10000Yuan": 0.5932477023726667,
+      "LogGDP": 0.678618511234365,
+      "LogCompensation": 0.42939396763660437,
+      "MigrantRatio": 0.3578922021313778,
+      "NonRegisteredPermanentPop10k": 0.9591867220413612,
+      "SexRatio100": -0.023522549409987277,
+      "PopDensityPerKm2": 0.13164024951265857,
+      "LogPopDensity": 0.36307162063713877,
+      "YearEndPermanentPop10k": 0.9999999999999999,
+      "AvgEmployedPersons": 0.15627403988266939
+    },
+    "AvgEmployedPersons": {
+      "AvgHousingPricePerSqM": -0.6220185819271762,
+      "LogHousingPrice": -0.6183349644918399,
+      "GDPperCapita": 0.5714030816582041,
+      "CompPerCapita": 0.5243288157417942,
+      "EmployeeCompensation100MYuan": 0.960621153569592,
+      "GDPin10000Yuan": 0.7055257235796104,
+      "LogGDP": 0.6229768748809678,
+      "LogCompensation": 0.8429644692240187,
+      "MigrantRatio": -0.7540302852559052,
+      "NonRegisteredPermanentPop10k": -0.09847108381994078,
+      "SexRatio100": 0.15542668292273493,
+      "PopDensityPerKm2": 0.741988810176968,
+      "LogPopDensity": 0.6786800752305363,
+      "YearEndPermanentPop10k": 0.15627403988266939,
+      "AvgEmployedPersons": 1.0
+    }
+  },
+  "set_search": [
+    {
+      "set": "baseline_h-g-c",
+      "features": [
+        "AvgHousingPricePerSqM",
+        "GDPperCapita",
+        "CompPerCapita"
+      ],
+      "axes": [
+        "housing",
+        "income"
+      ],
+      "n_features": 3,
+      "skipped": false,
+      "f_causal": 0.8069278597831726,
+      "max_vif": 2.5440714526407566,
+      "max_abs_corr": 0.7200435231932844,
+      "topk_jaccard": 1.0,
+      "spearman_alpha": 1.0,
+      "vifs": {
+        "AvgHousingPricePerSqM": 1.494970888598559,
+        "GDPperCapita": 2.5440714526407566,
+        "CompPerCapita": 2.0774253429920146
+      },
+      "delta_f_causal": 0.0,
+      "acceptable_vif": true,
+      "dominates_base3": false,
+      "verdict": "ROBUST-EQUIVALENT"
+    },
+    {
+      "set": "h-g-migrant",
+      "features": [
+        "AvgHousingPricePerSqM",
+        "GDPperCapita",
+        "MigrantRatio"
+      ],
+      "axes": [
+        "housing",
+        "income",
+        "pop_structure"
+      ],
+      "n_features": 3,
+      "skipped": false,
+      "f_causal": 0.7773632407188416,
+      "max_vif": 14.96470102929939,
+      "max_abs_corr": 0.9041169251736946,
+      "topk_jaccard": 0.9673959673959674,
+      "spearman_alpha": 0.863942914398873,
+      "vifs": {
+        "AvgHousingPricePerSqM": 4.083014908464068,
+        "GDPperCapita": 8.109978664046631,
+        "MigrantRatio": 14.96470102929939
+      },
+      "delta_f_causal": -0.029564619064331055,
+      "acceptable_vif": false,
+      "dominates_base3": false,
+      "verdict": "HIGH-VIF/UNSTABLE"
+    },
+    {
+      "set": "h-c-migrant",
+      "features": [
+        "AvgHousingPricePerSqM",
+        "CompPerCapita",
+        "MigrantRatio"
+      ],
+      "axes": [
+        "housing",
+        "income",
+        "pop_structure"
+      ],
+      "n_features": 3,
+      "skipped": false,
+      "f_causal": 0.7987950444221497,
+      "max_vif": 4.450004426316612,
+      "max_abs_corr": 0.7983490238935165,
+      "topk_jaccard": 0.9606669516887559,
+      "spearman_alpha": 0.9850526697388138,
+      "vifs": {
+        "AvgHousingPricePerSqM": 2.95322189663782,
+        "CompPerCapita": 1.9692834475065957,
+        "MigrantRatio": 4.450004426316612
+      },
+      "delta_f_causal": -0.00813281536102295,
+      "acceptable_vif": true,
+      "dominates_base3": false,
+      "verdict": "ROBUST-EQUIVALENT"
+    },
+    {
+      "set": "h-g-c-migrant",
+      "features": [
+        "AvgHousingPricePerSqM",
+        "GDPperCapita",
+        "CompPerCapita",
+        "MigrantRatio"
+      ],
+      "axes": [
+        "housing",
+        "income",
+        "pop_structure"
+      ],
+      "n_features": 4,
+      "skipped": false,
+      "f_causal": 0.7722560167312622,
+      "max_vif": 15.151910175472858,
+      "max_abs_corr": 0.9041169251736946,
+      "topk_jaccard": 0.9775765416127641,
+      "spearman_alpha": 0.9109693242849864,
+      "vifs": {
+        "AvgHousingPricePerSqM": 4.107564823761068,
+        "GDPperCapita": 8.662360401808488,
+        "CompPerCapita": 2.1034140362468348,
+        "MigrantRatio": 15.151910175472858
+      },
+      "delta_f_causal": -0.0346718430519104,
+      "acceptable_vif": false,
+      "dominates_base3": false,
+      "verdict": "HIGH-VIF/UNSTABLE"
+    },
+    {
+      "set": "h-g-c-logpop",
+      "features": [
+        "AvgHousingPricePerSqM",
+        "GDPperCapita",
+        "CompPerCapita",
+        "LogPopDensity"
+      ],
+      "axes": [
+        "density",
+        "housing",
+        "income"
+      ],
+      "n_features": 4,
+      "skipped": false,
+      "f_causal": 0.725318193435669,
+      "max_vif": 2.8668356297123267,
+      "max_abs_corr": 0.7200435231932844,
+      "topk_jaccard": 0.9228511530398323,
+      "spearman_alpha": 0.8352876851049809,
+      "vifs": {
+        "AvgHousingPricePerSqM": 2.8668356297123267,
+        "GDPperCapita": 2.7138163573504985,
+        "CompPerCapita": 2.090294314204617,
+        "LogPopDensity": 1.9537342864939553
+      },
+      "delta_f_causal": -0.08160966634750366,
+      "acceptable_vif": true,
+      "dominates_base3": true,
+      "verdict": "ROBUST-AND-BETTER"
+    },
+    {
+      "set": "h-c-migrant-logpop",
+      "features": [
+        "AvgHousingPricePerSqM",
+        "CompPerCapita",
+        "MigrantRatio",
+        "LogPopDensity"
+      ],
+      "axes": [
+        "density",
+        "housing",
+        "income",
+        "pop_structure"
+      ],
+      "n_features": 4,
+      "skipped": false,
+      "f_causal": 0.7252857089042664,
+      "max_vif": 4.505697530635966,
+      "max_abs_corr": 0.7983490238935165,
+      "topk_jaccard": 0.9317607413647851,
+      "spearman_alpha": 0.874166210223077,
+      "vifs": {
+        "AvgHousingPricePerSqM": 3.696205035355346,
+        "CompPerCapita": 2.1631673723112224,
+        "MigrantRatio": 4.505697530635966,
+        "LogPopDensity": 1.8544534575514455
+      },
+      "delta_f_causal": -0.08164215087890625,
+      "acceptable_vif": true,
+      "dominates_base3": true,
+      "verdict": "ROBUST-AND-BETTER"
+    },
+    {
+      "set": "h-g-migrant-logpop",
+      "features": [
+        "AvgHousingPricePerSqM",
+        "GDPperCapita",
+        "MigrantRatio",
+        "LogPopDensity"
+      ],
+      "axes": [
+        "density",
+        "housing",
+        "income",
+        "pop_structure"
+      ],
+      "n_features": 4,
+      "skipped": false,
+      "f_causal": 0.7371678352355957,
+      "max_vif": 23.297994911641936,
+      "max_abs_corr": 0.9041169251736946,
+      "topk_jaccard": 0.9456936784047518,
+      "spearman_alpha": 0.8933894699669681,
+      "vifs": {
+        "AvgHousingPricePerSqM": 4.147557104960627,
+        "GDPperCapita": 14.521773289899837,
+        "MigrantRatio": 23.297994911641936,
+        "LogPopDensity": 3.022971032265938
+      },
+      "delta_f_causal": -0.0697600245475769,
+      "acceptable_vif": false,
+      "dominates_base3": false,
+      "verdict": "HIGH-VIF/UNSTABLE"
+    },
+    {
+      "set": "h-g-migrant-sexratio",
+      "features": [
+        "AvgHousingPricePerSqM",
+        "GDPperCapita",
+        "MigrantRatio",
+        "SexRatio100"
+      ],
+      "axes": [
+        "housing",
+        "income",
+        "pop_structure"
+      ],
+      "n_features": 4,
+      "skipped": false,
+      "f_causal": 0.7586608529090881,
+      "max_vif": 15.10444821829769,
+      "max_abs_corr": 0.9041169251736946,
+      "topk_jaccard": 0.926890756302521,
+      "spearman_alpha": 0.9030098498000986,
+      "vifs": {
+        "AvgHousingPricePerSqM": 4.810993803025906,
+        "GDPperCapita": 8.545017595711524,
+        "MigrantRatio": 15.10444821829769,
+        "SexRatio100": 1.591944085790779
+      },
+      "delta_f_causal": -0.04826700687408447,
+      "acceptable_vif": false,
+      "dominates_base3": false,
+      "verdict": "HIGH-VIF/UNSTABLE"
+    },
+    {
+      "set": "h-g-migrant-logpop-sexratio",
+      "features": [
+        "AvgHousingPricePerSqM",
+        "GDPperCapita",
+        "MigrantRatio",
+        "LogPopDensity",
+        "SexRatio100"
+      ],
+      "axes": [
+        "density",
+        "housing",
+        "income",
+        "pop_structure"
+      ],
+      "n_features": 5,
+      "skipped": false,
+      "f_causal": 0.727329432964325,
+      "max_vif": 23.33758993446245,
+      "max_abs_corr": 0.9041169251736946,
+      "topk_jaccard": 0.918025930572982,
+      "spearman_alpha": 0.8368195912849605,
+      "vifs": {
+        "AvgHousingPricePerSqM": 4.99645027749646,
+        "GDPperCapita": 15.918377624969617,
+        "MigrantRatio": 23.33758993446245,
+        "LogPopDensity": 3.145125338497938,
+        "SexRatio100": 1.6562724644898421
+      },
+      "delta_f_causal": -0.07959842681884766,
+      "acceptable_vif": false,
+      "dominates_base3": false,
+      "verdict": "HIGH-VIF/UNSTABLE"
+    },
+    {
+      "set": "h-g-c-migrant-logpop",
+      "features": [
+        "AvgHousingPricePerSqM",
+        "GDPperCapita",
+        "CompPerCapita",
+        "MigrantRatio",
+        "LogPopDensity"
+      ],
+      "axes": [
+        "density",
+        "housing",
+        "income",
+        "pop_structure"
+      ],
+      "n_features": 5,
+      "skipped": false,
+      "f_causal": 0.7251157760620117,
+      "max_vif": 24.247192704033257,
+      "max_abs_corr": 0.9041169251736946,
+      "topk_jaccard": 0.9236577181208053,
+      "spearman_alpha": 0.850568772605461,
+      "vifs": {
+        "AvgHousingPricePerSqM": 4.160174676258796,
+        "GDPperCapita": 14.604271088465003,
+        "CompPerCapita": 2.1754562672403193,
+        "MigrantRatio": 24.247192704033257,
+        "LogPopDensity": 3.1265082216353366
+      },
+      "delta_f_causal": -0.08181208372116089,
+      "acceptable_vif": false,
+      "dominates_base3": false,
+      "verdict": "HIGH-VIF/UNSTABLE"
+    },
+    {
+      "set": "h-g-c-nonreg",
+      "features": [
+        "AvgHousingPricePerSqM",
+        "GDPperCapita",
+        "CompPerCapita",
+        "NonRegisteredPermanentPop10k"
+      ],
+      "axes": [
+        "housing",
+        "income",
+        "pop_structure"
+      ],
+      "n_features": 4,
+      "skipped": false,
+      "f_causal": 0.7563971281051636,
+      "max_vif": 5.839548729750727,
+      "max_abs_corr": 0.7361133510157002,
+      "topk_jaccard": 0.9514893617021276,
+      "spearman_alpha": 0.8378824809227368,
+      "vifs": {
+        "AvgHousingPricePerSqM": 1.5115108345316086,
+        "GDPperCapita": 5.839548729750727,
+        "CompPerCapita": 2.8163164641053626,
+        "NonRegisteredPermanentPop10k": 2.9783606339997313
+      },
+      "delta_f_causal": -0.05053073167800903,
+      "acceptable_vif": true,
+      "dominates_base3": true,
+      "verdict": "ROBUST-AND-BETTER"
+    }
+  ],
+  "pareto_summary": {
+    "vif_limit": 10.0,
+    "max_features": 5,
+    "base3_f_causal": 0.8069278597831726,
+    "sets_dominating_base3": [
+      "h-g-c-logpop",
+      "h-c-migrant-logpop",
+      "h-g-c-nonreg"
+    ],
+    "pareto_frontier_sets": [
+      "baseline_h-g-c",
+      "h-g-c-logpop",
+      "h-c-migrant-logpop"
+    ],
+    "any_low_vif_pop_axis_beats_base3": "h-c-migrant-logpop"
+  }
+}

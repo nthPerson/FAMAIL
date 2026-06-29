@@ -1,0 +1,176 @@
+{
+  "metric": "F_causal feature-set sensitivity (cleaned data, before-edit)",
+  "expected_baseline_f_causal": 0.8069279193878174,
+  "sanity_gate": {
+    "passed": true,
+    "expected": 0.8069279193878174,
+    "recomputed_cached_hat": 0.8069278597831726,
+    "recomputed_from_scratch": 0.8069278597831726,
+    "tol": 0.001,
+    "abs_err_cached": 5.960464477539063e-08,
+    "abs_err_scratch": 5.960464477539063e-08
+  },
+  "top_k": 2293,
+  "n_units": 34524,
+  "subsets": [
+    {
+      "label": "baseline",
+      "features": [
+        "AvgHousingPricePerSqM",
+        "GDPperCapita",
+        "CompPerCapita"
+      ],
+      "skipped": false,
+      "skip_reason": null,
+      "f_causal": 0.8069278597831726,
+      "vifs": {
+        "AvgHousingPricePerSqM": 1.494970888598559,
+        "GDPperCapita": 2.5440714526407566,
+        "CompPerCapita": 2.0774253429920146
+      },
+      "topk_jaccard": 1.0,
+      "spearman_alpha": 1.0
+    },
+    {
+      "label": "+popdensity",
+      "features": [
+        "AvgHousingPricePerSqM",
+        "GDPperCapita",
+        "CompPerCapita",
+        "LogPopDensity"
+      ],
+      "skipped": false,
+      "skip_reason": null,
+      "f_causal": 0.725318193435669,
+      "vifs": {
+        "AvgHousingPricePerSqM": 2.8668356297123267,
+        "GDPperCapita": 2.7138163573504985,
+        "CompPerCapita": 2.090294314204617,
+        "LogPopDensity": 1.9537342864939553
+      },
+      "topk_jaccard": 0.9228511530398323,
+      "spearman_alpha": 0.8352876851049809
+    },
+    {
+      "label": "+migrant",
+      "features": [
+        "AvgHousingPricePerSqM",
+        "GDPperCapita",
+        "CompPerCapita",
+        "MigrantRatio"
+      ],
+      "skipped": false,
+      "skip_reason": null,
+      "f_causal": 0.7722560167312622,
+      "vifs": {
+        "AvgHousingPricePerSqM": 4.107564823761068,
+        "GDPperCapita": 8.662360401808488,
+        "CompPerCapita": 2.1034140362468348,
+        "MigrantRatio": 15.151910175472858
+      },
+      "topk_jaccard": 0.9775765416127641,
+      "spearman_alpha": 0.9109693242849864
+    },
+    {
+      "label": "drop_gdp",
+      "features": [
+        "AvgHousingPricePerSqM",
+        "CompPerCapita"
+      ],
+      "skipped": false,
+      "skip_reason": null,
+      "f_causal": 0.8070681095123291,
+      "vifs": {
+        "AvgHousingPricePerSqM": 1.2203192874312307,
+        "CompPerCapita": 1.2203192874312327
+      },
+      "topk_jaccard": 1.0,
+      "spearman_alpha": 0.9997003932945135
+    },
+    {
+      "label": "drop_comp",
+      "features": [
+        "AvgHousingPricePerSqM",
+        "GDPperCapita"
+      ],
+      "skipped": false,
+      "skip_reason": null,
+      "f_causal": 0.8155278563499451,
+      "vifs": {
+        "AvgHousingPricePerSqM": 1.4944361166737943,
+        "GDPperCapita": 1.4944361166737925
+      },
+      "topk_jaccard": 0.9631849315068494,
+      "spearman_alpha": 0.9694198897596094
+    },
+    {
+      "label": "drop_housing",
+      "features": [
+        "GDPperCapita",
+        "CompPerCapita"
+      ],
+      "skipped": false,
+      "skip_reason": null,
+      "f_causal": 0.9030293822288513,
+      "vifs": {
+        "GDPperCapita": 2.0766822189902605,
+        "CompPerCapita": 2.076682218990261
+      },
+      "topk_jaccard": 0.5635867712240027,
+      "spearman_alpha": 0.9012514752465192
+    },
+    {
+      "label": "logs",
+      "features": [
+        "LogHousingPrice",
+        "LogGDP",
+        "LogCompensation"
+      ],
+      "skipped": false,
+      "skip_reason": null,
+      "f_causal": 0.7438555955886841,
+      "vifs": {
+        "LogHousingPrice": 2.1407098738367276,
+        "LogGDP": 5.246062500002962,
+        "LogCompensation": 6.998681775209344
+      },
+      "topk_jaccard": 0.9581554227156277,
+      "spearman_alpha": 0.7987135857273793
+    },
+    {
+      "label": "broad5",
+      "features": [
+        "AvgHousingPricePerSqM",
+        "GDPperCapita",
+        "CompPerCapita",
+        "LogPopDensity",
+        "MigrantRatio"
+      ],
+      "skipped": false,
+      "skip_reason": null,
+      "f_causal": 0.7251157760620117,
+      "vifs": {
+        "AvgHousingPricePerSqM": 4.160174676258821,
+        "GDPperCapita": 14.604271088465028,
+        "CompPerCapita": 2.1754562672403224,
+        "LogPopDensity": 3.1265082216353366,
+        "MigrantRatio": 24.247192704033257
+      },
+      "topk_jaccard": 0.9236577181208053,
+      "spearman_alpha": 0.850568772605461
+    }
+  ],
+  "verdict": {
+    "verdict": "FRAGILE",
+    "f_causal_spread": 0.1779136061668396,
+    "min_topk_jaccard": 0.5635867712240027,
+    "min_spearman_alpha": 0.7987135857273793,
+    "thresholds": {
+      "f_spread_robust": 0.05,
+      "jaccard_robust": 0.6,
+      "spearman_robust": 0.9
+    },
+    "worst_jaccard_subset": "drop_housing",
+    "worst_jaccard_value": 0.5635867712240027
+  }
+}

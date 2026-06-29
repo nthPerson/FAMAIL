@@ -1,7 +1,9 @@
 # E22: Experiment-level dirty-vs-clean robustness
 
-Data cleanup = stuck-GPS sink filter (6 drivers, cell (28,52) removed).
+Data cleanup = stuck-GPS sink filter (9 drivers, 10 flagged cells; 106,677 phantom pickups removed).
 All four stages of the argument are compared below.
+
+_Note: F_causal here uses the 3-feature set {AvgHousingPricePerSqM, GDPperCapita, CompPerCapita} under which the cleanup was validated; the dirty-vs-clean conclusions are an apples-to-apples comparison at constant feature set and are feature-set-invariant. Absolute F_causal values are NOT comparable to other feature sets' headline tables._
 
 ## Stage L1-v2 — per-source F_causal (edited should stay fairest faithful)
 
@@ -37,7 +39,7 @@ All four stages of the argument are compared below.
 | random_w10 | — (absent) | -0.0007 (p=0.3125) | clean_only |
 | random_w30 | — (absent) | -0.0004 (p=0.6875) | clean_only |
 
-**Conclusion preserved?** PRESERVED — weighted arms stay significant in both dirty & clean; new clean-only arms: most_fair_w10, most_fair_w20, most_fair_w30, random_w10, random_w30
+**Conclusion preserved?** PRESERVED — weighted (wN) arms stay significant in both dirty & clean; NOTE unweighted 'edited' (w=1) arm significance flipped (p 0.03125→0.4375), direction preserved (Δ -0.0019→-0.0008, both ≤0; the dirty p=0.03125 is the n=6 Wilcoxon floor, n.s. in the dedicated L2 5-seed run); new clean-only arms: most_fair_w10, most_fair_w20, most_fair_w30, random_w10, random_w30
 
 ## Stage variance — b0 vs FAMAIL paired Δ F_causal (should stay ≈null)
 

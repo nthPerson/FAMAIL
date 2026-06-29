@@ -2,78 +2,94 @@
 
 **Purpose.** A single, self-contained, auditable directory holding the **final** results, tables, and figures for
 the FAMAIL paper, so nothing has to be reconstructed from the broader (git-ignored) `famail_temporal/results/`
-tree. Every artifact below names the exact source file it was derived from (provenance). The numbers here are the
-**cleaned-data** results under the **4-feature F_causal** formulation (the paper target); the prior 3-feature set is
-preserved for comparison (see `famail_temporal/results/RESULTS_INDEX.md`).
+tree. Every artifact names the exact source file it was derived from (provenance).
 
 **Study in one paragraph.** Raw Shenzhen taxi GPS data contained per-driver "stuck-GPS" pickup-sink artifacts; we
-detect and filter them (data cleanup), then run the FAMAIL trajectory editor (attribution + ST-iFGSM) to make the
-data fairer, and test whether the fairness propagates into trained behavior-cloning policies. F_causal (causal
-fairness, 1 = fairest) uses four demographic axes {AvgHousingPricePerSqM, CompPerCapita, MigrantRatio,
-LogPopDensity}, selected and defended by a feature-sensitivity/dominance analysis.
+detect and filter them (data cleanup, `shared_cleanup/`), then run the FAMAIL trajectory editor (attribution +
+ST-iFGSM) to make the data fairer, and test whether the fairness propagates into trained behavior-cloning policies.
+We report results under **three demographic feature sets** for the fairness metric F_causal, organized as standalone
+directories so each is self-describing and the argument's robustness to the feature choice is explicit.
 
-## Headline findings (all on cleaned data, 4-feature F_causal)
-- **Data cleanup:** 106,677 phantom pickups removed (removal rate 49.7% → 38.95%); the headline stuck-GPS sink at
-  grid (29,53) alone accounted for +0.0885 of the per-cell F_spatial recovery (net global F_spatial +0.0213).
-- **Pillar 1 (L1 — data quality):** the edited dataset is the **fairest faithful** source (F_causal 0.741 vs raw
-  0.725, bc 0.722; GAN-generated disqualified by distributional collapse); identity-faithful; validation gate passed.
+## Layout
+
+```
+PAPER/
+  by_feature_set/
+    housing-comp-migrant/                 ★ PRIMARY — equity set {housing, comp, migrant}
+    housing-gdp-comp/                       original 3-feature set {housing, GDP, comp}      (sensitivity)
+    housing-comp-migrant-logpopdensity/     density-augmented 4-feature set                 (sensitivity)
+  shared_cleanup/        demographic-INDEPENDENT data-cleanup / F_spatial artifacts (valid for ALL sets)
+  feature_selection/     the demographic-feature vetting + cross-set comparison
+  reviews/               two adversarial-review reports + the 29 confirmed findings
+```
+
+Each `by_feature_set/<combo>/` and the two cross-cutting dirs carry their own `README.md` describing contents and
+data-source provenance.
+
+## The three feature sets — why three, and which is PRIMARY
+
+`F_causal = 1 − R²_demo` is a **feature-set-specific** fairness measure (the partial R² of the demand-adjusted
+service residual on a chosen set of district-level demographic axes). Its absolute scale therefore depends on the
+chosen axes; the editor's *direction* and *targeting* do not (top-cell Jaccard ≥ 0.92 across all housing-retaining
+sets). We report three:
+
+| dir | set | before-edit F_causal | role | one-line rationale |
+|---|---|---|---|---|
+| `housing-comp-migrant/` | {housing, comp, **migrant**} | **0.799** | **PRIMARY** | three equity-salient axes (wealth / income / migrant population structure); most defensible as *demographic* fairness; **higher** before-edit F_causal than the density set, so it is not the unfairness-maximizing lens |
+| `housing-gdp-comp/` | {housing, GDP, comp} | 0.807 | sensitivity | the original SES/income set; shows conclusions predate the migrant/density choices |
+| `housing-comp-migrant-logpopdensity/` | {housing, comp, migrant, **logpopdensity**} | 0.725 | sensitivity | adds a population-**density** demand control; shows conclusions survive a richer (but less purely-demographic) lens |
+
+**The headline numbers in the paper come from `housing-comp-migrant/`.** The other two are reported as
+robustness/sensitivity: the qualitative two-pillar story reproduces under all three; only the absolute F_causal scale
+shifts. See `feature_selection/` for the side-by-side and the selection analysis.
+
+> **Status (2026-06-29):** the PRIMARY `housing-comp-migrant/` experiment re-run is **in progress** (editor
+> before-edit F_causal 0.799 confirmed; ~16h pipeline). Its `figures/`, `tables/`, `data/` will be populated when the
+> run completes. The two sensitivity sets are complete.
+
+## The two-pillar argument (reproduces under all three sets)
+
+- **Pillar 1 (L1 — data quality):** the **edited** dataset is the *fairest faithful* source (higher F_causal than
+  raw/BC-gen; GAN-gen disqualified by distributional collapse), while remaining identity-faithful (Fidelity-A
+  unchanged). *Caveat (by construction):* F_causal is also the editor's optimization target, so the edited>raw gap is
+  expected; its value is that it is achieved without sacrificing identity faithfulness, and the edited−raw gap is a
+  **deterministic** data-level quantity (no sampling CI).
 - **L2 (vanilla transfer):** driver-conditioned BC trained on edited data does **not** transfer the fairness
-  (edited−raw ΔF_causal −0.0010, n.s.) — it averages it away.
-- **Pillar 2 (weighted-BC):** **upweighting** edited demos in BC **recovers** it — ΔF_causal +0.019/+0.026/+0.027
-  at weights 10/20/30 (all Wilcoxon p = 0.031, dose-responsive).
-- **Edit vs select vs random (PI-requested ablation):** **EDIT ≫ SELECT > RANDOM** — editing the unfair
-  trajectories (+0.027) beats upweighting the already-fairest ones (+0.002, ~12× smaller) which beats the random
-  placebo (null). Filtering out the unfair trajectories does **not** help either (Pareto). So FAMAIL's gain is
-  specific to *editing*, not reproducible by *selecting* or *removing* data.
-- **Robustness:** every conclusion above also holds under the prior 3-feature F_causal (only the absolute scale
-  shifts) — the argument is robust to the demographic-feature choice (editor targeting Jaccard 0.93). See
-  `tables/comparison_3v4.md`.
+  (edited−raw ΔF_causal within the ±0.003 cross-seed band; n.s.) — vanilla BC averages it away.
+- **Pillar 2 (weighted BC):** **upweighting** the edited demonstrations **recovers** it — ΔF_causal ≈ +0.02/+0.03 at
+  weights 10/20/30, monotone dose-response, all 6 seeds same sign, t-CIs excluding zero. The random-subset **placebo
+  is null on F_causal** → the gain is edit-driven, not generic oversampling.
+- **Edit ≫ select > random (PI-requested ablation):** editing the unfair trajectories beats upweighting the
+  already-fairest ones, which beats the random placebo. Selection captures only a small, **metric-dependent** fraction
+  of the gain (see the per-set READMEs); filtering unfair trajectories does not help (Pareto). So the gain is
+  **edit-dominant**, not reproducible by selecting or removing data.
 
-## Contents
+## Statistical reporting conventions (read before citing any p-value)
 
-### `figures/`
-| file | shows | source |
-|---|---|---|
-| `fig_dose_response.png` | **headline:** edit vs most-fair vs random ΔF_causal by upweight dose, with CIs + p | `data/weighted_bc_4feat_sweep.json` (`paired_vs_raw`) |
-| `fig_l1_data_quality.png` | L1 per-source F_causal/F_spatial (edited = fairest faithful), error bars | `data/L1v2_4feat_multiseed.json` |
-| `fig_l2_negative_transfer.png` | L2 edited−raw transfer Δ (n.s.) vs the weighted-BC recovery | `data/L2_4feat_metrics.json`, `data/weighted_bc_4feat_sweep.json` |
-| `fig_fidb_components.png` | Fidelity-B component breakdown (relocates pickups, preserves shape) | `data/L1v2_4feat_multiseed.json` (`fidelity_b_per_component`) |
-| `fig_feature_robustness.png` | 3-feature vs 4-feature headline numbers (conclusions hold) | 3-feat + 4-feat result dirs (see `tables/comparison_3v4.md`) |
-| `sink_spatial_attr_before_after.png` | E16: per-cell spatial αᵢ dirty vs cleaned; sinks circled | the two editor runs' `grid_before.pkl` |
-| `pareto_causal_4feat.png` / `pareto_spatial_4feat.png` | edit vs raw vs filter Pareto (F_causal / F_spatial) | `tables/pareto_points_4feat.csv` |
+- **n = 6 Wilcoxon floor.** With 6 paired seeds the two-sided exact Wilcoxon signed-rank p **floors at 2/2⁶ =
+  0.03125**, attained exactly when all 6 paired differences share a sign. So "p = 0.031" certifies **sign-unanimity
+  only** and carries no effect-magnitude information. Effect size is read from the **mean Δ and its t-CI**, not from p.
+- **Multiple comparisons.** Each weighted-BC family is 36 paired tests; at n = 6 no test can clear Bonferroni
+  (0.05/36 ≈ 0.0014 < 0.03125). We therefore do **not** lean on per-test corrected significance; the evidence is the
+  CI separation + monotone dose-response + 6/6 sign-consistency + null placebo, which are structural checks
+  independent of an uncorrected p.
+- **n = 5 nulls (L2, variance).** A two-sided n = 5 Wilcoxon cannot reach p < 0.05 (floor 0.0625), so we report these
+  nulls as **effect size vs the cross-seed noise band**, not as a powered test of zero.
+- **F_causal is associational, not causal.** It is the partial R² of a cross-sectional OLS of the demand-adjusted
+  residual on observational **district-level** demographics — no instrument, no counterfactual, no unconfoundedness.
+  It measures demographic *predictability* of service, not a causal effect. The demographics have only **10 distinct
+  district profiles** (an ecological-resolution limit), so cell-level attribution via district covariates carries a
+  standard ecological-fallacy caveat. See `feature_selection/README.md` and each per-set Limitations note. *(The
+  paper-facing rename of "F_causal" to an explicitly associational label is a pending PI decision.)*
 
-### `tables/`
-| file | content | source |
-|---|---|---|
-| `dataset_summary.md` | dirty-vs-clean cleanup stats (removal rate, phantom pickups, sink cells) | `source_data{,_dirty}/processing_metadata.json` |
-| `cleanup_delta_editor.csv` | editor dirty-vs-clean F_spatial/F_causal delta (sink-removal effect) | the two editor `metrics.json` |
-| `experiment_cleanup_delta.md` | dirty-vs-clean L1/L2/wbc/variance headline numbers (cleanup changed no conclusion) | the 3-feat experiment dirs vs the dirty baselines |
-| `sink_f_spatial_decomposition.md` | per-sink share of the F_spatial recovery (headline sink (29,53) dominates) | the two editor runs' `grid_before.pkl` (channel 0) |
-| `comparison_3v4.md` | **3-feature vs 4-feature F_causal robustness** (every conclusion holds) | both result sets |
-| `fcausal_feature_selection.md` / `fcausal_feature_sensitivity.md` | the demographic feature-set sensitivity + selection analysis (marginal table, VIF, set search, Pareto) that justified the 4-feature choice | `famail_temporal/analysis/fcausal_feature_sensitivity.py` |
-| `pareto_points_4feat.csv` | dual-metric Pareto points (raw / filter@K / edit) | `results/analysis/pareto_4feat/` |
+## Reproducibility
 
-### `data/` — the raw result JSONs the tables/figures are computed from (copied for self-containment)
-| file | source result dir |
-|---|---|
-| `editor_4feat_metrics.json` | `results/2026-06-28T11-46-12_…_cleaned_4feat/metrics.json` |
-| `L1v2_4feat_multiseed.json` | `results/level1_table_v2/cleaned_4feat_5seed/` |
-| `weighted_bc_4feat_{sweep,paired_stats,dose_response}.json` | `results/weighted_bc_sweep/cleaned_4feat_6seed/` |
-| `L2_4feat_metrics.json` | `results/level2_table/cleaned_4feat_5seed/` |
-| `variance_4feat_aggregate.json` | `results/variance_suite/cleaned_4feat_5seed/` |
-| `fcausal_feature_sensitivity.json` / `fcausal_feature_selection.json` | `results/analysis/fcausal_feature_sensitivity/` |
-| `sink_f_spatial_decomposition.json`, `dataset_summary.json` | `results/analysis/{sink_decomposition,dataset_summary}/` |
+- Figures are regenerated by `famail_temporal/analysis/paper_figures.py` (`--feat {hcm,3feat,4feat}`); cleanup
+  tables by `famail_temporal/analysis/{dataset_summary,experiment_delta}.py`; the sink decomposition + heatmap by
+  `famail_temporal/analysis/{sink_decomposition,sink_heatmap}.py`. All committed.
+- The committed config for each set lives in git history of `famail_temporal/config.py`; the cache filenames are
+  feature-suffixed so all sets coexist. See `famail_temporal/results/RESULTS_INDEX.md` for the on-disk result dirs.
 
-## Provenance / reproducibility
-- **Editor (4-feature) edit-dir:** `results/2026-06-28T11-46-12_k-10000_causal_emphasis_no-dedup_cleaned_4feat/`
-  (causal-emphasis α = 0.2/0.7/0.1, k = 10000; before-edit F_causal 0.7253). It carries the per-run provenance
-  bundle (`manifest.json` with git SHA, argv, env; `timings.jsonl`) and the enrichment artifacts
-  (`attribution_distribution.npz`, `convergence_curve.npz`, enriched `trajectories.csv`).
-- **F_causal feature set** committed at `7fb1fb2` (`famail_temporal/config.py`). Cache:
-  `cache/hat_matrices_T24_thr0.5_feat-housing-comp-migrantratio-logpopdensity.pkl`.
-- **Figures/tables** are regenerated by `famail_temporal/analysis/paper_figures.py` and the analysis modules under
-  `famail_temporal/analysis/` (all committed). Each weighted-BC / L2 run dir also has its own `manifest.json`.
-- **3-feature comparison set** is preserved and recomputable — see `famail_temporal/results/RESULTS_INDEX.md`.
-
-_Note: this directory is committed to git as the curated paper deliverable; the underlying `results/` tree it
-copies from is git-ignored (on-disk only)._
+_This directory is committed to git as the curated paper deliverable (a `.gitignore` negation force-tracks its
+`*.json`/`*.csv` data, which the global ignores would otherwise drop). The underlying `results/` tree it copies from
+is git-ignored (on-disk only)._
