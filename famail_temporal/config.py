@@ -41,21 +41,18 @@ ACTIVE_SUPPLY_THRESHOLD: float = 0.5
 DEMAND_FLOOR: float = 0.5
 SUPPLY_FLOOR: float = 0.1
 
-# Demographics. Selected via the feature-set sensitivity analysis (2026-06-28,
-# famail_temporal/analysis/fcausal_feature_sensitivity.py): spans four distinct,
-# low-co-linearity axes — SES (housing), income (comp), population-structure
-# (migrant), and density (log pop-density). Dominates the prior {housing, gdp,
-# comp}: captures more demographic-driven demand inequity (before-edit F_causal
-# 0.807 -> 0.725 on cleaned data) at max VIF 4.51 (< the <10 policy) while
-# preserving editor targeting (top-2293 Jaccard 0.93). GDPperCapita was dropped
-# because it is r=-0.90 collinear with MigrantRatio (an inverse-income proxy);
-# CompPerCapita is the retained, less-redundant income axis. Capped at 4 features
-# given only 10 district-level demographic profiles (DOF limit).
+# Demographics. PRIMARY equity set (2026-06-29): three equity-salient axes —
+# neighborhood wealth (housing), income (compensation), and migrant/hukou
+# population structure (a real underserved-group axis in Shenzhen). Chosen for
+# construct validity / fairness framing over the density-augmented variant
+# (LogPopDensity is demand-geography, not a protected attribute; kept as a
+# sensitivity appendix). Well-conditioned (max VIF 4.45) and targeting-stable
+# (top-2293 Jaccard 0.96 vs the original {housing,gdp,comp}). See
+# famail_temporal/analysis/fcausal_feature_sensitivity.py + results/RESULTS_INDEX.md.
 DEMOGRAPHIC_FEATURES: List[str] = [
     "AvgHousingPricePerSqM",
     "CompPerCapita",
     "MigrantRatio",
-    "LogPopDensity",
 ]
 
 # Objective weights
