@@ -1,0 +1,564 @@
+"""Headline figures for the FAMAIL paper (4-feature cleaned results).
+
+Read-only over committed result JSONs + matplotlib (Agg). This module NEVER
+touches source_data/cache, never calls DataBundle.load(), and never runs a
+runner -- it is a pure file-read + plotting driver.
+
+Figures (all written to ``results/analysis/figures_4feat/``):
+
+  1. fig_dose_response.png    -- THE headline: edit vs select vs random, the
+                                 upweight dose-response of Delta F_causal vs raw.
+  2. fig_l1_data_quality.png  -- L1 per-source data quality (F_causal/F_spatial
+                                 + Fidelity-A; GAN disqualified by Fidelity-B).
+  3. fig_l2_negative_transfer -- vanilla BC averages it away; upweighting recovers.
+  4. fig_fidb_components.png  -- Fidelity-B component breakdown (E9/E36).
+  5. fig_feature_robustness   -- 3-feature vs 4-feature: scale shifts, conclusions hold.
+
+Pure, unit-tested helper: :func:`t_ci_from_values`.
+
+CLI::
+
+    python -m famail_temporal.analysis.paper_figures [--results-root PATH] [--out-dir PATH]
+"""
+from __future__ import annotations
+
+import argparse
+import math
+from pathlib import Path
+
+import numpy as np
+
+from famail_temporal.analysis._io import read_json
+
+# ---------------------------------------------------------------------------
+# Result-file locations (relative to a results root, default famail_temporal/results)
+# ---------------------------------------------------------------------------
+REL_SWEEP_4FEAT = "weighted_bc_sweep/cleaned_4feat_6seed/sweep.json"
+REL_L1_4FEAT = "level1_table_v2/cleaned_4feat_5seed/level1_v2_multiseed.json"
+REL_L2_4FEAT = "level2_table/cleaned_4feat_5seed/level2_metrics.json"
+REL_VAR_4FEAT = "variance_suite/cleaned_4feat_5seed/aggregate.json"
+
+REL_SWEEP_3FEAT = "weighted_bc_sweep/cleaned_6seed/sweep.json"
+REL_L1_3FEAT = "level1_table_v2/cleaned_5seed/level1_v2_multiseed.json"
+REL_L2_3FEAT = "level2_table/cleaned_5seed/level2_metrics.json"
+REL_VAR_3FEAT = "variance_suite/cleaned_5seed/aggregate.json"
+
+DEFAULT_RESULTS_ROOT = Path(__file__).resolve().parents[1] / "results"
+DEFAULT_OUT_DIR = DEFAULT_RESULTS_ROOT / "analysis" / "figures_4feat"
+
+# ---------------------------------------------------------------------------
+# Style: one shared rcParams setup + colorblind-safe palette.
+# Palette = Wong (2011) colorblind-safe set.
+# ---------------------------------------------------------------------------
+_WONG = {
+    "black": "#000000",
+    "orange": "#E69F00",
+    "skyblue": "#56B4E9",
+    "green": "#009E73",
+    "yellow": "#F0E442",
+    "blue": "#0072B2",
+    "vermillion": "#D55E00",
+    "purple": "#CC79A7",
+    "grey": "#999999",
+}
+
+# Stable semantic role -> color mapping used across figures.
+COLORS = {
+    "edited": _WONG["blue"],       # FAMAIL editing (the method)
+    "most_fair": _WONG["orange"],  # selection baseline
+    "random": _WONG["grey"],       # placebo
+    "raw": _WONG["black"],
+    "bc": _WONG["green"],
+    "gan": _WONG["vermillion"],
+    "3feat": _WONG["skyblue"],
+    "4feat": _WONG["blue"],
+}
+
+
+def setup_style() -> None:
+    """Apply one consistent matplotlib style. Forces the Agg backend."""
+    import matplotlib
+
+    matplotlib.use("Agg", force=True)
+    import matplotlib.pyplot as plt
+
+    plt.rcParams.update(
+        {
+            "figure.dpi": 200,
+            "savefig.dpi": 200,
+            "savefig.bbox": "tight",
+            "font.size": 10,
+            "axes.titlesize": 11,
+            "axes.labelsize": 10,
+            "axes.spines.top": False,
+            "axes.spines.right": False,
+            "axes.grid": True,
+            "grid.alpha": 0.25,
+            "grid.linestyle": "-",
+            "legend.frameon": False,
+            "legend.fontsize": 9,
+            "lines.linewidth": 1.8,
+            "errorbar.capsize": 3,
+        }
+    )
+
+
+# ---------------------------------------------------------------------------
+# Pure helper (unit-tested)
+# ---------------------------------------------------------------------------
+def t_ci_from_values(values, confidence: float = 0.95):
+    """Two-sided t confidence interval of the MEAN of ``values``.
+
+    Returns ``(lo, hi)``. With fewer than two finite values the interval is
+    undefined and ``(nan, nan)`` is returned. The half-width uses the Student-t
+    quantile with ``n - 1`` degrees of freedom and the sample standard
+    deviation (ddof=1), matching :func:`famail_temporal.baselines._enrich.t_ci`.
+
+    Parameters
+    ----------
+    values : iterable of float
+    confidence : float, default 0.95
+        Central probability mass of the interval (0 < confidence < 1).
+    """
+    vals = [float(v) for v in values if v is not None and math.isfinite(float(v))]
+    n = len(vals)
+    if n < 2:
+        return (float("nan"), float("nan"))
+    if not (0.0 < confidence < 1.0):
+        raise ValueError("confidence must be in (0, 1)")
+    from scipy.stats import t
+
+    mean = float(np.mean(vals))
+    sem = float(np.std(vals, ddof=1)) / math.sqrt(n)
+    half = sem * float(t.ppf(0.5 + confidence / 2.0, n - 1))
+    return (mean - half, mean + half)
+
+
+def _ci_halfwidth(values, confidence: float = 0.95) -> float:
+    """Symmetric half-width of the t-CI of the mean (for error bars). nan-safe."""
+    lo, hi = t_ci_from_values(values, confidence)
+    if math.isnan(lo) or math.isnan(hi):
+        return float("nan")
+    return (hi - lo) / 2.0
+
+
+def _p_stars(p) -> str:
+    """Significance marker. '*' p<=0.05, '**' p<=0.01, 'n.s.' otherwise / None."""
+    if p is None or (isinstance(p, float) and math.isnan(p)):
+        return ""
+    if p <= 0.01:
+        return "**"
+    if p <= 0.05:
+        return "*"
+    return "n.s."
+
+
+# ---------------------------------------------------------------------------
+# Bundle loading
+# ---------------------------------------------------------------------------
+class ResultBundle:
+    """Holds the four result JSONs for one feature-count variant."""
+
+    def __init__(self, sweep: dict, l1: dict, l2: dict, var: dict):
+        self.sweep = sweep
+        self.l1 = l1
+        self.l2 = l2
+        self.var = var
+
+    @classmethod
+    def load(cls, root, *, feat: str) -> "ResultBundle":
+        root = Path(root)
+        if feat == "4feat":
+            rels = (REL_SWEEP_4FEAT, REL_L1_4FEAT, REL_L2_4FEAT, REL_VAR_4FEAT)
+        elif feat == "3feat":
+            rels = (REL_SWEEP_3FEAT, REL_L1_3FEAT, REL_L2_3FEAT, REL_VAR_3FEAT)
+        else:
+            raise ValueError(f"unknown feat variant: {feat!r}")
+        return cls(*(read_json(root / r) for r in rels))
+
+
+# ---------------------------------------------------------------------------
+# Figure 1 -- dose-response (THE headline)
+# ---------------------------------------------------------------------------
+def fig_dose_response(bundle: ResultBundle, out_path: Path) -> Path:
+    """Delta F_causal vs raw as a function of upweight dose, three series.
+
+    x : upweight dose. w=1 is the no-upweight baseline (the ``edited`` arm,
+        plotted only on the editing series at Delta~=0). w in {10,20,30}.
+    y : paired mean Delta F_causal vs raw, with t-CI(n=6) error bars from
+        per-seed diffs.
+    series : edited_wN (FAMAIL, solid), most_fair_wN (selection, dashed),
+             random_wN (placebo, dotted; only 10/30).
+    Wilcoxon-p significance marked above each point.
+    """
+    import matplotlib.pyplot as plt
+
+    pc = bundle.sweep["paired_vs_raw"]["f_causal"]
+
+    def series(prefix, weights):
+        xs, ys, errs, ps = [], [], [], []
+        for w in weights:
+            arm = "edited" if (prefix == "edited" and w == 1) else f"{prefix}_w{int(w)}"
+            d = pc[arm]
+            xs.append(w)
+            ys.append(d["mean"])
+            errs.append(_ci_halfwidth(d["diffs"]))
+            ps.append(d.get("wilcoxon_p"))
+        return xs, ys, errs, ps
+
+    fig, ax = plt.subplots(figsize=(6.4, 4.4))
+    ax.axhline(0.0, color=_WONG["grey"], lw=1.0, ls="-", zorder=0)
+
+    specs = [
+        ("edited", [1, 10, 20, 30], "-", "o", COLORS["edited"], "FAMAIL edit (upweighted)"),
+        ("most_fair", [10, 20, 30], "--", "s", COLORS["most_fair"], "Most-fair selection"),
+        ("random", [10, 30], ":", "^", COLORS["random"], "Random placebo"),
+    ]
+    for prefix, weights, ls, marker, color, label in specs:
+        xs, ys, errs, ps = series(prefix, weights)
+        ax.errorbar(
+            xs, ys, yerr=errs, ls=ls, marker=marker, color=color,
+            label=label, markersize=6, zorder=3,
+        )
+        for x, y, e, p in zip(xs, ys, errs, ps):
+            star = _p_stars(p)
+            if star:
+                off = (e if math.isfinite(e) else 0.0) + 0.0012
+                ax.annotate(
+                    star, (x, y + off), ha="center", va="bottom",
+                    fontsize=9, color=color,
+                )
+
+    ax.set_xticks([1, 10, 20, 30])
+    ax.set_xticklabels(["1\n(no upweight)", "10", "20", "30"])
+    ax.set_xlabel("Upweight factor on the edited demonstrations")
+    ax.set_ylabel(r"$\Delta\,F_{\mathrm{causal}}$ vs raw (paired, mean $\pm$ 95% CI)")
+    ax.set_title(
+        "Editing dominates selection and placebo under upweighting\n"
+        r"($*\ p\leq 0.05$, $**\ p\leq 0.01$, Wilcoxon; $n=6$ seeds)"
+    )
+    ax.legend(loc="upper left")
+    fig.tight_layout()
+    fig.savefig(out_path)
+    plt.close(fig)
+    return out_path
+
+
+# ---------------------------------------------------------------------------
+# Figure 2 -- L1 per-source data quality
+# ---------------------------------------------------------------------------
+def fig_l1_data_quality(bundle: ResultBundle, out_path: Path) -> Path:
+    """Per-source (raw/edited/bc/gan) data-quality panel.
+
+    Left  : grouped bars of F_causal and F_spatial (fairness; higher = fairer)
+            with std error bars from the multiseed ``values``. ``edited`` marked
+            as the fairest faithful source.
+    Right : Fidelity-A (identity faithfulness) + Fidelity-B annotation; GAN is
+            distributionally disqualified by its huge Fidelity-B.
+    """
+    import matplotlib.pyplot as plt
+
+    ps = bundle.l1["per_source"]
+    sources = ["raw", "edited", "bc", "gan"]
+    labels = {"raw": "raw", "edited": "edited\n(FAMAIL)", "bc": "BC-gen", "gan": "GAN-gen"}
+    bar_colors = [COLORS[s] for s in sources]
+
+    def mean_std(src, metric):
+        m = ps[src][metric]
+        vals = m["values"]
+        return float(np.mean(vals)), float(np.std(vals, ddof=1)) if len(vals) > 1 else 0.0
+
+    fig, (axL, axR) = plt.subplots(1, 2, figsize=(9.6, 4.4))
+    x = np.arange(len(sources))
+    width = 0.38
+
+    # Left: F_causal & F_spatial grouped bars.
+    fc = [mean_std(s, "f_causal") for s in sources]
+    fsp = [mean_std(s, "f_spatial") for s in sources]
+    axL.bar(
+        x - width / 2, [m for m, _ in fc], width,
+        yerr=[s for _, s in fc], color=bar_colors, edgecolor="black", lw=0.5,
+        label=r"$F_{\mathrm{causal}}$",
+    )
+    axL.bar(
+        x + width / 2, [m for m, _ in fsp], width,
+        yerr=[s for _, s in fsp], color=bar_colors, edgecolor="black", lw=0.5,
+        hatch="///", alpha=0.85, label=r"$F_{\mathrm{spatial}}$",
+    )
+    axL.set_xticks(x)
+    axL.set_xticklabels([labels[s] for s in sources])
+    axL.set_ylabel("Fairness (1 = fairest)")
+    axL.set_title("Data-quality fairness per source\n(solid $F_{causal}$, hatched $F_{spatial}$)")
+    # Mark edited as fairest-faithful.
+    ed_fc = mean_std("edited", "f_causal")[0]
+    axL.annotate(
+        "fairest\nfaithful", xy=(1 - width / 2, ed_fc),
+        xytext=(1 - width / 2, ed_fc + 0.06), ha="center", fontsize=8,
+        arrowprops=dict(arrowstyle="->", color=COLORS["edited"]),
+        color=COLORS["edited"],
+    )
+    axL.set_ylim(0, max(m for m, _ in fc) * 1.25)
+    axL.legend(loc="upper right")
+
+    # Right: Fidelity-A (identity faithfulness, higher = better separation).
+    fa = [mean_std(s, "fidelity_a") for s in sources]
+    fb = [mean_std(s, "fidelity_b") for s in sources]
+    axR.bar(
+        x, [m for m, _ in fa], 0.55,
+        yerr=[s for _, s in fa], color=bar_colors, edgecolor="black", lw=0.5,
+    )
+    axR.set_xticks(x)
+    axR.set_xticklabels([labels[s] for s in sources])
+    axR.set_ylabel("Fidelity-A (identity faithfulness)")
+    axR.set_title("Identity faithfulness per source\n(Fidelity-B distributional gap annotated)")
+    axR.set_ylim(0.80, 0.86)
+    for xi, (m, _), (fbm, _fbs) in zip(x, fa, fb):
+        axR.annotate(
+            f"Fid-B\n{fbm:.3f}", xy=(xi, m), xytext=(xi, 0.806),
+            ha="center", va="bottom", fontsize=7.5,
+            color=(COLORS["gan"] if fbm > 0.1 else "black"),
+        )
+    # Call out GAN disqualification.
+    gan_fb = mean_std("gan", "fidelity_b")[0]
+    axR.annotate(
+        f"GAN distributionally\ndisqualified (Fid-B={gan_fb:.2f})",
+        xy=(3, fa[3][0]), xytext=(2.0, 0.852), ha="center", fontsize=8,
+        color=COLORS["gan"],
+        arrowprops=dict(arrowstyle="->", color=COLORS["gan"]),
+    )
+
+    fig.suptitle("L1: edited data is the fairest identity-faithful source", fontsize=12)
+    fig.tight_layout(rect=(0, 0, 1, 0.96))
+    fig.savefig(out_path)
+    plt.close(fig)
+    return out_path
+
+
+# ---------------------------------------------------------------------------
+# Figure 3 -- L2 negative transfer vs weighted-BC recovery
+# ---------------------------------------------------------------------------
+def fig_l2_negative_transfer(bundle: ResultBundle, out_path: Path) -> Path:
+    """Vanilla BC averages the edit away; upweighting recovers it.
+
+    Point A : L2 vanilla edited-vs-raw paired Delta F_causal (baseline=edited,
+              so ``paired.f_causal.raw.diffs`` = edited - raw), t-CI(n=5),
+              crossing zero (n.s.).
+    Point B : weighted-BC recovery, edited_w30 paired Delta from the sweep,
+              t-CI(n=6), well above zero (significant).
+    """
+    import matplotlib.pyplot as plt
+
+    l2 = bundle.l2["paired"]["f_causal"]["raw"]  # edited - raw, vanilla BC transfer
+    l2_mean = l2["mean"]
+    l2_err = _ci_halfwidth(l2["diffs"])
+    l2_p = l2.get("wilcoxon_p")
+
+    w30 = bundle.sweep["paired_vs_raw"]["f_causal"]["edited_w30"]
+    w30_mean = w30["mean"]
+    w30_err = _ci_halfwidth(w30["diffs"])
+    w30_p = w30.get("wilcoxon_p")
+
+    fig, ax = plt.subplots(figsize=(5.6, 4.4))
+    ax.axhline(0.0, color=_WONG["grey"], lw=1.0, zorder=0)
+
+    xs = [0, 1]
+    means = [l2_mean, w30_mean]
+    errs = [l2_err, w30_err]
+    pts_colors = [COLORS["random"], COLORS["edited"]]
+    plabels = [_p_stars(l2_p), _p_stars(w30_p)]
+
+    for x, m, e, c, pl in zip(xs, means, errs, pts_colors, plabels):
+        ax.errorbar([x], [m], yerr=[e], marker="o", markersize=10, color=c, zorder=3)
+        # Label below-left so it never collides with the title band above.
+        ax.annotate(
+            f"{m:+.4f} ({pl})", (x, m), textcoords="offset points",
+            xytext=(0, -22), ha="center", va="top", fontsize=9, color=c,
+        )
+
+    ax.set_xticks(xs)
+    ax.set_xticklabels(
+        ["vanilla BC\n(edited demos,\nw=1)", "weighted BC\n(edited demos,\nw=30)"]
+    )
+    ax.set_xlim(-0.6, 1.6)
+    top = max(m + e for m, e in zip(means, errs))
+    ax.set_ylim(min(means) - 0.006, top + 0.004)
+    ax.set_ylabel(r"$\Delta\,F_{\mathrm{causal}}$ vs raw (paired, mean $\pm$ 95% CI)")
+    ax.set_title(
+        "Vanilla BC averages the edit away;\nupweighting recovers it"
+    )
+    fig.tight_layout()
+    fig.savefig(out_path)
+    plt.close(fig)
+    return out_path
+
+
+# ---------------------------------------------------------------------------
+# Figure 4 -- Fidelity-B component breakdown (E9/E36)
+# ---------------------------------------------------------------------------
+def fig_fidb_components(bundle: ResultBundle, out_path: Path) -> Path:
+    """Per-source Fidelity-B component breakdown.
+
+    Sources edited/bc/gan; the six Fid-B components as grouped bars (mean over
+    seeds, std error bars). Story: editing relocates pickups (high terminal_cell
+    JS) but preserves trajectory shape (low length/coverage/RoG). GAN blows up
+    every shape component (note the broken/clipped y-range annotation).
+    """
+    import matplotlib.pyplot as plt
+
+    comps = [
+        "length", "mean_displacement", "coverage",
+        "radius_of_gyration", "net_displacement", "terminal_cell",
+    ]
+    comp_labels = ["length", "mean\ndisp", "coverage", "radius\ngyr", "net\ndisp", "terminal\ncell"]
+    sources = ["edited", "bc", "gan"]
+    src_labels = {"edited": "edited (FAMAIL)", "bc": "BC-gen", "gan": "GAN-gen"}
+
+    ps = bundle.l1["per_source"]
+
+    def comp_mean_std(src, comp):
+        vals = ps[src]["fidelity_b_per_component"][comp]["values"]
+        return float(np.mean(vals)), (float(np.std(vals, ddof=1)) if len(vals) > 1 else 0.0)
+
+    fig, ax = plt.subplots(figsize=(8.4, 4.6))
+    x = np.arange(len(comps))
+    width = 0.26
+    offsets = {"edited": -width, "bc": 0.0, "gan": width}
+
+    for src in sources:
+        ms = [comp_mean_std(src, c) for c in comps]
+        ax.bar(
+            x + offsets[src], [m for m, _ in ms], width,
+            yerr=[s for _, s in ms], color=COLORS[src], edgecolor="black", lw=0.4,
+            label=src_labels[src],
+        )
+
+    ax.set_xticks(x)
+    ax.set_xticklabels(comp_labels)
+    ax.set_ylabel("Fidelity-B component (JS divergence; lower = closer to raw)")
+    ax.set_title(
+        "Editing concentrates its distributional shift in terminal-cell\n"
+        "(relocated pickups); GAN-gen distorts every shape component"
+    )
+    ax.legend(loc="upper left")
+    # Annotate the editing story on terminal_cell.
+    ed_term = comp_mean_std("edited", "terminal_cell")[0]
+    ax.annotate(
+        "edit signal:\nrelocated pickups",
+        xy=(5 + offsets["edited"], ed_term),
+        xytext=(4.0, ed_term + 0.012), ha="center", fontsize=8,
+        color=COLORS["edited"],
+        arrowprops=dict(arrowstyle="->", color=COLORS["edited"]),
+    )
+    fig.tight_layout()
+    fig.savefig(out_path)
+    plt.close(fig)
+    return out_path
+
+
+# ---------------------------------------------------------------------------
+# Figure 5 -- 3-feature vs 4-feature demographic robustness
+# ---------------------------------------------------------------------------
+def _robustness_numbers(bundle: ResultBundle) -> dict:
+    """Extract the four headline numbers for a feature variant."""
+    editor = bundle.var["paired_delta"]["f_causal"]["mean"]
+    l1_gap = (
+        bundle.l1["per_source"]["edited"]["f_causal"]["mean"]
+        - bundle.l1["per_source"]["raw"]["f_causal"]["mean"]
+    )
+    w30 = bundle.sweep["paired_vs_raw"]["f_causal"]["edited_w30"]["mean"]
+    l2_gap = bundle.l2["paired"]["f_causal"]["raw"]["mean"]  # edited - raw
+    return {
+        "editor_delta": editor,
+        "l1_edited_minus_raw": l1_gap,
+        "weighted_bc_w30": w30,
+        "l2_edited_minus_raw": l2_gap,
+    }
+
+
+def fig_feature_robustness(b4: ResultBundle, b3: ResultBundle, out_path: Path) -> Path:
+    """Dumbbell comparison of the four headline numbers under 3- vs 4-feature.
+
+    Story: the absolute F_causal scale shifts with demographic granularity, but
+    every directional conclusion holds (targeting was Jaccard ~0.93).
+    """
+    import matplotlib.pyplot as plt
+
+    n3 = _robustness_numbers(b3)
+    n4 = _robustness_numbers(b4)
+
+    keys = ["editor_delta", "l1_edited_minus_raw", "weighted_bc_w30", "l2_edited_minus_raw"]
+    nice = {
+        "editor_delta": r"Editor $\Delta F_{causal}$" + "\n(variance suite)",
+        "l1_edited_minus_raw": "L1 edited$-$raw\n" + r"$F_{causal}$ gap",
+        "weighted_bc_w30": r"Weighted-BC $\Delta F_{causal}$" + "\n(edited, w=30)",
+        "l2_edited_minus_raw": "L2 edited$-$raw\n(vanilla BC)",
+    }
+    y = np.arange(len(keys))[::-1]  # top-to-bottom in listed order
+
+    fig, ax = plt.subplots(figsize=(7.2, 4.4))
+    ax.axvline(0.0, color=_WONG["grey"], lw=1.0, zorder=0)
+
+    for yi, k in zip(y, keys):
+        v3, v4 = n3[k], n4[k]
+        ax.plot([v3, v4], [yi, yi], color=_WONG["grey"], lw=1.4, zorder=1)
+        ax.scatter([v3], [yi], color=COLORS["3feat"], s=70, zorder=3,
+                   label="3-feature" if k == keys[0] else None)
+        ax.scatter([v4], [yi], color=COLORS["4feat"], s=70, zorder=3,
+                   label="4-feature" if k == keys[0] else None)
+        ax.annotate(f"{v3:+.4f}", (v3, yi), textcoords="offset points",
+                    xytext=(0, 9), ha="center", fontsize=7.5, color=COLORS["3feat"])
+        ax.annotate(f"{v4:+.4f}", (v4, yi), textcoords="offset points",
+                    xytext=(0, -14), ha="center", fontsize=7.5, color=COLORS["4feat"])
+
+    ax.set_yticks(y)
+    ax.set_yticklabels([nice[k] for k in keys])
+    ax.set_xlabel(r"$\Delta\,F_{\mathrm{causal}}$ (paired/gap)")
+    ax.set_title(
+        "Demographic robustness: scale shifts, every conclusion holds\n"
+        "(3-feature vs 4-feature; edit targeting Jaccard ~0.93)"
+    )
+    ax.legend(loc="lower right")
+    fig.tight_layout()
+    fig.savefig(out_path)
+    plt.close(fig)
+    return out_path
+
+
+# ---------------------------------------------------------------------------
+# main()
+# ---------------------------------------------------------------------------
+def main(argv=None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--results-root", default=str(DEFAULT_RESULTS_ROOT),
+        help="Root of the results tree (default: famail_temporal/results).",
+    )
+    parser.add_argument(
+        "--out-dir", default=str(DEFAULT_OUT_DIR),
+        help="Output directory for PNGs (default: results/analysis/figures_4feat).",
+    )
+    args = parser.parse_args(argv)
+
+    root = Path(args.results_root)
+    out_dir = Path(args.out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    setup_style()
+
+    b4 = ResultBundle.load(root, feat="4feat")
+    b3 = ResultBundle.load(root, feat="3feat")
+
+    written = []
+    written.append(fig_dose_response(b4, out_dir / "fig_dose_response.png"))
+    written.append(fig_l1_data_quality(b4, out_dir / "fig_l1_data_quality.png"))
+    written.append(fig_l2_negative_transfer(b4, out_dir / "fig_l2_negative_transfer.png"))
+    written.append(fig_fidb_components(b4, out_dir / "fig_fidb_components.png"))
+    written.append(fig_feature_robustness(b4, b3, out_dir / "fig_feature_robustness.png"))
+
+    for p in written:
+        print(f"wrote {p}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
