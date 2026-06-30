@@ -40,8 +40,16 @@ def build(cab_dir: str, acs_csv: str, tiger_zip: str, out_dir: str):
     for did, g in df.groupby("driver_id"):
         seg = segment_driver(g, grid)
         per_driver[int(did)] = (g, seg)
-        all_pick.extend(seg.pickups)
-        all_drop.extend(seg.dropoffs)
+        # The editor reads a trajectory's pickup as its FINAL state
+        # (Trajectory.pickup = states[-1]; a passenger-seeking trajectory ends
+        # where the passenger boards). Count one pickup at the TERMINAL cell of
+        # each seeking trajectory (and one dropoff at each driving trajectory's
+        # terminal cell) so pickup_dropoff_counts aligns cell-for-cell with
+        # passenger_seeking_trajs — otherwise the editor subtracts a trajectory's
+        # mass from a cell whose count was recorded one ping later (occ=1), driving
+        # it negative (compute_fspatial guard) and misaligning the fairness signal.
+        all_pick.extend(tr[-1] for tr in seg.seeking)
+        all_drop.extend(tr[-1] for tr in seg.driving)
 
     print("[sf_build] gridding counts ...", flush=True)
     pd_counts = count_pickup_dropoff(all_pick, all_drop)
