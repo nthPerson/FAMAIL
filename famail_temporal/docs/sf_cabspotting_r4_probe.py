@@ -9,6 +9,10 @@ Probe-grade aggregation: tract centroid -> grid cell, population-weighted mean,
 nearest-tract fallback for empty active cells. Production (Phase 3) would use
 proper areal interpolation. Vintage: ACS 2020-2024 (variance proxy; production
 would use 2008-2012 to match the taxi data).
+
+US Census API key: stored in source_data/second_dataset/.census_api_key (gitignored)
+or the $CENSUS_API_KEY env var. This probe uses the keyless Census Reporter API and
+does not read the key; the keyed production fetch is docs/build_sf_demographics.py.
 """
 import os, glob, json, math, tempfile, urllib.request
 import numpy as np
