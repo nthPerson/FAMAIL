@@ -161,6 +161,47 @@ The two honestly-available robustness claims split cleanly:
 
 ---
 
+## 10. Phase 1 de-risk — measured on the SF Cabspotting data (2026-06-29)
+
+The dataset was obtained (`source_data/second_dataset/cabspottingdata/`: 536 cabs, 11.2M GPS pings, `[lat lon occupancy time]`, May 17–Jun 10 2008) and measured directly. **Assumptions:** trajectories segmented on occupancy-change or >5 min gap; grid origin = the 0.5–99.5 percentile ("core") bbox; `n_active` proxied by distinct cabs per `(cell, hour)`.
+
+### 10.1 Gridding decision — keep constant 0.01°, do NOT force 48×90
+
+Confirmed against `source_generation/quantization.py`: Shenzhen grids by **0.01° bins then clips to 48×90**, so 0.01° (not the cell count) is the invariant.
+
+| | SF (faithful 0.01°) | Shenzhen | Forced 48×90 on SF |
+|---|---|---|---|
+| Core bbox | 0.315° × 0.295° | ~0.48° × 0.90° | (same core) |
+| Grid dims | **32 × 30** (960 cells) | 48 × 90 (4,320) | 48 × 90 |
+| Physical cell | 1.106 km × 0.880 km | 1.106 km × 1.028 km | **0.725 km × 0.289 km** |
+| ε-ball=2 (5×5) span | 2.21 km | 2.21 km | distorted (non-square) |
+
+**Decision: keep `GRID_SIZE_DEG = 0.01`; set the SF grid to its own binned extent (~32×30 on the core; up to ~40×40 if the operational bbox includes SFO/East Bay edges). Do not reuse 48×90.** The faithful grid preserves both the ~1 km cell and the physical meaning of the ε-ball edit window; forcing 48×90 would shrink/skew cells (0.73×0.29 km) and corrupt the edit scale. This makes recomputing the discriminator normalizer denominators to the SF grid a required part of the R7 fix.
+
+### 10.2 Risk profile vs Shenzhen
+
+| Requirement | SF measured | Shenzhen | Verdict |
+|---|---|---|---|
+| **R2 discriminator corpus** | seeking **441k** / driving **461k** trajectories | 105k / 92k | ✅ **abundant (~4–5×)** |
+| **R3 pair feasibility** | 533/536 cabs ≥2 days; **11,722** (cab,day) with ≥5 seeking trajs; 441k trajs vs ~10k pairs needed | 50 drivers / 66 days | ✅ **abundant** |
+| **R5 trip volume** | **441,710** fares (pickups) | ~95k corpus | ✅ abundant |
+| **R6 action-space** | **96.3%** of steps ≤1 cell (99.2% ≤2) at 0.01°; median ping 60 s | pipeline drops ~38–50% | ✅ **cleaner than Shenzhen** |
+| **R5 active-unit footprint** | ~**10–12k** active `(cell,hour)` over 32×30×24=23,040 | n_active **34,524** | ⚠️ **~⅓ of Shenzhen** (the one genuine weak point) |
+
+### 10.3 Revised verdict
+
+The pre-data worry — "discriminator-corpus volume" — is **retired**: SF's seeking/driving corpora and fare count are *4–5× Shenzhen's*, pair formation is trivial, and action-space legality (96.3%) is actually *better* than Shenzhen. The remaining risks narrow to:
+
+1. **Smaller fairness-metric footprint** — ~10–12k active units vs 34.5k. This is a direct consequence of SF's compact geography at a faithful ~1 km cell, not a data-volume problem. Still thousands of units — ample for a 3-feature F_causal residual regression and a stable Gini — but ~3× fewer than Shenzhen, so report it honestly.
+2. **Recency / window** — 2008, 24 days (vs Shenzhen's 3 months). A relevance caveat for the paper, not a blocker.
+3. **Untested (deferred to Phase 2/3)** — the R4 ACS demographic join, and the R7 grid-extent/normalizer reconciliation (now SF-specific at 32×30).
+
+**Net:** SF's *structural* fit is **stronger** than the pre-data assessment assumed; it remains the #1 recommendation, and the honest residual risk to put before the PI is the **smaller active-unit footprint + 2008/24-day vintage**, not the discriminator corpus.
+
+*Reproduce: `python famail_temporal/docs/sf_cabspotting_derisk.py` (standalone, numpy-only; reads `source_data/second_dataset/cabspottingdata/` or `$SF_CAB_DIR`).*
+
+---
+
 ## References
 
 ### Code (`famail_temporal/`)
