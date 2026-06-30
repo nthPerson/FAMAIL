@@ -11,7 +11,8 @@ must be defended explicitly; this directory holds that defense.
 |---|---|---|
 | `fcausal_feature_selection.md` / `.json` (in `data/`) | per-feature marginal-contribution table, VIF / correlation matrix, set search, (F_causal, VIF) Pareto frontier | `analysis/fcausal_feature_sensitivity.py` |
 | `fcausal_feature_sensitivity.md` / `.json` (in `data/`) | leave-one-out + broad-set sensitivity sweep (verdict, F_causal spread, min Jaccard/Spearman) | `analysis/fcausal_feature_sensitivity.py` |
-| `comparison_3v4.md` | 3-feature ↔ 4-feature side-by-side (does the story hold; how much does the scale shift) | both sensitivity result sets |
+| `comparison_across_sets.md` | **canonical 3-way side-by-side** (PRIMARY + both sensitivity sets) | all three result sets |
+| `comparison_3v4.md` | focused density-vs-original 2-way sub-analysis (LogPopDensity attribution + co-dominance) | both sensitivity result sets |
 
 ### `figures/`
 | file | shows | source |
@@ -58,8 +59,12 @@ It is chosen for **construct validity as a *demographic* fairness lens**, on the
   on observational district demographics — no identification. It measures demographic *predictability* of service,
   not a causal effect. *(Paper-facing rename of the construct is a pending PI decision.)*
 
-## Cross-set comparison status
+## Cross-set comparison
 
-`comparison_3v4.md` documents the two **sensitivity** sets (3-feature ↔ density 4-feature) and shows every directional
-conclusion reproduces, only the absolute scale shifting. A full **3-way** comparison that adds the PRIMARY
-{housing, comp, migrant} set will be added here when the PRIMARY re-run completes (see top-level README status).
+- **`comparison_across_sets.md` — the canonical 3-way side-by-side** (PRIMARY {housing,comp,migrant} + both
+  sensitivity sets). Every directional conclusion (L1 fairest faithful, L2 vanilla null, weighted-BC dose-responsive
+  recovery, model-level null) reproduces under all three sets; only the absolute F_causal scale shifts (0.799 / 0.807
+  / 0.725). SELECT is weak/null everywhere and **cleanly null under the PRIMARY metric** (edit ≫ select ~70×).
+- **`comparison_3v4.md`** — the focused density-vs-original 2-way sub-analysis (with the LogPopDensity-drives-the-scale
+  attribution + co-dominance discussion).
+- **`figures/fig_feature_robustness.png`** — the 3-way dumbbell (PRIMARY in bold black; null rows marked).

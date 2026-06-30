@@ -553,19 +553,29 @@ def _robustness_numbers(bundle: ResultBundle) -> dict:
     }
 
 
-def fig_feature_robustness(b4: ResultBundle, b3: ResultBundle, out_path: Path) -> Path:
-    """Dumbbell comparison of the four headline numbers under two feature sets.
+# Per-set plot style for the robustness dumbbell. The PRIMARY set is drawn
+# black/diamond so it reads as the headline; the sensitivity sets are the
+# blue family. Each tuple: (legend label, color, marker, value-label placement).
+_ROBUSTNESS_STYLE = {
+    "hcm":   ("{housing,comp,migrant} (PRIMARY)", _WONG["black"], "D", "above"),
+    "3feat": ("{housing,gdp,comp}", COLORS["3feat"], "o", "below"),
+    "4feat": ("{housing,comp,migrant,logpop}", COLORS["4feat"], "s", "above2"),
+}
 
-    Story: the absolute F_causal scale shifts with the demographic feature set,
-    but the DIRECTIONAL conclusions hold (targeting was Jaccard ~0.93). Two of
-    the four rows (model-level variance-suite delta, and vanilla-BC L2 transfer)
-    are nulls by design and are marked as such — they are not "conclusions that
-    hold", they are nulls that reproduce.
+
+def fig_feature_robustness(sets, out_path: Path) -> Path:
+    """Dumbbell comparison of the four headline numbers across feature sets.
+
+    ``sets`` is an ordered list of ``(feat_key, ResultBundle)`` pairs (2 or 3
+    entries); the first is treated as the PRIMARY/reference. Story: the absolute
+    F_causal scale shifts with the demographic feature set, but the DIRECTIONAL
+    conclusions hold. Two of the four rows (model-level variance-suite delta and
+    vanilla-BC L2 transfer) are nulls by design and are marked as such — they are
+    nulls that reproduce, not conclusions that hold.
     """
     import matplotlib.pyplot as plt
 
-    n3 = _robustness_numbers(b3)
-    n4 = _robustness_numbers(b4)
+    nums = [(fk, _robustness_numbers(b)) for fk, b in sets]
 
     keys = ["model_level_delta", "l1_edited_minus_raw", "weighted_bc_w30", "l2_edited_minus_raw"]
     nice = {
@@ -576,27 +586,39 @@ def fig_feature_robustness(b4: ResultBundle, b3: ResultBundle, out_path: Path) -
     }
     y = np.arange(len(keys))[::-1]  # top-to-bottom in listed order
 
-    fig, ax = plt.subplots(figsize=(7.6, 4.6))
+    fig, ax = plt.subplots(figsize=(8.0, 4.8))
     ax.axvline(0.0, color=_WONG["grey"], lw=1.0, zorder=0)
 
     def _xerr(entry):
         e = entry["err"]
         return 0.0 if (not math.isfinite(e)) else e
 
+    # Pure-vertical stagger so labels never collide horizontally with an
+    # adjacent set's marker (the sets share a row but sit at different x).
+    place = {"above": dict(xytext=(0, 11), ha="center", va="bottom"),
+             "below": dict(xytext=(0, -13), ha="center", va="top"),
+             "above2": dict(xytext=(0, 26), ha="center", va="bottom")}
+
     for yi, k in zip(y, keys):
-        e3, e4 = n3[k], n4[k]
-        v3, v4 = e3["val"], e4["val"]
-        ax.plot([v3, v4], [yi, yi], color=_WONG["grey"], lw=1.2, ls=":", zorder=1)
-        ax.errorbar([v3], [yi], xerr=[_xerr(e3)], fmt="o", color=COLORS["3feat"],
-                    markersize=8, zorder=3, label="3-feature" if k == keys[0] else None)
-        ax.errorbar([v4], [yi], xerr=[_xerr(e4)], fmt="s", color=COLORS["4feat"],
-                    markersize=8, zorder=3, label="4-feature" if k == keys[0] else None)
-        ax.annotate(f"{v3:+.4f}", (v3, yi), textcoords="offset points",
-                    xytext=(0, 10), ha="center", fontsize=7.5, color=COLORS["3feat"])
-        ax.annotate(f"{v4:+.4f}", (v4, yi), textcoords="offset points",
-                    xytext=(0, -15), ha="center", fontsize=7.5, color=COLORS["4feat"])
-        # Shade null rows so a CI-straddles-zero row is not read as a result.
-        if e3["null"] or e4["null"]:
+        vals = [(fk, n[k]) for fk, n in nums]
+        xs = [e["val"] for _, e in vals]
+        # connect the spread of points on this row
+        ax.plot([min(xs), max(xs)], [yi, yi], color=_WONG["grey"], lw=1.2, ls=":", zorder=1)
+        any_null = False
+        for fk, e in vals:
+            label_txt, color, marker, placement = _ROBUSTNESS_STYLE[fk]
+            primary = (fk == nums[0][0])
+            ax.errorbar([e["val"]], [yi], xerr=[_xerr(e)], fmt=marker, color=color,
+                        markersize=10 if primary else 8,
+                        markeredgecolor="black" if primary else color,
+                        markeredgewidth=1.0 if primary else 0.0,
+                        zorder=4 if primary else 3,
+                        label=label_txt if k == keys[0] else None)
+            ax.annotate(f"{e['val']:+.4f}", (e["val"], yi), textcoords="offset points",
+                        fontsize=7.5, color=color, fontweight="bold" if primary else "normal",
+                        **place[placement])
+            any_null = any_null or e["null"]
+        if any_null:
             ax.annotate("null (CI ∋ 0)", (0.0, yi), textcoords="offset points",
                         xytext=(6, 0), ha="left", va="center", fontsize=7,
                         color=_WONG["grey"], style="italic")
@@ -605,10 +627,10 @@ def fig_feature_robustness(b4: ResultBundle, b3: ResultBundle, out_path: Path) -
     ax.set_yticklabels([nice[k] for k in keys])
     ax.set_xlabel(r"$\Delta\,F_{\mathrm{causal}}$ (paired/gap, mean $\pm$ 95% CI)")
     ax.set_title(
-        "Demographic robustness: scale shifts; directional conclusions hold\n"
-        "(model-level & vanilla-BC rows are null/within noise; edit targeting Jaccard ~0.93)"
+        "Demographic robustness: scale shifts; directional conclusions hold across feature sets\n"
+        "(model-level & vanilla-BC rows are null/within noise; edit targeting Jaccard ≥ 0.92, housing-retaining family)"
     )
-    ax.legend(loc="lower right")
+    ax.legend(loc="lower right", fontsize=8)
     fig.tight_layout()
     fig.savefig(out_path)
     plt.close(fig)
@@ -633,8 +655,9 @@ def main(argv=None) -> int:
         help="Primary feature set for the four single-set figures.",
     )
     parser.add_argument(
-        "--compare-feat", default="3feat", choices=sorted(_FEAT_RELS) + ["none"],
-        help="Second set for the cross-set robustness dumbbell ('none' to skip).",
+        "--compare-feat", default="3feat",
+        help="Comma-separated feature sets for the cross-set robustness dumbbell "
+             "(e.g. '3feat,4feat'), or 'none' to skip. The --feat set leads.",
     )
     args = parser.parse_args(argv)
 
@@ -652,16 +675,19 @@ def main(argv=None) -> int:
     written.append(fig_l2_negative_transfer(primary, out_dir / "fig_l2_negative_transfer.png"))
     written.append(fig_fidb_components(primary, out_dir / "fig_fidb_components.png"))
 
-    # Cross-set robustness dumbbell (skip gracefully if the comparison set's
-    # results are not on disk yet).
-    if args.compare_feat != "none":
+    # Cross-set robustness dumbbell: the --feat set plus every --compare-feat set
+    # whose results are on disk (PRIMARY leads). Skips missing sets gracefully.
+    compare = [] if args.compare_feat == "none" else [c for c in args.compare_feat.split(",") if c]
+    sets = [(args.feat, primary)]
+    for fk in compare:
+        if fk == args.feat:
+            continue
         try:
-            other = ResultBundle.load(root, feat=args.compare_feat)
-            written.append(
-                fig_feature_robustness(primary, other, out_dir / "fig_feature_robustness.png")
-            )
+            sets.append((fk, ResultBundle.load(root, feat=fk)))
         except FileNotFoundError:
-            print(f"[skip] robustness fig: feat={args.compare_feat!r} results not found")
+            print(f"[skip] robustness comparison set {fk!r}: results not found")
+    if len(sets) >= 2:
+        written.append(fig_feature_robustness(sets, out_dir / "fig_feature_robustness.png"))
 
     for p in written:
         print(f"wrote {p}")

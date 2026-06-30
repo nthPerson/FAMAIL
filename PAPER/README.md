@@ -41,11 +41,14 @@ sets). We report three:
 
 **The headline numbers in the paper come from `housing-comp-migrant/`.** The other two are reported as
 robustness/sensitivity: the qualitative two-pillar story reproduces under all three; only the absolute F_causal scale
-shifts. See `feature_selection/` for the side-by-side and the selection analysis.
+shifts. See `feature_selection/tables/comparison_across_sets.md` for the 3-way side-by-side, and `feature_selection/`
+for the selection analysis.
 
-> **Status (2026-06-29):** the PRIMARY `housing-comp-migrant/` experiment re-run is **in progress** (editor
-> before-edit F_causal 0.799 confirmed; ~16h pipeline). Its `figures/`, `tables/`, `data/` will be populated when the
-> run completes. The two sensitivity sets are complete.
+> **Status (2026-06-30): all three sets complete.** The PRIMARY `housing-comp-migrant/` re-run finished (editor
+> F_causal 0.7988 → 0.8132; L1 edited fairest faithful 0.8132; L2 vanilla null −0.0012; weighted-BC recovery
+> +0.0205/+0.0278/**+0.0311** at w10/20/30, 6/6 seeds; SELECT genuinely null (most_fair_w30 +0.0004, p = 1.0);
+> model-level null). It is the **cleanest** of the three sets — edit ≫ select by ~70× with no metric-dependent SELECT
+> effect to caveat. Its dir is fully populated.
 
 ## The two-pillar argument (reproduces under all three sets)
 

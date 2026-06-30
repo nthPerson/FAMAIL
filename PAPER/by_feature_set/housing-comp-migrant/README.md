@@ -1,33 +1,62 @@
-# housing-comp-migrant — PRIMARY equity F_causal  ⏳ RESULTS PENDING
+# housing-comp-migrant — PRIMARY equity F_causal  ★ (the paper's headline metric)
 
-**Role: ★ PRIMARY (the paper's headline metric).** F_causal uses three equity-salient axes
+**Role: ★ PRIMARY.** F_causal uses three equity-salient axes
 {AvgHousingPricePerSqM, CompPerCapita, **MigrantRatio**} — neighborhood wealth, income, and migrant/hukou population
-structure (a real underserved-group axis in Shenzhen). Chosen for **construct validity as a demographic fairness lens**
-and because its before-edit F_causal is **higher** than the density-augmented set (so the choice is not the
-unfairness-maximizing lens). See `../../feature_selection/README.md` for the full selection rationale.
+structure (a real underserved-group axis in Shenzhen). Chosen for **construct validity as a demographic fairness
+lens**: every axis is an equity/SES/population-structure variable (no demand-geography covariate), and its before-edit
+F_causal is **higher** than the density-augmented set, so it is not the unfairness-maximizing lens. The paper's
+headline numbers come from this set; the two sets in `../housing-gdp-comp/` and
+`../housing-comp-migrant-logpopdensity/` are sensitivity/robustness. Selection rationale: `../../feature_selection/`.
 
-> **Status (2026-06-29): the re-run is IN PROGRESS.** The editor has confirmed the before-edit metrics
-> (**F_causal 0.7988, F_spatial 0.1034**, n_trajectories 95,297, n_active 34,524 — identical corpus to the other
-> sets), then runs L1-v2 → weighted-BC (edit / most-fair / placebo) → L2 → variance (~16h total). This directory's
-> `figures/`, `tables/`, `data/` and the verified headline numbers will be filled in when the run completes and the
-> story is checked. Until then, cite the sensitivity sets in `../housing-gdp-comp/` and
-> `../housing-comp-migrant-logpopdensity/`, which bracket this set's expected scale.
+## Headline numbers (cleaned data; all values are seed MEANS)
 
-## Why this is the most defensible headline set
+- **Editor (causal-emphasis α = 0.2/0.7/0.1, k = 10000):** F_causal 0.7988 → **0.8132** (Δ **+0.0144**);
+  F_spatial 0.1034 → 0.1025.
+- **Pillar 1 (L1 — data quality):** edited is the **fairest faithful** source — F_causal: edited **0.8132** > raw
+  0.7988 ≈ **bc 0.7980** (bc statistically tied with raw); gan 0.8089 is distributionally disqualified (Fidelity-B
+  0.173 — it collapses, see the fidelity panel). Fidelity-A: all four within ~0.006 (raw 0.849, edited 0.843, bc
+  0.848, gan 0.848), so editing is identity-faithful.
+  - *Deterministic-gap caveat:* raw and edited F_causal have **std = 0** across BC seeds — they are static data-level
+    rescores, so the edited−raw gap is a **point comparison with no sampling CI**. It is also the editor's own
+    optimization target (α_causal = 0.7), so the gap is expected *by construction*; its value is that it is achieved
+    while Fidelity-A is unchanged.
+- **L2 (vanilla transfer):** edited−raw ΔF_causal **−0.0012** (n = 5, p = 0.44, n.s.; mixed signs 3−/2+, well within
+  the ±0.003 cross-seed band) — vanilla driver-conditioned BC averages the edit away. *(At n = 5 a two-sided Wilcoxon
+  cannot reach p < 0.05, floor 0.0625; reported as effect-vs-noise.)*
+- **Pillar 2 (weighted BC):** upweighting **recovers** it — edited ΔF_causal **+0.0205 / +0.0278 / +0.0311** at
+  w = 10/20/30 (t-CIs [+0.019,+0.022] / [+0.025,+0.031] / [+0.027,+0.035], all exclude 0; monotone dose-response;
+  **6/6 seeds positive**). This recovery is the largest of the three feature sets.
+- **Edit ≫ select > random (PI-requested ablation) — cleanest under this metric:** edited_w30 **+0.0311** vs
+  most_fair_w30 **+0.0004** vs random_w30 **−0.0009**. Under the PRIMARY metric **SELECT is genuinely null** —
+  most_fair is n.s. at *every* weight with **mixed signs** (w10 +0.0013 p = 0.16; w20 +0.0011 p = 0.31; w30 +0.0004
+  p = 1.0), not even the all-same-sign floor. So editing dominates selection by **~70×** and the random placebo is
+  null too. This is the sharpest version of the result: the fairness gain is **edit-driven**, not reproducible by
+  *selecting* the already-fair trajectories or by *random* oversampling, and (unlike the sensitivity sets) there is
+  no metric-dependent SELECT effect to caveat.
+- **Model-level (variance suite, b0 vs FAMAIL):** ΔF_causal **−0.0011 ± 0.0032** (n = 5; within noise; null).
 
-- **Purely demographic.** Unlike the density-augmented set, it contains **no demand-geography covariate** — every axis
-  is an equity/SES/population-structure variable, so "demographic fairness" is not carried by a density control.
-- **Not unfairness-maximizing.** Before-edit F_causal 0.799 > the density set's 0.725, so we are not selecting the
-  lens that inflates apparent baseline unfairness — this pre-empts the circularity objection.
-- **Well-conditioned & targeting-stable.** Max VIF 4.45 (< 10); top-cell Jaccard 0.96 vs the original 3-feature set,
-  so the editor flags essentially the same trajectories.
+## Statistical conventions (see top-level README for full detail)
 
-## Expected story (to be confirmed against the run, not asserted)
+- **`p = 0.03125` is the n = 6 Wilcoxon floor** (= all 6 seeds same sign), not a magnitude — read effects from the
+  means + t-CIs above. The weighted-BC recovery rests on CI-separation + monotone dose-response + 6/6 sign-consistency
+  + the null select/random arms, not on an uncorrected p (no test survives Bonferroni at n = 6).
+- F_causal is **associational** (partial R² of a cross-sectional OLS on **10 district-level** demographic profiles),
+  not causal; ecological-fallacy caveat applies. *(Naming decision: keep `F_causal` + caveat now; rename to `F_demo`
+  is a next-PI-meeting agenda item — `../../reviews/README.md`.)*
 
-The two-pillar argument is expected to reproduce at this set's scale (L1 edited fairest faithful; L2 vanilla null;
-weighted-BC dose-responsive recovery with the random placebo null on F_causal; model-level null). All statistical
-conventions from the top-level README apply (n = 6 Wilcoxon floor = sign-unanimity; lead with t-CIs + dose-response;
-n = 5 nulls reported vs the cross-seed noise band; F_causal is associational, 10-district ecological resolution).
+## Contents → source provenance
+
+| artifact | source result dir |
+|---|---|
+| `data/editor_hcm_metrics.json` | `results/2026-06-29T12-06-55_…_cleaned_hcm/metrics.json` |
+| `data/L1v2_hcm_multiseed.json` | `results/level1_table_v2/cleaned_hcm_5seed/` |
+| `data/L2_hcm_metrics.json` | `results/level2_table/cleaned_hcm_5seed/` |
+| `data/weighted_bc_hcm_{sweep,paired_stats,dose_response}.json` | `results/weighted_bc_sweep/cleaned_hcm_6seed/` |
+| `data/variance_hcm_aggregate.json` | `results/variance_suite/cleaned_hcm_5seed/` |
+| `figures/fig_{dose_response,l1_data_quality,l2_negative_transfer,fidb_components}.png` | regenerated by `analysis/paper_figures.py --feat hcm` |
+
+The cross-set robustness dumbbell (this set vs the two sensitivity sets) is `../../feature_selection/figures/fig_feature_robustness.png`.
 
 **Config:** git commit `16ad5f8` (`famail_temporal/config.py`). **Cache:**
-`cache/hat_matrices_T24_thr0.5_feat-housing-comp-migrantratio.pkl`. **Re-run driver:** `results/_rerun_hcm.sh`.
+`cache/hat_matrices_T24_thr0.5_feat-housing-comp-migrantratio.pkl`. **Re-run driver:** `results/_rerun_hcm.sh`
+(editor) + `results/_resume_hcm.sh` (stages 1–5, after a mid-run teardown).
