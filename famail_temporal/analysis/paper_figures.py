@@ -595,26 +595,31 @@ def fig_feature_robustness(sets, out_path: Path) -> Path:
 
     # Pure-vertical stagger so labels never collide horizontally with an
     # adjacent set's marker (the sets share a row but sit at different x).
-    place = {"above": dict(xytext=(0, 11), ha="center", va="bottom"),
-             "below": dict(xytext=(0, -13), ha="center", va="top"),
-             "above2": dict(xytext=(0, 26), ha="center", va="bottom")}
+    place = {"above": dict(xytext=(0, 10), ha="center", va="bottom"),
+             "below": dict(xytext=(0, -12), ha="center", va="top"),
+             "above2": dict(xytext=(0, 22), ha="center", va="bottom")}
+    # Small per-set vertical jitter so the markers don't perfectly overlap on
+    # the near-zero null rows (where all three sets sit at ~0); the y-tick stays
+    # at the row centre. Order matches the `sets` order (PRIMARY centred).
+    jit = [0.0, -0.16, 0.16]
 
     for yi, k in zip(y, keys):
         vals = [(fk, n[k]) for fk, n in nums]
         xs = [e["val"] for _, e in vals]
-        # connect the spread of points on this row
-        ax.plot([min(xs), max(xs)], [yi, yi], color=_WONG["grey"], lw=1.2, ls=":", zorder=1)
+        # reference line through the row centre (the spread of values)
+        ax.plot([min(xs), max(xs)], [yi, yi], color=_WONG["grey"], lw=1.0, ls=":", zorder=1)
         any_null = False
-        for fk, e in vals:
+        for i, (fk, e) in enumerate(vals):
             label_txt, color, marker, placement = _ROBUSTNESS_STYLE[fk]
             primary = (fk == nums[0][0])
-            ax.errorbar([e["val"]], [yi], xerr=[_xerr(e)], fmt=marker, color=color,
+            yj = yi + (jit[i] if i < len(jit) else 0.0)
+            ax.errorbar([e["val"]], [yj], xerr=[_xerr(e)], fmt=marker, color=color,
                         markersize=10 if primary else 8,
                         markeredgecolor="black" if primary else color,
                         markeredgewidth=1.0 if primary else 0.0,
                         zorder=4 if primary else 3,
                         label=label_txt if k == keys[0] else None)
-            ax.annotate(f"{e['val']:+.4f}", (e["val"], yi), textcoords="offset points",
+            ax.annotate(f"{e['val']:+.4f}", (e["val"], yj), textcoords="offset points",
                         fontsize=7.5, color=color, fontweight="bold" if primary else "normal",
                         **place[placement])
             any_null = any_null or e["null"]
@@ -623,6 +628,8 @@ def fig_feature_robustness(sets, out_path: Path) -> Path:
                         xytext=(6, 0), ha="left", va="center", fontsize=7,
                         color=_WONG["grey"], style="italic")
 
+    # Headroom so the top row's upper label clears the two-line title.
+    ax.set_ylim(-0.7, len(keys) - 1 + 0.9)
     ax.set_yticks(y)
     ax.set_yticklabels([nice[k] for k in keys])
     ax.set_xlabel(r"$\Delta\,F_{\mathrm{causal}}$ (paired/gap, mean $\pm$ 95% CI)")

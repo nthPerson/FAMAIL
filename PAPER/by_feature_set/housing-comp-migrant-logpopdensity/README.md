@@ -49,6 +49,10 @@ set, and `../../feature_selection/` for why).
 - **Random placebo is null *on F_causal* specifically.** On Fidelity-B the random arm *does* show a small significant
   shift (random_w30 ≈ +0.0028, p = 0.03125) — a generic oversampling/distribution-shift effect. The edit-specificity
   claim rests on F_causal, where the random arm is genuinely null (+0.0013, p = 0.31).
+- **Associational, district-resolution.** F_causal is the partial R² of a cross-sectional OLS on **10 district-level**
+  demographic profiles — associational, not causal; ecological-fallacy caveat applies (`../../feature_selection/README.md`).
+  For *this* set the caveat is sharper: the F_causal scale change is ~90% LogPopDensity (demand geography), so its
+  lower absolute scale should not be read as "more demographic inequity" (see the README header + `comparison_3v4.md`).
 
 ## Contents → source provenance
 

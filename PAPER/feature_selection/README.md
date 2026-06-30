@@ -48,8 +48,10 @@ It is chosen for **construct validity as a *demographic* fairness lens**, on the
 - **Robustness is within the *housing-retaining* family.** The full feature-sensitivity sweep is formally
   **FRAGILE** (F_causal spread 0.178; min top-cell Jaccard 0.56) — driven entirely by *dropping housing*, which
   collapses editor targeting (drop_housing Jaccard 0.56, F_causal jumps to 0.90). **Housing is a load-bearing axis we
-  retain by design.** All three reported sets retain housing; within that family targeting is stable (Jaccard ≥ 0.92,
-  per-cell Spearman ≥ 0.84). Claims of robustness are scoped to this family, not to "any feature choice."
+  retain by design.** All three reported sets retain housing; for them targeting is stable (top-cell Jaccard ≥ 0.92,
+  per-cell Spearman ≥ 0.84 for the three reported sets — some *other* housing-retaining sets fall below on Spearman,
+  so the Spearman bound is stated for the reported sets, not the whole family; the Jaccard ≥ 0.92 holds family-wide).
+  Claims of robustness are scoped to this family, not to "any feature choice."
 - **Ecological resolution = 10 districts.** The demographics resolve to only **10 distinct district-level profiles**
   broadcast onto cells, so VIF / correlation / F_causal projection have ~10 effective DOF, not the ~34.5k active
   units. Cell-level attribution via district covariates carries a standard **ecological-fallacy** caveat; the

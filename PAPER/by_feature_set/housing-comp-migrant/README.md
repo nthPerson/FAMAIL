@@ -13,9 +13,10 @@ headline numbers come from this set; the two sets in `../housing-gdp-comp/` and
 - **Editor (causal-emphasis α = 0.2/0.7/0.1, k = 10000):** F_causal 0.7988 → **0.8132** (Δ **+0.0144**);
   F_spatial 0.1034 → 0.1025.
 - **Pillar 1 (L1 — data quality):** edited is the **fairest faithful** source — F_causal: edited **0.8132** > raw
-  0.7988 ≈ **bc 0.7980** (bc statistically tied with raw); gan 0.8089 is distributionally disqualified (Fidelity-B
-  0.173 — it collapses, see the fidelity panel). Fidelity-A: all four within ~0.006 (raw 0.849, edited 0.843, bc
-  0.848, gan 0.848), so editing is identity-faithful.
+  0.7988 ≈ **bc 0.7980** (bc statistically tied with raw); gan 0.8089 is **distributionally disqualified** — GAN-gen
+  collapses (it free-runs/degenerates; its Fidelity-B is the worst of the sources, and the L2 evaluation shows the
+  distributional collapse directly — see the Fidelity-B component panel). Fidelity-A: all four within ~0.006 (raw
+  0.848, edited 0.843, bc 0.848, gan 0.848), so editing is identity-faithful.
   - *Deterministic-gap caveat:* raw and edited F_causal have **std = 0** across BC seeds — they are static data-level
     rescores, so the edited−raw gap is a **point comparison with no sampling CI**. It is also the editor's own
     optimization target (α_causal = 0.7), so the gap is expected *by construction*; its value is that it is achieved
@@ -32,10 +33,13 @@ headline numbers come from this set; the two sets in `../housing-gdp-comp/` and
   p = 1.0), not even the all-same-sign floor. So editing dominates selection by **~70×** and the random placebo is
   null too. This is the sharpest version of the result: the fairness gain is **edit-driven**, not reproducible by
   *selecting* the already-fair trajectories or by *random* oversampling, and (unlike the sensitivity sets) there is
-  no metric-dependent SELECT effect to caveat. **Filtering** trajectories does not help either: in the Pareto
-  (`figures/pareto_*_hcm.png`), filter@K *lowers* F_causal (0.7988 → 0.7935 at K=2455) and *raises* F_spatial, while
-  **edit** is the only point that improves both (F_causal 0.8132, F_spatial 0.1025). So removing or selecting data is
-  not a substitute for editing it.
+  no metric-dependent SELECT effect to caveat. **Filtering** trajectories does not help the F_causal objective either:
+  in the Pareto (`figures/pareto_*_hcm.png`), filter@K *lowers* F_causal (0.7988 → 0.7935 at K = 2455), whereas
+  **edit** raises it strongly (→ 0.8132). (This is a *causal-emphasis* editor, α_spatial = 0.2, so F_spatial is a
+  minor secondary metric here, not the objective: the F_spatial movements are all small — raw 0.1034, edit 0.1025,
+  filter 0.1046 — i.e. the editor trades a sliver of spatial fairness for the large causal gain, while filtering nudges
+  F_spatial up but *lowers* F_causal.) So on the F_causal objective, removing or selecting data is not a substitute
+  for editing it.
 - **Model-level (variance suite, b0 vs FAMAIL):** ΔF_causal **−0.0011 ± 0.0032** (n = 5; within noise; null).
 
 ## Statistical conventions (see top-level README for full detail)

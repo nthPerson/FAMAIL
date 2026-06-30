@@ -3,8 +3,8 @@
 > **Scope note (2026-06-29).** This table compares the two **sensitivity** sets (the original 3-feature SES/income
 > set and the density-augmented 4-feature set). The paper's **PRIMARY** metric is now a third set,
 > **{housing, comp, migrant}** (see `../README.md` and `../../by_feature_set/housing-comp-migrant/`). The corrected,
-> non-overclaiming framing lives in `../README.md`; this file is retained for the 3↔4 side-by-side. A full **3-way**
-> comparison including the PRIMARY set will be added when its re-run completes. Some original wording below is
+> non-overclaiming framing lives in `../README.md`; this file is retained for the 3↔4 side-by-side. The full **3-way**
+> comparison including the PRIMARY set is in **`comparison_across_sets.md`** (the canonical cross-set table). Some original wording below is
 > tightened inline per the adversarial review (density attribution, most-fair, seed-mean transcription, null rows).
 
 **Question (PI):** is the F_causal demographic-variable choice defensible, and does the argument survive a
