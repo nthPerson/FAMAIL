@@ -6,18 +6,29 @@ of this config so multiple configurations can coexist without invalidation.
 """
 
 from __future__ import annotations
+import os
 from pathlib import Path
 from typing import List, Tuple
 
-# Paths
+# Paths — city-switchable via the FAMAIL_CITY env var. Default "shenzhen" is
+# numerically identical to the original single-city config; "sf" selects the
+# San Francisco Cabspotting + ACS second dataset (docs/SF_PHASE2_DECISIONS.md).
+# Caches are isolated per city (cache/ vs cache/sf/) so they never collide.
+CITY = os.environ.get("FAMAIL_CITY", "shenzhen").strip().lower()
 PACKAGE_ROOT = Path(__file__).resolve().parent
-SOURCE_DATA_DIR = PACKAGE_ROOT / "source_data"
-CACHE_DIR = PACKAGE_ROOT / "cache"
 DISCRIMINATOR_CHECKPOINT_DIR = PACKAGE_ROOT / "discriminator_checkpoints"
-DISCRIMINATOR_CHECKPOINT_FILENAME = "default/best.pt"
+if CITY == "sf":
+    SOURCE_DATA_DIR = PACKAGE_ROOT / "source_data" / "second_dataset" / "sf_source"
+    CACHE_DIR = PACKAGE_ROOT / "cache" / "sf"
+    DISCRIMINATOR_CHECKPOINT_FILENAME = "sf/best.pt"
+else:
+    SOURCE_DATA_DIR = PACKAGE_ROOT / "source_data"
+    CACHE_DIR = PACKAGE_ROOT / "cache"
+    DISCRIMINATOR_CHECKPOINT_FILENAME = "default/best.pt"
 
-# Grid geometry (fixed by the Shenzhen dataset)
-GRID_DIMS: Tuple[int, int] = (48, 90)
+# Grid geometry — Shenzhen 48x90; SF 32x30 (faithful 0.01deg over the SF taxi
+# footprint, docs/SF_PHASE2_DECISIONS.md). Both use 0.01deg square cells.
+GRID_DIMS: Tuple[int, int] = (32, 30) if CITY == "sf" else (48, 90)
 N_TIME_BUCKETS: int = 288
 
 # Time blocks — each hourly block spans (h, h+1). No wraparound needed at
@@ -41,12 +52,21 @@ ACTIVE_SUPPLY_THRESHOLD: float = 0.5
 DEMAND_FLOOR: float = 0.5
 SUPPLY_FLOOR: float = 0.1
 
-# Demographics
-DEMOGRAPHIC_FEATURES: List[str] = [
-    "AvgHousingPricePerSqM",
-    "GDPperCapita",
-    "CompPerCapita",
-]
+# Demographics. SF reuses the same feature NAMES filled with ACS values
+# (housing = median home value, comp = per-capita income, migrant = foreign-born
+# share); it has no GDP analog. Shenzhen's set is unchanged (bit-identical).
+if CITY == "sf":
+    DEMOGRAPHIC_FEATURES: List[str] = [
+        "AvgHousingPricePerSqM",
+        "CompPerCapita",
+        "MigrantRatio",
+    ]
+else:
+    DEMOGRAPHIC_FEATURES: List[str] = [
+        "AvgHousingPricePerSqM",
+        "GDPperCapita",
+        "CompPerCapita",
+    ]
 
 # Objective weights
 ALPHA_SPATIAL: float = 0.33
