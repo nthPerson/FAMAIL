@@ -194,11 +194,26 @@ The pre-data worry — "discriminator-corpus volume" — is **retired**: SF's se
 
 1. **Smaller fairness-metric footprint** — ~10–12k active units vs 34.5k. This is a direct consequence of SF's compact geography at a faithful ~1 km cell, not a data-volume problem. Still thousands of units — ample for a 3-feature F_causal residual regression and a stable Gini — but ~3× fewer than Shenzhen, so report it honestly.
 2. **Recency / window** — 2008, 24 days (vs Shenzhen's 3 months). A relevance caveat for the paper, not a blocker.
-3. **Untested (deferred to Phase 2/3)** — the R4 ACS demographic join, and the R7 grid-extent/normalizer reconciliation (now SF-specific at 32×30).
+3. **Untested (deferred to Phase 2/3)** — the R7 grid-extent/normalizer reconciliation (now SF-specific at 32×30). *(R4 demographic join was probed and PASSED — see §10.4.)*
 
 **Net:** SF's *structural* fit is **stronger** than the pre-data assessment assumed; it remains the #1 recommendation, and the honest residual risk to put before the PI is the **smaller active-unit footprint + 2008/24-day vintage**, not the discriminator corpus.
 
-*Reproduce: `python famail_temporal/docs/sf_cabspotting_derisk.py` (standalone, numpy-only; reads `source_data/second_dataset/cabspottingdata/` or `$SF_CAB_DIR`).*
+### 10.4 R4 demographic-join probe — PASS (strong, well-conditioned signal)
+
+The last untested requirement (R4): does the faithful 32×30 SF grid carry usable, non-degenerate demographic signal for F_causal? Joined ACS 5-year (Census Reporter, keyless) for SF + San Mateo + Alameda counties (797 tracts) to the active taxi cells via tract centroids (Gazetteer internal points; population-weighted, nearest-tract fallback). Tested variance + collinearity over the 776 active footprint cells (85% with all features finite).
+
+| Feature (ACS analog) | mean | std | CV | range | VIF |
+|---|---|---|---|---|---|
+| **housing** = median home value `B25077` | $1.32M | $402k | 0.31 | $315k – $2.0M | 1.68 |
+| **comp** = per-capita income `B19301` | $85.1k | $35.0k | 0.41 | $12.6k – $202k | 1.82 |
+| **migrant** = foreign-born share `B05002` | 0.33 | 0.128 | 0.39 | 0.08 – 0.95 | 1.18 |
+| *(logdensity, sensitivity)* `B01003`/ALAND | 7.63 | 1.36 | 0.18 | 2.18 – 10.38 | 1.04 |
+
+**Verdict: PASS.** All three primary features show substantial cross-cell variance (CV 0.31–0.41; foreign-born share spans 8%→95%, matching SF's real enclave geography), and the design matrix is **well-conditioned — max VIF 1.82, *better* than Shenzhen's primary-set max of 4.45** (`config.py:48`). F_causal's hat-matrix `(I − H_demo)` would be non-degenerate. The smaller active footprint (§10.3) does not starve the demographic signal.
+
+**Caveats (probe-grade):** (1) **Vintage** — ACS 2020–2024, ~14 yr after the 2008 taxi data; absolute values are 2020s-inflated, but the *spatial structure* (and hence the variance R4 needs) is stable. Production must use **2008–2012** ACS (keyed Census API / NHGIS). (2) **Aggregation** — centroid assignment + nearest-tract fallback (60% of active cells fell back, as the taxi footprint extends over bay/SFO/commercial beyond residential tracts); production uses proper areal interpolation, which would also flag non-residential cells. (3) **Construct** — US "foreign-born share" is an *analog* of Shenzhen's rural-migrant/hukou axis, not identical; state this in the paper.
+
+*Reproduce: `python famail_temporal/docs/sf_cabspotting_derisk.py` (structural de-risk) and `python famail_temporal/docs/sf_cabspotting_r4_probe.py` (R4 join; needs network for Census Reporter + Gazetteer). Both standalone; read `source_data/second_dataset/cabspottingdata/` or `$SF_CAB_DIR`.*
 
 ---
 
