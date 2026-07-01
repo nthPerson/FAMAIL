@@ -68,9 +68,35 @@ with the PI (each an F_causal *intermediate-calculation* change → algorithm-ch
    service shows little demographic-fairness signal at 1 km resolution" — and lean on Shenzhen
    for the fairness-improvement claim, using SF only for realism/transfer.
 
+## Finding 2b — heatmaps + signal-existence test (2026-06-30)
+
+Concentration heatmaps (`docs/sf_supply_demand_heatmap.py` →
+`results/sf_diagnostics/sf_supply_demand.png`) show the mechanism directly: **demand is
+highly concentrated** (top-10 cells = 50% of pickups; 51% of cells empty; a downtown hotspot)
+while the **5×5 supply blankets all 960 cells** (~100× larger) → **DSR ≈ 0 everywhere**.
+
+Root cause is a **fleet-density mismatch**: SF is a near-complete fleet (**536 taxis, 0.56
+drivers/cell**) vs Shenzhen's **50-driver sample (0.012 drivers/cell, ~47× sparser)**. The
+`active_taxis` = "distinct taxis in the 5×5 neighborhood over the hour" measure, calibrated
+for the sparse sample, **saturates** on the dense fleet.
+
+**Signal-existence test** (Pearson r of service quantities vs demographics over 13,032 active
+units): a demographic-service association **exists but is weak** — supply vs housing/income
+**r ≈ 0.19**, demand vs demographics r ≈ 0.08, and the **DSR signal F_causal actually uses is
+only r ≈ 0.05**. So even a supply-measure fix would surface only a **modest** fairness signal;
+SF taxis mildly favor wealthier/downtown areas, but the effect is small.
+
+**Implication for the two-pillar claim:** SF is a **strong fit for the realism/method-transfer
+pillar** (dense per-driver traces → discriminator retrain; the whole editor runs un-contorted)
+but a **weak fit for the fairness-improvement pillar** (little demographic-service inequity to
+edit, and the DSR formulation barely captures what exists). Leaning SF → *realism/transfer*
+and Shenzhen → *fairness magnitude* is the honest split.
+
 **Recommendation:** do **not** start the GPU retrain (Phase 4) until the regime question is
-resolved — a retrained discriminator is wasted effort if the fairness signal is absent. Bring
-the diagnostic above to Dr. Zhang.
+resolved — a retrained discriminator is wasted effort if the fairness signal is absent/weak.
+Bring the heatmaps + the signal-existence numbers to Dr. Zhang. If the fairness claim on SF is
+required, test a supply re-definition (per-cell instead of 5×5, or a fleet subsample to
+Shenzhen density) — but expect a modest signal given r ≈ 0.19 is the ceiling.
 
 *Reproduce: `FAMAIL_CITY=sf python -m famail_temporal.preprocess --force` then the smoke in
 the session log; demand/supply diagnostic inline.*
