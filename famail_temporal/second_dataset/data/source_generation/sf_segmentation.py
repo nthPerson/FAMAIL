@@ -5,6 +5,20 @@ Splits a single driver's time-sorted pings into **seeking** (occupancy 0) and
 discriminator consumes — breaking a run on an occupancy change or a > `gap_sec`
 time gap. Emits 1-indexed `[x, y, time_bucket, day]` states (5-min buckets,
 calendar-day ints in SF local time) and the pickup/dropoff transition events.
+
+Day convention (Phase 4): the `day` field of every emitted state is the
+**absolute local epoch-day serial** (``local // 86400``), which is exactly what
+the pickup/dropoff count path (sf_build → sf_grid_counts) needs so that
+`preprocess.dataset_n_days` sees the true calendar-day count. The discriminator
+wants day-of-week instead; that remap happens downstream in
+`sf_multistream.assemble_multistream` (on copies), leaving this module and the
+fairness-count artifacts byte-identical to the pre-Phase-4 build.
+
+`seeking_days` / `driving_days` are **parallel to** `seeking` / `driving`: one
+absolute calendar day per trajectory (its start day). This matches the
+per-trajectory contract that `discriminator/.../generation.py` enforces
+(``len(calendar_days[d]) == len(trajs[d])``); the earlier sorted-distinct form
+would make Ren pair-generation raise.
 """
 from __future__ import annotations
 
@@ -27,6 +41,8 @@ class SegmentationResult:
     driving: List[Trajectory]
     pickups: List[State]
     dropoffs: List[State]
+    # Parallel to `seeking` / `driving`: one absolute calendar day (epoch-day
+    # serial) per trajectory. len == len(seeking) / len(driving).
     seeking_days: List[int]
     driving_days: List[int]
 
@@ -67,11 +83,21 @@ def segment_driver(
 
     seeking: List[Trajectory] = []
     driving: List[Trajectory] = []
+    # Parallel-to-trajectory calendar days (absolute epoch-day of each
+    # trajectory's start state), per the generation.py per-trajectory contract.
+    seeking_days: List[int] = []
+    driving_days: List[int] = []
     for s, e in zip(starts, ends):
         if e - s < 2:                       # a trajectory needs >= 2 states
             continue
         traj = [state(i) for i in range(s, e)]
-        (seeking if occ[s] == 0 else driving).append(traj)
+        traj_day = int(day[s])
+        if occ[s] == 0:
+            seeking.append(traj)
+            seeking_days.append(traj_day)
+        else:
+            driving.append(traj)
+            driving_days.append(traj_day)
 
     # Transition events (only across small-gap consecutive pings).
     if n >= 2:
@@ -85,8 +111,6 @@ def segment_driver(
     pickups = [state(int(i)) for i in pick_i]
     dropoffs = [state(int(i)) for i in drop_i]
 
-    seeking_days = sorted({s[3] for tr in seeking for s in tr})
-    driving_days = sorted({s[3] for tr in driving for s in tr})
     return SegmentationResult(
         seeking, driving, pickups, dropoffs, seeking_days, driving_days,
     )

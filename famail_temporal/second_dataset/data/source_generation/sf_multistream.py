@@ -23,6 +23,39 @@ from famail_temporal.data.source_generation.config import (
 )
 
 
+def weekday_from_epoch_day(abs_day: int) -> int:
+    """Map an absolute local epoch-day serial (``local // 86400``) to an
+    ISO-style day-of-week int (Mon=1 .. Sun=7).
+
+    Epoch day 0 (1970-01-01) is a Thursday, so ``(abs_day + 3) % 7`` gives a
+    0=Mon..6=Sun index; +1 makes it 1..7 to mirror Shenzhen's 1-indexed
+    day-of-week convention in trajectory col-3. Verified: SF's first collection
+    day 2008-05-17 (epoch day 14016) → 6 = Saturday.
+    """
+    return (int(abs_day) + 3) % 7 + 1
+
+
+def build_calendar_day_map(day_lists) -> Dict[int, str]:
+    """Map each absolute epoch-day serial in the calendar sidecars to its ISO
+    date 'YYYY-MM-DD'. The discriminator's generation.py requires this file to
+    exist (it is loaded but not used for pairing); we emit it for a complete,
+    Shenzhen-parallel source_data contract."""
+    import datetime as _dt
+    epoch = _dt.date(1970, 1, 1)
+    days = sorted({int(d) for lst in day_lists for d in lst})
+    return {d: (epoch + _dt.timedelta(days=d)).isoformat() for d in days}
+
+
+def _traj_to_dow(traj) -> list:
+    """Copy a trajectory, remapping col-3 (absolute epoch-day) → day-of-week.
+
+    The discriminator's FeatureNormalizer wants a day-of-week signal (cyclic,
+    period 7), not an absolute serial. Done on a COPY so the segmentation output
+    (which the fairness-count path in sf_build reads by reference) is untouched.
+    """
+    return [[s[0], s[1], s[2], weekday_from_epoch_day(s[3])] for s in traj]
+
+
 def _path_len(tr) -> float:
     return float(sum(
         math.hypot(tr[i][0] - tr[i - 1][0], tr[i][1] - tr[i - 1][1])
@@ -94,22 +127,33 @@ def assemble_multistream(
     idx_to_plate, plate_to_idx, passenger_seeking = {}, {}, {}
 
     for idx, (df_d, seg) in per_driver.items():
-        ms_seeking[idx] = seg.seeking
-        ms_driving[idx] = seg.driving
+        # Trajectory streams consumed by the discriminator/editor get col-3
+        # remapped from absolute epoch-day → day-of-week (1..7). The calendar-day
+        # sidecars keep the ABSOLUTE day (parallel-per-trajectory) so Ren
+        # pair-generation groups by true calendar date. profiles/counts are
+        # computed from `seg` (absolute), so this remap is discriminator-only.
+        seeking_dow = [_traj_to_dow(tr) for tr in seg.seeking]
+        driving_dow = [_traj_to_dow(tr) for tr in seg.driving]
+        ms_seeking[idx] = seeking_dow
+        ms_driving[idx] = driving_dow
         ms_seeking_days[idx] = list(seg.seeking_days)
         ms_driving_days[idx] = list(seg.driving_days)
         profiles_raw[idx] = driver_profile(df_d, seg, grid)
         plate = f"cab_{idx:04d}"
         idx_to_plate[idx] = plate
         plate_to_idx[plate] = idx
-        passenger_seeking[plate] = seg.seeking
+        passenger_seeking[plate] = seeking_dow
 
     profiles_norm, mean, std = normalize_profiles(profiles_raw)
+    calendar_day_map = build_calendar_day_map(
+        list(ms_seeking_days.values()) + list(ms_driving_days.values())
+    )
     return {
         "ms_seeking": ms_seeking,
         "ms_driving": ms_driving,
         "ms_seeking_days": ms_seeking_days,
         "ms_driving_days": ms_driving_days,
+        "calendar_day_map": calendar_day_map,
         "profiles_raw": profiles_raw,
         "profiles_normalized": profiles_norm,
         "profile_mean": mean,
