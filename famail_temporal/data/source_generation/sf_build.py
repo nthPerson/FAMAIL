@@ -62,7 +62,7 @@ def build(cab_dir: str, acs_csv: str, tiger_zip: str, out_dir: str,
     pd_counts = count_pickup_dropoff(all_pick, all_drop)
     active = count_active_taxis_5x5(df, grid)
 
-    print("[sf_build] areal-interpolating demographics ...", flush=True)
+    print("[sf_build] mapping demographics (majority-overlap) ...", flush=True)
     demo_grid, demo_names = build_cell_demographics(grid, acs_csv, tiger_zip)
     valid = build_valid_mask(grid)
 
