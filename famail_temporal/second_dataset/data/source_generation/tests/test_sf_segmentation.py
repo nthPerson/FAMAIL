@@ -46,6 +46,25 @@ def test_segment_splits_streams_and_counts_transitions():
     assert isinstance(x, int) and isinstance(tb, int)
 
 
+def test_calendar_days_are_parallel_per_trajectory_and_absolute():
+    t0 = 1213084700
+    # two all-seeking runs separated by a >1-day gap -> two trajectories on two
+    # different absolute calendar days.
+    later = t0 + 90000
+    df = _driver_df([0, 0, 0, 0], [t0, t0 + 60, later, later + 60])
+
+    res = segment_driver(df, GRID, gap_sec=300)
+
+    assert len(res.seeking) == 2
+    # sidecar is PARALLEL to the trajectory list (one calendar day per traj),
+    # not a sorted-distinct set — this is the contract generation.py enforces.
+    assert len(res.seeking_days) == len(res.seeking) == 2
+    assert res.seeking_days[1] > res.seeking_days[0]        # later absolute day
+    # at the segmentation layer, trajectory col-3 is still the ABSOLUTE day
+    # (the day-of-week remap happens later, in assemble_multistream).
+    assert res.seeking[0][0][3] == res.seeking_days[0]
+
+
 def test_segment_splits_on_time_gap():
     t0 = 1213084700
     # all seeking, but a >gap jump between index 2 and 3 splits into two trajectories

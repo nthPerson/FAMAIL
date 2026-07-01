@@ -85,6 +85,7 @@ def build(cab_dir: str, acs_csv: str, tiger_zip: str, out_dir: str,
     _write(out / "ms_driving_trajs.pkl", ms["ms_driving"])
     _write(out / "ms_seeking_calendar_days.pkl", ms["ms_seeking_days"])
     _write(out / "ms_driving_calendar_days.pkl", ms["ms_driving_days"])
+    _write(out / "calendar_day_map.pkl", ms["calendar_day_map"])
     _write(out / "ms_profile_features.pkl", {
         "features": ms["profiles_raw"],
         "features_normalized": ms["profiles_normalized"],

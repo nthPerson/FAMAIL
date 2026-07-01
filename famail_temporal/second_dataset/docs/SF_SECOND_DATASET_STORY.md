@@ -4,10 +4,12 @@
 discovered, the key results, and where we are. Companion detail docs live beside
 this one in `famail_temporal/second_dataset/docs/`.*
 
-**Status (2026-06-30):** Phase 3 (data pipeline) **complete & verified**; the
-F_causal supply/demand regime issue **diagnosed and resolved** via fleet
-subsampling; subsample **decision made (sf12 + causal-emphasis)**. **Phase 4
-(discriminator retrain, GPU) is next** — unblocked.
+**Status (2026-07-01):** Phases 3–5 **COMPLETE**. Pipeline built & verified;
+F_causal supply/demand regime resolved via fleet subsampling; **sf12 +
+causal-emphasis** decided; discriminator retrained on sf12 (**val-AUC 0.998**);
+**dual claim demonstrated on SF — ΔF_causal +0.0139 (beats Shenzhen's +0.0128)
+while F_fidelity 0.968.** Discriminator details + the profile-dominance finding
+(shared with Shenzhen, PI-approved parity framing) in `SF_PHASE4_DISCRIMINATOR.md`.
 
 ---
 

@@ -325,6 +325,10 @@ class MultiStreamSiameseDiscriminator(nn.Module):
                  streams: Tuple[str, ...] = ("seeking", "driving", "profile"),
                  n_trajs_per_stream: int = 5,
                  traj_projection_dim: Optional[int] = 48,
+                 x_max: float = 49.0,
+                 y_max: float = 89.0,
+                 time_buckets: int = 288,
+                 days_in_week: int = 5,
                  **kwargs):
         """Initialize the multi-stream discriminator.
 
@@ -363,8 +367,16 @@ class MultiStreamSiameseDiscriminator(nn.Module):
         self.n_trajs_per_stream = n_trajs_per_stream
         self.traj_projection_dim = traj_projection_dim
 
-        # Shared feature normalizer for trajectory streams
-        self.normalizer = FeatureNormalizer()
+        # Shared feature normalizer for trajectory streams. Config-driven so a
+        # per-city grid extent / weekly period can be baked into the checkpoint
+        # (defaults reproduce the original Shenzhen 50x90, Mon-Fri behavior
+        # exactly). SF uses x_max=32, y_max=30, days_in_week=7 — the loader
+        # reconstructs these from the checkpoint's model_config, so inference
+        # normalization always matches how the checkpoint was trained.
+        self.normalizer = FeatureNormalizer(
+            x_max=x_max, y_max=y_max,
+            time_buckets=time_buckets, days_in_week=days_in_week,
+        )
 
         # Stream 1: Seeking encoder (always present)
         self.seeking_encoder = SiameseLSTMEncoder(
@@ -471,6 +483,10 @@ class MultiStreamSiameseDiscriminator(nn.Module):
             "streams": streams,
             "n_trajs_per_stream": n_trajs_per_stream,
             "traj_projection_dim": traj_projection_dim,
+            "x_max": x_max,
+            "y_max": y_max,
+            "time_buckets": time_buckets,
+            "days_in_week": days_in_week,
         }
 
     def _encode_trajectory_stream(
