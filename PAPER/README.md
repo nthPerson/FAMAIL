@@ -21,9 +21,13 @@ PAPER/
   shared_cleanup/        demographic-INDEPENDENT data-cleanup / F_spatial artifacts (valid for ALL sets)
   feature_selection/     the demographic-feature vetting + cross-set comparison
   reviews/               two adversarial-review reports + the 29 confirmed findings
+  second-dataset/        ⟂ SEPARABLE second-city (SF Cabspotting) dual-claim validation — Shenzhen-independent
 ```
 
-Each `by_feature_set/<combo>/` and the two cross-cutting dirs carry their own `README.md` describing contents and
+Everything above `second-dataset/` is the **Shenzhen (primary)** study. `second-dataset/` is a **deliberately
+self-contained** external-validity result on San Francisco (the realism+fairness dual claim on a second city,
+no algorithm change); it is kept isolated so it can be replaced wholesale if the second dataset changes. Each
+`by_feature_set/<combo>/` and the cross-cutting dirs carry their own `README.md` describing contents and
 data-source provenance.
 
 ## The three feature sets — why three, and which is PRIMARY

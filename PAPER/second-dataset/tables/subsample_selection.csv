@@ -1,0 +1,5 @@
+subsample,drivers,drivers_per_cell,n_active,baseline_F_causal,dF_causal_default_alpha,dF_causal_causal_emphasis,role
+full_fleet,536,0.56,11596,0.982,,,"rejected: fleet saturates 5x5 supply -> F_causal ~1, editor near-no-op"
+sf50_count_matched,50,~0.05,7854,0.956,+0.0011,+0.0041,"rejected: baseline still saturated, cannot headline fairness"
+sf12_density_matched,12,~0.012,4230,0.870,+0.0085,+0.0199,"CHOSEN: Shenzhen-density-matched; largest editable fairness gain"
+shenzhen_primary_ref,50,0.012,~34500,~0.82,,~0.0128,"primary-dataset reference (density-comparable to sf12)"

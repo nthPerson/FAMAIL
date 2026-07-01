@@ -1,0 +1,19 @@
+{
+  "best_epoch": 5,
+  "epochs_run": 35,
+  "best_val_loss": 0.046768626476327575,
+  "best_val_auc": 0.998324749601639,
+  "best_val_acc": 0.9833333333333333,
+  "best_val_pos_acc": 1.0,
+  "best_val_neg_acc": 0.9660326086956522,
+  "best_val_f1": 0.9839021249195107,
+  "final_val_auc": 0.9999999999999999,
+  "max_val_auc": 1.0,
+  "n_params": 1556089,
+  "normalizer": {
+    "x_max": 32.0,
+    "y_max": 30.0,
+    "time_buckets": 288,
+    "days_in_week": 7
+  }
+}

@@ -1,0 +1,64 @@
+{
+  "pair_counts": {
+    "positive": 5000,
+    "negative": 5000,
+    "identical": 500,
+    "total": 10000
+  },
+  "split_counts": {
+    "train": 7500,
+    "val": 1500,
+    "test": 1000
+  },
+  "agent_coverage": {
+    "positive_agents": 12,
+    "negative_agents": 12,
+    "total_available": 12
+  },
+  "usable_days": {
+    "total_drivers_with_usable_days": 12,
+    "total_usable_driver_days": 282,
+    "drivers_with_2plus_days": 12,
+    "per_driver": {
+      "2": 24,
+      "6": 24,
+      "55": 23,
+      "75": 24,
+      "104": 23,
+      "117": 24,
+      "148": 24,
+      "346": 25,
+      "412": 24,
+      "469": 23,
+      "476": 21,
+      "488": 23
+    }
+  },
+  "shape_info": {
+    "n_trajs_per_stream": 5,
+    "seeking_length": 64,
+    "driving_length": 32,
+    "profile_dim": 11
+  },
+  "config": {
+    "extracted_data_dir": "/home/robert/FAMAIL/.claude/worktrees/second-dataset-compat/famail_temporal/source_data/second_dataset/sf_source_12",
+    "output_dir": "/home/robert/FAMAIL/.claude/worktrees/second-dataset-compat/famail_temporal/source_data/second_dataset/discriminator_datasets/sf12",
+    "positive_pairs": 5000,
+    "negative_pairs": 5000,
+    "identical_pair_ratio": 0.1,
+    "n_trajs_per_stream": 5,
+    "min_trajs_per_day": 5,
+    "seeking_padding": "fixed_length",
+    "driving_padding": "fixed_length",
+    "seeking_fixed_length": 64,
+    "driving_fixed_length": 32,
+    "positive_strategy": "random",
+    "negative_strategy": "random",
+    "agent_distribution": "uniform",
+    "ensure_agent_coverage": true,
+    "profile_noise_std": 0.0,
+    "val_ratio": 0.15,
+    "test_ratio": 0.1,
+    "seed": 42
+  }
+}

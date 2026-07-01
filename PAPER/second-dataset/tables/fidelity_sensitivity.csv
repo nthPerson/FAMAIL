@@ -1,0 +1,6 @@
+probe,sf12,shenzhen_primary,interpretation
+score_A_identical_seeking,1.0000,0.9315,disc P[same driver] when branch2 slot-0 = A's own trajectory
+score_diff_driver_seeking_in_A_context,1.0000,0.9189,"branch2 slot-0 = a DIFFERENT driver's trajectory, A's profile/driving kept"
+mean_score_drop_identical_minus_diff,-0.0001,-0.0012,"score change from swapping in a different driver's seeking (n=88 sf12 / 392 shenzhen combos)"
+grad_score_wrt_edited_pickup,2.6e-11,4.7e-06,gradient of disc score w.r.t. the edited pickup cell (x y)
+seeking_sensitive,No,No,"both discriminators are profile-dominated -> F_fidelity is a driver-identity-preservation metric, not an active gradient"

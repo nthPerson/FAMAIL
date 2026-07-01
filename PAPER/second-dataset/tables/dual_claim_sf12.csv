@@ -1,0 +1,5 @@
+metric,before,after,delta,note
+F_causal,0.8752,0.8891,+0.0139,"fairness (1=fairest); causal-emphasis alpha=0.2/0.7/0.1, fidelity ON, -k 2000, 1371 edits"
+F_spatial,0.1846,0.1817,-0.0030,secondary metric; small causal-emphasis trade-off
+gini_dsr,0.8266,0.8325,+0.0059,demand/supply-ratio Gini
+F_fidelity,,0.968,-1.5e-05,"realism = mean disc P[same driver | orig, edited] over 1371 edits; last col = mean edit-induced change (essentially 0)"
