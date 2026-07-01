@@ -1,0 +1,7 @@
+metric,b0_mean,b0_std,famail_mean,famail_std,paired_delta_mean,paired_delta_std,n_seeds
+f_causal,0.8749,0.0022,0.8744,0.0025,-0.0005,0.0043,5
+f_spatial,0.1875,0.0028,0.1898,0.0017,+0.0023,0.0023,5
+f_causal_localized,0.1376,0.0059,0.1241,0.0056,-0.0135,0.0063,5
+di_primary,NaN,NaN,NaN,NaN,NaN,NaN,5
+di_supplementary,NaN,NaN,NaN,NaN,NaN,NaN,5
+# di_* = N/A for SF: it is a Shenzhen hukou-district disparate-impact ratio; SF has no administrative-district abstraction (per-cell ACS tracts).,,,,,,,

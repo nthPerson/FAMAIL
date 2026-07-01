@@ -1,0 +1,5 @@
+source,f_causal,f_spatial,fidelity_a,fidelity_a_separation,fidelity_b,note
+raw,0.8752,0.1846,0.958,+0.923,0.0000,baseline (data-level; deterministic)
+edited,0.8891,0.1817,0.958,+0.924,0.1058,FAMAIL-edited = fairest source AND identity-faithful (Fidelity-A = raw)
+bc,0.8789,0.1894,0.958,+0.923,0.0100,driver-conditioned MLE-generated
+gan,0.8794,0.1856,0.958,+0.923,0.0269,WGAN-GP-generated; did NOT collapse (Shenzhen GAN collapsed to ~0.32)
