@@ -100,3 +100,39 @@ Shenzhen density) — but expect a modest signal given r ≈ 0.19 is the ceiling
 
 *Reproduce: `FAMAIL_CITY=sf python -m famail_temporal.preprocess --force` then the smoke in
 the session log; demand/supply diagnostic inline.*
+
+## Finding 3 (2026-06-30) — fleet subsample RESOLVES the regime; density-match wins
+
+Following the PI-approved plan, demographics were switched to **majority-overlap** (matching
+Shenzhen; `sf_demographics`), and two fleet subsamples were built (fixed grid, nested,
+seed 42): **sf50** (Shenzhen count-matched) and **sf12** (Shenzhen *density*-matched,
+~0.012 drivers/cell). Editor-workability test = fairness-only edits on the top-200
+attributed trajectories (`alpha_fidelity=0`, CPU).
+
+| variant | drivers | n_active | baseline F_causal | edits that moved | ΔF_causal | ΔF_spatial |
+|---|---|---|---|---|---|---|
+| full | 536 | 11,596 | 0.982 | **13/200** | +0.00007 | +0.0002 |
+| **sf50** (count) | 50 | 7,854 | 0.957 | **161/200** | +0.00132 | +0.0006 |
+| **sf12** (density) | 12 | 4,230 | **0.875** | **183/200** | **+0.00326** | +0.0002 |
+
+**Conclusions:**
+- **Subsampling fixes the regime.** Fewer drivers de-saturate supply and restore an editable
+  gradient: baseline F_causal 0.982 (full) → 0.957 (50) → **0.875 (12), essentially Shenzhen's
+  ~0.82 regime**. The editor goes from **13/200** edits (full, no-op) to **183/200** (sf12).
+- **Density-match (12) is the most workable for edits** — closest-to-Shenzhen F_causal and the
+  largest improvement. This validates your density argument.
+- **DEMAND_FLOOR=1.0 is WORSE, not better** (it *lowers* the F_causal proxy but hurts the actual
+  editor): at floor 1.0, sf50 **crashes on 180/200 edits** and sf12's gain shrinks (+0.00025 vs
+  +0.00326 at 0.5). **The proxy sweep misled on the floor — keep DEMAND_FLOOR=0.5.**
+
+**Two-pillar tradeoff (the remaining choice):**
+- **sf12** maximizes the *fairness* signal but gives the discriminator only **12 identity classes
+  / ~11k trajectories** — thin for the realism-retrain pillar (Shenzhen used 50).
+- **sf50** is **Shenzhen-matched for the discriminator** (50 identities / ~43k trajectories) AND
+  still workable for editing (161/200, real +0.00132 gain).
+
+**Recommendation:** **sf50 + DEMAND_FLOOR=0.5** as the balanced choice for the *dual* claim
+(Shenzhen-matched discriminator corpus + workable fairness editing); **sf12** if the
+fairness-improvement magnitude is the priority and a 12-identity discriminator proves trainable.
+Either way, **the editor now makes real edits → the GPU discriminator retrain (Phase 4) is
+finally warranted** (it needs the parent-monorepo training pipeline).
