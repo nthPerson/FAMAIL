@@ -17,10 +17,14 @@ from typing import List, Tuple
 CITY = os.environ.get("FAMAIL_CITY", "shenzhen").strip().lower()
 PACKAGE_ROOT = Path(__file__).resolve().parent
 DISCRIMINATOR_CHECKPOINT_DIR = PACKAGE_ROOT / "discriminator_checkpoints"
-if CITY == "sf":
-    SOURCE_DATA_DIR = PACKAGE_ROOT / "source_data" / "second_dataset" / "sf_source"
-    CACHE_DIR = PACKAGE_ROOT / "cache" / "sf"
-    DISCRIMINATOR_CHECKPOINT_FILENAME = "sf/best.pt"
+if CITY.startswith("sf"):
+    # "sf", "sf50", "sf12", ... — the suffix isolates source/cache dirs per
+    # fleet-subsample variant so they never collide.
+    _sfx = CITY[2:]
+    _suffix = f"_{_sfx}" if _sfx else ""
+    SOURCE_DATA_DIR = PACKAGE_ROOT / "source_data" / "second_dataset" / f"sf_source{_suffix}"
+    CACHE_DIR = PACKAGE_ROOT / "cache" / f"sf{_suffix}"
+    DISCRIMINATOR_CHECKPOINT_FILENAME = f"sf{_suffix}/best.pt"
 else:
     SOURCE_DATA_DIR = PACKAGE_ROOT / "source_data"
     CACHE_DIR = PACKAGE_ROOT / "cache"
@@ -28,7 +32,7 @@ else:
 
 # Grid geometry — Shenzhen 48x90; SF 32x30 (faithful 0.01deg over the SF taxi
 # footprint, docs/SF_PHASE2_DECISIONS.md). Both use 0.01deg square cells.
-GRID_DIMS: Tuple[int, int] = (32, 30) if CITY == "sf" else (48, 90)
+GRID_DIMS: Tuple[int, int] = (32, 30) if CITY.startswith("sf") else (48, 90)
 N_TIME_BUCKETS: int = 288
 
 # Time blocks — each hourly block spans (h, h+1). No wraparound needed at
@@ -55,7 +59,7 @@ SUPPLY_FLOOR: float = 0.1
 # Demographics. SF reuses the same feature NAMES filled with ACS values
 # (housing = median home value, comp = per-capita income, migrant = foreign-born
 # share); it has no GDP analog. Shenzhen's set is unchanged (bit-identical).
-if CITY == "sf":
+if CITY.startswith("sf"):
     DEMOGRAPHIC_FEATURES: List[str] = [
         "AvgHousingPricePerSqM",
         "CompPerCapita",

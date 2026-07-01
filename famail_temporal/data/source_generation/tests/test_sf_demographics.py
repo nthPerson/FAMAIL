@@ -51,3 +51,30 @@ def test_build_grid_cells_covers_full_grid_1indexed():
     assert cells["cell_x"].min() == 1 and cells["cell_x"].max() == 3
     assert cells["cell_y"].min() == 1 and cells["cell_y"].max() == 4
     assert cells.crs is not None
+
+
+def test_majority_overlap_assigns_dominant_tract():
+    from famail_temporal.data.source_generation.sf_demographics import majority_overlap
+    tracts = gpd.GeoDataFrame(
+        {"val": [10.0, 20.0], "geometry": [box(0, 0, 1, 1), box(1, 0, 2, 1)]},
+        crs="EPSG:3310",
+    )
+    # cell (1,1): 1.0 overlap with A vs 0.4 with B -> A(10); cell (2,1): 0.3 vs 1.0 -> B(20)
+    cells = gpd.GeoDataFrame(
+        {"cell_x": [1, 2], "cell_y": [1, 1],
+         "geometry": [box(0, 0, 1.4, 1), box(0.7, 0, 2, 1)]},
+        crs="EPSG:3310",
+    )
+    out = majority_overlap(cells, tracts, ["val"]).set_index(["cell_x", "cell_y"])
+    assert out.loc[(1, 1), "val"] == 10.0
+    assert out.loc[(2, 1), "val"] == 20.0
+
+
+def test_majority_overlap_no_overlap_is_nan():
+    from famail_temporal.data.source_generation.sf_demographics import majority_overlap
+    tracts = gpd.GeoDataFrame(
+        {"val": [10.0], "geometry": [box(0, 0, 1, 1)]}, crs="EPSG:3310")
+    cells = gpd.GeoDataFrame(
+        {"cell_x": [9], "cell_y": [9], "geometry": [box(10, 10, 11, 11)]}, crs="EPSG:3310")
+    out = majority_overlap(cells, tracts, ["val"]).set_index(["cell_x", "cell_y"])
+    assert np.isnan(out.loc[(9, 9), "val"])

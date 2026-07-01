@@ -93,6 +93,31 @@ def areal_interpolate(
     return out
 
 
+def majority_overlap(
+    cells: gpd.GeoDataFrame,
+    tracts: gpd.GeoDataFrame,
+    value_cols: List[str],
+    area_crs: str = AREA_CRS,
+) -> pd.DataFrame:
+    """Assign each cell the `value_cols` of the tract it overlaps MOST (by area).
+
+    Matches the Shenzhen demographic mapping (superimpose grid over the
+    demographic polygons, majority-overlap rule). Cells with no overlapping
+    tract get NaN.
+    """
+    cells_p = cells.to_crs(area_crs)
+    tracts_p = tracts.to_crs(area_crs)
+    inter = gpd.overlay(
+        cells_p[["cell_x", "cell_y", "geometry"]], tracts_p,
+        how="intersection", keep_geom_type=True,
+    )
+    inter["_iarea"] = inter.geometry.area
+    best_idx = inter.groupby(["cell_x", "cell_y"])["_iarea"].idxmax()
+    best = inter.loc[best_idx, ["cell_x", "cell_y", *value_cols]].reset_index(drop=True)
+    allc = cells[["cell_x", "cell_y"]].astype(int).copy()
+    return allc.merge(best, on=["cell_x", "cell_y"], how="left")
+
+
 def load_tracts(acs_csv: str, tiger_zip: str) -> gpd.GeoDataFrame:
     """Join ACS tract estimates (CSV) to TIGER 2010 tract polygons by GEOID."""
     acs = pd.read_csv(acs_csv, dtype={"GEOID": str})
@@ -105,25 +130,30 @@ def load_tracts(acs_csv: str, tiger_zip: str) -> gpd.GeoDataFrame:
 
 
 def build_cell_demographics(
-    grid: GridSpec, acs_csv: str, tiger_zip: str,
+    grid: GridSpec, acs_csv: str, tiger_zip: str, method: str = "majority",
 ) -> Tuple[np.ndarray, List[str]]:
     """Build the `(x_grid_max, y_grid_max, 3)` demographics grid + feature names.
 
-    NaN where a cell has no residential population (excluded from F_causal).
+    method="majority" (default) matches Shenzhen: each cell takes the demographics
+    of its largest-overlap tract. method="areal" uses population-weighted areal
+    interpolation. NaN where a cell has no tract (majority) or no captured
+    population (areal) -> excluded from F_causal.
     """
     tracts = load_tracts(acs_csv, tiger_zip).rename(columns=_ACS_TO_FEATURE)
     cells = build_grid_cells(grid)
-    out = areal_interpolate(
-        cells, tracts, value_cols=DEMO_FEATURE_NAMES, pop_col="pop",
-    )
+    if method == "majority":
+        out = majority_overlap(cells, tracts, DEMO_FEATURE_NAMES)
+    elif method == "areal":
+        out = areal_interpolate(cells, tracts, value_cols=DEMO_FEATURE_NAMES, pop_col="pop")
+        out.loc[out["pop_est"] <= 0, DEMO_FEATURE_NAMES] = np.nan
+    else:
+        raise ValueError(f"unknown method {method!r} (want 'majority' or 'areal')")
     arr = np.full(
         (grid.x_grid_max, grid.y_grid_max, len(DEMO_FEATURE_NAMES)),
         np.nan, dtype=np.float32,
     )
     for _, r in out.iterrows():
-        if r["pop_est"] <= 0:          # non-residential cell -> leave NaN
-            continue
         x, y = int(r["cell_x"]) - 1, int(r["cell_y"]) - 1
         for j, c in enumerate(DEMO_FEATURE_NAMES):
-            arr[x, y, j] = r[c]
+            arr[x, y, j] = r[c]     # NaN passes through for unassigned cells/features
     return arr, list(DEMO_FEATURE_NAMES)

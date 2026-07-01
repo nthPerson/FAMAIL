@@ -28,10 +28,17 @@ def _write(path: Path, obj) -> None:
         pickle.dump(obj, f)
 
 
-def build(cab_dir: str, acs_csv: str, tiger_zip: str, out_dir: str):
+def build(cab_dir: str, acs_csv: str, tiger_zip: str, out_dir: str,
+          driver_ids=None, grid=None):
+    """Assemble SF source_data. Optionally restrict to `driver_ids` (a fleet
+    subsample); pass a fixed `grid` (computed from the FULL fleet) so cell
+    indices align across subsample variants."""
     out = Path(out_dir)
     df = load_sf_raw(cab_dir)
-    grid = grid_from_points(df["lat"].to_numpy(), df["lon"].to_numpy())
+    if grid is None:                       # default: grid from the full footprint
+        grid = grid_from_points(df["lat"].to_numpy(), df["lon"].to_numpy())
+    if driver_ids is not None:
+        df = df[df["driver_id"].isin(set(driver_ids))].reset_index(drop=True)
     print(f"[sf_build] grid {grid.x_grid_max}x{grid.y_grid_max}, "
           f"{len(df):,} pings, {df['driver_id'].nunique()} drivers", flush=True)
 
