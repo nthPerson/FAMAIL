@@ -3,10 +3,10 @@ import numpy as np
 import geopandas as gpd
 from shapely.geometry import box
 
-from famail_temporal.data.source_generation.sf_demographics import (
+from famail_temporal.second_dataset.data.source_generation.sf_demographics import (
     areal_interpolate, build_grid_cells,
 )
-from famail_temporal.data.source_generation.sf_config import GridSpec
+from famail_temporal.second_dataset.data.source_generation.sf_config import GridSpec
 
 
 def test_areal_interpolate_is_population_weighted():
@@ -54,7 +54,7 @@ def test_build_grid_cells_covers_full_grid_1indexed():
 
 
 def test_majority_overlap_assigns_dominant_tract():
-    from famail_temporal.data.source_generation.sf_demographics import majority_overlap
+    from famail_temporal.second_dataset.data.source_generation.sf_demographics import majority_overlap
     tracts = gpd.GeoDataFrame(
         {"val": [10.0, 20.0], "geometry": [box(0, 0, 1, 1), box(1, 0, 2, 1)]},
         crs="EPSG:3310",
@@ -71,7 +71,7 @@ def test_majority_overlap_assigns_dominant_tract():
 
 
 def test_majority_overlap_no_overlap_is_nan():
-    from famail_temporal.data.source_generation.sf_demographics import majority_overlap
+    from famail_temporal.second_dataset.data.source_generation.sf_demographics import majority_overlap
     tracts = gpd.GeoDataFrame(
         {"val": [10.0], "geometry": [box(0, 0, 1, 1)]}, crs="EPSG:3310")
     cells = gpd.GeoDataFrame(

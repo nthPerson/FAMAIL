@@ -2,10 +2,10 @@
 import numpy as np
 import pandas as pd
 
-from famail_temporal.data.source_generation.sf_grid_counts import (
+from famail_temporal.second_dataset.data.source_generation.sf_grid_counts import (
     count_pickup_dropoff, count_active_taxis_5x5, build_valid_mask,
 )
-from famail_temporal.data.source_generation.sf_config import GridSpec
+from famail_temporal.second_dataset.data.source_generation.sf_config import GridSpec
 
 GRID = GridSpec(lat_min=37.7, lon_min=-122.5, x_grid_max=32, y_grid_max=30, cell_deg=0.01)
 

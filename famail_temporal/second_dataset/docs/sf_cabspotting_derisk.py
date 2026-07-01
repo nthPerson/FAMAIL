@@ -12,7 +12,7 @@ import numpy as np
 _HERE = os.path.dirname(os.path.abspath(__file__))  # famail_temporal/docs/
 DATA = os.environ.get(
     "SF_CAB_DIR",
-    os.path.join(_HERE, "..", "source_data", "second_dataset", "cabspottingdata"),
+    os.path.join(_HERE, "..", "..", "source_data", "second_dataset", "cabspottingdata"),
 )
 GRID_SIZE_DEG = 0.01          # matches Shenzhen source_generation/config.py
 GAP_SEC = 300                 # split a trajectory if consecutive pings > 5 min apart

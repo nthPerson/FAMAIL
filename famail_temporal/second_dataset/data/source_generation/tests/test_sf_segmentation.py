@@ -2,8 +2,8 @@
 import numpy as np
 import pandas as pd
 
-from famail_temporal.data.source_generation.sf_config import GridSpec
-from famail_temporal.data.source_generation.sf_segmentation import segment_driver
+from famail_temporal.second_dataset.data.source_generation.sf_config import GridSpec
+from famail_temporal.second_dataset.data.source_generation.sf_segmentation import segment_driver
 
 
 GRID = GridSpec(lat_min=37.7, lon_min=-122.5, x_grid_max=32, y_grid_max=30, cell_deg=0.01)

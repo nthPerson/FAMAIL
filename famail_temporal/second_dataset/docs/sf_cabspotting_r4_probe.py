@@ -20,7 +20,7 @@ import numpy as np
 _HERE = os.path.dirname(os.path.abspath(__file__))  # famail_temporal/docs/
 DATA = os.environ.get(
     "SF_CAB_DIR",
-    os.path.join(_HERE, "..", "source_data", "second_dataset", "cabspottingdata"),
+    os.path.join(_HERE, "..", "..", "source_data", "second_dataset", "cabspottingdata"),
 )
 SCRATCH = os.environ.get("SF_R4_CACHE", os.path.join(tempfile.gettempdir(), "sf_r4_cache"))
 os.makedirs(SCRATCH, exist_ok=True)

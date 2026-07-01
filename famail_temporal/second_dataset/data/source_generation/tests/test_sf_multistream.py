@@ -2,9 +2,9 @@
 import numpy as np
 import pandas as pd
 
-from famail_temporal.data.source_generation.sf_segmentation import SegmentationResult
-from famail_temporal.data.source_generation.sf_config import GridSpec
-from famail_temporal.data.source_generation.sf_multistream import (
+from famail_temporal.second_dataset.data.source_generation.sf_segmentation import SegmentationResult
+from famail_temporal.second_dataset.data.source_generation.sf_config import GridSpec
+from famail_temporal.second_dataset.data.source_generation.sf_multistream import (
     driver_profile, normalize_profiles, assemble_multistream, N_PROFILE_FEATURES,
 )
 

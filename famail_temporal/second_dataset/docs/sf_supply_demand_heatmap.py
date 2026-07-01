@@ -20,7 +20,7 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
-SD = os.path.normpath(os.path.join(_HERE, "..", "source_data", "second_dataset", "sf_source"))
+SD = os.path.normpath(os.path.join(_HERE, "..", "..", "source_data", "second_dataset", "sf_source"))
 OUT_DIR = os.path.normpath(os.path.join(_HERE, "..", "results", "sf_diagnostics"))
 os.makedirs(OUT_DIR, exist_ok=True)
 GX, GY = 32, 30

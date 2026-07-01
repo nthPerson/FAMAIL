@@ -13,7 +13,7 @@ from typing import List
 
 import numpy as np
 
-from famail_temporal.data.source_generation.sf_config import (
+from famail_temporal.second_dataset.data.source_generation.sf_config import (
     GridSpec, PDT_OFFSET_SEC,
 )
 

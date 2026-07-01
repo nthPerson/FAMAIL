@@ -10,11 +10,11 @@ pipeline's isotonic diagnostic). CPU only.  Run with FAMAIL_CITY=sf.
 import os, numpy as np
 from sklearn.isotonic import IsotonicRegression
 from famail_temporal import config
-from famail_temporal.data.source_generation.sf_raw_loader import load_sf_raw
-from famail_temporal.data.source_generation.sf_config import grid_from_points
-from famail_temporal.data.source_generation.sf_segmentation import segment_driver
-from famail_temporal.data.source_generation.sf_grid_counts import count_pickup_dropoff, count_active_taxis_5x5
-from famail_temporal.data.source_generation.sf_demographics import build_cell_demographics
+from famail_temporal.second_dataset.data.source_generation.sf_raw_loader import load_sf_raw
+from famail_temporal.second_dataset.data.source_generation.sf_config import grid_from_points
+from famail_temporal.second_dataset.data.source_generation.sf_segmentation import segment_driver
+from famail_temporal.second_dataset.data.source_generation.sf_grid_counts import count_pickup_dropoff, count_active_taxis_5x5
+from famail_temporal.second_dataset.data.source_generation.sf_demographics import build_cell_demographics
 from famail_temporal.data.aggregation import aggregate_pickup_dropoff, aggregate_active_taxis, dataset_n_days
 
 SD = os.path.join(config.PACKAGE_ROOT, "source_data", "second_dataset")

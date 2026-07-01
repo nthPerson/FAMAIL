@@ -1,7 +1,7 @@
 """Tests for the SF Cabspotting raw loader (Task 3.1)."""
 import numpy as np
 
-from famail_temporal.data.source_generation.sf_raw_loader import load_sf_raw
+from famail_temporal.second_dataset.data.source_generation.sf_raw_loader import load_sf_raw
 
 
 def _write_cab(d, name, rows):

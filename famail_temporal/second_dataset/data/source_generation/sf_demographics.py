@@ -22,7 +22,7 @@ import pandas as pd
 import geopandas as gpd
 from shapely.geometry import box
 
-from famail_temporal.data.source_generation.sf_config import GridSpec
+from famail_temporal.second_dataset.data.source_generation.sf_config import GridSpec
 
 DEMO_FEATURE_NAMES: List[str] = [
     "AvgHousingPricePerSqM", "CompPerCapita", "MigrantRatio",

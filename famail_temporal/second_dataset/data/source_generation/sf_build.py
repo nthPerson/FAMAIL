@@ -4,21 +4,21 @@ Orchestrates the tested SF components into the full set of `source_data`
 artifacts that `preprocess.py` + `loader.py` consume (see docs/SF_SOURCE_SCHEMA.md),
 written into the SF source dir. Run:
 
-    python -m famail_temporal.data.source_generation.sf_build
+    python -m famail_temporal.second_dataset.data.source_generation.sf_build
 """
 from __future__ import annotations
 
 import pickle
 from pathlib import Path
 
-from famail_temporal.data.source_generation.sf_raw_loader import load_sf_raw
-from famail_temporal.data.source_generation.sf_config import grid_from_points
-from famail_temporal.data.source_generation.sf_segmentation import segment_driver
-from famail_temporal.data.source_generation.sf_grid_counts import (
+from famail_temporal.second_dataset.data.source_generation.sf_raw_loader import load_sf_raw
+from famail_temporal.second_dataset.data.source_generation.sf_config import grid_from_points
+from famail_temporal.second_dataset.data.source_generation.sf_segmentation import segment_driver
+from famail_temporal.second_dataset.data.source_generation.sf_grid_counts import (
     count_pickup_dropoff, count_active_taxis_5x5, build_valid_mask,
 )
-from famail_temporal.data.source_generation.sf_demographics import build_cell_demographics
-from famail_temporal.data.source_generation.sf_multistream import assemble_multistream
+from famail_temporal.second_dataset.data.source_generation.sf_demographics import build_cell_demographics
+from famail_temporal.second_dataset.data.source_generation.sf_multistream import assemble_multistream
 from famail_temporal.data.source_generation import config as sg_config
 
 

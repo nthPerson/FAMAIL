@@ -22,7 +22,7 @@ import os, glob, json, math, csv, zipfile, urllib.request, subprocess
 import numpy as np
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
-SD = os.path.normpath(os.path.join(_HERE, "..", "source_data", "second_dataset"))
+SD = os.path.normpath(os.path.join(_HERE, "..", "..", "source_data", "second_dataset"))
 DEMO = os.path.join(SD, "demographics")
 RAW = os.path.join(DEMO, "raw")
 CAB = os.path.join(SD, "cabspottingdata")

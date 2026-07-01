@@ -15,7 +15,7 @@ from typing import Dict, List, Tuple
 import numpy as np
 import pandas as pd
 
-from famail_temporal.data.source_generation.sf_config import GridSpec, PDT_OFFSET_SEC
+from famail_temporal.second_dataset.data.source_generation.sf_config import GridSpec, PDT_OFFSET_SEC
 
 # 5x5 neighborhood radius (matches source_generation.config.NEIGHBORHOOD_K).
 NEIGHBORHOOD_K: int = 2

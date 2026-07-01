@@ -15,8 +15,8 @@ from typing import Dict, Tuple
 import numpy as np
 import pandas as pd
 
-from famail_temporal.data.source_generation.sf_config import GridSpec, PDT_OFFSET_SEC
-from famail_temporal.data.source_generation.sf_segmentation import SegmentationResult
+from famail_temporal.second_dataset.data.source_generation.sf_config import GridSpec, PDT_OFFSET_SEC
+from famail_temporal.second_dataset.data.source_generation.sf_segmentation import SegmentationResult
 from famail_temporal.data.source_generation.config import (
     PROFILE_FEATURE_NAMES, N_PROFILE_FEATURES,
     PROFILE_SHIFT_LOW_PCT, PROFILE_SHIFT_HIGH_PCT,
