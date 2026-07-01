@@ -131,8 +131,25 @@ attributed trajectories (`alpha_fidelity=0`, CPU).
 - **sf50** is **Shenzhen-matched for the discriminator** (50 identities / ~43k trajectories) AND
   still workable for editing (161/200, real +0.00132 gain).
 
-**Recommendation:** **sf50 + DEMAND_FLOOR=0.5** as the balanced choice for the *dual* claim
-(Shenzhen-matched discriminator corpus + workable fairness editing); **sf12** if the
-fairness-improvement magnitude is the priority and a 12-identity discriminator proves trainable.
-Either way, **the editor now makes real edits → the GPU discriminator retrain (Phase 4) is
-finally warranted** (it needs the parent-monorepo training pipeline).
+**Recommendation (revised after the full-k GPU runs — the 200-edit smoke was misleading):**
+**sf12 + DEMAND_FLOOR=0.5.** The 200-edit CPU smoke understated the gap; the correct measurement
+is the full-k run over the entire unfair pool via `evaluation.runner` (batched, GPU, alpha_fidelity=0):
+
+| subsample | baseline F_causal | ΔF_causal (default α=.33) | ΔF_causal (causal-emphasis α_ca=.7) |
+|---|---|---|---|
+| sf50 (count) | 0.956 | +0.0011 | +0.0041 |
+| **sf12 (density)** | 0.870 | +0.0085 | **+0.0199** |
+| *Shenzhen headline* | ~0.82 | — | *~+0.0128* |
+
+Under Shenzhen's headline (causal-emphasis), **sf12 gives ΔF_causal +0.0199 — larger than
+Shenzhen's own +0.0128** from a Shenzhen-comparable baseline (0.870≈0.82): a defensible
+fairness-improvement claim. **sf50 cannot headline fairness even with causal-emphasis (+0.0041)** —
+its saturated baseline (0.956) caps editability regardless of k or weighting. The density match is
+the only subsample producing a publishable fairness result.
+
+**Chosen: sf12 + causal-emphasis.** Remaining risk = the *realism* pillar: retraining the
+Multi-Stream Siamese discriminator on **12 identities** (Shenzhen used 50). Testable in Phase 4
+(check val-AUC); fallback = a ~20–25-driver subsample if 12 won't train (weaker density story).
+Runner CLI (fairness-only, GPU): `FAMAIL_CITY=sf12 python -m famail_temporal.evaluation.runner
+--name <n> -k 2000 --device cuda --override ALPHA_FIDELITY=0 --override ALPHA_SPATIAL=0.2
+--override ALPHA_CAUSAL=0.7`.
