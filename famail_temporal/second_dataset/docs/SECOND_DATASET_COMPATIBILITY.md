@@ -213,7 +213,7 @@ The last untested requirement (R4): does the faithful 32×30 SF grid carry usabl
 
 **Caveats (probe-grade):** (1) **Vintage** — ACS 2020–2024, ~14 yr after the 2008 taxi data; absolute values are 2020s-inflated, but the *spatial structure* (and hence the variance R4 needs) is stable. Production must use **2008–2012** ACS (keyed Census API / NHGIS). (2) **Aggregation** — centroid assignment + nearest-tract fallback (60% of active cells fell back, as the taxi footprint extends over bay/SFO/commercial beyond residential tracts); production uses proper areal interpolation, which would also flag non-residential cells. (3) **Construct** — US "foreign-born share" is an *analog* of Shenzhen's rural-migrant/hukou axis, not identical; state this in the paper.
 
-*Reproduce: `python famail_temporal/docs/sf_cabspotting_derisk.py` (structural de-risk) and `python famail_temporal/docs/sf_cabspotting_r4_probe.py` (R4 join; needs network for Census Reporter + Gazetteer). Both standalone; read `source_data/second_dataset/cabspottingdata/` or `$SF_CAB_DIR`.*
+*Reproduce: `python famail_temporal/second_dataset/docs/sf_cabspotting_derisk.py` (structural de-risk) and `python famail_temporal/second_dataset/docs/sf_cabspotting_r4_probe.py` (R4 join; needs network for Census Reporter + Gazetteer). Both standalone; read `source_data/second_dataset/cabspottingdata/` or `$SF_CAB_DIR`.*
 
 ---
 
