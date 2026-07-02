@@ -6,8 +6,8 @@
 **demographic-feature re-runs + the curated `PAPER/` deliverable** (done in a separate session; recapped here).
 
 **Bottom line.** The paper now has **external validity on a second city**: the FAMAIL editor makes San
-Francisco taxi trajectories **fairer (ΔF_causal +0.0139, beating Shenzhen's own +0.0128) while they stay
-realistic (F_fidelity 0.968)** — with **no change to the algorithm, fairness metric, or fidelity
+Francisco taxi trajectories **fairer (ΔF_causal +0.0139, on par with Shenzhen's PRIMARY editor gain +0.0144)
+while they stay realistic (F_fidelity 0.968)** — with **no change to the algorithm, fairness metric, or fidelity
 architecture** — and, running the **identical BC/GAN downstream eval**, the **full two-pillar argument
 reproduces on SF** (edited = fairest faithful source → vanilla BC null → weighted-BC recovery), with the
 recovery *sharper* than Shenzhen. Separately, the entire Shenzhen result set was re-run under **three
@@ -27,9 +27,9 @@ hard to lean on the second dataset given one honest caveat (the fidelity signal 
    IDs, and an ACS/Census join — it drops into the pipeline with **zero algorithm change**. **§A.**
 
 2. **Dual claim demonstrated on SF.** Editor causal-emphasis run: **F_causal 0.8752 → 0.8891 (Δ +0.0139)**
-   while **F_fidelity = 0.968** (edit-induced change ~1e-5). +0.0139 **beats Shenzhen's +0.0128** from a
-   density-comparable baseline. A matched fidelity-OFF run confirms the fidelity term is inert (+0.01392 vs
-   +0.01394). **§C.**
+   while **F_fidelity = 0.968** (edit-induced change ~1e-5). +0.0139 is **on par with Shenzhen's PRIMARY editor
+   gain (+0.0144)** and exceeds the older density-matched reference (+0.0128). A matched fidelity-OFF run confirms
+   the fidelity term is inert (+0.01392 vs +0.01394). **§C.**
 
 3. **The discriminator retrains cleanly on SF — val-AUC 0.998** (Shenzhen 0.982), identical architecture and
    training protocol. Getting there required fixing 3 latent SF-pipeline day-encoding bugs and a learning-rate
@@ -51,10 +51,12 @@ hard to lean on the second dataset given one honest caveat (the fidelity signal 
    ~null); model-level variance null. One SF divergence: the WGAN-GP GAN did **not** collapse. Identical
    protocol + one city-aware plumbing fix; ~90 min on one RTX 3070. **§C.5.**
 
-6. **Separate session: demographic-feature re-runs + the `PAPER/` bundle.** The full Shenzhen experiment set
-   (editor, L1, L2, weighted-BC, placebo, variance) was re-run under **three feature sets** and curated into a
-   committed `PAPER/` directory with per-set READMEs, figures, tables, and **two adversarial reviews (0 of 29
-   findings refuted)**. Two-pillar story reproduces under all three; only the F_causal *scale* shifts. **§D.**
+6. **Separate session: demographic-feature re-runs + the `PAPER/` bundle (now reorganized + merged to `main`).**
+   The full Shenzhen experiment set (editor, L1, L2, weighted-BC, placebo, variance) was re-run under **three
+   feature sets**, curated into a committed `PAPER/` directory (per-set READMEs, figures, tables, a 3-way cross-set
+   comparison, PRIMARY Pareto), and put through **three adversarial review passes** (29 findings 0-refuted, plus a
+   third review of the completed PRIMARY set: 0 critical / 1 substantive-fixed / ~8 minor). Two-pillar story
+   reproduces under all three; only the F_causal *scale* shifts. Now merged to `main` (700 tests pass). **§D.**
 
 7. **Open decisions for the meeting:** the `F_causal → F_demo` rename (held from the reviews), and the
    second-dataset framing given the profile-dominance caveat. **§E.**
@@ -131,7 +133,8 @@ Editor causal-emphasis (α = 0.2 / 0.7 / 0.1), fidelity ON, `-k 2000` (1371 edit
 | F_spatial (secondary) | 0.1846 | 0.1817 | −0.0030 ↓ |
 | **F_fidelity** (realism) | — | **0.968** | edit-induced Δ ≈ **−1.5e-5** |
 
-**+0.0139 beats Shenzhen's own +0.0128** from a density-comparable baseline. Edited SF trajectories stay
+**+0.0139 is on par with Shenzhen's PRIMARY editor gain (+0.0144)** and exceeds the older density-matched
+reference (+0.0128). (SF's full-unfair-pool selection metric is +0.0199; see §C.2.) Edited SF trajectories stay
 realistic (still recognized as the same driver; the edit barely moves the score).
 
 ### C.2 Two ΔF_causal figures, both correct (avoid confusion at the meeting)
@@ -190,11 +193,24 @@ sub-result, not load-bearing for either pillar.
 **Net:** the SF second dataset now carries the *complete* two-pillar argument end-to-end — edited data is the
 fairest faithful source, vanilla BC/variance does not transfer it, and importance-weighting recovers it
 edit-specifically — reproducing (and in Pillar 2 exceeding) the Shenzhen result with no algorithm change.
-*(On branch `sf-baseline-eval`, commit `658ae63`; ready to merge on your OK.)*
+*(Now **merged to `main`** — BC/GAN eval `658ae63` via merge `3a8ef54`, 2026-07-01; the SF second dataset is on
+`main` alongside the Shenzhen bundle. Kept deliberately separable in `PAPER/second-dataset/`.)*
 
 ## §D. Separate session — demographic-feature re-runs + the `PAPER/` bundle
 
 *(Recap of work completed in a separate session; packaged in the committed `PAPER/` directory.)*
+
+> **Update (this session, 2026-07-01/02 — finalization since the doc was drafted).** The Shenzhen bundle is now
+> **complete and merged to `main`** (fast-forward to `b9e6059`; full test suite 700 pass). Three
+> things were finalized: (1) `PAPER/` was **reorganized by feature set** — `by_feature_set/{housing-comp-migrant
+> (PRIMARY), housing-gdp-comp, housing-comp-migrant-logpopdensity}` + `shared_cleanup/` + `feature_selection/` +
+> `reviews/`, each with a provenance README (and a `.gitignore` fix so the data tables are actually tracked). (2) A
+> **canonical 3-way cross-set comparison** (`feature_selection/tables/comparison_across_sets.md` + a 3-way robustness
+> dumbbell) and a **PRIMARY Pareto** (edit vs raw vs filter@K — filtering *lowers* F_causal; only editing raises it)
+> were added. (3) A **third adversarial review round (REVIEW_C)** was run on the completed PRIMARY deliverable + the
+> branch code: **0 critical, 1 substantive (a Pareto F_spatial-direction framing error, fixed), ~8 minor** — branch
+> code verified sound, PRIMARY numbers verified correct (seed means). So the Shenzhen study has now had **three**
+> adversarial review passes total.
 
 **What was done.** The entire Shenzhen experiment set (editor, L1 data-quality, L2 vanilla transfer,
 weighted-BC recovery, random-subset placebo, variance suite) was **re-run under three demographic feature
@@ -219,14 +235,18 @@ figures, tables, provenance for every artifact).
 - **Edit ≫ select > random:** under the PRIMARY metric SELECT is **genuinely null** (edit beats select ~70×);
   the random placebo is null; **filtering** unfair trajectories *lowers* F_causal (Pareto). The gain is
   **edit-driven**, not reproducible by selecting or removing data.
-- Data cleanup (6 stuck-GPS "sink" artifacts) handled in `PAPER/shared_cleanup/` — affects the secondary
-  F_spatial by ~23%, leaves the headline F_causal essentially untouched.
+- Data cleanup (**10 calibrated stuck-GPS sink cells across 9 driver plates; 106,677 phantom pickups removed**)
+  handled in `PAPER/shared_cleanup/` — affects the secondary F_spatial (headline sink (29,53) ~+0.089 locally, net
+  global +0.021), leaves the headline F_causal essentially untouched. *(The earlier "6 sinks / cell (28,52)"
+  description was a stale pre-filter figure, corrected via the data-driven caption in this session's review.)*
 
-**Adversarial review.** Two independent reviews of the bundle; **0 of 29 findings refuted** (all were
-framing/labeling overreaches, now fixed across the bundle — figure honesty, statistical caveats, feature-choice
-scoping). Statistical conventions to keep in mind when citing: **n=6 Wilcoxon floors at p=0.03125** (= sign
-unanimity, not a magnitude — read effects from means + t-CIs); **F_causal is associational** (partial R² on 10
-district-level profiles), with an ecological-fallacy caveat.
+**Adversarial review (three passes).** REVIEW_A (paper content) + REVIEW_B (dirty-vs-clean) produced **29 findings,
+0 refuted** (all framing/labeling overreaches, since fixed — figure honesty, statistical caveats, feature-choice
+scoping). **REVIEW_C** (this session, on the completed PRIMARY deliverable + the branch code) added **0 critical,
+1 substantive (a Pareto F_spatial-direction framing error, fixed), ~8 minor**, and verified the branch code sound and
+the PRIMARY numbers correct. Statistical conventions to keep in mind when citing: **n=6 Wilcoxon floors at p=0.03125**
+(= sign unanimity, not a magnitude — read effects from means + t-CIs); **F_causal is associational** (partial R² on
+10 district-level profiles), with an ecological-fallacy caveat.
 
 ## §E. Decisions / open items for the meeting
 
