@@ -191,3 +191,64 @@ def write_figure(result: dict, out_dir, meta: dict) -> Path:
     fig.savefig(path, dpi=150)
     plt.close(fig)
     return path
+
+
+import argparse
+import sys
+from famail_temporal import config
+from famail_temporal.data.loader import DataBundle
+
+
+def _run_one(edit_dir: Path, dataset: str, out_dir: Path,
+             seed: int, B: int) -> dict:
+    bundle = DataBundle.load()
+    Y_before = io.service_ratio_Y(bundle.pickup_3d, bundle)
+    after_pickup = io.build_edited_pickup_3d(bundle, edit_dir)
+    Y_after = io.service_ratio_Y(after_pickup, bundle)
+    demo = io.per_unit_demographics(bundle)
+    result = assemble_results(Y_before, Y_after, demo, seed=seed, B=B)
+    meta = {"dataset": dataset, "city": config.CITY, "edit_dir": str(edit_dir),
+            "seed": seed, "B": B, "n_active": int(bundle.mask_3d.sum())}
+    write_json(result, out_dir, meta)
+    (out_dir / "report.md").write_text(render_markdown(result, meta))
+    write_figure(result, out_dir, meta)
+    return result
+
+
+def main(argv=None) -> int:
+    ap = argparse.ArgumentParser(prog="famail_temporal.baselines.run_external_fairness")
+    ap.add_argument("--edit-dir", type=Path, required=False,
+                    help="Results dir with histories.pkl for the edit")
+    ap.add_argument("--dataset", default=None,
+                    help="Label for outputs (e.g. shenzhen-primary, sf12)")
+    ap.add_argument("--out-dir", type=Path, default=None)
+    ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--bootstrap", type=int, default=1000)
+    ap.add_argument("--combine", nargs="+", type=Path, default=None,
+                    help="external_fairness.json paths to combine into one table")
+    args = ap.parse_args(argv)
+
+    if args.combine:
+        named = []
+        for p in args.combine:
+            payload = json.loads(Path(p).read_text())
+            named.append((payload["meta"].get("dataset", str(p)), payload))
+        out = args.out_dir or Path(config.PACKAGE_ROOT) / "baselines" / \
+            "external_fairness" / "results"
+        out.mkdir(parents=True, exist_ok=True)
+        (out / "combined.md").write_text(render_combined_table(named))
+        print(f"wrote {out / 'combined.md'}")
+        return 0
+
+    if not args.edit_dir:
+        ap.error("--edit-dir is required (unless --combine)")
+    dataset = args.dataset or f"{config.CITY}"
+    out_dir = args.out_dir or (Path(config.PACKAGE_ROOT) / "baselines" /
+                               "external_fairness" / "results" / dataset)
+    _run_one(args.edit_dir, dataset, out_dir, args.seed, args.bootstrap)
+    print(f"wrote outputs to {out_dir}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
