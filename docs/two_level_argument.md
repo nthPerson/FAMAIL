@@ -1,3 +1,7 @@
+> **Superseded (2026-07-01):** the current, results-backed paper argument lives in `PAPER/argument/`.
+> This document is retained for historical context; its numbers (and its Level-2 "transfer not
+> supported" conclusion) predate the PRIMARY re-run, the weighted-BC recovery, and the SF second dataset.
+
 # The Two-Level Argument (FAMAIL paper framing)
 
 This document is the brief top-level outline of how the FAMAIL paper argues its case. It frames two companion claims — **data quality** (Level 1) and **usability** (Level 2) — and points to the detailed results/methodology docs for each.

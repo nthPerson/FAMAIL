@@ -1,3 +1,7 @@
+> **Superseded (2026-07-01):** the current, results-backed paper argument lives in `PAPER/argument/`.
+> This document is retained for historical context; its numbers predate the PRIMARY re-run + the SF
+> second dataset.
+
 # FAMAIL — Paper Argument Plan (rough, for Dr. Zhang)
 
 **Date:** 2026-06-25 · **Status:** argument skeleton + evidence map. Figures are placeholders (no image
