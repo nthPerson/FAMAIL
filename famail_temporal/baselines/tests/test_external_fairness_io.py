@@ -63,7 +63,10 @@ def test_build_edited_pickup_relocates_mass(tmp_path):
     demand_vals = bundle.pickup_3d[mask]
     o = int(np.argmax(demand_vals))
     ox, oy, ot = int(xs[o]), int(ys[o]), int(ts[o])
-    d = next(i for i in range(len(xs)) if (xs[i], ys[i], ts[i]) != (ox, oy, ot))
+    # require ts[i] != ot (not just tuple inequality) so dt != ot: this makes
+    # mass_o and mass_d distinct below, which is what lets this test catch a
+    # per-block mass mix-up (e.g. accidentally using mass_o at the dest cell).
+    d = next(i for i in range(len(xs)) if ts[i] != ot)
     dx, dy, dt = int(xs[d]), int(ys[d]), int(ts[d])
     # build trajectories whose terminal state maps to (ox,oy,ot)/(dx,dy,dt).
     # pickup_unit_of computes t_block = hour_to_block_index(time_bucket_to_hour(tb)).
@@ -76,6 +79,15 @@ def test_build_edited_pickup_relocates_mass(tmp_path):
     histories = [SimpleNamespace(original=orig, modified=modif)]
     with open(tmp_path / "histories.pkl", "wb") as f:
         _pickle.dump(histories, f)
+
+    # Give the origin and destination blocks distinct hour-counts so
+    # mass_o != mass_d: under the default uniform-hourly config all blocks
+    # have n_hours_per_block == 1, which would make a per-block mass
+    # mix-up (e.g. using mass_o at the destination) undetectable below.
+    # n_hours_per_block is a numpy array on this frozen dataclass, so
+    # in-place mutation of this freshly-built synthetic bundle is safe.
+    bundle.n_hours_per_block[ot] = 2
+    bundle.n_hours_per_block[dt] = 3
 
     before = bundle.pickup_3d.copy()
     after = io.build_edited_pickup_3d(bundle, tmp_path)

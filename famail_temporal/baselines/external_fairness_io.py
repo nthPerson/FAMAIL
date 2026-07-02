@@ -59,7 +59,14 @@ def service_ratio_Y(pickup_3d: np.ndarray, bundle: DataBundle) -> np.ndarray:
 def build_edited_pickup_3d(bundle: DataBundle, edit_dir) -> np.ndarray:
     """After-edit demand grid: relocate each edited pickup's per-event mass
     from its original to modified cell (modifier convention). Subtraction is
-    floored at DEMAND_FLOOR; addition is unflored."""
+    floored at DEMAND_FLOOR; addition is unflored.
+
+    Returns a float64 grid (via `.astype(np.float64)`), intentionally
+    diverging from the float32 grid returned by `build_filtered_pickup_3d`,
+    to preserve the small relocated per-event mass (see the dtype note
+    below); downstream `service_ratio_Y` upcasts its input to float64
+    regardless, so this only matters for exactness of intermediate values
+    here."""
     with open(Path(edit_dir) / "histories.pkl", "rb") as f:
         histories = pickle.load(f)
     # float64 (not .copy(), which would preserve bundle.pickup_3d's float32
