@@ -49,3 +49,27 @@ def sdr_mean_disadvantaged(Y: np.ndarray, groups: np.ndarray) -> float:
 
 def sdr_mean_advantaged(Y: np.ndarray, groups: np.ndarray) -> float:
     return supply_demand_ratio(Y, groups)["mean_advantaged"]
+
+
+def theil_index(Y: np.ndarray, regions: np.ndarray) -> float:
+    """Between-region Theil-T index of Y. regions: (N,) int, -1 excluded.
+
+    T_between = sum_g (N_g/N) * (ybar_g/ybar) * ln(ybar_g/ybar).
+    Zero-service units contribute 0 (limit y*ln y -> 0). Scale-invariant.
+    """
+    valid = regions >= 0
+    y = Y[valid].astype(np.float64)
+    r = regions[valid]
+    n = y.size
+    if n == 0:
+        return float("nan")
+    ybar = y.mean()
+    if not np.isfinite(ybar) or ybar <= 0.0:
+        return float("nan")
+    total = 0.0
+    for g in np.unique(r):
+        yg = y[r == g]
+        ybar_g = yg.mean()
+        if ybar_g > 0.0:
+            total += (yg.size / n) * (ybar_g / ybar) * np.log(ybar_g / ybar)
+    return float(total)
