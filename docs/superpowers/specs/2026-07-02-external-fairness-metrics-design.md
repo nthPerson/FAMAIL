@@ -101,11 +101,20 @@ Pure functions, N-vector in → scalar out (mirroring the grid-unaware `fairness
 
 **Before-edit (per dataset):** `DataBundle.load()` for the matching city/config →
 - `Y_before` from `bundle.pickup_3d`, `bundle.active_taxis_3d`, `bundle.mask_3d`;
-- district/tract id per active unit via `district_metrics.district_of_active_units(bundle)`
-  (same ordering as `pickup_N`);
 - per-unit raw values for housing/comp/migrant, rebuilt from the demographics source
   (`cell_demographics.pkl` → `data/demographics.enrich_demographics` → select the 3 equity
-  columns → index by `mask_3d`). SF uses its ACS-filled equivalent.
+  columns → index by `mask_3d`). SF uses its ACS-filled equivalent (same 3 feature names).
+- **Region id per active unit derived from the demographic values themselves** — cells sharing an
+  identical (housing, comp, migrant) profile form a region (recovers Shenzhen's 10 districts and
+  SF's ACS tracts). This is **city-agnostic**: it does NOT use `district_metrics.district_of_active_units`,
+  which is Shenzhen-only (SF's `grid_to_district_mapping.pkl` carries only `valid_mask`, no district
+  ids). Regions are used by Theil; the per-axis district-extremes grouping ranks regions by that axis.
+
+**Planning refinement (2026-07-02):** `DataBundle.load()` takes no city argument — city is selected
+by the `FAMAIL_CITY` env var at process launch, so SF runs as `FAMAIL_CITY=sf12 python -m ...`. And
+because SF lacks a district-id file, grouping/regions are derived from demographic values (above)
+rather than the Shenzhen-only district helpers. The Shenzhen `compute_di`/`district_of_active_units`
+path is retained only as a cross-check test for the migrant axis.
 
 **After-edit:** reconstruct `after_pickup_3d` by relocating each edited pickup's per-event mass
 (`baselines/datasets.pickup_mass`) from its original to modified cell, read from `histories.pkl`
@@ -184,9 +193,10 @@ exist and Δ signs are finite.
 
 ## 11. Risks / open items (resolve during planning)
 
-- **SF adaptation:** confirm `district_of_active_units` and the demographics-rebuild chain work on
-  the SF sf12 bundle (tract mapping + ACS-filled housing/comp/migrant); may need an SF-specific
-  loader branch.
+- **SF adaptation (RESOLVED during planning):** SF has no district-id file, so grouping/regions are
+  derived from demographic values (city-agnostic). The demographics-rebuild chain works on SF
+  (same 3 feature names, ACS-filled). SF is run via `FAMAIL_CITY=sf12`; no code branch needed beyond
+  reading `config.CITY` for output labeling.
 - **After-grid reconstruction:** confirm the exact mechanism `run_metric_hardening` uses and share
   it rather than reimplement; verify relocated-mass flooring matches the modifier.
 - **District-extremes on SF:** number of ACS tracts determines the "third" cut; parameterize.
