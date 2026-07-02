@@ -150,3 +150,44 @@ def render_combined_table(named_results: List[Tuple[str, dict]]) -> str:
                      f"{e['demographic_parity']['delta']:+.4f} | "
                      f"{e['disparate_impact']['delta']:+.4f} |")
     return "\n".join(lines)
+
+
+def write_figure(result: dict, out_dir, meta: dict) -> Path:
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    out_dir = Path(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    rows: List[Tuple[str, float, float, float]] = []
+    for axis in io.EQUITY_AXES:
+        for g in GROUPINGS:
+            e = result["metrics"][axis][g]
+            for mname, key in (("DP", "demographic_parity"),
+                               ("DI", "disparate_impact")):
+                d = e[key]
+                lo, hi = d["delta_ci"]
+                rows.append((f"{mname} {axis[:6]}/{g[:4]}", d["delta"], lo, hi))
+    rows.append(("Theil", result["theil"]["delta"],
+                 *result["theil"]["delta_ci"]))
+
+    labels = [r[0] for r in rows]
+    deltas = [r[1] for r in rows]
+    # Percentile-bootstrap CIs are not guaranteed to strictly bracket the
+    # full-sample point estimate, so clip error-bar half-widths at 0 to
+    # avoid negative xerr values (which errorbar would draw backwards).
+    los = [max(0.0, r[1] - r[2]) for r in rows]
+    his = [max(0.0, r[3] - r[1]) for r in rows]
+    y = np.arange(len(rows))
+    fig, ax = plt.subplots(figsize=(7, 0.4 * len(rows) + 1))
+    ax.errorbar(deltas, y, xerr=[los, his], fmt="o", capsize=3)
+    ax.axvline(0.0, color="grey", lw=0.8, ls="--")
+    ax.set_yticks(y)
+    ax.set_yticklabels(labels, fontsize=7)
+    ax.set_xlabel("Δ (after − before)")
+    ax.set_title(f"External fairness Δ — {meta.get('dataset','')}")
+    fig.tight_layout()
+    path = out_dir / "external_fairness_delta.png"
+    fig.savefig(path, dpi=150)
+    plt.close(fig)
+    return path

@@ -74,3 +74,13 @@ def test_combined_table():
     res = rx.assemble_results(Yb, Ya, demo, seed=0, B=20)
     md = rx.render_combined_table([("shenzhen", res), ("sf", res)])
     assert "shenzhen" in md and "sf" in md
+
+
+def test_write_figure_creates_png(tmp_path):
+    Yb, Ya, demo = _synthetic_arrays()
+    res = rx.assemble_results(Yb, Ya, demo, seed=0, B=30)
+    meta = {"dataset": "shenzhen-primary"}
+    path = rx.write_figure(res, tmp_path, meta)
+    assert path.exists()
+    assert path.suffix == ".png"
+    assert path.stat().st_size > 0
