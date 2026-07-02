@@ -67,6 +67,8 @@ def test_write_json_and_markdown(tmp_path):
     assert "Disparate impact" in md
     assert "Theil" in md
     assert "| Before | After | Delta |" in md or "Before" in md
+    assert "Supply/demand ratio (disadvantaged)" in md
+    assert "(advantaged)" in md
 
 
 def test_combined_table():

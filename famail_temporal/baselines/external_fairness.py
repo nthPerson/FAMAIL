@@ -128,7 +128,7 @@ def regions_from_values(value_columns: Sequence[np.ndarray]) -> np.ndarray:
     if not finite.any():
         return regions
     _, inv = np.unique(stacked[finite], axis=0, return_inverse=True)
-    regions[finite] = inv
+    regions[finite] = np.ravel(inv)
     return regions
 
 
@@ -143,6 +143,9 @@ def paired_bootstrap(
     """Resample unit indices with replacement (shared per replicate); recompute
     each spec's metric on before/after; percentile CIs on before/after/delta.
     Non-finite replicates are dropped and counted."""
+    names = [name for name, _, _ in specs]
+    if len(set(names)) != len(names):
+        raise ValueError(f"paired_bootstrap: duplicate spec names {names}")
     rng = np.random.default_rng(seed)
     N = Y_before.shape[0]
     lo_q = 100.0 * (1.0 - ci) / 2.0

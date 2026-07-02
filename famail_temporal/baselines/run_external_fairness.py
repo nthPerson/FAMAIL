@@ -127,9 +127,16 @@ def render_markdown(result: dict, meta: dict) -> str:
             dp = e["demographic_parity"]
             di = e["disparate_impact"]
             sd = e["supply_demand_ratio"]
-            lines.append(f"| Supply/demand gap | {_fmt(sd['before']['gap'])} | "
-                         f"{_fmt(sd['after']['gap'])} | {sd['delta_gap']:+.4f} | "
-                         f"{_fmt_ci(sd['gap_ci'])} |")
+            sd_d_before = sd["before"]["mean_disadvantaged"]
+            sd_d_after = sd["after"]["mean_disadvantaged"]
+            sd_a_before = sd["before"]["mean_advantaged"]
+            sd_a_after = sd["after"]["mean_advantaged"]
+            lines.append(f"| Supply/demand ratio (disadvantaged) | {_fmt(sd_d_before)} | "
+                         f"{_fmt(sd_d_after)} | {sd_d_after - sd_d_before:+.4f} | "
+                         f"— |")
+            lines.append(f"| Supply/demand ratio (advantaged) | {_fmt(sd_a_before)} | "
+                         f"{_fmt(sd_a_after)} | {sd_a_after - sd_a_before:+.4f} | "
+                         f"— |")
             lines.append(f"| Demographic parity | {_fmt(dp['before'])} | "
                          f"{_fmt(dp['after'])} | {dp['delta']:+.4f} | "
                          f"{_fmt_ci(dp['delta_ci'])} |")
@@ -194,7 +201,6 @@ def write_figure(result: dict, out_dir, meta: dict) -> Path:
 
 
 import argparse
-import sys
 from famail_temporal import config
 from famail_temporal.data.loader import DataBundle
 
