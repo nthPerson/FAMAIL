@@ -68,3 +68,43 @@ def test_theil_excludes_negative_region_and_survives_zero_service():
     # region0 mean=2, region1 mean=4, ybar over valid = (0+4+4)/3
     val = ef.theil_index(Y, regions)
     assert np.isfinite(val)
+
+
+def test_median_split_disadvantaged_low():
+    values = np.array([1.0, 2.0, 3.0, 4.0])       # median 2.5
+    g = ef.median_split(values, disadvantaged_high=False)
+    # low (<=2.5) is disadvantaged
+    assert list(g) == [1, 1, 0, 0]
+
+
+def test_median_split_disadvantaged_high_and_nan_excluded():
+    values = np.array([1.0, 4.0, np.nan])
+    g = ef.median_split(values, disadvantaged_high=True)
+    assert g[2] == -1
+    assert g[0] == 0 and g[1] == 1                # high=disadvantaged
+
+
+def test_region_extremes_top_bottom_third():
+    # 6 distinct region values -> frac 1/3 -> k=2 each end
+    values = np.array([10.0, 20.0, 30.0, 40.0, 50.0, 60.0])
+    g = ef.region_extremes(values, disadvantaged_high=False)  # low = disadv
+    assert g[0] == 1 and g[1] == 1                # 10,20 bottom -> D
+    assert g[4] == 0 and g[5] == 0               # 50,60 top -> A
+    assert g[2] == -1 and g[3] == -1             # middle excluded
+
+
+def test_region_extremes_groups_by_distinct_value():
+    # region-constant values: two regions of size 3
+    values = np.array([5.0, 5.0, 5.0, 9.0, 9.0, 9.0])
+    g = ef.region_extremes(values, disadvantaged_high=True)   # high = disadv
+    assert list(g[:3]) == [0, 0, 0]              # value 5 = advantaged
+    assert list(g[3:]) == [1, 1, 1]              # value 9 = disadvantaged
+
+
+def test_regions_from_values_maps_profiles():
+    housing = np.array([1.0, 1.0, 2.0, np.nan])
+    comp = np.array([9.0, 9.0, 8.0, 8.0])
+    r = ef.regions_from_values([housing, comp])
+    assert r[0] == r[1]                          # same profile
+    assert r[0] != r[2]                          # different profile
+    assert r[3] == -1                            # NaN -> excluded

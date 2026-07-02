@@ -73,3 +73,60 @@ def theil_index(Y: np.ndarray, regions: np.ndarray) -> float:
         if ybar_g > 0.0:
             total += (yg.size / n) * (ybar_g / ybar) * np.log(ybar_g / ybar)
     return float(total)
+
+
+def median_split(values: np.ndarray, disadvantaged_high: bool) -> np.ndarray:
+    groups = np.full(values.shape, -1, dtype=np.int64)
+    finite = np.isfinite(values)
+    if not finite.any():
+        return groups
+    med = np.median(values[finite])
+    high = finite & (values > med)
+    low = finite & (values <= med)
+    if disadvantaged_high:
+        groups[high] = 1
+        groups[low] = 0
+    else:
+        groups[low] = 1
+        groups[high] = 0
+    return groups
+
+
+def region_extremes(
+    values: np.ndarray, disadvantaged_high: bool, frac: float = 1.0 / 3.0,
+) -> np.ndarray:
+    """Rank distinct region values; bottom/top `frac` of regions -> D/A."""
+    groups = np.full(values.shape, -1, dtype=np.int64)
+    finite = np.isfinite(values)
+    uniq = np.unique(values[finite])
+    n_reg = uniq.size
+    if n_reg < 2:
+        return groups
+    k = max(1, int(round(frac * n_reg)))
+    if 2 * k > n_reg:
+        k = n_reg // 2
+    low_vals = uniq[:k]
+    high_vals = uniq[-k:]
+    is_low = finite & np.isin(values, low_vals)
+    is_high = finite & np.isin(values, high_vals)
+    if disadvantaged_high:
+        groups[is_high] = 1
+        groups[is_low] = 0
+    else:
+        groups[is_low] = 1
+        groups[is_high] = 0
+    return groups
+
+
+def regions_from_values(value_columns: Sequence[np.ndarray]) -> np.ndarray:
+    """Map each unit's demographic profile (row across axes) to an int region
+    id. Any NaN across the columns -> -1 (excluded)."""
+    stacked = np.stack([np.asarray(c, dtype=np.float64) for c in value_columns],
+                       axis=1)
+    regions = np.full(stacked.shape[0], -1, dtype=np.int64)
+    finite = np.all(np.isfinite(stacked), axis=1)
+    if not finite.any():
+        return regions
+    _, inv = np.unique(stacked[finite], axis=0, return_inverse=True)
+    regions[finite] = inv
+    return regions
