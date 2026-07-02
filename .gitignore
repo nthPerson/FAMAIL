@@ -67,6 +67,9 @@ logs/
 # Discriminator training outputs (per-run timestamped dirs)
 checkpoints/
 
+# External-fairness CLI run outputs (data artifacts, per-dataset dirs)
+famail_temporal/baselines/external_fairness/results/
+
 # PAPER/ is the curated, committed paper deliverable: force-track its data
 # tables (the global *.json/*.csv ignores above would otherwise drop them).
 !PAPER/**/*.json
