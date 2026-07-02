@@ -13,9 +13,9 @@ import numpy as np
 def _group_means(Y: np.ndarray, groups: np.ndarray) -> Tuple[float, float]:
     d = Y[groups == 1]
     a = Y[groups == 0]
-    if d.size == 0 or a.size == 0:
-        return float("nan"), float("nan")
-    return float(d.mean()), float(a.mean())
+    mean_d = float(d.mean()) if d.size else float("nan")
+    mean_a = float(a.mean()) if a.size else float("nan")
+    return mean_d, mean_a
 
 
 def supply_demand_ratio(Y: np.ndarray, groups: np.ndarray) -> Dict[str, float]:
