@@ -3,11 +3,13 @@ the edited (after) demand grid. City-agnostic (reads cell_demographics.pkl)."""
 from __future__ import annotations
 
 import pickle
+from pathlib import Path
 from typing import Dict, List
 
 import numpy as np
 
 from famail_temporal import config
+from famail_temporal.baselines.datasets import pickup_mass, pickup_unit_of
 from famail_temporal.data.demographics import enrich_demographics
 from famail_temporal.data.loader import DataBundle
 
@@ -52,3 +54,27 @@ def service_ratio_Y(pickup_3d: np.ndarray, bundle: DataBundle) -> np.ndarray:
     demand_N = pickup_3d[mask].astype(np.float64)
     supply_N = bundle.active_taxis_3d[mask].astype(np.float64)
     return supply_N / np.maximum(demand_N, config.DEMAND_FLOOR)
+
+
+def build_edited_pickup_3d(bundle: DataBundle, edit_dir) -> np.ndarray:
+    """After-edit demand grid: relocate each edited pickup's per-event mass
+    from its original to modified cell (modifier convention). Subtraction is
+    floored at DEMAND_FLOOR; addition is unflored."""
+    with open(Path(edit_dir) / "histories.pkl", "rb") as f:
+        histories = pickle.load(f)
+    # float64 (not .copy(), which would preserve bundle.pickup_3d's float32
+    # dtype): matches the float64 convention already established by
+    # service_ratio_Y/per_unit_demographics in this module. Writing the
+    # float64 subtract/add results back into a float32 array would round
+    # each element to float32 ULP (~1e-7 relative to the *cell's demand
+    # magnitude*, e.g. ~1-5), which swamps the tiny per-event mass
+    # (~1e-2-1e-3) being relocated and fails exact-mass assertions.
+    pickup_3d = bundle.pickup_3d.astype(np.float64)
+    floor = config.DEMAND_FLOOR
+    for h in histories:
+        ox, oy, ot = pickup_unit_of(h.original)
+        mx, my, mt = pickup_unit_of(h.modified)
+        reduced = float(pickup_3d[ox, oy, ot]) - pickup_mass(bundle, ot)
+        pickup_3d[ox, oy, ot] = max(reduced, floor)
+        pickup_3d[mx, my, mt] = float(pickup_3d[mx, my, mt]) + pickup_mass(bundle, mt)
+    return pickup_3d

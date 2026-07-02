@@ -39,3 +39,47 @@ def test_equity_axes_and_pole_constants():
     assert io.EQUITY_AXES == ["AvgHousingPricePerSqM", "CompPerCapita", "MigrantRatio"]
     assert io.DISADVANTAGED_HIGH["MigrantRatio"] is True
     assert io.DISADVANTAGED_HIGH["AvgHousingPricePerSqM"] is False
+
+
+import pickle as _pickle
+from types import SimpleNamespace
+
+from famail_temporal.utils.trajectory import Trajectory, TrajectoryState
+
+
+def _traj_at(x, y, time_bucket=0):
+    return Trajectory(
+        trajectory_id=0, driver_id=0,
+        states=[TrajectoryState(
+            x_grid=int(x), y_grid=int(y), time_bucket=int(time_bucket), day_index=0)],
+    )
+
+
+def test_build_edited_pickup_relocates_mass(tmp_path):
+    bundle = _make_synthetic_bundle()
+    mask = bundle.mask_3d
+    xs, ys, ts = np.where(mask)
+    # pick an active origin unit with a high pickup, and a distinct active dest
+    demand_vals = bundle.pickup_3d[mask]
+    o = int(np.argmax(demand_vals))
+    ox, oy, ot = int(xs[o]), int(ys[o]), int(ts[o])
+    d = next(i for i in range(len(xs)) if (xs[i], ys[i], ts[i]) != (ox, oy, ot))
+    dx, dy, dt = int(xs[d]), int(ys[d]), int(ts[d])
+    # build trajectories whose terminal state maps to (ox,oy,ot)/(dx,dy,dt).
+    # pickup_unit_of computes t_block = hour_to_block_index(time_bucket_to_hour(tb)).
+    # config.TIME_BLOCKS is hourly (block i == hour i), so hour_to_block_index
+    # is the identity on 0..23. time_bucket_to_hour(tb) = max(0, (tb-1)//12)
+    # (1-indexed, 12 five-minute buckets per hour), so tb = 12*t_block + 1 is
+    # the value whose hour is exactly t_block for any t_block in 0..23.
+    orig = _traj_at(ox, oy, time_bucket=12 * ot + 1)
+    modif = _traj_at(dx, dy, time_bucket=12 * dt + 1)
+    histories = [SimpleNamespace(original=orig, modified=modif)]
+    with open(tmp_path / "histories.pkl", "wb") as f:
+        _pickle.dump(histories, f)
+
+    before = bundle.pickup_3d.copy()
+    after = io.build_edited_pickup_3d(bundle, tmp_path)
+    mass_o = 1.0 / (int(bundle.n_hours_per_block[ot]) * bundle.n_days)
+    mass_d = 1.0 / (int(bundle.n_hours_per_block[dt]) * bundle.n_days)
+    assert before[ox, oy, ot] - after[ox, oy, ot] == pytest.approx(mass_o)
+    assert after[dx, dy, dt] - before[dx, dy, dt] == pytest.approx(mass_d)
