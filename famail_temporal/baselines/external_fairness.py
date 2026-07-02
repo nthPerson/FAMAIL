@@ -130,3 +130,52 @@ def regions_from_values(value_columns: Sequence[np.ndarray]) -> np.ndarray:
     _, inv = np.unique(stacked[finite], axis=0, return_inverse=True)
     regions[finite] = inv
     return regions
+
+
+def paired_bootstrap(
+    Y_before: np.ndarray,
+    Y_after: np.ndarray,
+    specs: List[Tuple[str, Callable[[np.ndarray, np.ndarray], float], np.ndarray]],
+    B: int = 1000,
+    seed: int = 0,
+    ci: float = 0.95,
+) -> Dict[str, Dict[str, object]]:
+    """Resample unit indices with replacement (shared per replicate); recompute
+    each spec's metric on before/after; percentile CIs on before/after/delta.
+    Non-finite replicates are dropped and counted."""
+    rng = np.random.default_rng(seed)
+    N = Y_before.shape[0]
+    lo_q = 100.0 * (1.0 - ci) / 2.0
+    hi_q = 100.0 * (1.0 + ci) / 2.0
+    acc = {name: {"before": [], "after": [], "delta": [], "dropped": 0}
+           for name, _, _ in specs}
+    for _ in range(B):
+        idx = rng.integers(0, N, size=N)
+        yb = Y_before[idx]
+        ya = Y_after[idx]
+        for name, fn, labels in specs:
+            lab = labels[idx]
+            b = fn(yb, lab)
+            a = fn(ya, lab)
+            if not (np.isfinite(b) and np.isfinite(a)):
+                acc[name]["dropped"] += 1
+                continue
+            acc[name]["before"].append(b)
+            acc[name]["after"].append(a)
+            acc[name]["delta"].append(a - b)
+
+    def _ci(vals: List[float]) -> Tuple[float, float]:
+        if len(vals) == 0:
+            return (float("nan"), float("nan"))
+        return (float(np.percentile(vals, lo_q)),
+                float(np.percentile(vals, hi_q)))
+
+    out: Dict[str, Dict[str, object]] = {}
+    for name, d in acc.items():
+        out[name] = {
+            "before": _ci(d["before"]),
+            "after": _ci(d["after"]),
+            "delta": _ci(d["delta"]),
+            "n_dropped": int(d["dropped"]),
+        }
+    return out

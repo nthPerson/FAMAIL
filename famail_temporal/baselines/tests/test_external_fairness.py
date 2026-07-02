@@ -108,3 +108,27 @@ def test_regions_from_values_maps_profiles():
     assert r[0] == r[1]                          # same profile
     assert r[0] != r[2]                          # different profile
     assert r[3] == -1                            # NaN -> excluded
+
+
+def test_bootstrap_deterministic_and_brackets_point():
+    rng = np.random.default_rng(0)
+    Yb = rng.uniform(0.5, 2.0, size=200)
+    Ya = Yb + 0.3                                    # uniform improvement
+    groups = np.where(np.arange(200) % 2 == 0, 0, 1)
+    specs = [("dp", ef.demographic_parity, groups)]
+    out1 = ef.paired_bootstrap(Yb, Ya, specs, B=200, seed=7)
+    out2 = ef.paired_bootstrap(Yb, Ya, specs, B=200, seed=7)
+    assert out1 == out2                              # determinism
+    lo, hi = out1["dp"]["delta"]
+    assert lo <= 0.0 <= hi or (lo <= (ef.demographic_parity(Ya, groups)
+                                      - ef.demographic_parity(Yb, groups)) <= hi)
+
+
+def test_bootstrap_counts_empty_group_drops():
+    # a group that can vanish under resampling of a tiny sample
+    Yb = np.array([1.0, 1.0, 2.0])
+    Ya = np.array([1.5, 1.5, 2.0])
+    groups = np.array([0, 0, 1])                     # single disadvantaged unit
+    specs = [("di", ef.disparate_impact, groups)]
+    out = ef.paired_bootstrap(Yb, Ya, specs, B=300, seed=1)
+    assert out["di"]["n_dropped"] >= 1               # some resamples drop unit 2
