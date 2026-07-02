@@ -8,7 +8,10 @@
 **Bottom line.** The paper now has **external validity on a second city**: the FAMAIL editor makes San
 Francisco taxi trajectories **fairer (ΔF_causal +0.0139, beating Shenzhen's own +0.0128) while they stay
 realistic (F_fidelity 0.968)** — with **no change to the algorithm, fairness metric, or fidelity
-architecture**. Separately, the entire Shenzhen result set was re-run under **three demographic feature sets**
+architecture** — and, running the **identical BC/GAN downstream eval**, the **full two-pillar argument
+reproduces on SF** (edited = fairest faithful source → vanilla BC null → weighted-BC recovery), with the
+recovery *sharper* than Shenzhen. Separately, the entire Shenzhen result set was re-run under **three
+demographic feature sets**
 and packaged into a committed, adversarially-reviewed `PAPER/` bundle; the two-pillar story reproduces under
 all three. Two decisions are teed up for the meeting: **(a) the `F_causal → F_demo` rename**, and **(b) how
 hard to lean on the second dataset given one honest caveat (the fidelity signal is profile-dominated — but
@@ -40,17 +43,25 @@ hard to lean on the second dataset given one honest caveat (the fidelity signal 
    an active constraint; **it's a property of the whole method, not an SF weakness.** Decision needed on
    framing. **§C.4.**
 
-5. **Separate session: demographic-feature re-runs + the `PAPER/` bundle.** The full Shenzhen experiment set
+5. **BC/GAN downstream eval on SF: the two-pillar argument reproduces (and is sharper).** Running the
+   identical Shenzhen eval (L1 data-quality, L2 vanilla transfer, weighted-BC recovery, model-level variance)
+   on the SF edited trajectories: **Pillar 1** edited is fairest + identity-faithful; **L2** vanilla null;
+   **Pillar 2** weighted-BC **recovers** (+0.0296/+0.0348/**+0.0387** at w10/20/30, 6/6 seeds, > Shenzhen's
+   +0.0311) with the random-placebo **and** most-fair-select controls **both negative** (Shenzhen's were
+   ~null); model-level variance null. One SF divergence: the WGAN-GP GAN did **not** collapse. Identical
+   protocol + one city-aware plumbing fix; ~90 min on one RTX 3070. **§C.5.**
+
+6. **Separate session: demographic-feature re-runs + the `PAPER/` bundle.** The full Shenzhen experiment set
    (editor, L1, L2, weighted-BC, placebo, variance) was re-run under **three feature sets** and curated into a
    committed `PAPER/` directory with per-set READMEs, figures, tables, and **two adversarial reviews (0 of 29
    findings refuted)**. Two-pillar story reproduces under all three; only the F_causal *scale* shifts. **§D.**
 
-6. **Open decisions for the meeting:** the `F_causal → F_demo` rename (held from the reviews), and the
+7. **Open decisions for the meeting:** the `F_causal → F_demo` rename (held from the reviews), and the
    second-dataset framing given the profile-dominance caveat. **§E.**
 
 **Where the second dataset stands:** search **DONE**; implementation **DONE** (pipeline + discriminator);
-dual claim **DEMONSTRATED**; results curated into `PAPER/second-dataset/` (kept deliberately separable in case
-the second dataset is later swapped).
+dual claim **DEMONSTRATED**; **BC/GAN downstream eval DONE (two-pillar argument reproduces, §C.5)**; results
+curated into `PAPER/second-dataset/` (kept deliberately separable in case the second dataset is later swapped).
 
 ---
 
@@ -142,6 +153,44 @@ metric**, not an active gradient — **a property of the whole mechanism, not an
 decision (pending your input): report as-is for parity with Shenzhen; a stronger seeking-sensitive
 discriminator (drop the profile stream, or add same-driver-corrupted-seeking hard negatives) is deferred and
 would require re-running Shenzhen the same way for a fair comparison.*
+
+### C.5 Downstream BC/GAN evaluation — the two-pillar argument reproduces on SF
+We ran the **identical** Shenzhen downstream evaluation on the SF edited trajectories: L1 data-quality,
+L2 vanilla transfer, weighted-BC recovery, and the model-level variance suite. **Identical protocol + one
+backward-compatible plumbing fix** (a city-aware discriminator-checkpoint path in the runners; a second fix
+skips the Shenzhen-only DI district-disparity metric, which SF has no analog for). It reused the existing
+`sf12-dual` edit run (no editor re-run); the whole suite was ~90 min on one RTX 3070. The real-anchored
+**Fidelity-A validation gate PASSED** (matched real 0.958 vs mismatched 0.034), so Fidelity-A is trusted on
+the 12-driver sf12. Curated in `PAPER/second-dataset/` §6 + `tables/eval_*.csv`.
+
+- **Pillar 1 — L1 data quality:** FAMAIL-**edited is the fairest source** (F_causal 0.889 > raw 0.875 ≈ bc
+  0.879 ≈ gan 0.879) while **identity-faithful** (Fidelity-A 0.958 = raw). ✓ reproduces Shenzhen.
+- **L2 — vanilla transfer:** driver-conditioned BC on edited vs raw → **ΔF_causal +0.0004 ± 0.0033 (n=5,
+  p=0.81, null)** — vanilla BC averages the edit away, exactly like Shenzhen.
+- **Pillar 2 — weighted-BC recovery (the headline):** upweighting the edited demos **recovers** the fairness:
+
+  | arm | Δ vs raw @ w10 / w20 / w30 |
+  |---|---|
+  | **edited** | **+0.0296 / +0.0348 / +0.0387** (6/6 seeds, monotone, Fidelity-A unchanged) |
+  | random placebo | −0.0071 / — / −0.0095 |
+  | most-fair select | −0.0117 / −0.0068 / −0.0027 |
+
+  w30 (+0.0387) **exceeds Shenzhen's +0.0311**, and — unlike Shenzhen, where the two controls were ~null —
+  here **both the random placebo and the most-fair select are negative**, i.e. oversampling random data or
+  selecting the already-fairest trajectories both *hurt* fairness. This is a **sharper** demonstration that
+  the gain is **edit-specific**, not oversampling and not selection.
+- **Model-level variance (b0 vs FAMAIL, MLE-only):** ΔF_causal **−0.0005 ± 0.0043 (n=5, null)**, mirroring
+  Shenzhen's model-level null.
+
+**One SF-specific divergence to flag:** the WGAN-GP **GAN did not collapse** on SF (Fidelity-B 0.027 vs
+Shenzhen's ~0.32), so the Shenzhen "GAN disqualified by distributional collapse" sub-claim does **not**
+transfer — likely because SF's smaller vocab/corpus makes adversarial training more stable. This is a minor
+sub-result, not load-bearing for either pillar.
+
+**Net:** the SF second dataset now carries the *complete* two-pillar argument end-to-end — edited data is the
+fairest faithful source, vanilla BC/variance does not transfer it, and importance-weighting recovers it
+edit-specifically — reproducing (and in Pillar 2 exceeding) the Shenzhen result with no algorithm change.
+*(On branch `sf-baseline-eval`, commit `658ae63`; ready to merge on your OK.)*
 
 ## §D. Separate session — demographic-feature re-runs + the `PAPER/` bundle
 
