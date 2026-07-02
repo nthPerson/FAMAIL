@@ -48,3 +48,29 @@ def test_assemble_results_ci_present():
     entry = res["metrics"]["MigrantRatio"]["district_extremes"]
     lo, hi = entry["demographic_parity"]["delta_ci"]
     assert lo <= entry["demographic_parity"]["delta"] <= hi
+
+
+import json
+
+
+def test_write_json_and_markdown(tmp_path):
+    Yb, Ya, demo = _synthetic_arrays()
+    res = rx.assemble_results(Yb, Ya, demo, seed=0, B=30)
+    meta = {"dataset": "shenzhen-primary", "edit_dir": "x", "seed": 0, "B": 30}
+    path = rx.write_json(res, tmp_path, meta)
+    loaded = json.loads(path.read_text())
+    assert loaded["meta"]["dataset"] == "shenzhen-primary"
+    assert "theil" in loaded
+
+    md = rx.render_markdown(res, meta)
+    assert "Demographic parity" in md
+    assert "Disparate impact" in md
+    assert "Theil" in md
+    assert "| Before | After | Delta |" in md or "Before" in md
+
+
+def test_combined_table():
+    Yb, Ya, demo = _synthetic_arrays()
+    res = rx.assemble_results(Yb, Ya, demo, seed=0, B=20)
+    md = rx.render_combined_table([("shenzhen", res), ("sf", res)])
+    assert "shenzhen" in md and "sf" in md

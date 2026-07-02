@@ -2,6 +2,8 @@
 docs/superpowers/plans/2026-07-02-external-fairness-metrics.md."""
 from __future__ import annotations
 
+import json
+from pathlib import Path
 from typing import Dict, List, Tuple
 
 import numpy as np
@@ -81,3 +83,70 @@ def assemble_results(
             e["disparate_impact"]["delta_ci"] = boot[f"di::{axis}::{g}"]["delta"]
             e["supply_demand_ratio"]["gap_ci"] = boot[f"sdrgap::{axis}::{g}"]["delta"]
     return result
+
+
+def _fmt(x) -> str:
+    return "nan" if x is None or (isinstance(x, float) and np.isnan(x)) else f"{x:.4f}"
+
+
+def _fmt_ci(ci) -> str:
+    lo, hi = ci
+    return f"[{_fmt(lo)}, {_fmt(hi)}]"
+
+
+def write_json(result: dict, out_dir, meta: dict) -> Path:
+    out_dir = Path(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    payload = {"meta": meta, **result}
+    path = out_dir / "external_fairness.json"
+    path.write_text(json.dumps(payload, indent=2, default=float))
+    return path
+
+
+def render_markdown(result: dict, meta: dict) -> str:
+    lines: List[str] = [f"# External fairness — {meta.get('dataset','')}", ""]
+    lines.append(f"**Edit dir:** `{meta.get('edit_dir','')}`  ·  "
+                 f"**B:** {meta.get('B','')}  ·  **seed:** {meta.get('seed','')}")
+    lines.append("")
+    t = result["theil"]
+    lines.append("## Theil index (between-region, on Y)")
+    lines.append("| Before | After | Delta | Δ 95% CI |")
+    lines.append("|---:|---:|---:|---:|")
+    lines.append(f"| {_fmt(t['before'])} | {_fmt(t['after'])} | "
+                 f"{t['delta']:+.4f} | {_fmt_ci(t['delta_ci'])} |")
+    lines.append("")
+    for axis in io.EQUITY_AXES:
+        for g in GROUPINGS:
+            e = result["metrics"][axis][g]
+            gs = e["group_sizes"]
+            lines.append(f"## {axis} — {g}  "
+                         f"(D={gs['n_disadvantaged']}, A={gs['n_advantaged']}, "
+                         f"excl={gs['n_excluded']})")
+            lines.append("| Metric | Before | After | Delta | Δ 95% CI |")
+            lines.append("|---|---:|---:|---:|---:|")
+            dp = e["demographic_parity"]
+            di = e["disparate_impact"]
+            sd = e["supply_demand_ratio"]
+            lines.append(f"| Supply/demand gap | {_fmt(sd['before']['gap'])} | "
+                         f"{_fmt(sd['after']['gap'])} | {sd['delta_gap']:+.4f} | "
+                         f"{_fmt_ci(sd['gap_ci'])} |")
+            lines.append(f"| Demographic parity | {_fmt(dp['before'])} | "
+                         f"{_fmt(dp['after'])} | {dp['delta']:+.4f} | "
+                         f"{_fmt_ci(dp['delta_ci'])} |")
+            lines.append(f"| Disparate impact | {_fmt(di['before'])} | "
+                         f"{_fmt(di['after'])} | {di['delta']:+.4f} | "
+                         f"{_fmt_ci(di['delta_ci'])} |")
+            lines.append("")
+    return "\n".join(lines)
+
+
+def render_combined_table(named_results: List[Tuple[str, dict]]) -> str:
+    lines = ["# External fairness — cross-dataset comparison", "",
+             "| Dataset | Theil Δ | DP Δ (migrant/extremes) | DI Δ (migrant/extremes) |",
+             "|---|---:|---:|---:|"]
+    for label, res in named_results:
+        e = res["metrics"]["MigrantRatio"]["district_extremes"]
+        lines.append(f"| {label} | {res['theil']['delta']:+.4f} | "
+                     f"{e['demographic_parity']['delta']:+.4f} | "
+                     f"{e['disparate_impact']['delta']:+.4f} |")
+    return "\n".join(lines)
