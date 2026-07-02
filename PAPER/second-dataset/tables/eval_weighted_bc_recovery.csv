@@ -1,0 +1,10 @@
+arm,weight,delta_f_causal_vs_raw,wilcoxon_p,n_seeds,note
+edited,1,+0.0005,0.5625,6,vanilla baseline (reproduces the L2 null)
+edited,10,+0.0296,0.03125,6,RECOVERY (6/6 seeds positive)
+edited,20,+0.0348,0.03125,6,monotone dose-response
+edited,30,+0.0387,0.03125,6,largest recovery (> Shenzhen's +0.0311)
+random_placebo,10,-0.0071,0.03125,6,oversampling a random non-edited subset HURTS fairness
+random_placebo,30,-0.0095,0.03125,6,
+most_fair_select,10,-0.0117,0.03125,6,upweighting the already-fairest trajectories HURTS
+most_fair_select,20,-0.0068,0.03125,6,
+most_fair_select,30,-0.0027,0.4375,6,

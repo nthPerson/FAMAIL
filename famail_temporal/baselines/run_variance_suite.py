@@ -134,13 +134,26 @@ def _resolve_device(arg: str) -> torch.device:
 def _seed_metrics(bundle, result, edited_units) -> Dict[str, float]:
     """Extract the tracked scalars + histogram from one fit_and_evaluate result."""
     grid = pickups_to_pickup_3d(bundle, result["pickups"])
-    di = di_from_bundle_and_pickup_grid(bundle, grid)
+    try:
+        di = di_from_bundle_and_pickup_grid(bundle, grid)
+        di_primary = float(di["di_primary"])
+        di_supplementary = float(di["di_supplementary"])
+    except (ValueError, FileNotFoundError, KeyError):
+        # DI is a Shenzhen administrative-district (hukou) disparate-impact ratio
+        # and needs a `district_id_grid`. Cities without an administrative-district
+        # abstraction (e.g. SF, whose demographics are per-cell ACS tracts and whose
+        # grid_to_district_mapping.pkl carries only a valid_mask) have no districts,
+        # so DI does not apply — record NaN and continue. The district-free
+        # model-level signals (F_causal / F_spatial / localized F_causal) are still
+        # computed. Shenzhen (which supplies district_id_grid) is unaffected.
+        di_primary = float("nan")
+        di_supplementary = float("nan")
     loc = localized_f_causal(bundle, grid, edited_units)
     return {
         "f_spatial": float(result["generated"]["f_spatial"]),
         "f_causal": float(result["generated"]["f_causal"]),
-        "di_primary": float(di["di_primary"]),
-        "di_supplementary": float(di["di_supplementary"]),
+        "di_primary": di_primary,
+        "di_supplementary": di_supplementary,
         "f_causal_localized": float(loc["f_causal_localized"]),
         "f_causal_global_mi": float(loc["f_causal_global"]),
         "final_mle_loss": float(result["mle_losses"][-1]),

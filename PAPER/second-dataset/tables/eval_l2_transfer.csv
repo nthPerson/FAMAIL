@@ -1,0 +1,8 @@
+training_source,f_causal_mean,f_causal_std,f_spatial_mean,fidelity_a,fidelity_b,n_seeds
+raw,0.8742,0.0053,0.1892,0.9575,0.0109,5
+edited,0.8745,0.0043,0.1923,0.9575,0.0130,5
+bcgen,0.8801,0.0028,0.1896,0.9577,0.0164,5
+gangen,0.8779,0.0015,0.1863,0.9576,0.0341,5
+# paired (edited - raw) F_causal,,,,,,
+edited_minus_raw,+0.0004,0.0033,,,,5
+edited_minus_raw_wilcoxon_p,0.812,,,,,5

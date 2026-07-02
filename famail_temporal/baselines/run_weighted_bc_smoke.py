@@ -172,7 +172,8 @@ def main(argv: List[str] | None = None) -> int:
     fss = args.fidelity_sample_size
 
     # ---- discriminator (Fidelity-A) checkpoint guard before any expensive work ----
-    ckpt = Path(config.PACKAGE_ROOT) / "discriminator_checkpoints" / "default" / "best.pt"
+    # City-aware: default/best.pt for Shenzhen, sf_12/best.pt under FAMAIL_CITY=sf12.
+    ckpt = config.DISCRIMINATOR_CHECKPOINT_DIR / config.DISCRIMINATOR_CHECKPOINT_FILENAME
     if not ckpt.exists():
         raise SystemExit(f"discriminator checkpoint not found: {ckpt}")
     disc = load_discriminator(ckpt).to(device)
