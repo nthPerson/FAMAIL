@@ -1,0 +1,74 @@
+{
+  "edit_dir": "famail_temporal/results/2026-05-28T08-51-32_k-10000_causal_emphasis_no-dedup",
+  "gate": {
+    "high_real_real": 0.6684819257378578,
+    "low_collapsed": 0.6603442784547806,
+    "low_shuffled": 0.6684523792624474,
+    "margin": 0.2,
+    "passed": false
+  },
+  "gan_max_len": 64,
+  "sources": {
+    "raw": {
+      "f_causal": 0.8052338361740112,
+      "f_spatial": 0.0821562185883522,
+      "fidelity_a": 0.6684819257378578,
+      "fidelity_a_std": 0.0,
+      "fidelity_a_n": 5000,
+      "fidelity_a_trusted": false,
+      "fidelity_b": 0.0,
+      "fidelity_b_per_stat": {
+        "length": 0.0,
+        "mean_displacement": 0.0,
+        "coverage": 0.0
+      },
+      "n_empty": 0
+    },
+    "edited": {
+      "f_causal": 0.8179873824119568,
+      "f_spatial": 0.08244386315345764,
+      "fidelity_a": 0.6645361356794629,
+      "fidelity_a_std": 0.0272725959191994,
+      "fidelity_a_n": 3773,
+      "fidelity_a_trusted": false,
+      "fidelity_b": 0.04798501145540319,
+      "fidelity_b_per_stat": {
+        "length": 0.005230243095676828,
+        "mean_displacement": 0.029718150395302713,
+        "coverage": 0.10900664087523003
+      },
+      "n_empty": 0
+    },
+    "bc": {
+      "f_causal": 0.8064435720443726,
+      "f_spatial": 0.08272255957126617,
+      "fidelity_a": 0.6643152681350708,
+      "fidelity_a_std": 0.024029096411240843,
+      "fidelity_a_n": 5000,
+      "fidelity_a_trusted": false,
+      "fidelity_b": 0.010558202805954068,
+      "fidelity_b_per_stat": {
+        "length": 0.022018481190280267,
+        "mean_displacement": 0.006029413740503215,
+        "coverage": 0.0036267134870787182
+      },
+      "n_empty": 0
+    },
+    "gan": {
+      "f_causal": 0.8212026357650757,
+      "f_spatial": 0.08474921435117722,
+      "fidelity_a": 0.6636954981207848,
+      "fidelity_a_std": 0.025684963010897812,
+      "fidelity_a_n": 5000,
+      "fidelity_a_trusted": false,
+      "fidelity_b": 0.318907324163834,
+      "fidelity_b_per_stat": {
+        "length": 0.49255081469910267,
+        "mean_displacement": 0.01660032850871883,
+        "coverage": 0.4475708292836804
+      },
+      "n_empty": 0
+    }
+  },
+  "edited_fairness_source": "edit metrics_after (full-corpus; see LEVEL1_RESULTS.md)"
+}

@@ -74,3 +74,130 @@ famail_temporal/baselines/external_fairness/results/
 # tables (the global *.json/*.csv ignores above would otherwise drop them).
 !PAPER/**/*.json
 !PAPER/**/*.csv
+
+# >>> graphify-tracked curated results (auto-generated; see .graphifyignore) >>>
+# Track ONLY the run reports + <=64KB data files cited by committed docs, so the
+# graphify knowledge graph can see them. Run-dirs are un-ignored so git can descend;
+# collateral file types are re-ignored; then the specific cited files are re-included.
+# --- un-ignore cited run-dirs (allow descent) ---
+!famail_temporal/results/2026-05-28T08-51-32_k-10000_causal_emphasis_no-dedup/
+!famail_temporal/results/2026-07-01T09-59-11_sf12-dual/
+!famail_temporal/results/b0_adversarial/
+!famail_temporal/results/data_pareto/
+!famail_temporal/results/level1_table/
+!famail_temporal/results/level1_table_v2/
+!famail_temporal/results/level2_table/
+!famail_temporal/results/overnight_2026-06-10/
+!famail_temporal/results/weighted_bc_sweep/
+# --- re-ignore collateral swept in by the run-dir un-ignore ---
+famail_temporal/results/**/*.png
+famail_temporal/results/**/*.jsonl
+famail_temporal/results/**/*.sh
+famail_temporal/results/**/*.log
+famail_temporal/results/**/*.txt
+famail_temporal/results/**/ALL_DONE
+famail_temporal/results/**/pid.txt
+# --- re-include the specific cited reports + data files (override everything above) ---
+!famail_temporal/results/2026-05-28T08-51-32_k-10000_causal_emphasis_no-dedup/metrics.json
+!famail_temporal/results/2026-05-28T08-51-32_k-10000_causal_emphasis_no-dedup/report.md
+!famail_temporal/results/2026-07-01T09-59-11_sf12-dual/metrics.json
+!famail_temporal/results/2026-07-01T09-59-11_sf12-dual/report.md
+!famail_temporal/results/b0_adversarial/b0_adversarial_fairness.json
+!famail_temporal/results/data_pareto/pareto_points.json
+!famail_temporal/results/level1_table/2026-06-17T21-43-07/curves/bc_mle_epoch.csv
+!famail_temporal/results/level1_table/2026-06-17T21-43-07/curves/gan_adv_d_epoch.csv
+!famail_temporal/results/level1_table/2026-06-17T21-43-07/curves/gan_adv_g_batch.csv
+!famail_temporal/results/level1_table/2026-06-17T21-43-07/curves/gan_adv_g_epoch.csv
+!famail_temporal/results/level1_table/2026-06-17T21-43-07/curves/gan_mle_epoch.csv
+!famail_temporal/results/level1_table/2026-06-17T21-43-07/level1_metrics.json
+!famail_temporal/results/level1_table/2026-06-17T21-43-07/level1_table.md
+!famail_temporal/results/level1_table_v2/2026-06-18_full_run/curves/bc_mle_epoch.csv
+!famail_temporal/results/level1_table_v2/2026-06-18_full_run/curves/gan_adv_d_epoch.csv
+!famail_temporal/results/level1_table_v2/2026-06-18_full_run/curves/gan_adv_g_batch.csv
+!famail_temporal/results/level1_table_v2/2026-06-18_full_run/curves/gan_adv_g_epoch.csv
+!famail_temporal/results/level1_table_v2/2026-06-18_full_run/curves/gan_mle_epoch.csv
+!famail_temporal/results/level1_table_v2/2026-06-18_full_run/driver_index.json
+!famail_temporal/results/level1_table_v2/2026-06-18_full_run/level1_v2_metrics.json
+!famail_temporal/results/level1_table_v2/2026-06-18_full_run/level1_v2_table.md
+!famail_temporal/results/level1_table_v2/cleaned_4feat_5seed/driver_index.json
+!famail_temporal/results/level1_table_v2/cleaned_4feat_5seed/level1_v2_metrics.json
+!famail_temporal/results/level1_table_v2/cleaned_4feat_5seed/level1_v2_multiseed.json
+!famail_temporal/results/level1_table_v2/cleaned_4feat_5seed/level1_v2_table.md
+!famail_temporal/results/level1_table_v2/cleaned_4feat_5seed/manifest.json
+!famail_temporal/results/level1_table_v2/cleaned_5seed/driver_index.json
+!famail_temporal/results/level1_table_v2/cleaned_5seed/level1_v2_metrics.json
+!famail_temporal/results/level1_table_v2/cleaned_5seed/level1_v2_multiseed.json
+!famail_temporal/results/level1_table_v2/cleaned_5seed/level1_v2_table.md
+!famail_temporal/results/level1_table_v2/cleaned_5seed/manifest.json
+!famail_temporal/results/level1_table_v2/cleaned_hcm_5seed/driver_index.json
+!famail_temporal/results/level1_table_v2/cleaned_hcm_5seed/level1_v2_metrics.json
+!famail_temporal/results/level1_table_v2/cleaned_hcm_5seed/level1_v2_multiseed.json
+!famail_temporal/results/level1_table_v2/cleaned_hcm_5seed/level1_v2_table.md
+!famail_temporal/results/level1_table_v2/cleaned_hcm_5seed/manifest.json
+!famail_temporal/results/level1_table_v2/sf12_5seed/driver_index.json
+!famail_temporal/results/level1_table_v2/sf12_5seed/level1_v2_metrics.json
+!famail_temporal/results/level1_table_v2/sf12_5seed/level1_v2_multiseed.json
+!famail_temporal/results/level1_table_v2/sf12_5seed/level1_v2_table.md
+!famail_temporal/results/level1_table_v2/sf12_5seed/manifest.json
+!famail_temporal/results/level1_table_v2/sf12_smoke_seed0/driver_index.json
+!famail_temporal/results/level1_table_v2/sf12_smoke_seed0/level1_v2_metrics.json
+!famail_temporal/results/level1_table_v2/sf12_smoke_seed0/level1_v2_table.md
+!famail_temporal/results/level1_table_v2/sf12_smoke_seed0/manifest.json
+!famail_temporal/results/level2_table/2026-06-18T17-27-34/driver_index.json
+!famail_temporal/results/level2_table/2026-06-18T17-27-34/level2_metrics.json
+!famail_temporal/results/level2_table/2026-06-18T17-27-34/level2_table.md
+!famail_temporal/results/level2_table/cleaned_4feat_5seed/driver_index.json
+!famail_temporal/results/level2_table/cleaned_4feat_5seed/level2_metrics.json
+!famail_temporal/results/level2_table/cleaned_4feat_5seed/level2_table.md
+!famail_temporal/results/level2_table/cleaned_4feat_5seed/manifest.json
+!famail_temporal/results/level2_table/cleaned_4feat_5seed/paired_stats.json
+!famail_temporal/results/level2_table/cleaned_5seed/driver_index.json
+!famail_temporal/results/level2_table/cleaned_5seed/level2_metrics.json
+!famail_temporal/results/level2_table/cleaned_5seed/level2_table.md
+!famail_temporal/results/level2_table/cleaned_5seed/manifest.json
+!famail_temporal/results/level2_table/cleaned_5seed/paired_stats.json
+!famail_temporal/results/level2_table/cleaned_hcm_5seed/driver_index.json
+!famail_temporal/results/level2_table/cleaned_hcm_5seed/level2_metrics.json
+!famail_temporal/results/level2_table/cleaned_hcm_5seed/level2_table.md
+!famail_temporal/results/level2_table/cleaned_hcm_5seed/manifest.json
+!famail_temporal/results/level2_table/cleaned_hcm_5seed/paired_stats.json
+!famail_temporal/results/level2_table/sf12_5seed/driver_index.json
+!famail_temporal/results/level2_table/sf12_5seed/level2_metrics.json
+!famail_temporal/results/level2_table/sf12_5seed/level2_table.md
+!famail_temporal/results/level2_table/sf12_5seed/manifest.json
+!famail_temporal/results/level2_table/sf12_5seed/paired_stats.json
+!famail_temporal/results/overnight_2026-06-10/ablation_mle10/b0_adversarial_fairness.json
+!famail_temporal/results/overnight_2026-06-10/ablation_mle20/b0_adversarial_fairness.json
+!famail_temporal/results/overnight_2026-06-10/ablation_mle20_dslow/b0_adversarial_fairness.json
+!famail_temporal/results/overnight_2026-06-10/wgan_genheavy/b0_adversarial_fairness.json
+!famail_temporal/results/overnight_2026-06-10/wgan_ncritic5/b0_adversarial_fairness.json
+!famail_temporal/results/weighted_bc_sweep/cleaned_4feat_6seed/dose_response.json
+!famail_temporal/results/weighted_bc_sweep/cleaned_4feat_6seed/manifest.json
+!famail_temporal/results/weighted_bc_sweep/cleaned_4feat_6seed/paired_stats.json
+!famail_temporal/results/weighted_bc_sweep/cleaned_4feat_6seed/sweep.json
+!famail_temporal/results/weighted_bc_sweep/cleaned_6seed/dose_response.json
+!famail_temporal/results/weighted_bc_sweep/cleaned_6seed/manifest.json
+!famail_temporal/results/weighted_bc_sweep/cleaned_6seed/paired_stats.json
+!famail_temporal/results/weighted_bc_sweep/cleaned_6seed/sweep.json
+!famail_temporal/results/weighted_bc_sweep/cleaned_hcm_6seed/dose_response.json
+!famail_temporal/results/weighted_bc_sweep/cleaned_hcm_6seed/manifest.json
+!famail_temporal/results/weighted_bc_sweep/cleaned_hcm_6seed/paired_stats.json
+!famail_temporal/results/weighted_bc_sweep/cleaned_hcm_6seed/sweep.json
+!famail_temporal/results/weighted_bc_sweep/dryrun/sweep.json
+!famail_temporal/results/weighted_bc_sweep/full_5seed_w10_w30/sweep.json
+!famail_temporal/results/weighted_bc_sweep/placebo_6seed_w10_w30/sweep.json
+!famail_temporal/results/weighted_bc_sweep/sf12_6seed/chosen_ids.json
+!famail_temporal/results/weighted_bc_sweep/sf12_6seed/dose_response.json
+!famail_temporal/results/weighted_bc_sweep/sf12_6seed/manifest.json
+!famail_temporal/results/weighted_bc_sweep/sf12_6seed/paired_stats.json
+!famail_temporal/results/weighted_bc_sweep/sf12_6seed/sweep.json
+!famail_temporal/results/weighted_bc_sweep/sig_6seed_w10_w20_w30/sweep.json
+# <<< graphify-tracked curated results <<<
+
+# graphify knowledge-graph output (generated; rebuilt by hook)
+/graphify-out/
+
+# Track the graphify awareness note (project CLAUDE.md) even though .claude/CLAUDE.md dep is ignored
+!/CLAUDE.md
+# Dirty/experimental source data (analogous to the ignored source_data/)
+famail_temporal/source_data_dirty/

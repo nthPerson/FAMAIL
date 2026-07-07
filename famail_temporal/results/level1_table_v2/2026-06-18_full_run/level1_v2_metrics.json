@@ -1,0 +1,82 @@
+{
+  "edit_dir": "famail_temporal/results/2026-05-28T08-51-32_k-10000_causal_emphasis_no-dedup",
+  "gate": {
+    "high_matched": 0.840417517542839,
+    "low_mismatched": 0.1742855693222402,
+    "margin": 0.2,
+    "passed": true,
+    "n_matched": 1000,
+    "n_mismatched": 1000
+  },
+  "n_eval_drivers": 50,
+  "sources": {
+    "raw": {
+      "f_causal": 0.8052338361740112,
+      "f_spatial": 0.0821562185883522,
+      "fidelity_a": 0.840417517542839,
+      "fidelity_a_separation": 0.6661319482205987,
+      "fidelity_a_trusted": true,
+      "fidelity_b": 0.0,
+      "fidelity_b_per_component": {
+        "length": 0.0,
+        "mean_displacement": 0.0,
+        "coverage": 0.0,
+        "radius_of_gyration": 0.0,
+        "net_displacement": 0.0,
+        "terminal_cell": 0.0
+      },
+      "n_empty": 0
+    },
+    "edited": {
+      "f_causal": 0.8179873824119568,
+      "f_spatial": 0.08244386315345764,
+      "fidelity_a": 0.838189173613163,
+      "fidelity_a_separation": 0.72494555024954,
+      "fidelity_a_trusted": true,
+      "fidelity_b": 0.16886161613027664,
+      "fidelity_b_per_component": {
+        "length": 0.005230243095676828,
+        "mean_displacement": 0.03936501609594019,
+        "coverage": 0.10900664087523003,
+        "radius_of_gyration": 0.0802311188409838,
+        "net_displacement": 0.13462496935544555,
+        "terminal_cell": 0.6447117085183836
+      },
+      "n_empty": 0
+    },
+    "bc": {
+      "f_causal": 0.8069928884506226,
+      "f_spatial": 0.08326807618141174,
+      "fidelity_a": 0.8411632505655289,
+      "fidelity_a_separation": 0.6670961815628484,
+      "fidelity_a_trusted": true,
+      "fidelity_b": 0.010286286865869595,
+      "fidelity_b_per_component": {
+        "length": 0.00784796151755509,
+        "mean_displacement": 0.007148055882629465,
+        "coverage": 0.002851953632659107,
+        "radius_of_gyration": 0.0073269738126936525,
+        "net_displacement": 0.0075859391471080305,
+        "terminal_cell": 0.028956837202572222
+      },
+      "n_empty": 0
+    },
+    "gan": {
+      "f_causal": 0.8146236538887024,
+      "f_spatial": 0.08372893184423447,
+      "fidelity_a": 0.8424013409018517,
+      "fidelity_a_separation": 0.6682172156288912,
+      "fidelity_a_trusted": true,
+      "fidelity_b": 0.32281532108758276,
+      "fidelity_b_per_component": {
+        "length": 0.4952442038087468,
+        "mean_displacement": 0.17853475956151216,
+        "coverage": 0.5332045208476227,
+        "radius_of_gyration": 0.3955434313652588,
+        "net_displacement": 0.19782679818895343,
+        "terminal_cell": 0.1365382127534026
+      },
+      "n_empty": 1
+    }
+  }
+}

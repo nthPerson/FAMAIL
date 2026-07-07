@@ -1,0 +1,205 @@
+{
+  "edit_dir": "famail_temporal/results/2026-05-28T08-51-32_k-10000_causal_emphasis_no-dedup",
+  "seeds": [
+    0
+  ],
+  "weights": [
+    30.0
+  ],
+  "mle_epochs": 1,
+  "n_edited": 3773,
+  "n_corpus": 105401,
+  "n_eval_drivers": 3,
+  "gate": {
+    "high_matched": 0.827550858259201,
+    "low_mismatched": 0.0037302916545153644,
+    "margin": 0.2,
+    "passed": true,
+    "n_matched": 12,
+    "n_mismatched": 12
+  },
+  "trusted": true,
+  "per_arm": {
+    "raw": {
+      "f_causal": {
+        "mean": 0.8133463859558105,
+        "std": 0.0,
+        "values": [
+          0.8133
+        ]
+      },
+      "f_spatial": {
+        "mean": 0.0862220749258995,
+        "std": 0.0,
+        "values": [
+          0.0862
+        ]
+      },
+      "fidelity_a": {
+        "mean": 0.822445755203565,
+        "std": 0.0,
+        "values": [
+          0.8224
+        ]
+      },
+      "fidelity_b": {
+        "mean": 0.21301012948262465,
+        "std": 0.0,
+        "values": [
+          0.213
+        ]
+      },
+      "n_empty": [
+        3
+      ]
+    },
+    "edited": {
+      "f_causal": {
+        "mean": 0.8103931546211243,
+        "std": 0.0,
+        "values": [
+          0.8104
+        ]
+      },
+      "f_spatial": {
+        "mean": 0.08777071535587311,
+        "std": 0.0,
+        "values": [
+          0.0878
+        ]
+      },
+      "fidelity_a": {
+        "mean": 0.8270989656448364,
+        "std": 0.0,
+        "values": [
+          0.8271
+        ]
+      },
+      "fidelity_b": {
+        "mean": 0.2034712457174002,
+        "std": 0.0,
+        "values": [
+          0.2035
+        ]
+      },
+      "n_empty": [
+        7
+      ]
+    },
+    "edited_w30": {
+      "f_causal": {
+        "mean": 0.8491532802581787,
+        "std": 0.0,
+        "values": [
+          0.8492
+        ]
+      },
+      "f_spatial": {
+        "mean": 0.09201066941022873,
+        "std": 0.0,
+        "values": [
+          0.092
+        ]
+      },
+      "fidelity_a": {
+        "mean": 0.8341750502586365,
+        "std": 0.0,
+        "values": [
+          0.8342
+        ]
+      },
+      "fidelity_b": {
+        "mean": 0.21492934767533736,
+        "std": 0.0,
+        "values": [
+          0.2149
+        ]
+      },
+      "n_empty": [
+        9
+      ]
+    }
+  },
+  "paired_vs_raw": {
+    "f_causal": {
+      "edited": {
+        "diffs": [
+          -0.003
+        ],
+        "mean": -0.0029532313346862793,
+        "std": 0.0,
+        "n": 1,
+        "wilcoxon_p": 1.0
+      },
+      "edited_w30": {
+        "diffs": [
+          0.0358
+        ],
+        "mean": 0.035806894302368164,
+        "std": 0.0,
+        "n": 1,
+        "wilcoxon_p": 1.0
+      }
+    },
+    "f_spatial": {
+      "edited": {
+        "diffs": [
+          0.0015
+        ],
+        "mean": 0.0015486404299736023,
+        "std": 0.0,
+        "n": 1,
+        "wilcoxon_p": 1.0
+      },
+      "edited_w30": {
+        "diffs": [
+          0.0058
+        ],
+        "mean": 0.005788594484329224,
+        "std": 0.0,
+        "n": 1,
+        "wilcoxon_p": 1.0
+      }
+    },
+    "fidelity_a": {
+      "edited": {
+        "diffs": [
+          0.0047
+        ],
+        "mean": 0.004653210441271427,
+        "std": 0.0,
+        "n": 1,
+        "wilcoxon_p": 1.0
+      },
+      "edited_w30": {
+        "diffs": [
+          0.0117
+        ],
+        "mean": 0.011729295055071476,
+        "std": 0.0,
+        "n": 1,
+        "wilcoxon_p": 1.0
+      }
+    },
+    "fidelity_b": {
+      "edited": {
+        "diffs": [
+          -0.0095
+        ],
+        "mean": -0.009538883765224465,
+        "std": 0.0,
+        "n": 1,
+        "wilcoxon_p": 1.0
+      },
+      "edited_w30": {
+        "diffs": [
+          0.0019
+        ],
+        "mean": 0.0019192181927127072,
+        "std": 0.0,
+        "n": 1,
+        "wilcoxon_p": 1.0
+      }
+    }
+  }
+}

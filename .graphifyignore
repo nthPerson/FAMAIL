@@ -1,0 +1,36 @@
+# graphify corpus scope — restrict the knowledge graph to famail_temporal/ + PAPER/ only.
+# graphify matches with fnmatch (where * crosses /), so a /* catch-all + negations does
+# NOT work; instead we explicitly exclude every other top-level entry. graphify prunes
+# these by name during the walk. The repo .gitignore is merged on top, so datasets,
+# binaries, per-run results and *.json/*.csv inside the two kept trees stay excluded
+# except where an explicit .gitignore exception re-includes them.
+/.claude/
+/.github/
+/.pytest_cache/
+/.superpowers/
+/.venv/
+/CHANGELOG.md
+/DATASETS.md
+/DATASET_README.md
+/README.md
+/active_taxis/
+/cGAIL_data_and_processing/
+/checkpoints/
+/data/
+/data_dictionary/
+/diag_negative_cells.py
+/diag_trajectory_vs_pickup_3d.py
+/discriminator/
+/docs/
+/experiment_framework/
+/experiment_results/
+/logs/
+/mkdocs.yml
+/move_famail_temporal_deps.sh
+/new_all_trajs/
+/objective_function/
+/pickup_dropoff_counts/
+/raw_data/
+/source_data/
+/trajectory_modification/
+/graphify_rebuild.py

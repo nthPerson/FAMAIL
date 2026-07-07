@@ -1,0 +1,37 @@
+{
+  "timestamp_utc": "2026-06-27T08:25:35.304322+00:00",
+  "git_sha": "d0e2199",
+  "git_dirty": true,
+  "argv": [
+    "/home/robert/FAMAIL/famail_temporal/baselines/run_level1_table_v2.py",
+    "--edit-dir",
+    "famail_temporal/results/2026-06-26T12-32-59_k-10000_causal_emphasis_no-dedup_cleaned",
+    "--seeds",
+    "0,1,2,3,4",
+    "--out-dir",
+    "famail_temporal/results/level1_table_v2/cleaned_5seed"
+  ],
+  "seeds": [
+    0,
+    1,
+    2,
+    3,
+    4
+  ],
+  "edit_dir": "famail_temporal/results/2026-06-26T12-32-59_k-10000_causal_emphasis_no-dedup_cleaned",
+  "hostname": "mf-pc",
+  "env": {
+    "python": "3.12.3",
+    "torch": "2.11.0+cu130",
+    "cuda": "13.0",
+    "gpu_name": "NVIDIA GeForce RTX 3070",
+    "numpy": "2.4.4",
+    "pandas": "3.0.2",
+    "cudnn_deterministic": false,
+    "cudnn_benchmark": false
+  },
+  "discriminator_sha256": "0623b2da0a61666b52dbf40e8949efef13b888bf747cff3ff9e230e8b4cc0f6f",
+  "gate_matched": 0.8474972864985466,
+  "gate_mismatched": 0.19303626876229846,
+  "gate_passed": true
+}

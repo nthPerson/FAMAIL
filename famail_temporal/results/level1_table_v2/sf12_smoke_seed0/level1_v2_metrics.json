@@ -1,0 +1,85 @@
+{
+  "edit_dir": "famail_temporal/results/2026-07-01T09-59-11_sf12-dual",
+  "gate": {
+    "high_matched": 0.9578102787335714,
+    "low_mismatched": 0.034354701393715784,
+    "margin": 0.2,
+    "passed": true,
+    "n_matched": 240,
+    "n_mismatched": 240
+  },
+  "n_eval_drivers": 12,
+  "sources": {
+    "raw": {
+      "f_causal": 0.8751505613327026,
+      "f_spatial": 0.18462900817394257,
+      "fidelity_a": 0.9578102787335714,
+      "fidelity_a_separation": 0.9234555773398556,
+      "fidelity_a_trusted": true,
+      "fidelity_b": 0.0,
+      "fidelity_b_per_component": {
+        "length": 0.0,
+        "mean_displacement": 0.0,
+        "coverage": 0.0,
+        "radius_of_gyration": 0.0,
+        "net_displacement": 0.0,
+        "terminal_cell": 0.0
+      },
+      "n_empty": 0
+    },
+    "edited": {
+      "f_causal": 0.8890948295593262,
+      "f_spatial": 0.1816568225622177,
+      "fidelity_a": 0.9581167861819267,
+      "fidelity_a_separation": 0.9236163393117041,
+      "fidelity_a_trusted": true,
+      "fidelity_b": 0.10577944176526725,
+      "fidelity_b_per_component": {
+        "length": 0.004100597810746365,
+        "mean_displacement": 0.02913879251424738,
+        "coverage": 0.04827894680405939,
+        "radius_of_gyration": 0.0583994445416427,
+        "net_displacement": 0.06014426922729811,
+        "terminal_cell": 0.4346145996936095
+      },
+      "n_empty": 0
+    },
+    "bc": {
+      "f_causal": 0.8788509368896484,
+      "f_spatial": 0.18942421674728394,
+      "fidelity_a": 0.9577075352271398,
+      "fidelity_a_separation": 0.9232359873021595,
+      "fidelity_a_trusted": true,
+      "fidelity_b": 0.010033365307850373,
+      "fidelity_b_per_component": {
+        "length": 0.01140035600541719,
+        "mean_displacement": 0.009302072854232846,
+        "coverage": 0.00540746301297829,
+        "radius_of_gyration": 0.006435446314050874,
+        "net_displacement": 0.008813362852277495,
+        "terminal_cell": 0.018841490808145542
+      },
+      "n_empty": 5
+    },
+    "gan": {
+      "f_causal": 0.8794325590133667,
+      "f_spatial": 0.1856151819229126,
+      "fidelity_a": 0.9579021282494068,
+      "fidelity_a_separation": 0.9234462616387423,
+      "fidelity_a_trusted": true,
+      "fidelity_b": 0.026942099323968665,
+      "fidelity_b_per_component": {
+        "length": 0.041630647852908965,
+        "mean_displacement": 0.011612034352188954,
+        "coverage": 0.03189451123317112,
+        "radius_of_gyration": 0.0227798157681364,
+        "net_displacement": 0.023221931445244665,
+        "terminal_cell": 0.03051365529216187
+      },
+      "n_empty": 6
+    }
+  },
+  "seeds": [
+    0
+  ]
+}
