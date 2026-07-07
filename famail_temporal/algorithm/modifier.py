@@ -38,7 +38,10 @@ from famail_temporal.data.aggregation import (
     hour_to_block_index, time_bucket_to_hour,
 )
 from famail_temporal.data.loader import DataBundle
-from famail_temporal.utils.trajectory import Trajectory
+from famail_temporal.utils.trajectory import Trajectory, taper_weights
+from famail_temporal.algorithm.supply import (
+    soft_delta_supply, hard_delta_supply, state_presence_mass,
+)
 
 
 @dataclass
@@ -172,6 +175,21 @@ class TrajectoryModifier:
         )
         self._prev_grad_sign = None
 
+        # ── Supply-lift state (Task 7) ───────────────────────────────────
+        # Shared DELTA-supply accumulator (evaluation-honest tier-1 ΔS). Shape
+        # is derived from the bundle tensors (NOT config.GRID_DIMS) so it always
+        # matches _base_pickup_3d and the objective's grid buffers. Zero at init;
+        # holds deltas, never totals (baseline presence lives in S_base).
+        self._delta_supply_3d = torch.zeros_like(self._base_pickup_3d)
+        self._grid_shape = tuple(self._base_pickup_3d.shape)  # (gx, gy, T)
+        # Boolean grid→unit mask. Boolean-indexing (gx,gy,T) with this in C order
+        # yields the (N,) vector in the SAME unit order the objective uses for
+        # its active_taxis_N / mask_3d buffers (both built from bundle.mask_3d).
+        self._mask_3d_t = torch.from_numpy(bundle.mask_3d).to(self.device)
+        # Tapered-tail infeasibility counters (Task 8 persists these).
+        self.n_taper_infeasible_trim = 0
+        self.n_taper_infeasible_lift = 0
+
     def current_pickup_3d(self) -> np.ndarray:
         """Return the post-modification pickup tensor as a numpy ndarray.
 
@@ -179,6 +197,48 @@ class TrajectoryModifier:
         cannot mutate modifier state.
         """
         return self._base_pickup_3d.detach().cpu().numpy().copy().astype(np.float32)
+
+    def current_delta_supply_3d(self) -> np.ndarray:
+        """Return the accumulated tier-1 ΔS grid as a float64 numpy copy.
+
+        Shape (grid_x, grid_y, T). This is the evaluation-honest supply delta
+        contributed by every discretized edit (trim tails and lift tails alike);
+        the downstream evaluator adds it to the baseline supply. Returns a copy
+        so callers cannot mutate modifier state.
+        """
+        return (
+            self._delta_supply_3d.detach().cpu().numpy().astype(np.float64).copy()
+        )
+
+    def _hard_tail_delta_supply(
+        self, original: Trajectory, modified: Trajectory,
+    ) -> Optional[torch.Tensor]:
+        """Hard tier-1 ΔS of a discretized edit: −presence box at each ORIGINAL
+        state cell, +presence box at each MODIFIED state cell, over exactly the
+        rows that changed cell (unmoved rows cancel, so iterating all states is
+        safe and captures any tail-deepening apply_tail_perturbation performed).
+
+        Returns a torch tensor (matching the accumulator's dtype/device) or
+        ``None`` when nothing moved.
+        """
+        olds, news, tbs, masses = [], [], [], []
+        for s_old, s_new in zip(original.states, modified.states):
+            oc = (int(s_old.x_grid), int(s_old.y_grid))
+            nc = (int(s_new.x_grid), int(s_new.y_grid))
+            if oc == nc:
+                continue
+            tb = hour_to_block_index(time_bucket_to_hour(s_old.time_bucket))
+            mass = state_presence_mass(
+                self.bundle.n_hours_per_block, self.bundle.n_days, tb,
+            )
+            olds.append(oc)
+            news.append(nc)
+            tbs.append(tb)
+            masses.append(mass)
+        if not olds:
+            return None
+        ds_np = hard_delta_supply(olds, news, tbs, masses, self._grid_shape)
+        return torch.from_numpy(ds_np).to(self._delta_supply_3d)
 
     def _get_annealed_temperature(self, iteration: int) -> float:
         """Exponential temperature annealing: tau_max * (tau_min/tau_max)^(t/T)."""
@@ -288,6 +348,7 @@ class TrajectoryModifier:
         on_iteration: Optional[Callable[[int, "ModificationResult"], None]] = None,
         *,
         original_cell: Optional[tuple] = None,
+        mode: str = "trim",
     ) -> ModificationHistory:
         """Run the ST-iFGSM loop on a single trajectory.
 
@@ -369,6 +430,49 @@ class TrajectoryModifier:
             else None
         )
 
+        # ── Lift-mode per-trajectory constants ────────────────────────────
+        # Precomputed ONCE (independent of the optimizer's delta): the moving
+        # tail rows (last L_eff+1 states, matching apply_tail_perturbation /
+        # lift_candidates), their presence masses, taper weights, and the
+        # CONSTANT hard removal at the ORIGINAL positions. Guarded by ``mode`` so
+        # the trim optimization path pays for none of this (G1).
+        if mode == "lift":
+            n_states = trajectory.n_states
+            l_eff = max(0, min(config.TAIL_LEN, n_states - 2))
+            M = l_eff + 1
+            moving_idx = list(range(n_states - M, n_states))
+            tail_states = [trajectory.states[i] for i in moving_idx]
+            tail_cells = [(int(s.x_grid), int(s.y_grid)) for s in tail_states]
+            tail_tblocks = [
+                hour_to_block_index(time_bucket_to_hour(s.time_bucket))
+                for s in tail_states
+            ]
+            tail_masses = [
+                state_presence_mass(
+                    self.bundle.n_hours_per_block, self.bundle.n_days, tb,
+                )
+                for tb in tail_tblocks
+            ]
+            tail_signs_pos = [1] * M
+            # Taper: the L_eff tail rows get taper_weights(l_eff); the pickup
+            # (last moving row) gets the full 1.0 delta.
+            taper_vec = list(taper_weights(l_eff)) + [1.0]
+            tail_orig_tensor = torch.tensor(
+                [[float(cx), float(cy)] for (cx, cy) in tail_cells],
+                dtype=torch.float32, device=self.device,
+            )  # (M, 2) — original integer positions of the moving rows
+            tail_cell_tensor = tail_orig_tensor.clone()  # neighborhood centers
+            taper_col = torch.tensor(
+                taper_vec, dtype=torch.float32, device=self.device,
+            ).unsqueeze(1)  # (M, 1)
+            # Constant hard removal at the ORIGINAL tail positions (sign already
+            # −mass; not differentiable — only the +soft-add term carries grad).
+            removal_const = torch.from_numpy(
+                hard_delta_supply(
+                    tail_cells, [], tail_tblocks, tail_masses, self._grid_shape,
+                )
+            ).to(self._delta_supply_3d)
+
         iterations: List[ModificationResult] = []
         # Best-iterate tracking. We persist the perturbation associated with
         # the best objective value seen across all iters (not the last) —
@@ -388,21 +492,41 @@ class TrajectoryModifier:
                     self._get_annealed_temperature(it)
                 )
 
-            # (b) Build pickup_tensor with requires_grad=True (on self.device)
+            # (b) Build the differentiable leaf + the soft pickup-demand probs.
             current_pickup = original_pickup + cumulative_delta
-            pickup_tensor = torch.tensor(
-                current_pickup, dtype=torch.float32,
-                device=self.device, requires_grad=True,
-            )
-            cell_tensor = torch.tensor(
-                [orig_cx, orig_cy], dtype=torch.float32, device=self.device,
-            ).unsqueeze(0)
+            delta_supply_N = None
+            if mode == "lift":
+                # Leaf = the tail-translation delta. Every moving row's soft
+                # position (supply) AND the pickup-demand position derive from
+                # it, so gradients from the demand grid, the endogenous supply
+                # channel, and fidelity all land on this single (2,) tensor —
+                # exactly as cumulative_delta plays the pickup-delta role in trim.
+                delta_tensor = torch.tensor(
+                    cumulative_delta, dtype=torch.float32,
+                    device=self.device, requires_grad=True,
+                )
+                grad_leaf = delta_tensor
+                # pos_j = orig_j + taper_j * delta  (differentiable in delta)
+                pos_stack = tail_orig_tensor + taper_col * delta_tensor  # (M, 2)
+                probs_new = self.soft_assign(pos_stack, tail_cell_tensor)  # (M,ns,ns)
+                probs = probs_new[-1]  # the pickup row's soft assignment (ns, ns)
+            else:
+                pickup_tensor = torch.tensor(
+                    current_pickup, dtype=torch.float32,
+                    device=self.device, requires_grad=True,
+                )
+                grad_leaf = pickup_tensor
+                cell_tensor = torch.tensor(
+                    [orig_cx, orig_cy], dtype=torch.float32, device=self.device,
+                ).unsqueeze(0)
 
-            # (c) Compute soft probs -> inject into t_block slice
-            probs = self.soft_assign(
-                pickup_tensor.unsqueeze(0), cell_tensor,
-            )[0]  # (ns, ns)
+                # (c) Compute soft probs -> inject into t_block slice
+                probs = self.soft_assign(
+                    pickup_tensor.unsqueeze(0), cell_tensor,
+                )[0]  # (ns, ns)
 
+            # Pickup demand injection (UNCHANGED; lift moves demand too, by
+            # design — the pickup row's soft position feeds the same t_block slice).
             soft_3d = inject_soft_counts_into_3d(
                 base_3d, probs, (orig_cx, orig_cy), t_block,
                 k=self.soft_assign.k, pickup_mass=pickup_mass,
@@ -430,6 +554,21 @@ class TrajectoryModifier:
             else:
                 objective_grid = soft_3d
 
+            # (c3) Endogenous supply channel (lift only). Build this trajectory's
+            # soft ΔS: +1 soft-add at the moving rows' NEW soft positions, plus
+            # the constant −1 hard removal at the ORIGINAL positions; add it to
+            # the shared accumulator and gather to (N,) in the objective's unit
+            # order. Only the +soft-add term carries gradient w.r.t. delta_tensor.
+            if mode == "lift":
+                soft_add = soft_delta_supply(
+                    probs_new, tail_cells, tail_tblocks, tail_masses,
+                    tail_signs_pos, self._grid_shape,
+                )
+                traj_soft_ds = soft_add + removal_const
+                delta_supply_N = (
+                    self._delta_supply_3d + traj_soft_ds
+                )[self._mask_3d_t]
+
             # Build fidelity features if needed
             tau_features = None
             tau_prime_features = None
@@ -437,25 +576,48 @@ class TrajectoryModifier:
             if self.objective.alpha_fidelity > 0:
                 tau_features = tau_features_cached
                 tau_prime_features = tau_features.clone()
-                tau_prime_features[0, -1, 0] = pickup_tensor[0]
-                tau_prime_features[0, -1, 1] = pickup_tensor[1]
+                if mode == "lift":
+                    # Splice ALL moving rows (not just the pickup): moving row j
+                    # is feature row -(M)+j == -(L_eff+1)+j.
+                    for j in range(M):
+                        row = -M + j
+                        tau_prime_features[0, row, 0] = pos_stack[j, 0]
+                        tau_prime_features[0, row, 1] = pos_stack[j, 1]
+                else:
+                    tau_prime_features[0, -1, 0] = pickup_tensor[0]
+                    tau_prime_features[0, -1, 1] = pickup_tensor[1]
                 if self.multi_stream_builder is not None:
                     # Reuse the per-trajectory cache and splice only the
-                    # iter-dependent slot — slot 0's last state coords on
-                    # x2 — into a fresh clone. The cache itself is never
-                    # mutated, so subsequent iters start from clean state.
+                    # iter-dependent slot(s) into a fresh clone. The cache itself
+                    # is never mutated, so subsequent iters start from clean state.
                     x2_new = ms_kwargs_cached["x2"].clone()
-                    x2_new[0, 0, -1, 0] = pickup_tensor[0] + 1
-                    x2_new[0, 0, -1, 1] = pickup_tensor[1] + 1
+                    if mode == "lift":
+                        for j in range(M):
+                            row = -M + j
+                            x2_new[0, 0, row, 0] = pos_stack[j, 0] + 1
+                            x2_new[0, 0, row, 1] = pos_stack[j, 1] + 1
+                    else:
+                        x2_new[0, 0, -1, 0] = pickup_tensor[0] + 1
+                        x2_new[0, 0, -1, 1] = pickup_tensor[1] + 1
                     ms_kwargs = {**ms_kwargs_cached, "x2": x2_new}
 
-            # (d) Forward through FAMAILObjective
-            total, terms = self.objective(
-                soft_pickup_3d=objective_grid,
-                tau_features=tau_features,
-                tau_prime_features=tau_prime_features,
-                multi_stream_kwargs=ms_kwargs,
-            )
+            # (d) Forward through FAMAILObjective. Trim passes NOTHING for
+            # delta_supply_N (G1: the None path is byte-identical to legacy).
+            if mode == "lift":
+                total, terms = self.objective(
+                    soft_pickup_3d=objective_grid,
+                    tau_features=tau_features,
+                    tau_prime_features=tau_prime_features,
+                    multi_stream_kwargs=ms_kwargs,
+                    delta_supply_N=delta_supply_N,
+                )
+            else:
+                total, terms = self.objective(
+                    soft_pickup_3d=objective_grid,
+                    tau_features=tau_features,
+                    tau_prime_features=tau_prime_features,
+                    multi_stream_kwargs=ms_kwargs,
+                )
 
             # (e) Backward - decomposed if diagnostics_enabled, else single-backward
             self.objective.zero_grad()
@@ -463,14 +625,14 @@ class TrajectoryModifier:
             if self.diagnostics_enabled:
                 grad, tier_a_metrics = self._compute_decomposed_gradient(
                     terms["f_spatial"], terms["f_causal"], terms["f_fidelity"],
-                    pickup_tensor,
+                    grad_leaf,
                 )
             else:
                 total.backward(retain_graph=True)
-                if pickup_tensor.grad is None:
+                if grad_leaf.grad is None:
                     grad = np.zeros(2)
                 else:
-                    grad = pickup_tensor.grad.detach().cpu().numpy()
+                    grad = grad_leaf.grad.detach().cpu().numpy()
             grad_norm = float(np.linalg.norm(grad))
 
             # (f) ST-iFGSM: delta = clip(alpha * sign(grad), -epsilon, epsilon)
@@ -554,12 +716,46 @@ class TrajectoryModifier:
                     converged = True
                     break
 
-        # Create the modified trajectory from the BEST iterate seen, not the
-        # last. If no iter exceeded the initial -inf by more than tol (rare;
-        # would only happen if all iters had degenerate objective values),
-        # best_cumulative_delta stays at its zero default — i.e., no
-        # perturbation, which is the correct fallback.
-        modified = trajectory.apply_perturbation(best_cumulative_delta)
+        # ── Discretize the BEST iterate's perturbation ────────────────────
+        # If no iter exceeded the initial -inf by more than tol (rare),
+        # best_cumulative_delta stays at its zero default — no perturbation,
+        # the correct fallback.
+        if mode == "lift":
+            # Move the whole seeking tail toward under-served cells. Infeasible
+            # tail repair → skip the edit entirely: the shared demand grid was
+            # never touched (the demand subtraction lived only in the local
+            # base_3d clone) and the ΔS accumulator stays untouched.
+            modified = trajectory.apply_tail_perturbation(
+                best_cumulative_delta, config.TAIL_LEN, config.GRID_DIMS,
+            )
+            if modified is None:
+                self.n_taper_infeasible_lift += 1
+                return ModificationHistory(
+                    original=trajectory,
+                    modified=trajectory.clone(),
+                    iterations=iterations,
+                    converged=converged,
+                    total_iterations=len(iterations),
+                    final_objective=(
+                        iterations[-1].objective_value if iterations else 0.0
+                    ),
+                    best_iteration=best_iteration,
+                    best_objective=best_objective if best_iteration >= 0 else 0.0,
+                )
+        elif config.TAIL_LEN > 0:
+            # Trim with a real tail: translate the tail so the pickup lands at
+            # the SAME rounded-clipped cell legacy produces (G3). On infeasible
+            # repair, fall back to the legacy pickup-only move so the pickup
+            # NEVER differs from legacy (count the fallback).
+            modified = trajectory.apply_tail_perturbation(
+                best_cumulative_delta, config.TAIL_LEN, config.GRID_DIMS,
+            )
+            if modified is None:
+                self.n_taper_infeasible_trim += 1
+                modified = trajectory.apply_perturbation(best_cumulative_delta)
+        else:
+            # TAIL_LEN == 0 → bit-for-bit legacy (G1).
+            modified = trajectory.apply_perturbation(best_cumulative_delta)
 
         # Persist change to shared _base_pickup_3d (sub at old, add at new).
         # Uses the BEST iterate's pickup cell, matching the returned trajectory.
@@ -568,6 +764,15 @@ class TrajectoryModifier:
         if (new_cx, new_cy) != (orig_cx, orig_cy):
             self._base_pickup_3d[orig_cx, orig_cy, t_block] -= pickup_mass
             self._base_pickup_3d[new_cx, new_cy, t_block] += pickup_mass
+
+        # Accumulate the FINAL hard tier-1 ΔS of the (tail) move — evaluation
+        # honesty. Lift always contributes; trim contributes only when a real
+        # tail exists (TAIL_LEN > 0), so a TAIL_LEN == 0 run is bit-for-bit
+        # legacy (the accumulator is never read on the trim optimization path).
+        if mode == "lift" or config.TAIL_LEN > 0:
+            ds = self._hard_tail_delta_supply(trajectory, modified)
+            if ds is not None:
+                self._delta_supply_3d = self._delta_supply_3d + ds
 
         return ModificationHistory(
             original=trajectory,

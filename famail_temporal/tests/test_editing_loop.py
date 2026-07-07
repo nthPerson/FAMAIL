@@ -99,7 +99,7 @@ def test_convergence_stops_when_f_causal_plateaus():
     assert len(result.rounds) < 50
 
 
-def test_bounded_cap_limits_total_displacement():
+def test_bounded_cap_limits_total_displacement(monkeypatch):
     """The cumulative epsilon-cap genuinely BINDS (not a vacuous assertion).
 
     With the helper's 5 inner iterations a pickup would move up to ~0.5 cells
@@ -108,6 +108,8 @@ def test_bounded_cap_limits_total_displacement():
     strictly the binding constraint: no edited trajectory may exceed 0.3 (L-inf)
     from its true original across all rounds, AND at least one must be held
     exactly at the cap — so a broken cap (which would allow >=0.4) fails here."""
+    # legacy-mode (TAIL_LEN=0): asserts fractional sub-cell semantics of apply_perturbation
+    monkeypatch.setattr(config, "TAIL_LEN", 0)
     bundle = _bundle_with_drag_trajectories()
     modifier = _make_modifier(bundle, epsilon_cap=0.3)
     result = run_editing_rounds(
@@ -157,9 +159,11 @@ def test_iterative_max_edits_1_never_re_edits():
     assert all(rec.n_edited == 1 for rec in result.rounds)
 
 
-def test_iterative_unlimited_can_re_edit():
+def test_iterative_unlimited_can_re_edit(monkeypatch):
     """B=1 with max_edits=0 (unlimited) may edit the same trajectory more than
     once across rounds when it stays most-negative and under the eps-cap."""
+    # legacy-mode (TAIL_LEN=0): asserts fractional sub-cell semantics of apply_perturbation
+    monkeypatch.setattr(config, "TAIL_LEN", 0)
     bundle = _bundle_with_drag_trajectories(n_trajs=2)
     modifier = _make_modifier(bundle, epsilon_cap=float("inf"))
     result = run_editing_rounds(

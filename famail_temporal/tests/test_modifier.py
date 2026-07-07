@@ -277,3 +277,160 @@ def test_ste_feeds_concentrated_hard_grid():
     n_diff = int((_t.abs(soft_grid[:, :, t_block] - ste_grid[:, :, t_block])
                   > 1e-9).sum())
     assert n_diff > 1
+
+
+# ── Supply-lift mode (Task 7) ────────────────────────────────────────────
+from famail_temporal.data.aggregation import (  # noqa: E402
+    hour_to_block_index, time_bucket_to_hour,
+)
+
+
+def _king_ok(traj):
+    """King-move adjacency (max(|dx|, |dy|) <= 1 between consecutive states)."""
+    return all(
+        max(abs(b.x_grid - a.x_grid), abs(b.y_grid - a.y_grid)) <= 1
+        for a, b in zip(traj.states, traj.states[1:])
+    )
+
+
+def _interior_active_cell(bundle, lo=2, hi=5):
+    """First active (cell, time_bucket) with both grid coords in [lo, hi].
+
+    Keeping the pickup off the grid edge guarantees a +/-EPSILON_BALL move
+    stays inside the (small) synthetic accumulator grid, so the demand persist
+    (which indexes the (gx, gy)-shaped grid directly) never runs out of bounds.
+    """
+    gy = bundle.pickup_3d.shape[1]
+    for i in range(bundle.unit_map.n_units):
+        fc = bundle.unit_map.to_flat_cell(i)
+        cx, cy = fc // gy, fc % gy
+        if lo <= cx <= hi and lo <= cy <= hi:
+            t_block = bundle.unit_map.to_time_block(i)
+            _, start_hour, _ = config.TIME_BLOCKS[t_block]
+            return cx, cy, 1 + (start_hour * 12)
+    raise RuntimeError("no interior active cell in synthetic bundle")
+
+
+def _stay_trajectory(x, y, tb, n):
+    """``n`` stationary states at (x, y) sharing time_bucket ``tb`` (compliant)."""
+    return Trajectory(
+        trajectory_id=0, driver_id=0,
+        states=[TrajectoryState(x_grid=float(x), y_grid=float(y),
+                                time_bucket=tb, day_index=1) for _ in range(n)],
+    )
+
+
+def test_trim_mode_pickup_identical_to_legacy_and_demand_grid_unchanged(monkeypatch):
+    """Trim optimization is TAIL_LEN-independent, so a TAIL_LEN=4 run (tail
+    translation) and a TAIL_LEN=0 run (legacy pickup-only move) must land the
+    SAME final pickup cell and produce the SAME demand grid (G1/G3). With
+    alpha=1.0 the cumulative delta is integer-valued, so round-clip == int-clip.
+    The TAIL_LEN=4 run accumulates hard tier-1 dS iff the tail actually moved;
+    the TAIL_LEN=0 run never touches the accumulator."""
+    bundle = _make_synthetic_bundle(N_cells_per_block=30, seed=0)
+    x, y, tb = _interior_active_cell(bundle)
+    traj = _stay_trajectory(x, y, tb, n=6)
+
+    def run(tail_len):
+        monkeypatch.setattr(config, "TAIL_LEN", tail_len)
+        obj = FAMAILObjective(bundle, alpha_spatial=1.0, alpha_causal=0.0,
+                              alpha_fidelity=0.0)
+        m = TrajectoryModifier(objective=obj, bundle=bundle, max_iterations=5,
+                               alpha=1.0, diagnostics_enabled=False)
+        h = m.modify_single(traj.clone(), mode="trim")
+        return m, h
+
+    m4, h4 = run(4)
+    m0, h0 = run(0)
+
+    assert (int(h4.modified.pickup_state.x_grid),
+            int(h4.modified.pickup_state.y_grid)) == \
+           (int(h0.modified.pickup_state.x_grid),
+            int(h0.modified.pickup_state.y_grid))
+    assert np.allclose(m4.current_pickup_3d(), m0.current_pickup_3d())
+
+    tail_moved = any(
+        (int(a.x_grid), int(a.y_grid)) != (int(b.x_grid), int(b.y_grid))
+        for a, b in zip(traj.states, h4.modified.states)
+    )
+    ds4 = np.abs(m4.current_delta_supply_3d()).sum()
+    if tail_moved:
+        assert ds4 > 0
+    else:
+        assert ds4 == 0
+    # TAIL_LEN == 0 is bit-for-bit legacy: accumulator stays exactly zero.
+    assert np.abs(m0.current_delta_supply_3d()).sum() == 0
+
+
+def test_lift_mode_moves_supply_toward_positive_gradient():
+    """Lift's endogenous supply channel: with a stubbed objective whose supply
+    gradient rewards higher-y units, lift drives the seeking tail up (+y) and
+    ends with net-positive dS mass in that region — via a king-move-compliant
+    edit."""
+    import torch as _t
+    bundle = _make_synthetic_bundle(N_cells_per_block=30, seed=1)
+    x, y, tb = _interior_active_cell(bundle, lo=2, hi=4)
+    t_block = hour_to_block_index(time_bucket_to_hour(tb))
+    gy = bundle.pickup_3d.shape[1]
+    reward = _t.tensor(
+        [float(bundle.unit_map.to_flat_cell(i) % gy)
+         for i in range(bundle.unit_map.n_units)],
+        dtype=_t.float32,
+    )  # per active-unit y-coordinate — higher y = higher reward
+
+    obj = FAMAILObjective(bundle, alpha_spatial=1.0, alpha_causal=0.0,
+                          alpha_fidelity=0.0)
+
+    def fake_forward(soft_pickup_3d=None, delta_supply_N=None, **kw):
+        if delta_supply_N is not None:
+            total = (delta_supply_N * reward).sum()
+        else:
+            total = soft_pickup_3d.sum() * 0.0
+        terms = {"f_spatial": _t.tensor(0.0), "f_causal": _t.tensor(0.0),
+                 "f_fidelity": _t.tensor(0.0)}
+        return total, terms
+
+    obj.forward = fake_forward  # type: ignore[method-assign]
+
+    traj = _stay_trajectory(x, y, tb, n=6)
+    m = TrajectoryModifier(objective=obj, bundle=bundle, max_iterations=6,
+                           alpha=1.0, diagnostics_enabled=False, patience=None)
+    h = m.modify_single(traj, mode="lift")
+
+    assert _king_ok(h.modified)
+    assert h.modified.pickup_state.y_grid > y  # tail moved toward higher reward
+    ds = m.current_delta_supply_3d()
+    # New (+) presence boxes land above the removal zone → net-positive there.
+    assert ds[:, y + 3:, t_block].sum() > 0
+
+
+def test_lift_skip_on_infeasible_repair_reverts_cleanly(monkeypatch):
+    """When tail repair is infeasible (apply_tail_perturbation -> None), lift
+    skips the edit entirely: the shared demand grid AND the dS accumulator are
+    left exactly unchanged, the skip is counted, and the returned trajectory is
+    unmoved. Uses a genuine len-2 trajectory (no tail room) with the real
+    objective, so the delta_supply_N gather order is exercised end-to-end."""
+    bundle = _make_synthetic_bundle(N_cells_per_block=30, seed=2)
+    x, y, tb = _interior_active_cell(bundle)
+    traj = Trajectory(
+        trajectory_id=0, driver_id=0,
+        states=[TrajectoryState(float(x), float(y), tb, 1),
+                TrajectoryState(float(x), float(y), tb, 1)],
+    )
+    obj = FAMAILObjective(bundle, alpha_spatial=1.0, alpha_causal=0.0,
+                          alpha_fidelity=0.0)
+    m = TrajectoryModifier(objective=obj, bundle=bundle, max_iterations=4,
+                           alpha=1.0, diagnostics_enabled=False)
+    monkeypatch.setattr(Trajectory, "apply_tail_perturbation",
+                        lambda self, *a, **k: None)
+
+    base_before = m.current_pickup_3d()
+    ds_before = m.current_delta_supply_3d()
+    h = m.modify_single(traj, mode="lift")
+
+    assert np.allclose(m.current_pickup_3d(), base_before)
+    assert np.allclose(m.current_delta_supply_3d(), ds_before)
+    assert np.abs(m.current_delta_supply_3d()).sum() == 0
+    assert m.n_taper_infeasible_lift == 1
+    assert (int(h.modified.pickup_state.x_grid),
+            int(h.modified.pickup_state.y_grid)) == (x, y)
