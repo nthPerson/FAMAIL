@@ -54,3 +54,68 @@ def test_soft_delta_supply_differentiable():
     d = sp.soft_delta_supply(probs, [(6, 6)], [0], [0.2], [+1], (gx, gy, T))
     d.sum().backward()
     assert loc.grad is not None and torch.isfinite(loc.grad).all()
+
+
+# ── Task 4: supply-gradient attribution + lift scoring ─────────────────
+
+
+def test_supply_gradient_matches_analytic_fcausal():
+    """alpha=(0,1,0): dL/dS_i must equal the analytic F_causal supply gradient."""
+    from famail_temporal.tests.test_objective import _make_synthetic_bundle
+    from famail_temporal.algorithm.objective import FAMAILObjective
+    bundle = _make_synthetic_bundle()
+    obj = FAMAILObjective(bundle, alpha_spatial=0.0, alpha_causal=1.0, alpha_fidelity=0.0)
+    g = sp.supply_gradient_N(bundle, obj)
+    # analytic: R = Y - g0(D), Y = S/max(D,.5); dF/dS_i = (2/(R'MR)) * [((I-H)R)_i - F*(MR)_i] / max(D_i,.5)
+    import torch
+    D = torch.clamp(torch.from_numpy(bundle.pickup_3d[bundle.mask_3d]).double(), min=0.5)
+    S = torch.from_numpy(bundle.active_taxis_3d[bundle.mask_3d]).double()
+    Y = S / D
+    g0 = torch.from_numpy(np.asarray(bundle.g0_func((D).numpy()))).double()
+    R = Y - g0
+    X = torch.from_numpy(bundle.hat_matrices["X_demo"]).double()
+    XtX_inv = torch.from_numpy(bundle.hat_matrices["XtX_inv"]).double()
+    IHR = R - X @ (XtX_inv @ (X.T @ R))
+    MR = R - R.mean()
+    RMR = float(R @ MR)
+    F = float(R @ IHR) / RMR
+    analytic = (2.0 / RMR) * (IHR - F * MR) / D
+    mask_free = bundle.active_taxis_3d[bundle.mask_3d] > 0.1   # clamp-inactive units only
+    np.testing.assert_allclose(g[mask_free], analytic.numpy()[mask_free], rtol=1e-3, atol=1e-6)
+
+
+def test_lift_candidates_prefers_tails_near_positive_gradient():
+    """Synthetic: gradient positive in one region; trajectory tails near it score higher.
+
+    ``_make_synthetic_bundle`` carries ``trajectories=[]`` (see
+    ``famail_temporal/tests/test_objective.py``), so it cannot exercise
+    ``lift_candidates`` directly. Attach 10 synthetic 3-state Trajectory
+    objects on active cells (anchor + one tail state + pickup, so
+    ``len(states) == 3`` clears the ``< 3`` skip and exercises the
+    ``min(tail_len, len-2)`` anchor-safety clamp) via ``dataclasses.replace``,
+    per the brief's documented fallback.
+    """
+    import dataclasses
+    from famail_temporal.tests.test_objective import _make_synthetic_bundle
+    from famail_temporal.baselines.tests._helpers import active_units, time_bucket_for_block
+    from famail_temporal.utils.trajectory import Trajectory, TrajectoryState
+
+    bundle = _make_synthetic_bundle()
+    N = int(bundle.mask_3d.sum())
+    grad = np.zeros(N); grad[: N // 4] = 1.0      # first units (low x) positive
+
+    units = active_units(bundle, 10)  # 10 active (cx, cy, t_block) triples
+    trajs = []
+    for i, (cx, cy, tb) in enumerate(units):
+        tbucket = time_bucket_for_block(tb)
+        states = [
+            TrajectoryState(x_grid=float(cx), y_grid=float(cy), time_bucket=tbucket, day_index=1),
+            TrajectoryState(x_grid=float(cx), y_grid=float(cy), time_bucket=tbucket, day_index=1),
+            TrajectoryState(x_grid=float(cx), y_grid=float(cy), time_bucket=tbucket, day_index=1),
+        ]
+        trajs.append(Trajectory(trajectory_id=i, driver_id=0, states=states))
+    bundle = dataclasses.replace(bundle, trajectories=trajs)
+
+    scored = sp.lift_candidates(bundle, grad, tail_len=2, epsilon=2)
+    assert len(scored) > 0
+    assert all(scored[i][1] >= scored[i + 1][1] for i in range(len(scored) - 1))

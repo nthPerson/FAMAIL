@@ -81,6 +81,9 @@ ALPHA_FIDELITY: float = 0.34
 # ST-iFGSM
 STEP_SIZE_ALPHA: float = 0.1
 EPSILON_BALL: float = 2.0
+# supply-lift: seeking-tail rerouting
+TAIL_LEN: int = 4
+TAIL_TAPER: Tuple[float, float, float, float] = (0.25, 0.5, 0.75, 1.0)
 MAX_ITERATIONS: int = 50
 # Convergence: the optimizer runs to MAX_ITERATIONS by default. Inside the
 # loop we track the best-seen objective and apply *patience-based* early
