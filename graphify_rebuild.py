@@ -28,13 +28,24 @@ from graphify.detect import detect
 CAP = 64 * 1024  # bytes
 
 
-def not_ignored(paths):
-    if not paths:
-        return []
-    res = subprocess.run(['git', 'check-ignore', '--no-index', *paths],
-                         capture_output=True, text=True)
-    ignored = set(res.stdout.split('\n'))
-    return [p for p in paths if p not in ignored]
+def git_tracked(patterns, cap=None):
+    """Tracked files matching git pathspecs, scoped to famail_temporal/ + PAPER/.
+
+    Uses `git ls-files`, which is independent of .graphifyignore — so the result
+    data/reports we exclude from graphify's detect (to stop the hook re-AST-ing
+    them) are still discovered here and re-included as semantic documents.
+    """
+    out = subprocess.run(['git', 'ls-files', '--', *patterns],
+                         capture_output=True, text=True).stdout.splitlines()
+    files = []
+    for rel in out:
+        rel = rel.strip()
+        if not rel or not (rel.startswith('famail_temporal/') or rel.startswith('PAPER/')):
+            continue
+        if cap is not None and (os.path.getsize(rel) if os.path.exists(rel) else 0) > cap:
+            continue
+        files.append(os.path.abspath(rel))
+    return files
 
 
 def main():
@@ -46,38 +57,31 @@ def main():
         p = str(p)
         return p[len(str(root)) + 1:] if p.startswith(str(root)) else p
 
-    # 1) .json: code -> document
-    code_json = [p for p in f['code'] if p.lower().endswith('.json')]
+    # code: keep .py; drop .json (routed to semantic documents below)
     f['code'] = [p for p in f['code'] if not p.lower().endswith('.json')]
 
-    # 2) .csv: discover in scope, keep only git-tracked (respects .gitignore exceptions)
-    csv_all = [os.path.join(dp, fn)
-               for base in ('famail_temporal', 'PAPER')
-               for dp, _, fns in os.walk(base) for fn in fns
-               if fn.lower().endswith('.csv')]
-    csv_keep = not_ignored(csv_all)
+    # documents = every tracked .md + every tracked .json/.csv <= 64 KB, across
+    # famail_temporal/ + PAPER/. git ls-files sees the .graphifyignore'd result
+    # data too, so this re-includes it semantically while the hook leaves it alone.
+    md   = git_tracked(['*.md'])
+    data = git_tracked(['*.json', '*.csv'], cap=CAP)
+    docs = sorted(set(md + data))
+    f['document'] = docs
 
-    # 3) 64 KB cap on data docs
-    def under_cap(paths):
-        return [p for p in paths if (os.path.getsize(p) if os.path.exists(p) else 0) <= CAP]
-    data_docs = under_cap(code_json) + under_cap(csv_keep)
-
-    # 4) images: PAPER/ only
+    # images: PAPER/ figures only
     f['image'] = [p for p in f['image'] if '/PAPER/' in p or rel(p).startswith('PAPER/')]
 
-    # 5) rebuild documents + totals
-    f['document'] = list(f['document']) + data_docs
     allf = f['code'] + f['document'] + f['paper'] + f['image'] + f['video']
     r['total_files'] = len(allf)
     r['total_words'] = sum(
         len(Path(p).read_text(encoding='utf-8', errors='ignore').split())
-        for p in f['document'] if os.path.exists(p))
+        for p in docs if os.path.exists(p))
 
     Path('graphify-out/.graphify_detect.json').write_text(json.dumps(r, ensure_ascii=False))
-    print(f"routed: code={len(f['code'])} docs={len(f['document'])} "
-          f"(md={sum(1 for p in f['document'] if p.endswith('.md'))} "
-          f"json={sum(1 for p in f['document'] if p.endswith('.json'))} "
-          f"csv={sum(1 for p in f['document'] if p.endswith('.csv'))}) "
+    print(f"routed: code(py)={len(f['code'])} docs={len(docs)} "
+          f"(md={sum(1 for p in docs if p.endswith('.md'))} "
+          f"json={sum(1 for p in docs if p.endswith('.json'))} "
+          f"csv={sum(1 for p in docs if p.endswith('.csv'))}) "
           f"images={len(f['image'])} total={r['total_files']}")
 
 

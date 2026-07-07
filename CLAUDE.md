@@ -11,5 +11,6 @@ Use it for codebase questions — architecture, "where is X", "how does X connec
 Reading specific files directly (to edit or debug known code) is fine — the graph is for *orientation*, not a gate on every read.
 
 Freshness:
-- **Code** stays current automatically via the git post-commit/post-checkout hook (all branches, AST-only, no API cost).
-- **Docs / result data / figures** (the LLM-extracted layer) refresh only on a full rebuild. This project uses custom routing (JSON/CSV → semantic, PAPER figures only, 64 KB cap on data files) — to reproduce it, re-run the `/graphify` skill and apply `graphify_rebuild.py` (repo root). A plain `graphify update .` will NOT reproduce that routing.
+- A **post-commit** git hook keeps the code layer current on every branch (incremental AST, no API cost) and preserves the LLM semantic layer for unchanged files. Only files *changed in a commit* are re-extracted (a changed doc/data file is re-represented as AST until the next full rebuild).
+- The **post-checkout** hook was intentionally removed: its full AST rebuild cannot reproduce the LLM semantic layer and would wipe it on every branch switch. Do **not** re-add it (e.g. via `graphify hook install` / `graphify claude install`, which reinstall it).
+- To refresh the **docs / result data / figures** semantic layer (or after editing many docs, or switching branches), re-run the `/graphify` skill and apply `graphify_rebuild.py` (repo root). This project uses custom routing (JSON/CSV → semantic, PAPER figures only, 64 KB cap on data files); a plain `graphify update .` will NOT reproduce it.
