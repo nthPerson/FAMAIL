@@ -23,13 +23,13 @@ def state_presence_mass(n_hours_per_block: np.ndarray, n_days: int, t_block: int
     Args:
         n_hours_per_block: (24,) array of hours per time block (e.g., all 1s for hourly).
         n_days: number of days in the dataset.
-        t_block: time block index (unused; kept for signature consistency).
+        t_block: time block index into n_hours_per_block.
 
     Returns:
-        float: 1.0 / ((sum(n_hours_per_block) / 2) * n_days)
+        float: 1.0 / (12.0 * n_hours_per_block[t_block] * n_days)
     """
-    mean_hours = np.sum(n_hours_per_block) / 2.0
-    return 1.0 / (mean_hours * n_days)
+    hours = float(n_hours_per_block[t_block])
+    return 1.0 / (12.0 * hours * n_days)
 
 
 def soft_delta_supply(
@@ -63,6 +63,11 @@ def soft_delta_supply(
 
     # Infer k from probs shape; assume (B, ns, ns) where ns = 2k+1
     ns = probs_batch.shape[1]
+    assert ns == PRESENCE_KERNEL_SIZE, (
+        f"probs window size {ns} != PRESENCE_KERNEL_SIZE {PRESENCE_KERNEL_SIZE}: "
+        "soft_delta_supply's 5x5 blur kernel assumes SoftCellAssignment's neighborhood "
+        "matches the presence-kernel box."
+    )
     k = (ns - 1) // 2
 
     # Accumulator
@@ -98,33 +103,14 @@ def soft_delta_supply(
         contrib_2d = probs_2d[px_lo:px_hi, py_lo:py_hi] * mass  # (h, w)
         padded_2d = F.pad(contrib_2d, (y_lo, gy - y_hi, x_lo, gx - x_hi))  # (gx, gy)
 
-        # Apply 5x5 box blur
+        # Apply 5x5 box blur (plain conv2d; no post-hoc normalization — the blurred
+        # output must remain a genuine function of probs_2d so gradients w.r.t.
+        # sub-cell position survive downstream).
         plane = padded_2d.unsqueeze(0).unsqueeze(0)  # (1, 1, gx, gy)
         blurred = F.conv2d(plane, kernel, padding=(PRESENCE_KERNEL_SIZE // 2, PRESENCE_KERNEL_SIZE // 2))[0, 0]  # (gx, gy)
 
-        # To match hard_delta_supply at low temperature: the blur should distribute mass
-        # uniformly over the clipped window. We achieve this by setting a uniform value
-        # at all cells in the box that have any non-zero blur contribution.
-        box_size = (x_hi - x_lo) * (y_hi - y_lo)
-        if box_size > 0:
-            # Find the maximum blur value in the clipped window (should be close to mass)
-            max_blur = blurred[x_lo:x_hi, y_lo:y_hi].max()
-
-            # Set all non-zero cells in the clipped window to max_blur (which approximates mass)
-            result_2d = torch.where(
-                blurred[x_lo:x_hi, y_lo:y_hi] > 0,
-                max_blur,
-                blurred[x_lo:x_hi, y_lo:y_hi]
-            )
-
-            # Embed back into full grid
-            clipped = torch.zeros_like(blurred)
-            clipped[x_lo:x_hi, y_lo:y_hi] = result_2d
-        else:
-            clipped = blurred
-
         # Add to accumulator with sign
-        delta[:, :, t_block] = delta[:, :, t_block] + sign * clipped
+        delta[:, :, t_block] = delta[:, :, t_block] + sign * blurred
 
     return delta
 
@@ -151,14 +137,15 @@ def hard_delta_supply(
     """
     gx, gy, T = grid_shape
     delta = np.zeros((gx, gy, T), dtype=np.float64)
+    h = PRESENCE_KERNEL_SIZE // 2
 
     # Remove from old positions
     for i, (cx, cy) in enumerate(positions_old):
         mass = masses[i]
         t_block = t_blocks[i]
         # 5x5 box centered at (cx, cy)
-        for dx in range(-2, 3):
-            for dy in range(-2, 3):
+        for dx in range(-h, h + 1):
+            for dy in range(-h, h + 1):
                 x = cx + dx
                 y = cy + dy
                 if 0 <= x < gx and 0 <= y < gy:
@@ -169,8 +156,8 @@ def hard_delta_supply(
         mass = masses[i]
         t_block = t_blocks[i]
         # 5x5 box centered at (cx, cy)
-        for dx in range(-2, 3):
-            for dy in range(-2, 3):
+        for dx in range(-h, h + 1):
+            for dy in range(-h, h + 1):
                 x = cx + dx
                 y = cy + dy
                 if 0 <= x < gx and 0 <= y < gy:

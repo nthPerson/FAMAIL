@@ -37,7 +37,8 @@ def test_soft_delta_supply_matches_hard_at_low_temperature():
     gx, gy, T = 12, 12, 3
     sa = SoftCellAssignment(grid_dims=(gx, gy))
     sa.temperature.fill_(1e-4)                    # near-one-hot softmax
-    loc = torch.tensor([[6.0, 6.0]]); cell = torch.tensor([[6, 6]])
+    # loc strictly inside cell (6,6): (6,6) itself is a 4-cell tie point of the assignment
+    loc = torch.tensor([[6.7, 6.7]]); cell = torch.tensor([[6, 6]])
     probs = sa(loc, cell)                         # (1, ns, ns)
     d_soft = sp.soft_delta_supply(probs, cells=[(6, 6)], t_blocks=[1],
                                   masses=[0.2], signs=[+1], grid_shape=(gx, gy, T))
