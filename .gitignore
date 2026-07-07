@@ -52,6 +52,9 @@ famail_temporal/cache/*
 famail_temporal/discriminator_checkpoints/*
 !famail_temporal/discriminator_checkpoints/.gitkeep
 !famail_temporal/discriminator_checkpoints/README.md
+
+# supply-lift Stage-0 oracle (gate G0) CLI run-output artifacts
+famail_temporal/analysis/supply_lift_oracle_out/
 !famail_temporal/discriminator_checkpoints/default/
 famail_temporal/discriminator_checkpoints/default/*.pt
 
