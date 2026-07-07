@@ -96,6 +96,7 @@ class FAMAILObjective(nn.Module):
         tau_features: Optional[torch.Tensor] = None,
         tau_prime_features: Optional[torch.Tensor] = None,
         multi_stream_kwargs: Optional[Dict[str, torch.Tensor]] = None,
+        delta_supply_N: Optional[torch.Tensor] = None,
     ) -> Tuple[torch.Tensor, dict]:
         """Compute L = weighted sum of F_spatial, F_causal, F_fidelity.
 
@@ -121,6 +122,8 @@ class FAMAILObjective(nn.Module):
         # pre-flattened buffers instead of re-gathering every forward.
         dropoff_N = self.dropoff_N
         active_taxis_N = self.active_taxis_N
+        if delta_supply_N is not None:
+            active_taxis_N = torch.clamp(self.active_taxis_N + delta_supply_N, min=config.SUPPLY_FLOOR)
 
         # ── F_spatial ───────────────────────────────────────────────────
         f_spatial, sp_debug = compute_fspatial(pickup_N, dropoff_N, active_taxis_N)

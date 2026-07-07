@@ -259,3 +259,32 @@ def test_famailobjective_on_real_data():
     print(f"  Real data F_causal  = {float(terms['f_causal']):.4f}")
     print(f"  Real data total     = {float(total):.4f}")
     print(f"  N active units      = {bundle.unit_map.n_units}")
+
+
+# ── delta_supply_N optional parameter tests ─────────────────────────────
+
+
+def test_forward_delta_supply_none_is_byte_identical():
+    bundle = _make_synthetic_bundle()
+    obj = FAMAILObjective(bundle)
+    pick = torch.from_numpy(bundle.pickup_3d).float()
+    l0, m0 = obj.forward(pick)
+    l1, m1 = obj.forward(pick, delta_supply_N=None)
+    assert float(l0) == float(l1)
+    assert m0["f_causal"] == m1["f_causal"] and m0["f_spatial"] == m1["f_spatial"]
+
+
+def test_forward_delta_supply_moves_both_terms_and_keeps_grad():
+    bundle = _make_synthetic_bundle()
+    obj = FAMAILObjective(bundle)
+    pick = torch.from_numpy(bundle.pickup_3d).float()
+    N = int(bundle.mask_3d.sum())
+    ds = torch.zeros(N, requires_grad=True)
+    l0, m0 = obj.forward(pick, delta_supply_N=ds)
+    assert float(l0) == pytest.approx(float(obj.forward(pick)[0]))  # zeros == None numerically
+    l0.backward()
+    assert ds.grad is not None and torch.isfinite(ds.grad).all()
+    ds2 = torch.full((N,), 0.5)
+    l2, m2 = obj.forward(pick, delta_supply_N=ds2)
+    assert m2["f_causal"] != m0["f_causal"]        # supply moved F_causal
+    assert m2["f_spatial"] != m0["f_spatial"]      # and F_spatial (DSR/ASR denominators)
