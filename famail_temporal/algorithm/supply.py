@@ -232,6 +232,51 @@ def _box_sum_grid(grad_grid: np.ndarray, half_width: int) -> np.ndarray:
     return box_sum
 
 
+def assemble_edit_plan(
+    trim_indices: List[int],
+    lift_scored: List[Tuple[int, float]],
+    k_total: int,
+    lift_budget: int | None = None,
+) -> List[Tuple[int, str]]:
+    """Assemble an edit plan from trim and lift selections.
+
+    Produces a list of (trajectory_idx, mode) tuples where mode ∈ {"trim", "lift"}.
+    Trim entries are added first (in their given order), then lift entries are added
+    from ``lift_scored`` (already sorted descending by score), skipping duplicates
+    (trim precedence), non-positive scores, and respecting the lift budget.
+
+    Args:
+        trim_indices: trajectory indices to trim, in the order they should appear.
+        lift_scored: [(idx, score), ...] sorted descending by score.
+        k_total: total budget (trim + lift combined).
+        lift_budget: max number of lift entries. If None, computed as k_total - len(trim_indices).
+
+    Returns:
+        List[Tuple[int, str]]: [(trajectory_idx, mode), ...] with mode ∈ {"trim", "lift"}.
+    """
+    # Step 1: add trim entries first, in their given order
+    plan: List[Tuple[int, str]] = [(idx, "trim") for idx in trim_indices]
+
+    # Step 2: compute lift budget if not provided
+    if lift_budget is None:
+        lift_budget = k_total - len(trim_indices)
+
+    # Step 3: add lift entries, skipping trim indices and non-positive scores
+    trim_set = set(trim_indices)
+    lift_count = 0
+    for idx, score in lift_scored:
+        if lift_count >= lift_budget:
+            break
+        if idx in trim_set:  # skip if already trimmed (trim precedence)
+            continue
+        if score <= 0:  # skip non-positive scores
+            continue
+        plan.append((idx, "lift"))
+        lift_count += 1
+
+    return plan
+
+
 def lift_candidates(
     bundle: "DataBundle",
     grad_N: np.ndarray,

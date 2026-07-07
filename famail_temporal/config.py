@@ -84,6 +84,7 @@ EPSILON_BALL: float = 2.0
 # supply-lift: seeking-tail rerouting
 TAIL_LEN: int = 4
 TAIL_TAPER: Tuple[float, float, float, float] = (0.25, 0.5, 0.75, 1.0)
+LIFT_BUDGET: int | None = None  # None -> fill k_total - n_trim slots
 MAX_ITERATIONS: int = 50
 # Convergence: the optimizer runs to MAX_ITERATIONS by default. Inside the
 # loop we track the best-seen objective and apply *patience-based* early

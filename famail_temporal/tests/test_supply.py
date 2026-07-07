@@ -119,3 +119,19 @@ def test_lift_candidates_prefers_tails_near_positive_gradient():
     scored = sp.lift_candidates(bundle, grad, tail_len=2, epsilon=2)
     assert len(scored) > 0
     assert all(scored[i][1] >= scored[i + 1][1] for i in range(len(scored) - 1))
+
+
+# ── Task 6: edit-plan assembly (trim precedence, budget fill) ──────────
+
+
+def test_assemble_edit_plan_trim_precedence_and_fill():
+    trim = [3, 7]
+    lift = [(7, 9.0), (1, 5.0), (2, 3.0), (9, 0.0), (4, -1.0)]
+    plan = sp.assemble_edit_plan(trim, lift, k_total=5)
+    assert plan[:2] == [(3, "trim"), (7, "trim")]
+    assert plan[2:] == [(1, "lift"), (2, "lift")]     # 7 deduped to trim; 9 and 4 dropped (score<=0)
+
+
+def test_assemble_edit_plan_explicit_budget():
+    plan = sp.assemble_edit_plan([1], [(2, 4.0), (3, 2.0)], k_total=10, lift_budget=1)
+    assert plan == [(1, "trim"), (2, "lift")]
