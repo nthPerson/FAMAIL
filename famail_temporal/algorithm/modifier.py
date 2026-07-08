@@ -240,6 +240,45 @@ class TrajectoryModifier:
         ds_np = hard_delta_supply(olds, news, tbs, masses, self._grid_shape)
         return torch.from_numpy(ds_np).to(self._delta_supply_3d)
 
+    def _discretize_trim(
+        self, trajectory: Trajectory, best_cumulative_delta: np.ndarray,
+    ) -> Trajectory:
+        """Trim-mode discretization of the best iterate's perturbation.
+
+        TAIL_LEN == 0 → legacy ``apply_perturbation`` (bit-for-bit, G1).
+        TAIL_LEN > 0 → tail translation; on infeasible repair, fall back to
+        the legacy pickup-only move (counted) so the pickup NEVER differs
+        from legacy (G3).
+        """
+        # G3: must match legacy persist cell arithmetic exactly. Legacy applies
+        # the FRACTIONAL delta (apply_perturbation: clip(coord + delta, 0,
+        # dim-1), default grid_dims) and the persist step int()-TRUNCATES the
+        # result. apply_tail_perturbation instead round()s the offset, which
+        # diverges by one cell at fractional deltas (e.g. int(10-0.4)=9 vs
+        # 10+round(-0.4)=10). So compute the legacy deployed cell FIRST, then
+        # hand the repair the INTEGER offset vector — round() of an
+        # integer-valued float is a no-op, so the repair deploys exactly that
+        # cell. Feasibility/repair/taper logic unchanged.
+        legacy_frac = trajectory.apply_perturbation(best_cumulative_delta)
+        if config.TAIL_LEN == 0:
+            # TAIL_LEN == 0 → bit-for-bit legacy (G1).
+            return legacy_frac
+        pickup = trajectory.pickup_state
+        legacy_cx = int(legacy_frac.pickup_state.x_grid)
+        legacy_cy = int(legacy_frac.pickup_state.y_grid)
+        delta_int = np.array(
+            [float(legacy_cx - int(pickup.x_grid)),
+             float(legacy_cy - int(pickup.y_grid))],
+            dtype=np.float32,
+        )
+        modified = trajectory.apply_tail_perturbation(
+            delta_int, config.TAIL_LEN, config.GRID_DIMS,
+        )
+        if modified is None:
+            self.n_taper_infeasible_trim += 1
+            modified = legacy_frac
+        return modified
+
     def _get_annealed_temperature(self, iteration: int) -> float:
         """Exponential temperature annealing: tau_max * (tau_min/tau_max)^(t/T)."""
         if not config.ANNEAL_TEMPERATURE or self.max_iterations <= 1:
@@ -742,20 +781,8 @@ class TrajectoryModifier:
                     best_iteration=best_iteration,
                     best_objective=best_objective if best_iteration >= 0 else 0.0,
                 )
-        elif config.TAIL_LEN > 0:
-            # Trim with a real tail: translate the tail so the pickup lands at
-            # the SAME rounded-clipped cell legacy produces (G3). On infeasible
-            # repair, fall back to the legacy pickup-only move so the pickup
-            # NEVER differs from legacy (count the fallback).
-            modified = trajectory.apply_tail_perturbation(
-                best_cumulative_delta, config.TAIL_LEN, config.GRID_DIMS,
-            )
-            if modified is None:
-                self.n_taper_infeasible_trim += 1
-                modified = trajectory.apply_perturbation(best_cumulative_delta)
         else:
-            # TAIL_LEN == 0 → bit-for-bit legacy (G1).
-            modified = trajectory.apply_perturbation(best_cumulative_delta)
+            modified = self._discretize_trim(trajectory, best_cumulative_delta)
 
         # Persist change to shared _base_pickup_3d (sub at old, add at new).
         # Uses the BEST iterate's pickup cell, matching the returned trajectory.

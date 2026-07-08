@@ -362,6 +362,39 @@ def test_trim_mode_pickup_identical_to_legacy_and_demand_grid_unchanged(monkeypa
     assert np.abs(m0.current_delta_supply_3d()).sum() == 0
 
 
+@pytest.mark.parametrize("delta", [
+    (1.6, 0.4), (0.4, -0.4), (-0.4, 1.6), (-1.7, -0.3), (-0.3, 2.0),
+])
+def test_trim_discretization_matches_legacy_cell_at_fractional_deltas(
+        monkeypatch, delta):
+    """G3 at FRACTIONAL step regimes (production STEP_SIZE_ALPHA=0.1 yields
+    fractional cumulative deltas): taper-mode trim must deploy EXACTLY the
+    pickup cell legacy deploys. Legacy = int()-truncation of
+    apply_perturbation's clipped fractional position (the persist arithmetic);
+    round()ing the offset diverges on negative fractional components
+    (int(10-0.4)=9 vs 10+round(-0.4)=10) and on positive frac >= 0.5
+    (int(10+1.6)=11 vs 10+round(1.6)=12)."""
+    monkeypatch.setattr(config, "TAIL_LEN", 4)
+    bundle = _make_synthetic_bundle(N_cells_per_block=30, seed=0)
+    obj = FAMAILObjective(bundle, alpha_spatial=1.0, alpha_causal=0.0,
+                          alpha_fidelity=0.0)
+    m = TrajectoryModifier(objective=obj, bundle=bundle, max_iterations=1)
+    traj = _stay_trajectory(10, 10, tb=90, n=6)  # mid-grid, king-compliant
+    d = np.array(delta, dtype=np.float32)
+
+    # Legacy deployed cell: apply_perturbation (fractional, clipped) then the
+    # persist step's int() truncation — exactly modifier.py's legacy path.
+    legacy = traj.apply_perturbation(d)
+    legacy_cell = (int(legacy.pickup_state.x_grid),
+                   int(legacy.pickup_state.y_grid))
+
+    out = m._discretize_trim(traj, d)
+    assert out is not None
+    assert (int(out.pickup_state.x_grid),
+            int(out.pickup_state.y_grid)) == legacy_cell
+    assert _king_ok(out)
+
+
 def test_lift_mode_moves_supply_toward_positive_gradient():
     """Lift's endogenous supply channel: with a stubbed objective whose supply
     gradient rewards higher-y units, lift drives the seeking tail up (+y) and
