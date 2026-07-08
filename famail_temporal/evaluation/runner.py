@@ -372,19 +372,32 @@ def run_experiment(
             _log(t0, "WARNING: round-convergence-tol set but max-rounds<=1; "
                      "running a single pass. Raise --max-rounds for convergence mode.")
 
-        # Supply-lift enablement, resolved ONCE and reused by the
-        # flush-denormal hardening here and the lift-selection block after
-        # the trim loop. False is exactly the G1 legacy configuration
-        # (TAIL_LEN=0 or LIFT_BUDGET=0): legacy invocations get neither the
-        # FP-environment change nor any lift compute, preserving
-        # published-number reproduction bit-for-bit.
+        # Lift enablement for the lift-selection block after the trim loop.
+        # False includes the G1 legacy configuration (TAIL_LEN=0 or
+        # LIFT_BUDGET=0): such invocations run zero lift compute.
         lift_enabled = config.TAIL_LEN > 0 and config.LIFT_BUDGET != 0
-        if lift_enabled:
+        if config.TAIL_LEN > 0:
             # Subnormal residuals from float32 persist chains (-=mass/+=mass on
             # the shared demand grid) cause pathological 10-100x CPU backward
             # slowdowns; flush-to-zero eliminates them at no accuracy cost at
             # our magnitudes (observed: one edit stalling 25+ min/iteration
             # after ~2250 normal edits in the k=10000 validation run).
+            #
+            # Scope: guarded on TAIL_LEN > 0 (ANY taper-mode run), not on
+            # lift_enabled — the denormal-poisoning mechanism is the TRIM
+            # persist chain, which runs at full k in a trim-only ablation
+            # (TAIL_LEN=4, LIFT_BUDGET=0). TAIL_LEN=0 legacy runs keep the
+            # historical FP environment untouched for bit-reproduction of
+            # published numbers (G1).
+            #
+            # WARNING (process-global side effect): set_flush_denormal
+            # mutates process-wide FPU state (FTZ/DAZ bits in MXCSR) that
+            # PERSISTS after run_experiment returns — a taper-mode call
+            # followed by a legacy call in the SAME process would leave FTZ
+            # enabled for the legacy call. Current guarantee: the runner CLI
+            # is one-shot per process, so production runs are unaffected;
+            # library callers mixing taper and legacy modes in one process
+            # beware.
             ftz_supported = torch.set_flush_denormal(True)
             if ftz_supported:
                 _log(t0, "flush-denormal enabled (subnormal float32 residuals "
