@@ -48,11 +48,20 @@ def per_unit_demographics(
     return out
 
 
-def service_ratio_Y(pickup_3d: np.ndarray, bundle: DataBundle) -> np.ndarray:
-    """Y = supply/demand over active units (F_causal convention)."""
+def service_ratio_Y(
+    pickup_3d: np.ndarray, bundle: DataBundle, supply_3d: np.ndarray | None = None,
+) -> np.ndarray:
+    """Y = supply/demand over active units (F_causal convention).
+
+    ``supply_3d`` defaults to None, which uses ``bundle.active_taxis_3d`` —
+    byte-identical to the pre-override behavior. Pass a (GX, GY, T) grid
+    (e.g. the supply-lift edit's S' = clip(S_base + delta_supply_3d,
+    SUPPLY_FLOOR, None)) to substitute it in place of the bundle's frozen
+    supply grid."""
     mask = bundle.mask_3d
     demand_N = pickup_3d[mask].astype(np.float64)
-    supply_N = bundle.active_taxis_3d[mask].astype(np.float64)
+    supply_grid = bundle.active_taxis_3d if supply_3d is None else supply_3d
+    supply_N = supply_grid[mask].astype(np.float64)
     return supply_N / np.maximum(demand_N, config.DEMAND_FLOOR)
 
 

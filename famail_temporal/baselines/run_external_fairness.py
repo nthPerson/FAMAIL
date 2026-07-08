@@ -206,11 +206,23 @@ from famail_temporal.data.loader import DataBundle
 
 
 def _run_one(edit_dir: Path, dataset: str, out_dir: Path,
-             seed: int, B: int) -> dict:
+             seed: int, B: int, delta_supply_path: Path | None = None) -> dict:
     bundle = DataBundle.load()
     Y_before = io.service_ratio_Y(bundle.pickup_3d, bundle)
     after_pickup = io.build_edited_pickup_3d(bundle, edit_dir)
-    Y_after = io.service_ratio_Y(after_pickup, bundle)
+    # Supply-lift edits persist delta_supply_3d.npz; when given, the AFTER
+    # side's supply is S' = clip(S_base + delta_supply_3d, SUPPLY_FLOOR,
+    # None) instead of the bundle's frozen (pre-edit) active_taxis_3d. The
+    # BEFORE side always uses S_base (bundle.active_taxis_3d, via the
+    # supply_3d=None default), matching the "before" convention elsewhere
+    # in this harness (see supply_recount.py's S_tier1_after).
+    supply_after = None
+    if delta_supply_path is not None:
+        delta_supply_3d = np.load(delta_supply_path)["delta_supply_3d"]
+        supply_after = np.clip(
+            bundle.active_taxis_3d + delta_supply_3d, config.SUPPLY_FLOOR, None,
+        )
+    Y_after = io.service_ratio_Y(after_pickup, bundle, supply_3d=supply_after)
     demo = io.per_unit_demographics(bundle)
     result = assemble_results(Y_before, Y_after, demo, seed=seed, B=B)
     meta = {"dataset": dataset, "city": config.CITY, "edit_dir": str(edit_dir),
@@ -228,6 +240,10 @@ def main(argv=None) -> int:
     ap.add_argument("--dataset", default=None,
                     help="Label for outputs (e.g. shenzhen-primary, sf12)")
     ap.add_argument("--out-dir", type=Path, default=None)
+    ap.add_argument("--delta-supply", type=Path, default=None,
+                    help="Path to the edit's delta_supply_3d.npz; when given, the "
+                         "AFTER-side supply is clip(S_base + delta_supply_3d, "
+                         "SUPPLY_FLOOR, None) instead of S_base (BEFORE unaffected)")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--bootstrap", type=int, default=1000)
     ap.add_argument("--combine", nargs="+", type=Path, default=None,
@@ -251,7 +267,8 @@ def main(argv=None) -> int:
     dataset = args.dataset or f"{config.CITY}"
     out_dir = args.out_dir or (Path(config.PACKAGE_ROOT) / "baselines" /
                                "external_fairness" / "results" / dataset)
-    _run_one(args.edit_dir, dataset, out_dir, args.seed, args.bootstrap)
+    _run_one(args.edit_dir, dataset, out_dir, args.seed, args.bootstrap,
+             delta_supply_path=args.delta_supply)
     print(f"wrote outputs to {out_dir}")
     return 0
 

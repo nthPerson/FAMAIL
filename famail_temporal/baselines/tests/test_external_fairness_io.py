@@ -1,6 +1,7 @@
 import numpy as np
 import pytest
 
+from famail_temporal import config
 from famail_temporal.baselines import external_fairness_io as io
 from famail_temporal.tests.test_objective import _make_synthetic_bundle
 
@@ -19,6 +20,35 @@ def test_service_ratio_matches_manual():
     expected = supply / np.maximum(demand, 0.5)
     assert Y.shape == (int(mask.sum()),)
     np.testing.assert_allclose(Y, expected, rtol=1e-9)
+
+
+def test_service_ratio_supply_override_used():
+    bundle = _make_synthetic_bundle()
+    mask = bundle.mask_3d
+    # distinct from bundle.active_taxis_3d so the override is detectable
+    custom_supply = bundle.active_taxis_3d + 5.0
+    Y_default = io.service_ratio_Y(bundle.pickup_3d, bundle)
+    Y_override = io.service_ratio_Y(bundle.pickup_3d, bundle, supply_3d=custom_supply)
+    demand = bundle.pickup_3d[mask].astype(np.float64)
+    expected_override = (custom_supply[mask].astype(np.float64)
+                          / np.maximum(demand, config.DEMAND_FLOOR))
+    np.testing.assert_allclose(Y_override, expected_override, rtol=1e-9)
+    assert not np.allclose(Y_override, Y_default)
+
+
+def test_service_ratio_default_path_unchanged_when_supply_omitted():
+    bundle = _make_synthetic_bundle()
+    mask = bundle.mask_3d
+    # pre-change reference: the exact formula before the override was added
+    demand = bundle.pickup_3d[mask].astype(np.float64)
+    supply = bundle.active_taxis_3d[mask].astype(np.float64)
+    expected = supply / np.maximum(demand, config.DEMAND_FLOOR)
+
+    Y_omitted = io.service_ratio_Y(bundle.pickup_3d, bundle)
+    Y_explicit_none = io.service_ratio_Y(bundle.pickup_3d, bundle, supply_3d=None)
+
+    np.testing.assert_array_equal(Y_omitted, expected)
+    np.testing.assert_array_equal(Y_omitted, Y_explicit_none)
 
 
 def test_per_unit_demographics_injected_grid_shapes_and_values():

@@ -3,6 +3,7 @@ import pytest
 
 from famail_temporal.baselines import run_external_fairness as rx
 from famail_temporal.baselines import external_fairness_io as io
+from famail_temporal import config as fm_config
 
 
 def _synthetic_arrays(n_per_region=20):
@@ -76,6 +77,55 @@ def test_combined_table():
     res = rx.assemble_results(Yb, Ya, demo, seed=0, B=20)
     md = rx.render_combined_table([("shenzhen", res), ("sf", res)])
     assert "shenzhen" in md and "sf" in md
+
+
+def test_delta_supply_flag_applies_to_after_side_only(tmp_path, monkeypatch):
+    import pickle
+
+    from famail_temporal.tests.test_objective import _make_synthetic_bundle
+
+    bundle = _make_synthetic_bundle()
+    monkeypatch.setattr(rx.DataBundle, "load", staticmethod(lambda *a, **kw: bundle))
+
+    edit_dir = tmp_path / "edit"
+    edit_dir.mkdir()
+    with open(edit_dir / "histories.pkl", "wb") as f:
+        pickle.dump([], f)  # no relocations: after_pickup == bundle.pickup_3d
+
+    delta_supply_3d = np.zeros_like(bundle.active_taxis_3d)
+    delta_supply_3d[bundle.mask_3d] = 3.0
+    delta_path = edit_dir / "delta_supply_3d.npz"
+    np.savez_compressed(delta_path, delta_supply_3d=delta_supply_3d)
+
+    calls = []
+    orig_service_ratio_Y = io.service_ratio_Y
+
+    def spy(pickup_3d, b, supply_3d=None):
+        calls.append(supply_3d)
+        return orig_service_ratio_Y(pickup_3d, b, supply_3d=supply_3d)
+
+    monkeypatch.setattr(io, "service_ratio_Y", spy)
+    # per_unit_demographics reads the real (48, 90) cell_demographics.pkl via
+    # _enriched_selected_grid(), which doesn't match the synthetic bundle's
+    # small grid; stub it out since this test only cares about the
+    # before/after supply_3d wiring, not the demographics values.
+    n_active = int(bundle.mask_3d.sum())
+    monkeypatch.setattr(
+        io, "per_unit_demographics",
+        lambda b, selected_grid=None: {a: np.ones(n_active) for a in io.EQUITY_AXES},
+    )
+
+    out_dir = tmp_path / "out"
+    rx._run_one(edit_dir, "test-dataset", out_dir, seed=0, B=10,
+                delta_supply_path=delta_path)
+
+    assert len(calls) == 2
+    before_supply, after_supply = calls
+    assert before_supply is None  # BEFORE side untouched by the flag
+    expected_after = np.clip(
+        bundle.active_taxis_3d + delta_supply_3d, fm_config.SUPPLY_FLOOR, None,
+    )
+    np.testing.assert_allclose(after_supply, expected_after)
 
 
 def test_write_figure_creates_png(tmp_path):
