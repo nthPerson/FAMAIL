@@ -437,6 +437,45 @@ def test_lift_mode_moves_supply_toward_positive_gradient():
     assert ds[:, y + 3:, t_block].sum() > 0
 
 
+def test_lift_survives_float32_negative_epsilon_demand():
+    """Regression (Task-10 production incident): after thousands of trim
+    persists (chains of -= mass / += mass float32 ops on the shared demand
+    grid) a cell's value can drift a few ULP below zero in exact-arithmetic
+    terms — verified mechanism: a float32 cell aggregating 67 pickups, 66
+    moved out by trim persists, minus the lift trajectory's own mass ends at
+    -1.86e-9. compute_fspatial's strict (pickup_N < 0) check then raises
+    ValueError on the FIRST lift objective call. The lift branch must sanitize
+    its LOCAL demand clone (clamp min=0); the trim/legacy tensor ops stay
+    byte-identical (G1) so this plants the epsilon and runs LIFT only."""
+    bundle = _make_synthetic_bundle(N_cells_per_block=30, seed=3)
+    x, y, tb = _interior_active_cell(bundle)
+    t_block = hour_to_block_index(time_bucket_to_hour(tb))
+    gy = bundle.pickup_3d.shape[1]
+
+    obj = FAMAILObjective(bundle, alpha_spatial=1.0, alpha_causal=0.0,
+                          alpha_fidelity=0.0)
+    m = TrajectoryModifier(objective=obj, bundle=bundle, max_iterations=3,
+                           alpha=1.0, diagnostics_enabled=False)
+
+    # Plant the drift residual at an active unit in a DIFFERENT time block —
+    # guaranteed outside the lift trajectory's injection slice, exactly like a
+    # far-away cell the trim phase drained before the lift phase started.
+    planted = None
+    for i in range(bundle.unit_map.n_units):
+        t2 = bundle.unit_map.to_time_block(i)
+        if t2 != t_block:
+            fc = bundle.unit_map.to_flat_cell(i)
+            planted = (fc // gy, fc % gy, t2)
+            break
+    assert planted is not None
+    m._base_pickup_3d[planted[0], planted[1], planted[2]] = -1.86e-9
+
+    traj = _stay_trajectory(x, y, tb, n=6)
+    h = m.modify_single(traj, mode="lift")  # pre-fix: ValueError from spatial.py
+    assert isinstance(h, ModificationHistory)
+    assert len(h.iterations) > 0
+
+
 def test_lift_skip_on_infeasible_repair_reverts_cleanly(monkeypatch):
     """When tail repair is infeasible (apply_tail_perturbation -> None), lift
     skips the edit entirely: the shared demand grid AND the dS accumulator are

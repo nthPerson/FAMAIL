@@ -476,6 +476,16 @@ class TrajectoryModifier:
         # CONSTANT hard removal at the ORIGINAL positions. Guarded by ``mode`` so
         # the trim optimization path pays for none of this (G1).
         if mode == "lift":
+            # Guard float32 demand epsilon (Task-10 production incident): after
+            # thousands of trim persists (chains of -= mass / += mass float32
+            # ops on the shared grid) a drained cell can sit a few ULP below
+            # zero (verified: 67 aggregated pickups − 67 masses = −1.86e-9),
+            # and compute_fspatial's strict negativity check raises on the
+            # first lift objective call. Sanitize the LOCAL clone only — one
+            # data-cleaning op per lift trajectory on a constant (no-autograd)
+            # tensor. The trim/legacy path is untouched: its tensor ops and
+            # objective inputs stay byte-identical (G1/G3).
+            base_3d = torch.clamp(base_3d, min=0.0)
             n_states = trajectory.n_states
             l_eff = max(0, min(config.TAIL_LEN, n_states - 2))
             M = l_eff + 1
