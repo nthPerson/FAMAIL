@@ -402,6 +402,19 @@ def write(result: ExperimentResult, output_root: Path, bundle=None) -> Path:
     artifact_paths["convergence_curve"] = path.name
     file_sizes["convergence_curve"] = path.stat().st_size
 
+    # Supply-lift editing (Task 8). ``delta_supply_3d`` is None for any
+    # ExperimentResult built before this field existed (e.g. pre-existing
+    # fixtures in test_persistence.py / test_report.py) — write neither the
+    # artifact nor the metrics.json keys in that case, so old-style results
+    # get byte-identical persistence output (no new files/keys in legacy
+    # mode is the safer reading; run_experiment itself always populates this
+    # field, including an all-zero array under TAIL_LEN=0/LIFT_BUDGET=0).
+    if result.delta_supply_3d is not None:
+        path = out_dir / "delta_supply_3d.npz"
+        np.savez_compressed(path, delta_supply_3d=result.delta_supply_3d.astype(np.float64))
+        artifact_paths["delta_supply_3d"] = path.name
+        file_sizes["delta_supply_3d"] = path.stat().st_size
+
     metrics = {
         "experiment_id": result.experiment_id,
         "timestamp_utc": _dt.datetime.now(_dt.timezone.utc).isoformat(timespec="seconds"),
@@ -447,6 +460,17 @@ def write(result: ExperimentResult, output_root: Path, bundle=None) -> Path:
         "artifact_paths": artifact_paths,
         "file_sizes_bytes": file_sizes,
     }
+    if result.delta_supply_3d is not None:
+        pos = result.delta_supply_3d[result.delta_supply_3d > 0]
+        neg = result.delta_supply_3d[result.delta_supply_3d < 0]
+        metrics["n_trim"] = result.n_trim
+        metrics["n_lift"] = result.n_lift
+        metrics["n_taper_infeasible_trim"] = result.n_taper_infeasible_trim
+        metrics["n_taper_infeasible_lift"] = result.n_taper_infeasible_lift
+        metrics["supply_totals"] = {
+            "added": float(pos.sum()) if pos.size else 0.0,
+            "removed": float(-neg.sum()) if neg.size else 0.0,
+        }
     (out_dir / "metrics.json").write_text(
         json.dumps(_coerce_json(metrics), indent=2)
     )

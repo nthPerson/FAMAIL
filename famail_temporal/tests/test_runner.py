@@ -257,3 +257,232 @@ def test_run_experiment_ste_runs(tiny_bundle):
     result = run_experiment(k=4, use_ste=True)
     assert len(result.rounds) == 1  # default single round
     assert len(result.modified_trajectory_ids) >= 1
+
+
+# ── Task 8: supply-lift runner/persistence wiring ───────────────────────────
+
+
+@pytest.fixture
+def lift_ready_bundle(monkeypatch):
+    """Same construction as ``tiny_bundle`` (N_cells_per_block=8, seed=5 — a
+    seed known to produce a strictly-negative-attribution cell), but each
+    trajectory carries a real 6-state seeking tail instead of the 2-state
+    stub. ``lift_candidates`` always skips trajectories with < 3 states, so
+    the plain ``tiny_bundle`` fixture can never produce a lift candidate."""
+    from famail_temporal.tests.test_objective import _make_synthetic_bundle
+    from famail_temporal.algorithm.attribution import compute_per_unit_attribution
+    from famail_temporal.utils.trajectory import Trajectory, TrajectoryState
+    from dataclasses import replace
+
+    bundle = _make_synthetic_bundle(N_cells_per_block=8, seed=5)
+    attribution = compute_per_unit_attribution(bundle)
+    gy = bundle.unit_map.grid_shape[1]
+    ix_x, ix_y, ix_t = np.where(bundle.mask_3d)
+    chosen = None
+    for i in range(len(ix_x)):
+        if attribution[bundle.unit_map.from_cell_time(
+            int(ix_x[i]) * gy + int(ix_y[i]),
+            int(ix_t[i]),
+        )] < -1e-6:
+            chosen = i
+            break
+    assert chosen is not None, (
+        "synthetic bundle has no cells with negative attribution — seed unstable"
+    )
+    x, y, t_block = int(ix_x[chosen]), int(ix_y[chosen]), int(ix_t[chosen])
+    start_hour = config.TIME_BLOCKS[t_block][1]
+    tb = start_hour * 12 + 1
+    trajs = []
+    for tid in range(6):
+        trajs.append(Trajectory(
+            trajectory_id=tid, driver_id=tid % 2,
+            states=[
+                TrajectoryState(x_grid=x, y_grid=y, time_bucket=tb, day_index=0)
+                for _ in range(6)
+            ],
+        ))
+    bundle = replace(bundle, trajectories=trajs)
+    monkeypatch.setattr(
+        "famail_temporal.evaluation.runner._load_bundle",
+        lambda **kwargs: bundle,
+    )
+    return bundle, (x, y, t_block)
+
+
+def test_lift_wiring_produces_lift_edits_and_nonzero_delta_supply(
+    lift_ready_bundle, monkeypatch,
+):
+    """A crafted supply gradient that strongly rewards moving a trajectory's
+    tail toward one specific active cell must drive the runner's lift step to
+    produce n_lift > 0 edits and a nonzero persisted-shape delta_supply_3d,
+    end-to-end through the real modifier.modify_single(mode="lift") loop.
+    supply_gradient_N is monkeypatched (selection input only) so the test is
+    deterministic; the actual lift optimization runs unmocked."""
+    import famail_temporal.evaluation.runner as runner_mod
+
+    bundle, (x, y, t_block) = lift_ready_bundle
+    n_units = bundle.unit_map.n_units
+
+    # Boost a single active cell at Chebyshev distance 3 from the tail's
+    # location: far enough that the OLD tail position's 5x5 lift box (half
+    # width 2) never covers it, close enough that some delta within the
+    # epsilon-ball (2) brings the NEW box's 5x5 window over it. Guarantees a
+    # strictly positive linearized lift score for every trajectory whose tail
+    # sits at (x, y, t_block) regardless of the bundle's real gradient.
+    gx, gy, _ = bundle.mask_3d.shape
+    boost_cell = None
+    for dist in (3, 4):
+        for ddx in range(-dist, dist + 1):
+            for ddy in range(-dist, dist + 1):
+                if max(abs(ddx), abs(ddy)) != dist:
+                    continue
+                cx, cy = x + ddx, y + ddy
+                if 0 <= cx < gx and 0 <= cy < gy and bundle.mask_3d[cx, cy, t_block]:
+                    boost_cell = (cx, cy)
+                    break
+            if boost_cell:
+                break
+        if boost_cell:
+            break
+    assert boost_cell is not None, "no boostable cell found — adjust bundle params"
+
+    flat_idx = np.full(bundle.mask_3d.shape, -1, dtype=np.int64)
+    flat_idx[bundle.mask_3d] = np.arange(n_units)
+    grad = np.zeros(n_units, dtype=np.float64)
+    grad[flat_idx[boost_cell[0], boost_cell[1], t_block]] = 1000.0
+
+    monkeypatch.setattr(
+        runner_mod, "supply_gradient_N", lambda bundle, objective: grad,
+    )
+
+    result = run_experiment(k=2, max_trajectories=6, config_overrides={"LIFT_BUDGET": 3})
+
+    assert result.n_lift > 0
+    assert result.delta_supply_3d is not None
+    assert result.delta_supply_3d.shape == bundle.pickup_3d.shape
+    assert np.abs(result.delta_supply_3d).sum() > 0
+
+
+def test_legacy_mode_end_to_end_byte_identical(tiny_bundle, monkeypatch):
+    """TAIL_LEN=0, LIFT_BUDGET=0 must reproduce the pre-supply-lift pipeline
+    exactly: run the runner's new code path (run_experiment, which now always
+    contains the Task 8 lift-wiring block) against a pinned pre-change call
+    sequence built independently — attribution/selection/editing via
+    run_editing_rounds -> modifier.modify_single(mode="trim") (the actual
+    pre-Task-8 production loop; predates and is untouched by this task) ->
+    build_fairness_grid, with no lift step at all. Byte-identical (== on
+    floats, not approx) metrics and grids is the G1 claim."""
+    monkeypatch.setattr(config, "TAIL_LEN", 0)
+    monkeypatch.setattr(config, "LIFT_BUDGET", 0)
+
+    import torch
+    import torch.nn as nn
+    from famail_temporal.algorithm.editing_loop import run_editing_rounds
+    from famail_temporal.algorithm.modifier import TrajectoryModifier
+    from famail_temporal.algorithm.objective import FAMAILObjective
+    from famail_temporal.evaluation.grid import build_fairness_grid
+    from famail_temporal.evaluation.runner import _scalar_metrics_from_grid
+    from famail_temporal.fidelity.context import MultiStreamContextBuilder
+
+    bundle = tiny_bundle
+
+    # ── "new" code path: the actual runner, forced onto CPU for a
+    # deterministic bitwise comparison against the manual reconstruction. ──
+    result = run_experiment(k=2, max_trajectories=6, device="cpu")
+
+    # ── pinned pre-change call sequence, built independently (does not call
+    # or share any state with run_experiment / the Task 8 lift block). ──
+    grid_before_ref = build_fairness_grid(bundle)
+    assert isinstance(bundle.discriminator, nn.Identity)
+    objective_ref = FAMAILObjective(bundle, alpha_fidelity=0.0)
+    ms_builder_ref = MultiStreamContextBuilder(bundle.multi_stream, device="cpu")
+    modifier_ref = TrajectoryModifier(
+        objective=objective_ref, bundle=bundle,
+        multi_stream_builder=ms_builder_ref,
+        diagnostics_enabled=False, device=torch.device("cpu"),
+    )
+    loop_result_ref = run_editing_rounds(
+        modifier_ref, bundle,
+        k=2, mode="batch", max_rounds=config.MAX_ROUNDS,
+        round_convergence_tol=config.ROUND_CONVERGENCE_TOL,
+        round_patience=config.ROUND_PATIENCE,
+        iterative_max_edits=config.ITERATIVE_TOPK_MAX_EDITS,
+        max_per_unit=None, max_per_cell=None, on_iter=None, log=None,
+    )
+    pickup_after_ref = modifier_ref.current_pickup_3d()
+    grid_after_ref = build_fairness_grid(bundle, pickup_3d=pickup_after_ref)
+    metrics_before_ref = _scalar_metrics_from_grid(grid_before_ref)
+    metrics_after_ref = _scalar_metrics_from_grid(grid_after_ref)
+
+    assert result.f_spatial_before == metrics_before_ref["f_spatial"]
+    assert result.f_causal_before  == metrics_before_ref["f_causal"]
+    assert result.gini_dsr_before  == metrics_before_ref["gini_dsr"]
+    assert result.gini_asr_before  == metrics_before_ref["gini_asr"]
+    assert result.f_spatial_after == metrics_after_ref["f_spatial"]
+    assert result.f_causal_after  == metrics_after_ref["f_causal"]
+    assert result.gini_dsr_after  == metrics_after_ref["gini_dsr"]
+    assert result.gini_asr_after  == metrics_after_ref["gini_asr"]
+    np.testing.assert_array_equal(result.grid_before, grid_before_ref)
+    np.testing.assert_array_equal(result.grid_after, grid_after_ref)
+
+    assert result.delta_supply_3d is not None
+    assert result.delta_supply_3d.sum() == 0.0
+    assert result.n_lift == 0
+    assert len(loop_result_ref.histories) == result.n_trim
+
+
+def test_persistence_roundtrip_delta_supply_and_counters(tmp_path):
+    """delta_supply_3d.npz + the new metrics.json counters must round-trip
+    exactly: added/removed supply_totals derived from the array's sign,
+    n_trim/n_lift/n_taper_infeasible_* copied through verbatim."""
+    from famail_temporal.tests.test_persistence import _fake_result
+    from famail_temporal.evaluation.persistence import write
+    from dataclasses import replace
+    import json
+
+    ds = np.zeros((4, 4, 2), dtype=np.float64)
+    ds[0, 0, 0] = 0.5
+    ds[1, 1, 1] = 0.25
+    ds[2, 2, 0] = -0.2
+    result = replace(
+        _fake_result(),
+        delta_supply_3d=ds,
+        n_trim=3, n_lift=2,
+        n_taper_infeasible_trim=1, n_taper_infeasible_lift=0,
+    )
+    out_dir = write(result, output_root=tmp_path)
+
+    npz_path = out_dir / "delta_supply_3d.npz"
+    assert npz_path.exists()
+    loaded = np.load(npz_path)
+    assert set(loaded.files) == {"delta_supply_3d"}
+    np.testing.assert_array_equal(loaded["delta_supply_3d"], ds)
+
+    metrics = json.loads((out_dir / "metrics.json").read_text())
+    assert metrics["n_trim"] == 3
+    assert metrics["n_lift"] == 2
+    assert metrics["n_taper_infeasible_trim"] == 1
+    assert metrics["n_taper_infeasible_lift"] == 0
+    assert metrics["supply_totals"]["added"] == pytest.approx(0.75)
+    assert metrics["supply_totals"]["removed"] == pytest.approx(0.2)
+    assert metrics["artifact_paths"]["delta_supply_3d"] == "delta_supply_3d.npz"
+
+
+def test_persistence_skips_delta_supply_artifact_when_absent(tmp_path):
+    """Legacy-shaped ExperimentResult objects (delta_supply_3d left at its
+    default None — e.g. anything constructed before this task) must not grow
+    a new file or new metrics.json keys, so old callers/fixtures are
+    unaffected."""
+    from famail_temporal.tests.test_persistence import _fake_result
+    from famail_temporal.evaluation.persistence import write
+    import json
+
+    result = _fake_result()
+    assert result.delta_supply_3d is None
+    out_dir = write(result, output_root=tmp_path)
+
+    assert not (out_dir / "delta_supply_3d.npz").exists()
+    metrics = json.loads((out_dir / "metrics.json").read_text())
+    assert "supply_totals" not in metrics
+    assert "n_trim" not in metrics
+    assert "delta_supply_3d" not in metrics["artifact_paths"]

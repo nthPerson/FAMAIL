@@ -6,7 +6,7 @@ import datetime as _dt
 import re
 import sys
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -21,6 +21,9 @@ from famail_temporal.algorithm.attribution import (
 from famail_temporal.algorithm.editing_loop import run_editing_rounds, RoundRecord
 from famail_temporal.algorithm.modifier import TrajectoryModifier, ModificationHistory
 from famail_temporal.algorithm.objective import FAMAILObjective
+from famail_temporal.algorithm.supply import (
+    supply_gradient_N, lift_candidates, assemble_edit_plan,
+)
 from famail_temporal.data.loader import DataBundle
 from famail_temporal.evaluation.augment import augment_trajectories
 from famail_temporal.evaluation.grid import build_fairness_grid
@@ -113,6 +116,18 @@ class ExperimentResult:
     # E6: every trajectory's selection αᵢ (ascending), for the attribution
     # distribution figure. Optional so synthetic constructions stay valid.
     all_trajectory_scores: Optional[np.ndarray] = None
+
+    # Supply-lift editing (Task 8). ``delta_supply_3d`` is the modifier's
+    # accumulated tier-1 ΔS grid (None for anything constructed before this
+    # field existed, e.g. pre-existing test fixtures — persistence treats
+    # that as "no supply-lift data to write", see persistence.write). Under
+    # TAIL_LEN=0/LIFT_BUDGET=0 (G1) this is an all-zero array, never None,
+    # since run_experiment always populates it from the live modifier.
+    delta_supply_3d: Optional[np.ndarray] = None
+    n_trim: int = 0
+    n_lift: int = 0
+    n_taper_infeasible_trim: int = 0
+    n_taper_infeasible_lift: int = 0
 
 
 def _parse_override_value(s: str) -> Any:
@@ -379,6 +394,76 @@ def run_experiment(
         top_k_scores = loop_result.edit_scores
         _log(t0, f"editing loop done: {len(histories)} edits over "
                  f"{len(rounds)} round(s), stop={loop_result.stop_reason}")
+        n_trim = len(histories)
+
+        # ── Supply-lift selection (Task 8) ──────────────────────────────
+        # Runs AFTER the trim rounds (which are untouched above) so trim
+        # keeps sole claim on its budget/eligibility machinery. Entirely
+        # skipped — no supply_gradient_N / lift_candidates call at all — when
+        # lift is disabled (TAIL_LEN<=0 or LIFT_BUDGET==0); this is exactly
+        # the G1 legacy configuration, so the legacy path pays zero extra
+        # compute and carries zero extra risk.
+        lift_histories: List[ModificationHistory] = []
+        lift_scores: List[float] = []
+        if config.TAIL_LEN > 0 and config.LIFT_BUDGET != 0:
+            _log(t0, "computing supply-gradient attribution for lift selection...")
+            # supply_gradient_N (Task 4, algorithm/supply.py — out of scope
+            # to modify here) always builds its internal leaf/pickup tensors
+            # on CPU, so it needs the objective's buffers on CPU too. It runs
+            # once per experiment (not the per-trajectory hot path), so the
+            # temporary shuttle costs one extra .to() round trip — same
+            # one-shot-CPU convention already used above for grid_before /
+            # sensitivity_before / augment. nn.Module.to() mutates in place
+            # and returns self, so `objective` is moved back before any
+            # lift edit runs (the modifier's optimization loop needs it on
+            # the configured device).
+            objective.to("cpu")
+            try:
+                grad_N = supply_gradient_N(bundle, objective)
+            finally:
+                objective.to(device)
+            lift_scored = lift_candidates(
+                bundle, grad_N, tail_len=config.TAIL_LEN, epsilon=config.EPSILON_BALL,
+            )
+            # trim_indices: positions (into bundle.trajectories) of every
+            # trajectory the trim rounds edited, deduped and order-preserved
+            # (iterative mode may re-edit the same trajectory across rounds).
+            # These give assemble_edit_plan its trim-precedence set and the
+            # default lift_budget = k - n_trim fill.
+            id_to_idx = {t.trajectory_id: i for i, t in enumerate(bundle.trajectories)}
+            trim_indices = list(dict.fromkeys(
+                id_to_idx[tid] for tid in loop_result.edited_ids
+            ))
+            plan = assemble_edit_plan(
+                trim_indices, lift_scored, k_total=k, lift_budget=config.LIFT_BUDGET,
+            )
+            lift_score_by_idx = dict(lift_scored)
+            orig_pos_all = {
+                t.trajectory_id: (float(t.pickup_state.x_grid), float(t.pickup_state.y_grid))
+                for t in bundle.trajectories
+            }
+            for idx, mode in plan:
+                if mode != "lift":
+                    continue
+                # idx is guaranteed disjoint from trim_indices (assemble_edit_plan
+                # dedupes), so bundle.trajectories[idx] is still the pristine
+                # original — no trim edit ever touched it.
+                traj = bundle.trajectories[idx]
+                h = modifier.modify_single(
+                    traj, mode="lift", original_cell=orig_pos_all[traj.trajectory_id],
+                )
+                lift_histories.append(h)
+                lift_scores.append(float(lift_score_by_idx[idx]))
+            _log(
+                t0,
+                f"lift step done: {len(lift_histories)} lift edits "
+                f"(n_taper_infeasible_lift={modifier.n_taper_infeasible_lift})",
+            )
+
+        histories = histories + lift_histories
+        top_k_scores = top_k_scores + lift_scores
+        n_lift = len(lift_histories)
+
         n_converged = sum(1 for h in histories if h.converged)
         mean_total_iters = (
             np.mean([h.total_iterations for h in histories]) if histories else 0.0
@@ -393,8 +478,25 @@ def run_experiment(
         )
 
         pickup_after = modifier.current_pickup_3d()
+        # delta_supply_3d is always materialized (a zero array when neither
+        # trim-taper nor lift moved any supply — e.g. G1) so the "no ΔS
+        # happened" case is a real, checkable value, not an absent field.
+        delta_supply_3d = modifier.current_delta_supply_3d()
         _log(t0, "building fairness grid (after)...")
-        grid_after = build_fairness_grid(bundle, pickup_3d=pickup_after)
+        if np.any(delta_supply_3d):
+            # Build a bundle whose active_taxis_3d reflects the endogenous
+            # supply change, then reuse build_fairness_grid's existing,
+            # unmodified math (grid.py is frozen for this task) so
+            # f_spatial/f_causal/gini_dsr/gini_asr all come out mutually
+            # consistent under the new supply. Same clip convention as the
+            # objective's delta_supply_N path (config.SUPPLY_FLOOR).
+            active_taxis_after = np.clip(
+                bundle.active_taxis_3d + delta_supply_3d, config.SUPPLY_FLOOR, None,
+            ).astype(bundle.active_taxis_3d.dtype)
+            bundle_for_after = replace(bundle, active_taxis_3d=active_taxis_after)
+        else:
+            bundle_for_after = bundle
+        grid_after = build_fairness_grid(bundle_for_after, pickup_3d=pickup_after)
         if diagnostics_enabled:
             _log(t0, "computing gradient sensitivity (after)...")
             sensitivity_after = compute_gradient_sensitivity(bundle, pickup_after)
@@ -449,6 +551,11 @@ def run_experiment(
             augmented_trajs_after=augmented_after,
             rounds=rounds,
             all_trajectory_scores=np.asarray([s for _, s in scored], dtype=np.float32),
+            delta_supply_3d=delta_supply_3d,
+            n_trim=n_trim,
+            n_lift=n_lift,
+            n_taper_infeasible_trim=modifier.n_taper_infeasible_trim,
+            n_taper_infeasible_lift=modifier.n_taper_infeasible_lift,
         )
     finally:
         restore_config()
