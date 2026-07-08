@@ -546,6 +546,23 @@ def run_experiment(
         )
 
         pickup_after = modifier.current_pickup_3d()
+        if config.TAIL_LEN > 0:
+            # Taper-mode runs fully drain far more demand cells than legacy
+            # trim ever did (lift relocates pickup demand too, and lift
+            # selection deliberately clusters near under-served regions). A
+            # fully drained float32 cell can rest a few ULP below zero
+            # (established mechanism: 67 aggregated pickups minus 67 persist
+            # -=mass subtractions = -1.86e-9), and the fairness stack's
+            # strict negativity check then rejects the whole after-grid.
+            # Clamp negatives to exact 0 at THE single fetch point so every
+            # downstream consumer (grid_after, sensitivity_after, persisted
+            # artifacts) sees the sanitized grid — downstream evaluators
+            # already treat |v| < 1e-6 as zero (legacy float32 drift).
+            # Legacy (TAIL_LEN=0) keeps the raw grid byte-identical (G1):
+            # verified that the pre-branch pipeline passes the raw drifted
+            # grid straight through and has simply never drained an
+            # unluckily-rounded cell.
+            pickup_after = np.clip(pickup_after, 0.0, None)
         # delta_supply_3d is always materialized (a zero array when neither
         # trim-taper nor lift moved any supply — e.g. G1) so the "no ΔS
         # happened" case is a real, checkable value, not an absent field.

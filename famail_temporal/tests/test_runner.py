@@ -514,6 +514,40 @@ def test_lift_enabled_path_enables_flush_denormal_once(tiny_bundle, monkeypatch)
     assert calls == [True]
 
 
+def test_supply_lift_after_metrics_tolerate_float32_demand_residuals(
+    tiny_bundle, monkeypatch,
+):
+    """Production incident #3: after all editing, the shared float32 demand
+    grid can carry ~-1e-9 residuals at fully drained cells (persist -=mass
+    chains vs the aggregation-time division; established at -1.86e-9 for a
+    67-pickup cell), and build_fairness_grid's strict negativity check then
+    rejects the whole after-grid. On the taper path (TAIL_LEN>0) the runner
+    must sanitize the fetched grid so metrics_after computes; pre-fix this
+    test dies with the production 'must not contain negatives' ValueError.
+    The legacy path (TAIL_LEN=0) stays byte-identical-untouched — covered by
+    test_legacy_mode_end_to_end_byte_identical."""
+    from famail_temporal.algorithm.modifier import TrajectoryModifier
+
+    orig = TrajectoryModifier.current_pickup_3d
+
+    def drifted(self):
+        g = orig(self)
+        ix, iy, it = np.argwhere(self.bundle.mask_3d)[0]
+        g[ix, iy, it] = np.float32(-1.86e-9)  # the verified drained-cell residual
+        return g
+
+    # Patching globally is safe: the in-loop consumer (compute_per_unit_
+    # attribution via editing_loop) clamps demand at DEMAND_FLOOR and
+    # tolerates negatives; only the after-metrics fairness grid rejects them.
+    monkeypatch.setattr(TrajectoryModifier, "current_pickup_3d", drifted)
+
+    result = run_experiment(k=2, max_trajectories=6)  # defaults: TAIL_LEN=4
+
+    assert np.isfinite(result.f_spatial_after)
+    active = ~np.isnan(result.grid_after[..., 0])
+    assert active.any()  # the after-grid was actually computed
+
+
 def test_persistence_skips_delta_supply_artifact_when_absent(tmp_path):
     """Legacy-shaped ExperimentResult objects (delta_supply_3d left at its
     default None — e.g. anything constructed before this task) must not grow
