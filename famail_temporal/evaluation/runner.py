@@ -371,6 +371,51 @@ def run_experiment(
         if resolved_round_tol is not None and resolved_max_rounds <= 1:
             _log(t0, "WARNING: round-convergence-tol set but max-rounds<=1; "
                      "running a single pass. Raise --max-rounds for convergence mode.")
+
+        # Supply-lift enablement, resolved ONCE and reused by the
+        # flush-denormal hardening here and the lift-selection block after
+        # the trim loop. False is exactly the G1 legacy configuration
+        # (TAIL_LEN=0 or LIFT_BUDGET=0): legacy invocations get neither the
+        # FP-environment change nor any lift compute, preserving
+        # published-number reproduction bit-for-bit.
+        lift_enabled = config.TAIL_LEN > 0 and config.LIFT_BUDGET != 0
+        if lift_enabled:
+            # Subnormal residuals from float32 persist chains (-=mass/+=mass on
+            # the shared demand grid) cause pathological 10-100x CPU backward
+            # slowdowns; flush-to-zero eliminates them at no accuracy cost at
+            # our magnitudes (observed: one edit stalling 25+ min/iteration
+            # after ~2250 normal edits in the k=10000 validation run).
+            ftz_supported = torch.set_flush_denormal(True)
+            if ftz_supported:
+                _log(t0, "flush-denormal enabled (subnormal float32 residuals "
+                         "from persist chains cause pathological CPU backward "
+                         "slowdowns)")
+            else:
+                _log(t0, "WARNING: torch.set_flush_denormal(True) not supported "
+                         "on this platform — subnormal-residual slowdowns "
+                         "remain possible")
+
+        # Per-edit progress heartbeat for the trim loop. run_editing_rounds'
+        # on_iter is forwarded to modify_single's on_iteration, which fires
+        # with (iteration_index, ModificationResult) on EVERY inner ST-iFGSM
+        # step (see editing_loop.py:126 / modifier.py:739) — there is no
+        # per-edit hook in that signature, so iteration_index == 0 is used as
+        # the "new edit started" marker and per-100-edit wall time + the
+        # iteration's f_causal are logged from what the callback does provide.
+        # Pure instrumentation: touches no algorithmic state.
+        _progress = {"edit_idx": 0, "t_mark": time.monotonic()}
+
+        def _trim_progress(it_idx: int, rec) -> None:
+            if it_idx != 0:
+                return
+            _progress["edit_idx"] += 1
+            if _progress["edit_idx"] % 100 == 0:
+                now = time.monotonic()
+                _log(t0, f"trim progress: edit {_progress['edit_idx']} "
+                         f"(+{now - _progress['t_mark']:.1f}s /100 edits) "
+                         f"f_causal={rec.f_causal:.6f}")
+                _progress["t_mark"] = now
+
         _log(t0, f"editing loop: mode={'iterative' if iterative_topk else 'batch'} "
                  f"max_rounds={resolved_max_rounds} eps_cap={modifier.epsilon_cap} "
                  f"accept={modifier.accept_rule} round_tol={resolved_round_tol}")
@@ -384,9 +429,10 @@ def run_experiment(
             iterative_max_edits=resolved_max_edits,
             max_per_unit=max_per_unit,
             max_per_cell=max_per_cell,
-            on_iter=None,
+            on_iter=_trim_progress,
             log=lambda msg: _log(t0, msg),
         )
+        _log(t0, "trim phase complete")
         histories = loop_result.histories
         rounds = loop_result.rounds
         # Selection-time αᵢ per edit (aligned with histories) — persistence
@@ -405,7 +451,8 @@ def run_experiment(
         # compute and carries zero extra risk.
         lift_histories: List[ModificationHistory] = []
         lift_scores: List[float] = []
-        if config.TAIL_LEN > 0 and config.LIFT_BUDGET != 0:
+        if lift_enabled:
+            _log(t0, "lift phase starting")
             _log(t0, "computing supply-gradient attribution for lift selection...")
             # supply_gradient_N (Task 4, algorithm/supply.py — out of scope
             # to modify here) always builds its internal leaf/pickup tensors
@@ -442,6 +489,7 @@ def run_experiment(
                 t.trajectory_id: (float(t.pickup_state.x_grid), float(t.pickup_state.y_grid))
                 for t in bundle.trajectories
             }
+            lift_t_mark = time.monotonic()
             for idx, mode in plan:
                 if mode != "lift":
                     continue
@@ -454,6 +502,13 @@ def run_experiment(
                 )
                 lift_histories.append(h)
                 lift_scores.append(float(lift_score_by_idx[idx]))
+                if len(lift_histories) % 100 == 0:
+                    now = time.monotonic()
+                    _log(t0, f"lift progress: edit {len(lift_histories)} "
+                             f"(+{now - lift_t_mark:.1f}s /100 edits) "
+                             f"n_taper_infeasible_lift="
+                             f"{modifier.n_taper_infeasible_lift}")
+                    lift_t_mark = now
             _log(
                 t0,
                 f"lift step done: {len(lift_histories)} lift edits "

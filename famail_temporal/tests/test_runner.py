@@ -468,6 +468,36 @@ def test_persistence_roundtrip_delta_supply_and_counters(tmp_path):
     assert metrics["artifact_paths"]["delta_supply_3d"] == "delta_supply_3d.npz"
 
 
+def test_legacy_mode_does_not_enable_flush_denormal(tiny_bundle, monkeypatch):
+    """G1 hygiene: the flush-denormal FP-environment change lives inside the
+    lift-enabled guard — a TAIL_LEN=0/LIFT_BUDGET=0 (legacy) invocation must
+    never call torch.set_flush_denormal, so published-number reproduction
+    runs in an untouched FP environment. The spy returns True without calling
+    through, so the process's real FP state is never mutated by this test."""
+    import torch
+    calls = []
+    monkeypatch.setattr(
+        torch, "set_flush_denormal", lambda enabled: (calls.append(enabled), True)[1],
+    )
+    monkeypatch.setattr(config, "TAIL_LEN", 0)
+    monkeypatch.setattr(config, "LIFT_BUDGET", 0)
+    run_experiment(k=2, max_trajectories=6)
+    assert calls == []
+
+
+def test_lift_enabled_path_enables_flush_denormal_once(tiny_bundle, monkeypatch):
+    """With the production defaults (TAIL_LEN=4, LIFT_BUDGET=None) the runner
+    must enable flush-denormal exactly once (stall-hardening for subnormal
+    float32 residuals in the demand-grid persist chains)."""
+    import torch
+    calls = []
+    monkeypatch.setattr(
+        torch, "set_flush_denormal", lambda enabled: (calls.append(enabled), True)[1],
+    )
+    run_experiment(k=2, max_trajectories=6)
+    assert calls == [True]
+
+
 def test_persistence_skips_delta_supply_artifact_when_absent(tmp_path):
     """Legacy-shaped ExperimentResult objects (delta_supply_3d left at its
     default None — e.g. anything constructed before this task) must not grow
