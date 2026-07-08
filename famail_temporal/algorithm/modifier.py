@@ -22,6 +22,7 @@ modification. This is intentional.
 """
 
 from __future__ import annotations
+from contextlib import nullcontext
 from dataclasses import dataclass, field
 from typing import Callable, List, Optional
 import warnings
@@ -534,236 +535,251 @@ class TrajectoryModifier:
         f_causal_0 = None
         f_spatial_0 = None
 
-        for it in range(self.max_iterations):
-            # (a) Anneal temperature
-            if config.ANNEAL_TEMPERATURE:
-                self.soft_assign.set_temperature(
-                    self._get_annealed_temperature(it)
-                )
+        # Cache the discriminator's constant (iteration-invariant) stream
+        # encodings for the whole loop: within one trajectory's ST-iFGSM loop
+        # only x2 slot 0 changes, so ~15 of the ~20 LSTM row-encodes per
+        # fidelity forward are otherwise recomputed identically. The cache is
+        # bitwise-transparent (eval mode => deterministic encoders); trip_s2 and
+        # the gradient path stay live. nullcontext when fidelity is off or the
+        # discriminator is a stub => those paths are byte-unchanged (G1).
+        _disc = getattr(self.objective, "discriminator", None)
+        _cache_cm = (
+            _disc.cache_constant_streams()
+            if (self.objective.alpha_fidelity > 0
+                and hasattr(_disc, "cache_constant_streams"))
+            else nullcontext()
+        )
+        with _cache_cm:
+            for it in range(self.max_iterations):
+                # (a) Anneal temperature
+                if config.ANNEAL_TEMPERATURE:
+                    self.soft_assign.set_temperature(
+                        self._get_annealed_temperature(it)
+                    )
 
-            # (b) Build the differentiable leaf + the soft pickup-demand probs.
-            current_pickup = original_pickup + cumulative_delta
-            delta_supply_N = None
-            if mode == "lift":
-                # Leaf = the tail-translation delta. Every moving row's soft
-                # position (supply) AND the pickup-demand position derive from
-                # it, so gradients from the demand grid, the endogenous supply
-                # channel, and fidelity all land on this single (2,) tensor —
-                # exactly as cumulative_delta plays the pickup-delta role in trim.
-                delta_tensor = torch.tensor(
-                    cumulative_delta, dtype=torch.float32,
-                    device=self.device, requires_grad=True,
-                )
-                grad_leaf = delta_tensor
-                # pos_j = orig_j + taper_j * delta  (differentiable in delta)
-                pos_stack = tail_orig_tensor + taper_col * delta_tensor  # (M, 2)
-                probs_new = self.soft_assign(pos_stack, tail_cell_tensor)  # (M,ns,ns)
-                probs = probs_new[-1]  # the pickup row's soft assignment (ns, ns)
-            else:
-                pickup_tensor = torch.tensor(
-                    current_pickup, dtype=torch.float32,
-                    device=self.device, requires_grad=True,
-                )
-                grad_leaf = pickup_tensor
-                cell_tensor = torch.tensor(
-                    [orig_cx, orig_cy], dtype=torch.float32, device=self.device,
-                ).unsqueeze(0)
-
-                # (c) Compute soft probs -> inject into t_block slice
-                probs = self.soft_assign(
-                    pickup_tensor.unsqueeze(0), cell_tensor,
-                )[0]  # (ns, ns)
-
-            # Pickup demand injection (UNCHANGED; lift moves demand too, by
-            # design — the pickup row's soft position feeds the same t_block slice).
-            soft_3d = inject_soft_counts_into_3d(
-                base_3d, probs, (orig_cx, orig_cy), t_block,
-                k=self.soft_assign.k, pickup_mass=pickup_mass,
-            )
-
-            # (c2) Straight-through hard-metric grid (opt-in). Forward value =
-            # the HARD (realizable) grid: full pickup mass at int(current_pickup),
-            # the exact cell the persist step writes. Gradient flows via the soft
-            # assignment (soft_3d - soft_3d.detach()). This makes best-iterate +
-            # the acceptance gate select on the metric actually deployed (§8.8).
-            # int(current_pickup), NOT argmax(probs): soft uses cell centers, so
-            # argmax can tie-break wrong at integer coords.
-            if self.use_ste:
-                k_half = self.soft_assign.k
-                snap_x, snap_y = int(current_pickup[0]), int(current_pickup[1])
-                ox, oy = snap_x - orig_cx + k_half, snap_y - orig_cy + k_half
-                hard_probs = torch.zeros_like(probs)
-                if 0 <= ox < probs.shape[0] and 0 <= oy < probs.shape[1]:
-                    hard_probs[ox, oy] = 1.0
-                hard_3d = inject_soft_counts_into_3d(
-                    base_3d, hard_probs, (orig_cx, orig_cy), t_block,
-                    k=k_half, pickup_mass=pickup_mass,
-                )
-                objective_grid = hard_3d + (soft_3d - soft_3d.detach())
-            else:
-                objective_grid = soft_3d
-
-            # (c3) Endogenous supply channel (lift only). Build this trajectory's
-            # soft ΔS: +1 soft-add at the moving rows' NEW soft positions, plus
-            # the constant −1 hard removal at the ORIGINAL positions; add it to
-            # the shared accumulator and gather to (N,) in the objective's unit
-            # order. Only the +soft-add term carries gradient w.r.t. delta_tensor.
-            if mode == "lift":
-                soft_add = soft_delta_supply(
-                    probs_new, tail_cells, tail_tblocks, tail_masses,
-                    tail_signs_pos, self._grid_shape,
-                )
-                traj_soft_ds = soft_add + removal_const
-                delta_supply_N = (
-                    self._delta_supply_3d + traj_soft_ds
-                )[self._mask_3d_t]
-
-            # Build fidelity features if needed
-            tau_features = None
-            tau_prime_features = None
-            ms_kwargs = None
-            if self.objective.alpha_fidelity > 0:
-                tau_features = tau_features_cached
-                tau_prime_features = tau_features.clone()
+                # (b) Build the differentiable leaf + the soft pickup-demand probs.
+                current_pickup = original_pickup + cumulative_delta
+                delta_supply_N = None
                 if mode == "lift":
-                    # Splice ALL moving rows (not just the pickup): moving row j
-                    # is feature row -(M)+j == -(L_eff+1)+j.
-                    for j in range(M):
-                        row = -M + j
-                        tau_prime_features[0, row, 0] = pos_stack[j, 0]
-                        tau_prime_features[0, row, 1] = pos_stack[j, 1]
+                    # Leaf = the tail-translation delta. Every moving row's soft
+                    # position (supply) AND the pickup-demand position derive from
+                    # it, so gradients from the demand grid, the endogenous supply
+                    # channel, and fidelity all land on this single (2,) tensor —
+                    # exactly as cumulative_delta plays the pickup-delta role in trim.
+                    delta_tensor = torch.tensor(
+                        cumulative_delta, dtype=torch.float32,
+                        device=self.device, requires_grad=True,
+                    )
+                    grad_leaf = delta_tensor
+                    # pos_j = orig_j + taper_j * delta  (differentiable in delta)
+                    pos_stack = tail_orig_tensor + taper_col * delta_tensor  # (M, 2)
+                    probs_new = self.soft_assign(pos_stack, tail_cell_tensor)  # (M,ns,ns)
+                    probs = probs_new[-1]  # the pickup row's soft assignment (ns, ns)
                 else:
-                    tau_prime_features[0, -1, 0] = pickup_tensor[0]
-                    tau_prime_features[0, -1, 1] = pickup_tensor[1]
-                if self.multi_stream_builder is not None:
-                    # Reuse the per-trajectory cache and splice only the
-                    # iter-dependent slot(s) into a fresh clone. The cache itself
-                    # is never mutated, so subsequent iters start from clean state.
-                    x2_new = ms_kwargs_cached["x2"].clone()
+                    pickup_tensor = torch.tensor(
+                        current_pickup, dtype=torch.float32,
+                        device=self.device, requires_grad=True,
+                    )
+                    grad_leaf = pickup_tensor
+                    cell_tensor = torch.tensor(
+                        [orig_cx, orig_cy], dtype=torch.float32, device=self.device,
+                    ).unsqueeze(0)
+
+                    # (c) Compute soft probs -> inject into t_block slice
+                    probs = self.soft_assign(
+                        pickup_tensor.unsqueeze(0), cell_tensor,
+                    )[0]  # (ns, ns)
+
+                # Pickup demand injection (UNCHANGED; lift moves demand too, by
+                # design — the pickup row's soft position feeds the same t_block slice).
+                soft_3d = inject_soft_counts_into_3d(
+                    base_3d, probs, (orig_cx, orig_cy), t_block,
+                    k=self.soft_assign.k, pickup_mass=pickup_mass,
+                )
+
+                # (c2) Straight-through hard-metric grid (opt-in). Forward value =
+                # the HARD (realizable) grid: full pickup mass at int(current_pickup),
+                # the exact cell the persist step writes. Gradient flows via the soft
+                # assignment (soft_3d - soft_3d.detach()). This makes best-iterate +
+                # the acceptance gate select on the metric actually deployed (§8.8).
+                # int(current_pickup), NOT argmax(probs): soft uses cell centers, so
+                # argmax can tie-break wrong at integer coords.
+                if self.use_ste:
+                    k_half = self.soft_assign.k
+                    snap_x, snap_y = int(current_pickup[0]), int(current_pickup[1])
+                    ox, oy = snap_x - orig_cx + k_half, snap_y - orig_cy + k_half
+                    hard_probs = torch.zeros_like(probs)
+                    if 0 <= ox < probs.shape[0] and 0 <= oy < probs.shape[1]:
+                        hard_probs[ox, oy] = 1.0
+                    hard_3d = inject_soft_counts_into_3d(
+                        base_3d, hard_probs, (orig_cx, orig_cy), t_block,
+                        k=k_half, pickup_mass=pickup_mass,
+                    )
+                    objective_grid = hard_3d + (soft_3d - soft_3d.detach())
+                else:
+                    objective_grid = soft_3d
+
+                # (c3) Endogenous supply channel (lift only). Build this trajectory's
+                # soft ΔS: +1 soft-add at the moving rows' NEW soft positions, plus
+                # the constant −1 hard removal at the ORIGINAL positions; add it to
+                # the shared accumulator and gather to (N,) in the objective's unit
+                # order. Only the +soft-add term carries gradient w.r.t. delta_tensor.
+                if mode == "lift":
+                    soft_add = soft_delta_supply(
+                        probs_new, tail_cells, tail_tblocks, tail_masses,
+                        tail_signs_pos, self._grid_shape,
+                    )
+                    traj_soft_ds = soft_add + removal_const
+                    delta_supply_N = (
+                        self._delta_supply_3d + traj_soft_ds
+                    )[self._mask_3d_t]
+
+                # Build fidelity features if needed
+                tau_features = None
+                tau_prime_features = None
+                ms_kwargs = None
+                if self.objective.alpha_fidelity > 0:
+                    tau_features = tau_features_cached
+                    tau_prime_features = tau_features.clone()
                     if mode == "lift":
+                        # Splice ALL moving rows (not just the pickup): moving row j
+                        # is feature row -(M)+j == -(L_eff+1)+j.
                         for j in range(M):
                             row = -M + j
-                            x2_new[0, 0, row, 0] = pos_stack[j, 0] + 1
-                            x2_new[0, 0, row, 1] = pos_stack[j, 1] + 1
+                            tau_prime_features[0, row, 0] = pos_stack[j, 0]
+                            tau_prime_features[0, row, 1] = pos_stack[j, 1]
                     else:
-                        x2_new[0, 0, -1, 0] = pickup_tensor[0] + 1
-                        x2_new[0, 0, -1, 1] = pickup_tensor[1] + 1
-                    ms_kwargs = {**ms_kwargs_cached, "x2": x2_new}
+                        tau_prime_features[0, -1, 0] = pickup_tensor[0]
+                        tau_prime_features[0, -1, 1] = pickup_tensor[1]
+                    if self.multi_stream_builder is not None:
+                        # Reuse the per-trajectory cache and splice only the
+                        # iter-dependent slot(s) into a fresh clone. The cache itself
+                        # is never mutated, so subsequent iters start from clean state.
+                        x2_new = ms_kwargs_cached["x2"].clone()
+                        if mode == "lift":
+                            for j in range(M):
+                                row = -M + j
+                                x2_new[0, 0, row, 0] = pos_stack[j, 0] + 1
+                                x2_new[0, 0, row, 1] = pos_stack[j, 1] + 1
+                        else:
+                            x2_new[0, 0, -1, 0] = pickup_tensor[0] + 1
+                            x2_new[0, 0, -1, 1] = pickup_tensor[1] + 1
+                        ms_kwargs = {**ms_kwargs_cached, "x2": x2_new}
 
-            # (d) Forward through FAMAILObjective. Trim passes NOTHING for
-            # delta_supply_N (G1: the None path is byte-identical to legacy).
-            if mode == "lift":
-                total, terms = self.objective(
-                    soft_pickup_3d=objective_grid,
-                    tau_features=tau_features,
-                    tau_prime_features=tau_prime_features,
-                    multi_stream_kwargs=ms_kwargs,
-                    delta_supply_N=delta_supply_N,
-                )
-            else:
-                total, terms = self.objective(
-                    soft_pickup_3d=objective_grid,
-                    tau_features=tau_features,
-                    tau_prime_features=tau_prime_features,
-                    multi_stream_kwargs=ms_kwargs,
-                )
-
-            # (e) Backward - decomposed if diagnostics_enabled, else single-backward
-            self.objective.zero_grad()
-            tier_a_metrics = None
-            if self.diagnostics_enabled:
-                grad, tier_a_metrics = self._compute_decomposed_gradient(
-                    terms["f_spatial"], terms["f_causal"], terms["f_fidelity"],
-                    grad_leaf,
-                )
-            else:
-                total.backward(retain_graph=True)
-                if grad_leaf.grad is None:
-                    grad = np.zeros(2)
+                # (d) Forward through FAMAILObjective. Trim passes NOTHING for
+                # delta_supply_N (G1: the None path is byte-identical to legacy).
+                if mode == "lift":
+                    total, terms = self.objective(
+                        soft_pickup_3d=objective_grid,
+                        tau_features=tau_features,
+                        tau_prime_features=tau_prime_features,
+                        multi_stream_kwargs=ms_kwargs,
+                        delta_supply_N=delta_supply_N,
+                    )
                 else:
-                    grad = grad_leaf.grad.detach().cpu().numpy()
-            grad_norm = float(np.linalg.norm(grad))
+                    total, terms = self.objective(
+                        soft_pickup_3d=objective_grid,
+                        tau_features=tau_features,
+                        tau_prime_features=tau_prime_features,
+                        multi_stream_kwargs=ms_kwargs,
+                    )
 
-            # (f) ST-iFGSM: delta = clip(alpha * sign(grad), -epsilon, epsilon)
-            if grad_norm > 1e-8:
-                delta = self.alpha * np.sign(grad)
-                cumulative_delta = np.clip(
-                    cumulative_delta + delta, -self.epsilon, self.epsilon,
-                ).astype(np.float32)
+                # (e) Backward - decomposed if diagnostics_enabled, else single-backward
+                self.objective.zero_grad()
+                tier_a_metrics = None
+                if self.diagnostics_enabled:
+                    grad, tier_a_metrics = self._compute_decomposed_gradient(
+                        terms["f_spatial"], terms["f_causal"], terms["f_fidelity"],
+                        grad_leaf,
+                    )
+                else:
+                    total.backward(retain_graph=True)
+                    if grad_leaf.grad is None:
+                        grad = np.zeros(2)
+                    else:
+                        grad = grad_leaf.grad.detach().cpu().numpy()
+                grad_norm = float(np.linalg.norm(grad))
 
-            # Clip pickup to grid bounds
-            new_pickup = np.clip(
-                original_pickup + cumulative_delta,
-                [0.0, 0.0],
-                [config.GRID_DIMS[0] - 1, config.GRID_DIMS[1] - 1],
-            ).astype(np.float32)
-            # Cumulative-epsilon cap: keep within self.epsilon_cap (L-inf) of the
-            # TRUE original cell, across rounds. With epsilon_cap == EPSILON_BALL
-            # and original_cell == this call's start cell, this is a no-op
-            # (new_pickup is already within EPSILON_BALL of original_pickup).
-            if self.epsilon_cap is not None and np.isfinite(self.epsilon_cap):
+                # (f) ST-iFGSM: delta = clip(alpha * sign(grad), -epsilon, epsilon)
+                if grad_norm > 1e-8:
+                    delta = self.alpha * np.sign(grad)
+                    cumulative_delta = np.clip(
+                        cumulative_delta + delta, -self.epsilon, self.epsilon,
+                    ).astype(np.float32)
+
+                # Clip pickup to grid bounds
                 new_pickup = np.clip(
-                    new_pickup,
-                    true_original - self.epsilon_cap,
-                    true_original + self.epsilon_cap,
+                    original_pickup + cumulative_delta,
+                    [0.0, 0.0],
+                    [config.GRID_DIMS[0] - 1, config.GRID_DIMS[1] - 1],
                 ).astype(np.float32)
-            # Re-sync cumulative_delta after grid + cumulative-cap clips
-            cumulative_delta = new_pickup - original_pickup
+                # Cumulative-epsilon cap: keep within self.epsilon_cap (L-inf) of the
+                # TRUE original cell, across rounds. With epsilon_cap == EPSILON_BALL
+                # and original_cell == this call's start cell, this is a no-op
+                # (new_pickup is already within EPSILON_BALL of original_pickup).
+                if self.epsilon_cap is not None and np.isfinite(self.epsilon_cap):
+                    new_pickup = np.clip(
+                        new_pickup,
+                        true_original - self.epsilon_cap,
+                        true_original + self.epsilon_cap,
+                    ).astype(np.float32)
+                # Re-sync cumulative_delta after grid + cumulative-cap clips
+                cumulative_delta = new_pickup - original_pickup
 
-            prev_sign = self._prev_grad_sign
-            cur_sign = np.sign(grad)
-            sign_flipped = (
-                bool(np.any(prev_sign != cur_sign))
-                if (self.diagnostics_enabled and prev_sign is not None)
-                else (False if self.diagnostics_enabled else None)
-            )
-            self._prev_grad_sign = cur_sign
-
-            result = ModificationResult(
-                iteration=it,
-                objective_value=float(total.detach()),
-                f_spatial=float(terms["f_spatial"].detach()),
-                f_causal=float(terms["f_causal"].detach()),
-                f_fidelity=float(terms["f_fidelity"].detach()),
-                gradient_norm=grad_norm,
-                cumulative_delta=cumulative_delta.copy(),
-                grad_spatial_norm=(tier_a_metrics or {}).get("grad_spatial_norm"),
-                grad_causal_norm=(tier_a_metrics or {}).get("grad_causal_norm"),
-                grad_fidelity_norm=(tier_a_metrics or {}).get("grad_fidelity_norm"),
-                grad_cosine_spatial_causal=(tier_a_metrics or {}).get("grad_cosine_spatial_causal"),
-                grad_cosine_fairness_fidelity=(tier_a_metrics or {}).get("grad_cosine_fairness_fidelity"),
-                sign_flipped=sign_flipped,
-                dominant_term=(tier_a_metrics or {}).get("dominant_term"),
-            )
-            iterations.append(result)
-            if on_iteration is not None:
-                on_iteration(it, result)
-
-            # (g) Best-iterate tracking + patience-based convergence.
-            # iter-0 sits at the pre-edit pickup ⇒ captures the baseline F the
-            # non-regression gate compares against.
-            if it == 0:
-                f_causal_0 = result.f_causal
-                f_spatial_0 = result.f_spatial
-            current_objective = float(total.detach())
-            if self.accept_rule == "non-regression":
-                qualifies = (
-                    result.f_causal >= f_causal_0 + self.convergence_tol
-                    and result.f_spatial >= f_spatial_0 - self.convergence_tol
+                prev_sign = self._prev_grad_sign
+                cur_sign = np.sign(grad)
+                sign_flipped = (
+                    bool(np.any(prev_sign != cur_sign))
+                    if (self.diagnostics_enabled and prev_sign is not None)
+                    else (False if self.diagnostics_enabled else None)
                 )
-            else:
-                qualifies = True
-            if qualifies and current_objective > best_objective + self.convergence_tol:
-                best_objective = current_objective
-                best_cumulative_delta = cumulative_delta.copy()
-                best_iteration = it
-                iters_since_improvement = 0
-            else:
-                iters_since_improvement += 1
-                if (self.patience is not None
-                        and iters_since_improvement >= self.patience):
-                    converged = True
-                    break
+                self._prev_grad_sign = cur_sign
+
+                result = ModificationResult(
+                    iteration=it,
+                    objective_value=float(total.detach()),
+                    f_spatial=float(terms["f_spatial"].detach()),
+                    f_causal=float(terms["f_causal"].detach()),
+                    f_fidelity=float(terms["f_fidelity"].detach()),
+                    gradient_norm=grad_norm,
+                    cumulative_delta=cumulative_delta.copy(),
+                    grad_spatial_norm=(tier_a_metrics or {}).get("grad_spatial_norm"),
+                    grad_causal_norm=(tier_a_metrics or {}).get("grad_causal_norm"),
+                    grad_fidelity_norm=(tier_a_metrics or {}).get("grad_fidelity_norm"),
+                    grad_cosine_spatial_causal=(tier_a_metrics or {}).get("grad_cosine_spatial_causal"),
+                    grad_cosine_fairness_fidelity=(tier_a_metrics or {}).get("grad_cosine_fairness_fidelity"),
+                    sign_flipped=sign_flipped,
+                    dominant_term=(tier_a_metrics or {}).get("dominant_term"),
+                )
+                iterations.append(result)
+                if on_iteration is not None:
+                    on_iteration(it, result)
+
+                # (g) Best-iterate tracking + patience-based convergence.
+                # iter-0 sits at the pre-edit pickup ⇒ captures the baseline F the
+                # non-regression gate compares against.
+                if it == 0:
+                    f_causal_0 = result.f_causal
+                    f_spatial_0 = result.f_spatial
+                current_objective = float(total.detach())
+                if self.accept_rule == "non-regression":
+                    qualifies = (
+                        result.f_causal >= f_causal_0 + self.convergence_tol
+                        and result.f_spatial >= f_spatial_0 - self.convergence_tol
+                    )
+                else:
+                    qualifies = True
+                if qualifies and current_objective > best_objective + self.convergence_tol:
+                    best_objective = current_objective
+                    best_cumulative_delta = cumulative_delta.copy()
+                    best_iteration = it
+                    iters_since_improvement = 0
+                else:
+                    iters_since_improvement += 1
+                    if (self.patience is not None
+                            and iters_since_improvement >= self.patience):
+                        converged = True
+                        break
 
         # ── Discretize the BEST iterate's perturbation ────────────────────
         # If no iter exceeded the initial -inf by more than tol (rare),

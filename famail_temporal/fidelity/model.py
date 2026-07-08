@@ -20,7 +20,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import math
-from typing import Optional, Tuple
+from contextlib import contextmanager
+from typing import Callable, Optional, Tuple
 
 
 class FeatureNormalizer(nn.Module):
@@ -489,6 +490,65 @@ class MultiStreamSiameseDiscriminator(nn.Module):
             "days_in_week": days_in_week,
         }
 
+        # Per-trajectory-loop constant-encoding cache (see cache_constant_streams).
+        # ``None`` => caching disabled (the default; forward() is byte-identical
+        # to the pre-cache implementation). A dict => caching active for one
+        # trajectory's ST-iFGSM loop.
+        self._fidelity_cache: Optional[dict] = None
+
+    @contextmanager
+    def cache_constant_streams(self):
+        """Cache the constant (iteration-invariant) stream encodings across ONE
+        trajectory's optimization loop.
+
+        Inside a single ST-iFGSM loop the ONLY discriminator input that changes
+        between iterations is slot 0 of ``x2`` (the modified seeking branch); see
+        modifier.py / context.py "Decision 4". Therefore the seeking-branch-1
+        embedding (``trip_s1``), both driving-branch embeddings, and both profile
+        embeddings are constants that would otherwise be re-encoded identically
+        every iteration (~15 of the ~20 LSTM row-encodes per forward). This
+        context manager computes them once (on the first forward) and reuses the
+        stored tensors on subsequent forwards; only ``trip_s2`` is recomputed.
+
+        Bitwise transparency: the module is in inference mode (dropout is an
+        identity) and all inputs/parameters are constant, so the discriminator's
+        stream encoders are deterministic — a reused embedding is bit-for-bit
+        equal to a fresh recompute. ``trip_s2`` is recomputed with the exact same
+        full-batch op sequence as the uncached path, so the combined embedding,
+        classifier logits, F_fidelity value, AND the gradient w.r.t. the leaf are
+        bitwise-identical to the uncached forward. Verified end-to-end by the G1
+        / equivalence tests.
+
+        Correctness contract (caller): x1/mask1, driving_*/mask_d*, and profile_*
+        MUST stay constant across every forward() inside the context — only x2
+        (slot 0) may change. TrajectoryModifier guarantees this by reusing its
+        per-trajectory ``ms_kwargs_cached`` and splicing only x2 each iter.
+
+        Nesting-safe and exception-safe: the previous cache state is restored on
+        exit, so a partially-run loop never leaks stale embeddings into the next
+        trajectory.
+        """
+        prev = self._fidelity_cache
+        self._fidelity_cache = {}
+        try:
+            yield
+        finally:
+            self._fidelity_cache = prev
+
+    def _cached(self, key: str, compute: Callable[[], torch.Tensor]) -> torch.Tensor:
+        """Return a constant stream embedding, memoized within the active cache.
+
+        When no cache is active (``_fidelity_cache is None``) this is a pass-
+        through call of ``compute()`` — identical op sequence to the pre-cache
+        forward, so the uncached path is byte-for-byte unchanged (G1).
+        """
+        cache = self._fidelity_cache
+        if cache is None:
+            return compute()
+        if key not in cache:
+            cache[key] = compute()
+        return cache[key]
+
     def _encode_trajectory_stream(
         self,
         x: torch.Tensor,
@@ -682,36 +742,53 @@ class MultiStreamSiameseDiscriminator(nn.Module):
         """
         batch_size = x1.size(0)
 
-        # Stream 1: Seeking (always) -- handles 3D/4D auto-detect
-        trip_s1 = self._encode_trajectory_stream(
-            x1, mask1, self.seeking_encoder, self.seeking_projection
+        # Stream 1: Seeking (always) -- handles 3D/4D auto-detect.
+        # trip_s1 (branch 1 = ORIGINAL seeking) is constant across a trajectory's
+        # loop and is cached; trip_s2 (branch 2 = MODIFIED seeking, slot 0 changes)
+        # is ALWAYS recomputed with the full-batch op sequence so the value AND the
+        # gradient w.r.t. the leaf stay bitwise-identical to the uncached path.
+        trip_s1 = self._cached(
+            "trip_s1",
+            lambda: self._encode_trajectory_stream(
+                x1, mask1, self.seeking_encoder, self.seeking_projection
+            ),
         )
         trip_s2 = self._encode_trajectory_stream(
             x2, mask2, self.seeking_encoder, self.seeking_projection
         )
         stream_pairs = [(trip_s1, trip_s2)]
 
-        # Stream 2: Driving
+        # Stream 2: Driving (constant both branches within a loop -> cached)
         if "driving" in self.streams:
             if driving_1 is not None and driving_2 is not None:
-                trip_d1 = self._encode_trajectory_stream(
-                    driving_1, mask_d1,
-                    self.driving_encoder, self.driving_projection
+                trip_d1 = self._cached(
+                    "trip_d1",
+                    lambda: self._encode_trajectory_stream(
+                        driving_1, mask_d1,
+                        self.driving_encoder, self.driving_projection
+                    ),
                 )
-                trip_d2 = self._encode_trajectory_stream(
-                    driving_2, mask_d2,
-                    self.driving_encoder, self.driving_projection
+                trip_d2 = self._cached(
+                    "trip_d2",
+                    lambda: self._encode_trajectory_stream(
+                        driving_2, mask_d2,
+                        self.driving_encoder, self.driving_projection
+                    ),
                 )
             else:
                 trip_d1 = self.driving_default_embedding.expand(batch_size, -1)
                 trip_d2 = self.driving_default_embedding.expand(batch_size, -1)
             stream_pairs.append((trip_d1, trip_d2))
 
-        # Stream 3: Profile
+        # Stream 3: Profile (constant both branches within a loop -> cached)
         if "profile" in self.streams:
             if profile_1 is not None and profile_2 is not None:
-                emb_p1 = self.profile_encoder(profile_1)
-                emb_p2 = self.profile_encoder(profile_2)
+                emb_p1 = self._cached(
+                    "emb_p1", lambda: self.profile_encoder(profile_1)
+                )
+                emb_p2 = self._cached(
+                    "emb_p2", lambda: self.profile_encoder(profile_2)
+                )
             else:
                 emb_p1 = self.profile_default_embedding.expand(batch_size, -1)
                 emb_p2 = self.profile_default_embedding.expand(batch_size, -1)
