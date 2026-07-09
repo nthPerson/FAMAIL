@@ -142,13 +142,17 @@ which is why F_fidelity barely moves under it.
   the objective, the ST-SiameseNet discriminator, ST-iFGSM, and the soft-assignment discretization.
 - `famail_temporal/docs/TRAJECTORY_EDITING_METHODOLOGY.md` — the editing methodology end-to-end.
 
-**External lineage** (as grounded in the repo's methodology docs; exact bibliographic references to be
-finalized by the authors):
-- **cGAIL** — the conditional generative-adversarial imitation-learning base for taxi trajectories.
-- **HuMID / Ren et al.** — the driver-identity discriminator this fidelity model follows.
-- **FGSM / iFGSM (Goodfellow et al.; Kurakin et al.)** — the signed-gradient editing step.
+**External lineage** (bibliographic references verified 2026-07-08; full literature-grounded motivation +
+reviewer defense: [`../objective-motivation/`](../objective-motivation/README.md)):
+- **cGAIL** — the conditional generative-adversarial imitation-learning base for taxi trajectories
+  (Zhang, Li, Zhou & Luo; *IEEE ICDM* 2019; journal *IEEE Trans. Big Data* 8(5):1288–1300, 2022).
+- **ST-SiameseNet / HuMID** — the driver-identity discriminator this fidelity model follows
+  (Ren, Pan, Li, Zhou & Luo; *KDD* 2020).
+- **FGSM / iFGSM** — the signed-gradient editing step (Goodfellow, Shlens & Szegedy, *ICLR* 2015;
+  Kurakin, Goodfellow & Bengio, *ICLR Workshop* 2017); the spatio-temporal instantiation is **ST-iFGSM**
+  (Hu, Zhang, Li, Zhou & Luo; *KDD* 2023).
 - **Frisch–Waugh–Lovell theorem** — the partial-regression identity underpinning F_causal's
-  residualize-then-project construction.
+  residualize-then-project construction (Frisch & Waugh, *Econometrica* 1933; Lovell, *JASA* 1963).
 
 ---
 
