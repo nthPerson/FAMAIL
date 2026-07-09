@@ -64,27 +64,142 @@ from famail_temporal.data.aggregation import hour_to_block_index, time_bucket_to
 
 
 # ---------------------------------------------------------------------------
-# King-move identification (byte-identical semantics to the G4 sweep)
+# King-move identification (EDIT-INTRODUCED violations; city-robust).
+# Step semantics are byte-identical to the G4 sweep.
 # ---------------------------------------------------------------------------
+
+def _violating_steps(traj) -> List[bool]:
+    """Per-transition king-move violation flags (len = n_states - 1). Uses the
+    RAW state coordinates (exactly as the committed G4 adjacency sweep does),
+    so a legacy fractional-offset fallback edit (e.g. a +1.7-cell pickup move)
+    is correctly flagged even though its int cell would round to a 1-cell
+    step."""
+    ss = traj.states
+    return [
+        max(abs(b.x_grid - a.x_grid), abs(b.y_grid - a.y_grid)) > 1
+        for a, b in zip(ss, ss[1:])
+    ]
+
 
 def king_ok(traj) -> bool:
     """True iff every consecutive step of ``traj`` satisfies king-move
-    adjacency ``max(|dx|,|dy|) <= 1``. Uses the RAW state coordinates (exactly
-    as the committed G4 adjacency sweep does), so a legacy fractional-offset
-    fallback edit (e.g. a +1.7-cell pickup move) is correctly flagged even
-    though its int cell would round to a 1-cell step."""
-    ss = traj.states
-    return all(
-        max(abs(b.x_grid - a.x_grid), abs(b.y_grid - a.y_grid)) <= 1
-        for a, b in zip(ss, ss[1:])
+    adjacency ``max(|dx|,|dy|) <= 1`` (ABSOLUTE compliance — used for
+    reporting; violator identification uses ``introduces_violation``)."""
+    return not any(_violating_steps(traj))
+
+
+def introduces_violation(h) -> bool:
+    """True iff the MODIFIED trajectory has a king-violating transition at an
+    index where the ORIGINAL's same-index transition was compliant — i.e. the
+    edit *introduced* a new violation.
+
+    This is the city-robust identification: SF's raw Cabspotting-derived
+    trajectories have ~15% baseline king-move violations (GPS gaps up to ~18
+    cells) that pre-exist any editing, so an absolute check on the modified
+    trajectory (valid on Shenzhen, whose originals are 100% compliant)
+    over-counts there. The per-index diff isolates exactly the legacy
+    pickup-only fallback moves the skip-on-infeasible rule targets. On
+    Shenzhen the two definitions coincide.
+
+    The editor is length-preserving; a length mismatch means the history is
+    not per-index comparable and is a hard error."""
+    o, m = h.original, h.modified
+    if len(o.states) != len(m.states):
+        raise ValueError(
+            f"introduces_violation: original has {len(o.states)} states but "
+            f"modified has {len(m.states)} — the editor is length-preserving, "
+            f"so per-index transition comparison is undefined for this history "
+            f"(trajectory_id={getattr(o, 'trajectory_id', '?')})."
+        )
+    ov = _violating_steps(o)
+    mv = _violating_steps(m)
+    return any(m_bad and not o_bad for o_bad, m_bad in zip(ov, mv))
+
+
+def find_edit_introduced_indices(histories: Sequence) -> List[int]:
+    """Positions of every history whose edit INTRODUCED a king-move violation
+    (see ``introduces_violation``). Pre-existing (raw-data) violations are
+    NOT flagged. Order preserved. Used for compliance reporting and as a
+    cross-check on the replay identification (every edit-introduced violator
+    must be a fallback; the converse need not hold — a fallback whose legacy
+    move is <=1 cell, or which alters an ALREADY-violating transition,
+    introduces no NEW violation yet still broke the skip-on-infeasible
+    rule)."""
+    return [i for i, h in enumerate(histories) if introduces_violation(h)]
+
+
+def recovered_delta_int(h) -> tuple:
+    """Recover the integer pickup offset the modifier handed
+    ``apply_tail_perturbation`` (``_discretize_trim``'s ``delta_int``) from
+    the persisted history alone.
+
+    Valid in BOTH branches: a successful taper repair deploys exactly the
+    legacy cell (integer offset preserves the original's fractional part, and
+    ``_discretize_trim`` computes the offset from int-truncated cells), and
+    the legacy fallback's fractional pickup int-truncates to the legacy cell
+    by definition. So ``int(modified.pickup) - int(original.pickup)`` equals
+    the modifier's ``delta_int`` in either case."""
+    o, m = h.original, h.modified
+    return (
+        int(m.states[-1].x_grid) - int(o.states[-1].x_grid),
+        int(m.states[-1].y_grid) - int(o.states[-1].y_grid),
     )
 
 
-def find_infeasible_indices(histories: Sequence) -> List[int]:
-    """Positions of every history whose MODIFIED trajectory violates king-move
-    adjacency — i.e. the trim edits that fell back to the legacy pickup-only
-    perturbation. Order preserved."""
-    return [i for i, h in enumerate(histories) if not king_ok(h.modified)]
+def is_taper_infeasible(h, tail_len: int, grid_dims) -> bool:
+    """REPLAY of the modifier's own fallback decision (``_discretize_trim``):
+    True iff ``apply_tail_perturbation(delta_int, tail_len, grid_dims)`` on
+    the ORIGINAL returns ``None`` — exactly the condition under which the
+    modifier incremented ``n_taper_infeasible_trim`` and fell back to the
+    legacy pickup-only move. ``tail_len``/``grid_dims`` must come from the
+    run's ``config_snapshot`` (not the current config) for exactness."""
+    dx, dy = recovered_delta_int(h)
+    repaired = h.original.apply_tail_perturbation(
+        np.array([float(dx), float(dy)], dtype=np.float32),
+        tail_len, tuple(grid_dims),
+    )
+    return repaired is None
+
+
+def find_fallback_indices(
+    histories: Sequence, tail_len: int, grid_dims,
+) -> List[int]:
+    """Positions of every history whose trim edit used the legacy pickup-only
+    fallback, identified by replaying the modifier's decision procedure (see
+    ``is_taper_infeasible``). Caller passes the TRIM block only (lift mode
+    skips on infeasible and never falls back). This is exact by construction:
+    it evaluates the same pure function on the same inputs the modifier used,
+    so the count equals ``n_taper_infeasible_trim`` whenever the histories
+    are the run's own. City-robust: unlike an absolute king-move check, it is
+    unaffected by pre-existing raw-data violations (~15% of SF Cabspotting
+    trajectories have GPS-gap steps up to ~18 cells)."""
+    return [
+        i for i, h in enumerate(histories)
+        if is_taper_infeasible(h, tail_len, grid_dims)
+    ]
+
+
+def compliance_summary(histories: Sequence) -> dict:
+    """Absolute + edit-relative king-move compliance over a histories list.
+
+    - absolute: whole-trajectory ``king_ok`` on the modified corpus, plus the
+      original-corpus baseline (SF raw data is NOT 100% compliant);
+    - edit-relative: fraction of edits introducing ZERO new violations — the
+      cross-city G4 statement (must be 100% post-filter).
+    """
+    n = len(histories)
+    n_mod_ok = sum(1 for h in histories if king_ok(h.modified))
+    n_orig_ok = sum(1 for h in histories if king_ok(h.original))
+    n_introducing = sum(1 for h in histories if introduces_violation(h))
+    return {
+        "n": n,
+        "n_modified_king_compliant": n_mod_ok,
+        "n_original_king_compliant": n_orig_ok,
+        "absolute_modified_compliance_frac": (n_mod_ok / n) if n else float("nan"),
+        "absolute_original_compliance_frac": (n_orig_ok / n) if n else float("nan"),
+        "n_edits_introducing_violations": n_introducing,
+        "edit_relative_compliance_frac": (1.0 - n_introducing / n) if n else float("nan"),
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -207,33 +322,76 @@ def main(argv: list[str] | None = None) -> int:
     print(f"[filter] loaded {len(histories)} histories "
           f"(n_trim={n_trim_src}, n_lift={n_lift_src})", flush=True)
 
-    # --- identify violators (exact, hard-asserted) ---
-    viol = find_infeasible_indices(histories)
+    # --- identify violators by REPLAYING the modifier's fallback decision ---
+    # (city-robust: exact on SF despite ~15% pre-existing raw king-move
+    # violations). tail_len/grid_dims come from the run's own config snapshot.
+    snap = src_metrics["config_snapshot"]
+    tail_len = int(snap["TAIL_LEN"])
+    grid_dims = tuple(snap["GRID_DIMS"])
+    viol = find_fallback_indices(histories[:n_trim_src], tail_len, grid_dims)
     if len(viol) != n_expected:
         raise SystemExit(
-            f"[filter] ABORT: identified {len(viol)} king-move violators but "
-            f"metrics.json reports n_taper_infeasible_trim={n_expected}. "
+            f"[filter] ABORT: replay identified {len(viol)} fallback trims "
+            f"but metrics.json reports n_taper_infeasible_trim={n_expected}. "
             f"Identification must be EXACT (not heuristic); refusing to write "
             f"a filtered dir from a mismatched violator set."
         )
-    if any(i >= n_trim_src for i in viol):
-        bad = [i for i in viol if i >= n_trim_src]
+    # Cross-checks: every EDIT-INTRODUCED king violation must come from a
+    # fallback trim (successful repairs are compliance-preserving by
+    # construction, and lift skips on infeasible).
+    edit_introduced = find_edit_introduced_indices(histories)
+    bad_lift = [i for i in edit_introduced if i >= n_trim_src]
+    if bad_lift:
         raise SystemExit(
-            f"[filter] ABORT: {len(bad)} violator(s) fall in the lift block "
-            f"(index >= n_trim={n_trim_src}): {bad[:10]}. Lift already skips "
-            f"on infeasible, so every king-move violator must be a trim "
-            f"fallback."
+            f"[filter] ABORT: {len(bad_lift)} edit-introduced king-move "
+            f"violation(s) fall in the lift block (index >= "
+            f"n_trim={n_trim_src}): {bad_lift[:10]}. Lift skips on infeasible "
+            f"and its repairs preserve compliance, so this indicates a "
+            f"corrupted or mismatched run."
         )
+    not_fallback = sorted(set(edit_introduced) - set(viol))
+    if not_fallback:
+        raise SystemExit(
+            f"[filter] ABORT: {len(not_fallback)} edit-introduced king-move "
+            f"violator(s) are NOT in the replayed fallback set: "
+            f"{not_fallback[:10]}. Successful taper repairs preserve "
+            f"compliance, so every edit-introduced violation must be a "
+            f"fallback; this indicates a corrupted or mismatched run."
+        )
+    print(f"[filter] cross-check OK: {len(edit_introduced)} edit-introduced "
+          f"violators, all within the {len(viol)} replayed fallbacks "
+          f"({len(viol) - len(edit_introduced)} fallback(s) introduced no NEW "
+          f"violation: <=1-cell legacy move or altered an already-violating "
+          f"raw step)", flush=True)
     viol_set = set(viol)
     viol_ids = [str(histories[i].original.trajectory_id) for i in viol]
-    print(f"[filter] {len(viol)} infeasible-trim violators (all in trim block) "
-          f"-> reverting to originals", flush=True)
+    print(f"[filter] {len(viol)} fallback-trim violators (replayed; all in "
+          f"trim block) -> reverting to originals", flush=True)
 
     filtered = [h for i, h in enumerate(histories) if i not in viol_set]
     n_trim_new = n_trim_src - len(viol)
     assert len(filtered) == n_trim_new + n_lift_src, (
         len(filtered), n_trim_new, n_lift_src,
     )
+
+    # --- compliance reporting (absolute + edit-relative, pre/post-filter) ---
+    compliance_source = compliance_summary(histories)
+    compliance_filtered = compliance_summary(filtered)
+    assert compliance_filtered["n_edits_introducing_violations"] == 0, (
+        "post-filter edit-relative compliance must be 100%",
+        compliance_filtered,
+    )
+    print(f"[filter] compliance (source): absolute modified "
+          f"{compliance_source['absolute_modified_compliance_frac']:.2%} | "
+          f"original baseline "
+          f"{compliance_source['absolute_original_compliance_frac']:.2%} | "
+          f"edit-relative "
+          f"{compliance_source['edit_relative_compliance_frac']:.2%}", flush=True)
+    print(f"[filter] compliance (filtered): absolute modified "
+          f"{compliance_filtered['absolute_modified_compliance_frac']:.2%} | "
+          f"edit-relative "
+          f"{compliance_filtered['edit_relative_compliance_frac']:.2%} "
+          f"(must be 100%)", flush=True)
 
     # --- write filtered histories FIRST (build_edited_pickup_3d reads it) ---
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -320,6 +478,29 @@ def main(argv: list[str] | None = None) -> int:
                 "TAIL_LEN=0; nothing in the source dir is modified by this tool."
             ),
             "delta_supply_reconstruction_equivalence": equivalence,
+            "violator_identification": (
+                "replay: a trim history is a violator iff replaying the "
+                "modifier's own fallback decision "
+                "(apply_tail_perturbation(delta_int, TAIL_LEN, GRID_DIMS) on "
+                "the ORIGINAL, with delta_int recovered from the int pickup "
+                "cells and TAIL_LEN/GRID_DIMS from this run's "
+                "config_snapshot) returns None — the exact condition under "
+                "which the editor fell back to the legacy pickup-only move. "
+                "City-robust: pre-existing raw-data king-move violations "
+                "(e.g. SF Cabspotting GPS gaps, ~15% of raw trajectories) do "
+                "not affect it. Cross-checked: every EDIT-INTRODUCED king "
+                "violation (a violating transition at an index where the "
+                "original's same-index transition was compliant) lies within "
+                "the replayed fallback set, and none occur in the lift block."
+            ),
+            "identification_counts": {
+                "n_fallback_replayed": len(viol),
+                "n_edit_introduced_violations": len(edit_introduced),
+            },
+            "compliance": {
+                "source": compliance_source,
+                "filtered": compliance_filtered,
+            },
         },
         "dataset": src_metrics.get("dataset"),
         "effective_alphas": src_metrics.get("effective_alphas"),
@@ -395,6 +576,45 @@ def _write_provenance_md(out_dir, edit_dir, src_metrics, metrics, viol_ids, equi
         f"| n_skipped_infeasible_trim | 0 (fell back) | "
         f"{metrics['n_skipped_infeasible_trim']} |",
         f"| total edits | {src_metrics.get('k_modified')} | {metrics['k_modified']} |",
+        "",
+        "## King-move compliance (absolute + edit-relative)",
+        "",
+        "Violators are identified by **replaying the modifier's fallback "
+        "decision** (`apply_tail_perturbation` on the original with the "
+        "recovered integer pickup offset and this run's TAIL_LEN/GRID_DIMS; "
+        "`None` = fallback) — exact by construction and city-robust. Raw "
+        "source data is not necessarily 100% king-compliant (SF "
+        "Cabspotting-derived trajectories have ~15% baseline violations from "
+        "GPS gaps of up to ~18 cells — a source-data property, unrelated to "
+        "editing), so *absolute* compliance of the edited corpus can only be "
+        "judged against the original-corpus baseline; the cross-city G4 "
+        "statement is **edit-relative compliance** (fraction of edits "
+        "introducing zero new violations), which must be 100% post-filter. "
+        "Note a fallback can introduce no NEW violation (<=1-cell legacy "
+        "move, or altering an already-violating raw step) yet still break "
+        "the skip-on-infeasible rule — such fallbacks are reverted too.",
+        "",
+        "| | source (pre-filter) | filtered |",
+        "|---|---|---|",
+    ]
+    comp_s = metrics["provenance"]["compliance"]["source"]
+    comp_f = metrics["provenance"]["compliance"]["filtered"]
+    lines += [
+        f"| absolute — modified corpus | "
+        f"{comp_s['n_modified_king_compliant']}/{comp_s['n']} "
+        f"({comp_s['absolute_modified_compliance_frac']:.2%}) | "
+        f"{comp_f['n_modified_king_compliant']}/{comp_f['n']} "
+        f"({comp_f['absolute_modified_compliance_frac']:.2%}) |",
+        f"| absolute — ORIGINAL corpus baseline | "
+        f"{comp_s['n_original_king_compliant']}/{comp_s['n']} "
+        f"({comp_s['absolute_original_compliance_frac']:.2%}) | "
+        f"{comp_f['n_original_king_compliant']}/{comp_f['n']} "
+        f"({comp_f['absolute_original_compliance_frac']:.2%}) |",
+        f"| edit-relative (zero new violations) | "
+        f"{comp_s['n'] - comp_s['n_edits_introducing_violations']}/{comp_s['n']} "
+        f"({comp_s['edit_relative_compliance_frac']:.2%}) | "
+        f"{comp_f['n'] - comp_f['n_edits_introducing_violations']}/{comp_f['n']} "
+        f"(**{comp_f['edit_relative_compliance_frac']:.2%}**) |",
         "",
         "## Fairness metrics (recomputed from filtered histories)",
         "",

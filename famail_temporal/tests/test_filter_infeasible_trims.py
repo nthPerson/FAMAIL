@@ -20,7 +20,9 @@ from famail_temporal.algorithm.supply import hard_delta_supply, state_presence_m
 from famail_temporal.data.aggregation import hour_to_block_index, time_bucket_to_hour
 from famail_temporal.analysis.filter_infeasible_trims import (
     king_ok,
-    find_infeasible_indices,
+    find_edit_introduced_indices,
+    find_fallback_indices,
+    recovered_delta_int,
     reconstruct_delta_supply_3d,
 )
 
@@ -77,7 +79,152 @@ def test_find_infeasible_indices_picks_only_violators():
         _Hist(_Traj([_State(5, 5), _State(5, 6)]), _Traj([_State(5, 5), _State(6, 6)])),   # ok
         _Hist(_Traj([_State(2, 2), _State(2, 2)]), _Traj([_State(2, 2), _State(2.0, 4.9)])),  # violator
     ]
-    assert find_infeasible_indices(hs) == [1, 3]
+    assert find_edit_introduced_indices(hs) == [1, 3]
+
+
+# --- edit-introduced identification (city-robust: SF raw data has ~15%
+# --- baseline king-move violations from GPS gaps; those must NOT be flagged) --
+
+def test_preexisting_violation_not_flagged():
+    # SF-style raw GPS gap: the ORIGINAL already violates (0,0)->(5,0).
+    # Untouched (modified identical) -> not an edit-introduced violation.
+    orig = _Traj([_State(0, 0), _State(5, 0), _State(5, 1)])
+    mod = _Traj([_State(0, 0), _State(5, 0), _State(5, 1)])
+    assert find_edit_introduced_indices([_Hist(orig, mod)]) == []
+
+
+def test_edit_introduced_violation_flagged():
+    # Original fully compliant; the edit makes step 1 violating.
+    orig = _Traj([_State(0, 0), _State(1, 0), _State(1, 1)])
+    mod = _Traj([_State(0, 0), _State(1, 0), _State(4, 1)])
+    assert find_edit_introduced_indices([_Hist(orig, mod)]) == [0]
+
+
+def test_mixed_preexisting_plus_new_violation_flagged():
+    # Original violates at step 0 (raw GPS gap); the edit KEEPS that violation
+    # and introduces a NEW one at step 1 (was compliant) -> flagged.
+    orig = _Traj([_State(0, 0), _State(5, 0), _State(5, 1)])
+    mod = _Traj([_State(0, 0), _State(5, 0), _State(9, 1)])
+    assert find_edit_introduced_indices([_Hist(orig, mod)]) == [0]
+
+
+def test_preexisting_violation_with_compliant_edit_not_flagged():
+    # Original violates at step 0; the edit only changes step 1 and keeps it
+    # king-compliant -> no NEW violation -> not flagged.
+    orig = _Traj([_State(0, 0), _State(5, 0), _State(5, 1)])
+    mod = _Traj([_State(0, 0), _State(5, 0), _State(6, 1)])
+    assert find_edit_introduced_indices([_Hist(orig, mod)]) == []
+
+
+def test_preexisting_violation_changed_but_still_at_same_index_not_flagged():
+    # The step-0 transition was ALREADY violating in the original; the edit
+    # changes it to a different (still violating) jump at the same index —
+    # not a NEW violation under the per-index edit-introduced rule.
+    orig = _Traj([_State(0, 0), _State(5, 0)])
+    mod = _Traj([_State(0, 0), _State(6, 0)])
+    assert find_edit_introduced_indices([_Hist(orig, mod)]) == []
+
+
+def test_length_mismatch_raises():
+    orig = _Traj([_State(0, 0), _State(1, 0), _State(1, 1)])
+    mod = _Traj([_State(0, 0), _State(1, 0)])
+    with pytest.raises(ValueError):
+        find_edit_introduced_indices([_Hist(orig, mod)])
+
+
+def test_compliance_summary_counts():
+    from famail_temporal.analysis.filter_infeasible_trims import compliance_summary
+    hs = [
+        # compliant everywhere
+        _Hist(_Traj([_State(0, 0), _State(1, 1)]), _Traj([_State(0, 0), _State(1, 1)])),
+        # pre-existing violation, untouched (absolute-noncompliant, edit-clean)
+        _Hist(_Traj([_State(0, 0), _State(5, 0)]), _Traj([_State(0, 0), _State(5, 0)])),
+        # edit-introduced violation
+        _Hist(_Traj([_State(0, 0), _State(1, 0)]), _Traj([_State(0, 0), _State(4, 0)])),
+    ]
+    s = compliance_summary(hs)
+    assert s["n"] == 3
+    assert s["n_original_king_compliant"] == 2
+    assert s["n_modified_king_compliant"] == 1
+    assert s["n_edits_introducing_violations"] == 1
+    assert s["edit_relative_compliance_frac"] == pytest.approx(2.0 / 3.0)
+
+
+# --- replay identification (find_fallback_indices) ---------------------------
+# Requires real Trajectory objects (apply_tail_perturbation), not the doubles.
+
+def _real_traj(cells, tid="t"):
+    from famail_temporal.utils.trajectory import Trajectory, TrajectoryState
+    return Trajectory(
+        trajectory_id=tid, driver_id=0,
+        states=[TrajectoryState(float(x), float(y), 1, 0) for x, y in cells],
+    )
+
+
+def _replayable_hist(orig_cells, mod_cells, tid="t"):
+    return _Hist(_real_traj(orig_cells, tid), _real_traj(mod_cells, tid))
+
+
+def test_replay_flags_infeasible_repair():
+    # n=2, compliant original step, pickup moved 2 cells: no tail to absorb
+    # the move (anchor fixed at offset 0), so |1+2| > 1 -> repair infeasible
+    # -> the modifier MUST have used the legacy fallback -> flagged.
+    h = _replayable_hist([(0, 0), (1, 0)], [(0, 0), (3, 0)])
+    assert find_fallback_indices([h], tail_len=4, grid_dims=(10, 10)) == [0]
+
+
+def test_replay_not_flagged_when_repair_feasible():
+    # 5-state stationary trajectory (steps of 0 = slack to absorb the
+    # translation), pickup moved 2 cells: repair feasible -> modifier used
+    # the repair, not the fallback -> not flagged. (Modified = the repaired
+    # trajectory itself.)
+    orig = _real_traj([(2, 2), (2, 2), (2, 2), (2, 2), (2, 2)])
+    rep = orig.apply_tail_perturbation(np.array([2.0, 0.0]), 4, (10, 10))
+    assert rep is not None
+    h = _Hist(orig, rep)
+    assert find_fallback_indices([h], tail_len=4, grid_dims=(10, 10)) == []
+
+
+def test_replay_flags_taut_chain_even_when_tail_exists():
+    # A chain of (+1) steps is taut (every step already at the king max), so
+    # translating the pickup +2 is infeasible at ANY tail depth -> fallback.
+    orig = _real_traj([(0, 0), (1, 0), (2, 0), (3, 0), (4, 0)])
+    assert orig.apply_tail_perturbation(np.array([2.0, 0.0]), 4, (10, 10)) is None
+    h = _replayable_hist(
+        [(0, 0), (1, 0), (2, 0), (3, 0), (4, 0)],
+        [(0, 0), (1, 0), (2, 0), (3, 0), (6.0, 0)],  # legacy pickup-only move
+    )
+    assert find_fallback_indices([h], tail_len=4, grid_dims=(10, 10)) == [0]
+
+
+def test_replay_flags_fallback_that_introduced_no_new_violation():
+    # SF missed-case: the ORIGINAL's only step is already violating (GPS gap
+    # (0,0)->(5,0)), so ANY repair is infeasible (l_eff==0 requires absolute
+    # compliance) -> fallback, even though the legacy move (pickup 5.0->4.6,
+    # int cell 5->4) alters an ALREADY-violating step and introduces no NEW
+    # violation. Replay must flag it; the per-index rule must not.
+    h = _replayable_hist([(0, 0), (5, 0)], [(0, 0), (4.6, 0)])
+    assert find_fallback_indices([h], tail_len=4, grid_dims=(10, 10)) == [0]
+    assert find_edit_introduced_indices([h]) == []
+
+
+def test_replay_zero_delta_on_violating_step_is_still_fallback():
+    # Unchanged trajectory whose only step violates: _discretize_trim always
+    # runs apply_tail_perturbation (even with delta 0) and counts the None ->
+    # replay reproduces that accounting exactly.
+    h = _replayable_hist([(0, 0), (5, 0)], [(0, 0), (5, 0)])
+    assert find_fallback_indices([h], tail_len=4, grid_dims=(10, 10)) == [0]
+
+
+def test_recovered_delta_int_matches_both_branches():
+    # Fallback branch: fractional legacy pickup int-truncates to legacy cell.
+    h_fb = _replayable_hist([(0, 0), (1, 0)], [(0, 0), (3.4, 0.0)])
+    assert recovered_delta_int(h_fb) == (2, 0)
+    # Repair branch: integer offsets preserve the original cell arithmetic.
+    orig = _real_traj([(2, 2), (2, 2), (2, 2), (2, 2), (2, 2)])
+    rep = orig.apply_tail_perturbation(np.array([2.0, 0.0]), 4, (10, 10))
+    assert rep is not None
+    assert recovered_delta_int(_Hist(orig, rep)) == (2, 0)
 
 
 # --- reconstruct_delta_supply_3d --------------------------------------------
@@ -171,11 +318,19 @@ def test_delta_supply_reconstruction_equals_persisted_on_real_run():
     reason="real validation-run artifacts not present",
 )
 def test_real_violator_count_matches_metrics():
-    """The king-move violator count on the real run equals the metrics.json
-    n_taper_infeasible_trim (the exact-identification invariant the tool asserts)."""
+    """On the real Shenzhen run, BOTH identifications (replay of the fallback
+    decision, and the per-index edit-introduced rule) find exactly the
+    metrics.json n_taper_infeasible_trim violators, on identical indices —
+    the PRIMARY regression guarantee for the city-robust identification."""
     with open(_REAL_DIR / "histories.pkl", "rb") as f:  # trusted repo artifact
         histories = pickle.load(f)
     metrics = json.loads((_REAL_DIR / "metrics.json").read_text())
-    viol = find_infeasible_indices(histories)
-    assert len(viol) == int(metrics["n_taper_infeasible_trim"])
-    assert all(i < int(metrics["n_trim"]) for i in viol)
+    n_trim = int(metrics["n_trim"])
+    snap = metrics["config_snapshot"]
+    fallback = find_fallback_indices(
+        histories[:n_trim], int(snap["TAIL_LEN"]), tuple(snap["GRID_DIMS"]),
+    )
+    edit_introduced = find_edit_introduced_indices(histories)
+    assert len(fallback) == int(metrics["n_taper_infeasible_trim"])
+    assert edit_introduced == fallback  # Shenzhen: definitions coincide
+    assert all(i < n_trim for i in edit_introduced)
