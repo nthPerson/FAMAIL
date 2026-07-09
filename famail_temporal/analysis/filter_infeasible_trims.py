@@ -377,6 +377,15 @@ def _write_provenance_md(out_dir, edit_dir, src_metrics, metrics, viol_ids, equi
         "The published legacy trim numbers remain reproducible via `TAIL_LEN=0`;"
         " this tool modifies nothing in the source directory.",
         "",
+        "**Non-reoptimized survivors:** the surviving edits were NOT "
+        "re-optimized after removing the reverted trims — their optimization "
+        "saw the reverted edits' intermediate demand perturbations in the "
+        "sequential base grid. The filtered grids are exact for \"these "
+        "surviving edits applied to base,\" which is not byte-identical to a "
+        "from-scratch skip-on-infeasible run. Approved trade-off (2026-07-08) "
+        "to avoid a multi-hour GPU re-run; the coupling is negligible (the "
+        "reverted edits were pickup-only single-cell-mass moves).",
+        "",
         "## Edit counts",
         "",
         "| | source | filtered |",

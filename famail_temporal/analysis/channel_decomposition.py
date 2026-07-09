@@ -53,6 +53,38 @@ def _mean_or_nan(v: np.ndarray) -> float:
     return float(v.mean()) if v.size else float("nan")
 
 
+def compute_channel_vectors(
+    Y_bb: np.ndarray,
+    Y_bp: np.ndarray,
+    Y_pp: np.ndarray,
+    Y_pb: np.ndarray,
+    Y_t2: np.ndarray | None = None,
+) -> Dict[str, np.ndarray]:
+    """Per-unit channel vectors from the four (five) group-restricted Y
+    evaluations. Naming: ``Y_<supply><demand>`` with ``b`` = base and
+    ``p`` = prime (edited); ``Y_t2`` = Y(S_tier2_after, D').
+
+    Identities (exact, per unit, by construction):
+      demand + supply == total
+      supply_first + demand_second == total
+      demand + supply_tier2 == total_tier2   (when ``Y_t2`` is given;
+      the demand channel itself is UNCHANGED by tier-2 mode)
+    """
+    channels: Dict[str, np.ndarray] = {
+        # demand-first sequential decomposition
+        "demand": Y_bp - Y_bb,
+        "supply": Y_pp - Y_bp,
+        "total": Y_pp - Y_bb,
+        # supply-first robustness
+        "supply_first": Y_pb - Y_bb,
+        "demand_second": Y_pp - Y_pb,
+    }
+    if Y_t2 is not None:
+        channels["supply_tier2"] = Y_t2 - Y_bp  # demand channel unchanged
+        channels["total_tier2"] = Y_t2 - Y_bb
+    return channels
+
+
 def bootstrap_channels(
     channel_vectors: Dict[str, np.ndarray],
     B: int = 2000,
@@ -145,30 +177,22 @@ def main(argv: list[str] | None = None) -> int:
 
     yb, ybp, ypp, ypb = Y_bb[d], Y_bp[d], Y_pp[d], Y_pb[d]
 
-    channels: Dict[str, np.ndarray] = {
-        # demand-first sequential decomposition
-        "demand": ybp - yb,
-        "supply": ypp - ybp,
-        "total": ypp - yb,
-        # supply-first robustness
-        "supply_first": ypb - yb,
-        "demand_second": ypp - ypb,
-    }
     levels = {
         "mean_Y_D_before": _mean_or_nan(yb),
         "mean_Y_D_after_tier1": _mean_or_nan(ypp),
     }
 
+    yt2 = None
     tier2_meta = None
     if args.tier2_grid is not None:
         S_t2 = np.load(args.tier2_grid)["S_tier2_after"].astype(S_base.dtype)
         b_t2 = replace(bundle, active_taxis_3d=S_t2)
         Y_t2 = efio.service_ratio_Y(D_prime, b_t2)             # Y(S_tier2, D')
         yt2 = Y_t2[d]
-        channels["supply_tier2"] = yt2 - ybp                   # demand channel unchanged
-        channels["total_tier2"] = yt2 - yb
         levels["mean_Y_D_after_tier2"] = _mean_or_nan(yt2)
         tier2_meta = str(args.tier2_grid)
+
+    channels = compute_channel_vectors(yb, ybp, ypp, ypb, Y_t2=yt2)
 
     print(f"[channel] bootstrapping B={args.bootstrap} seed={args.seed}...", flush=True)
     boot = bootstrap_channels(channels, B=args.bootstrap, seed=args.seed)
