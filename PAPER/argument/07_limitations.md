@@ -9,7 +9,12 @@ Stated candidly. None of these overturn the two-pillar argument, but each bounds
    counterfactual. On Shenzhen the demographics resolve to **10 district-level profiles**, so the
    regression has few degrees of freedom and an **ecological-fallacy** exposure (a district-level
    association is not an individual-level effect). Interpret magnitudes as a fairness *audit* signal,
-   not a causal estimate.
+   not a causal estimate. **Demand-adjustment further assumes demand is exogenous, but recorded demand
+   is itself suppressed by historical under-supply** — latent demand is censored where service was
+   historically thin, so conditioning on it can *under-detect* real inequity (the feedback-loop pathology
+   of Ensign et al. 2018 and Lum & Isaac 2016). This demand endogeneity is the same phenomenon as the
+   editor's leveling-down behavior; see
+   [`../objective-motivation/LEVELING_DOWN.md`](../objective-motivation/LEVELING_DOWN.md).
 
 2. **Small-n significance floors, no multiple-comparison survival.** The weighted-BC evidence uses 6
    paired seeds, where the two-sided Wilcoxon floors at **`p = 0.03125`** (sign-unanimity, not effect
