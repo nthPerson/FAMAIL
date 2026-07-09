@@ -307,6 +307,9 @@ def main(argv: list[str] | None = None) -> int:
                          help="'sf12' is deliberately deferred (see module docstring).")
     parser.add_argument("--raw-dir", type=Path, default=Path("raw_data"),
                          help="Directory with the 3 taxi_record_0*_50drivers.pkl raw GPS files.")
+    parser.add_argument("--persist-grids", action="store_true",
+                         help="Also save S_tier2_before.npz / S_tier2_after.npz "
+                              "alongside the json (for the direct tier-2 supply-channel CI).")
     args = parser.parse_args(argv)
 
     edit_dir = Path(args.edit_dir)
@@ -351,6 +354,14 @@ def main(argv: list[str] | None = None) -> int:
 
     print("[supply_recount] recounting tier-2 AFTER...", flush=True)
     S_tier2_after, _ = recount_tier2(df_after, n_days, active_taxis_view, aggregate_active_taxis)
+
+    if args.persist_grids:
+        # Save the two tier-2 supply grids so the channel decomposition can
+        # substitute S_tier2_after for S' in the DIRECT tier-2 supply-channel CI.
+        np.savez_compressed(edit_dir / "S_tier2_before.npz", S_tier2_before=S_tier2_before)
+        np.savez_compressed(edit_dir / "S_tier2_after.npz", S_tier2_after=S_tier2_after)
+        print(f"[supply_recount] persisted S_tier2_before.npz / S_tier2_after.npz "
+              f"to {edit_dir}", flush=True)
 
     # --- tier-1 AFTER supply (from Task 8's own persisted delta-supply) ---
     delta_path = edit_dir / "delta_supply_3d.npz"
