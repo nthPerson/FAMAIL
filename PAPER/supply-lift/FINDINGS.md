@@ -1,8 +1,8 @@
 # Supply-lift editing — FINDINGS
 
-**Status:** built + validated on branch `supply-lift-editing` (2026-07-07 → 07-09). Headline datasets are
-the **filtered** Shenzhen PRIMARY and SF sf12 supply-lift runs. **One eval is still in flight:** the
-downstream rollout-allocation eval (§9) is re-running as of this writing — that section is a marked stub.
+**Status:** built + validated on branch `supply-lift-editing` (2026-07-07 → 07-09); all evals landed
+(rollout-allocation eval + SF fidelity added 2026-07-09). Headline datasets are the **filtered** Shenzhen
+PRIMARY and SF sf12 supply-lift runs.
 
 **Motivation:** the trajectory editor's published mechanism ("trim" — relocate a recorded pickup) improves
 fairness only by **leveling down** (it removes service from the over-served group and never adds service to
@@ -17,7 +17,9 @@ and — for the first time in this line of work — the **under-served (migrant)
 both cities** (SZ +0.009 tier-1 / +0.024 tier-2; SF +0.020). It is **no longer pure leveling-down.** On
 **SF** the same supply channel replicates and every *external* metric improves (incl. the migrant axis, which
 trim-only could not move), but the **total** `mean(Y|D)` moves **negative** because lift also reroutes pickups
-into under-served cells (demand there rises); §5.2 presents both readings without resolving them.
+into under-served cells (demand there rises); §5.2 presents both readings without resolving them. The honest
+boundary: downstream **rollout allocation** still tilts away from poor areas — the trim-era drain is
+**attenuated ~40%, not reversed** (§9).
 
 ---
 
@@ -176,10 +178,12 @@ such caveat** (its demand channel is n.s., not negative).
 
 ---
 
-## 6. Fidelity
+## 6. Fidelity — stable on the identity axis, both cities; lift's distributional cost is by-design
 
-Gate **G5** (`.superpowers/sdd/g5-fidelity-report.md`, unfiltered mode split) + the filtered-corpus re-check
-(`.superpowers/sdd/task-11a-report.md`). Shenzhen; SF supply-lift fidelity was not separately evaluated (§10 deferral).
+Gate **G5** (`.superpowers/sdd/g5-fidelity-report.md`: Shenzhen unfiltered mode split + the "SF supply-lift
+fidelity" section) + the Shenzhen filtered-corpus re-check (`.superpowers/sdd/task-11a-report.md`).
+
+### 6.1 Shenzhen
 
 **Fidelity-A (HuMID driver-identity, higher better) — STABLE.** Real-anchored validation gate **PASSED** (matched
 0.849 vs mismatched 0.192, margin >> 0.20). Filtered corpus: edited-combined **0.8457** vs raw 0.8489 (Delta
@@ -192,6 +196,24 @@ whole-tail relocation shifts trajectory-shape statistics more than trim's pickup
 trim-mode **0.1601** (~1.65x), both above the published trim-only reference 0.1689. This is the expected
 distributional cost of moving seeking tails and should be **disclosed as a trade-off**, not treated as
 disqualifying — G5's stability criterion is on the identity axis (Fidelity-A), which holds.
+
+### 6.2 SF (filtered corpus, sf_12 discriminator)
+
+**Fidelity-A — STABLE, reproduces the published relationship exactly.** Gate **PASSED**: matched **0.9578** vs
+mismatched **0.0344** (margin 0.92 >> 0.20; n = 240/240) — identical to ~1e-7 to the published SF L1v2 gate
+(`PAPER/second-dataset/data/eval_l1v2_sf12_metrics.json`, **sources node** — the house source-precedence
+convention; raw pairs come from the same seed-0 RNG stream, so unlike Shenzhen the raw baselines are directly
+comparable across runs). Supply-lift edited-combined **0.9581** vs raw **0.9578** (Δ +0.0003 — exactly the
+published trim-only raw≈edited relationship); **trim-mode 0.9582 / lift-mode 0.9577** (lift within −0.0001 of
+raw). *Caveats:* lift-mode rests on **236 pairs from 12 drivers**; and the sf_12 discriminator is
+**profile-dominated** (separation 0.92 from 12 highly separable identities, edits never touch the profile
+stream) — SF Fidelity-A is a *weaker instrument* than Shenzhen's (separation 0.66), so its stability is
+necessary but less informative; Fidelity-B carries more weight on SF.
+
+**Fidelity-B — the same by-design cost signature, cross-city.** Trim-mode **0.1087** ≈ the published trim-only
+reference **0.1058**; lift-mode **0.2649** — almost identical to Shenzhen's lift-mode **0.2645** despite the
+different city/discriminator, i.e. the distributional cost of a lift edit appears **city-independent**. All SF
+edited trajectories were scored (trim 1324/1324, lift 629/629 — no sampling caveat).
 
 ---
 
@@ -246,19 +268,38 @@ data-level Fidelity-B note in §6.
 
 ---
 
-## 9. Downstream rollout-allocation eval — **PENDING (running now)**
+## 9. Downstream rollout-allocation eval — drain **attenuated ~40%, not reversed** (the honest boundary)
 
-> **TODO — RESULTS NOT YET IN.** The rollout-allocation eval (renamed from "Option A"; policy-rollout allocation
-> shares) is **re-running as of 2026-07-09** on the filtered supply-lift corpus — the smoke passed and the full
-> 6-seed run launched (`famail_temporal/baselines/external_fairness/results/option_a_rollout_supplylift/`,
-> `run.log`). It must be re-run because the training data changed under supply-lift.
->
-> **Prior trim-only result was NEGATIVE** and is the bar to beat (§1.2,
-> [`data/rollout_trimonly_prior_summary.json`](data/rollout_trimonly_prior_summary.json)): raw poor-area pickup
-> share **0.0500 -> 0.0452** at w30 (**-0.0048**, ~-10%, **0/6** seeds positive, Wilcoxon **p = .031**) —
-> trim-edited policies allocated *fewer* pickups to poor areas, dose-dependently. The open question this eval
-> answers: do policies trained on **supply-lift** data serve or drain poor areas? **Fill this section when the run
-> completes.**
+`data/rollout_supplylift_summary.json` (supply-lift, filtered PRIMARY corpus) vs
+`data/rollout_trimonly_prior_summary.json` (prior trim-only). Same protocol both eras (renamed from "Option A":
+BC policies trained per arm, 6 seeds, corpus-matched rollouts; Δ = policy-rollout share to migrant-disadvantaged
+cells, edited − raw, Wilcoxon). Re-run was required because the training data changed under supply-lift.
+
+**Migrant-D *pickup* share (allocation of service):**
+
+| Arm | supply-lift Δ (n_pos, p) | prior trim-only Δ (n_pos, p) |
+|---|---:|---:|
+| edited, w = 1 | **−0.0008** (0/6, .031) | +0.0003 (3/6, .56 — n.s.) |
+| edited, w = 10 | **−0.0023** (0/6, .031) | −0.0033 (0/6, .031) |
+| edited, w = 30 | **−0.0029** (0/6, .031) | −0.0048 (0/6, .031) |
+
+**Migrant-D *seeking-state* share (where policies cruise):** **n.s. in every arm, both eras** (supply-lift
+w1/w10/w30 p = .31/.22/.84; prior p = .84/.094/.56) — the trained policies did **not** learn to cruise poor
+areas, even though the training data's seeking tails were rerouted there.
+
+**The honest read — a three-level story:**
+1. **Data level: lifting-up verified.** The edited corpus adds real, distinct-taxi-verified supply to
+   under-served areas (§4 — supply channel significant, both tiers, both cities).
+2. **Metric propagation: strong.** Weighted BC transfers the fairness gain into trained policies (§7 —
+   F_causal +0.031 and, newly, F_spatial +0.0057 at w30, all 6/6).
+3. **Allocation behavior: still tilts away, attenuated.** At w30 the poor-area pickup-share drain is
+   **−0.0029 vs the trim-era −0.0048 — ~40% attenuated but still negative** (0/6, p = .031), and it now
+   appears already at w1 (−0.0008, p = .031, where trim-only was null). Seeking-state shares are unmoved.
+
+**Claim levels 1–2; disclose level 3** as the method's honest boundary: data-level supply editing weakens but
+does not invert how BC-trained policies *allocate* service. This motivates future work on **training-side
+allocation constraints** (e.g., constraining or rewarding rollout allocation shares directly) rather than
+further data-side editing alone.
 
 ---
 
@@ -277,8 +318,10 @@ data-level Fidelity-B note in §6.
   not byte-identical to a from-scratch run.
 - **2 alternate Shenzhen feature-set runs deferred** (`{housing,gdp,comp}`, `{housing,comp,migrant,logpopdensity}`)
   — robustness parity with the trim-only 3-feature-set sweep; idle-GPU work, not yet run.
-- **SF supply-lift fidelity not separately evaluated.** Fidelity (§6) is Shenzhen-only for supply-lift; the SF
-  Fidelity-A 0.958 reported in `PAPER/second-dataset/` is for the trim-only dual-claim edit, a different corpus.
+- **Rollout allocation still net-negative** (§9): the poor-area pickup-share drain is attenuated ~40% but not
+  reversed, and seeking-state shares do not move — the boundary of what data-side editing achieves downstream.
+- **SF Fidelity-A is a weak instrument** (§6.2): profile-dominated, 12 identities, separation 0.92 — its
+  stability is necessary but less informative than Shenzhen's; lift-mode rests on 236 pairs.
 - **First-order bootstrap.** Unit-level paired bootstrap; units are spatially correlated and demographics are
   district-constant, so CIs are first-order (inherited caveat from `PAPER/external-metrics/` FINDINGS §5).
 - **Oracle is a generous ceiling** (§1.3): a realism-constrained editor lands well below the +0.88 upper bound.

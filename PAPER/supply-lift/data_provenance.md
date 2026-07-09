@@ -4,7 +4,8 @@ Every load-bearing number in [`FINDINGS.md`](FINDINGS.md) mapped to its source a
 produced it. Rule of this bundle: **numbers come from the artifacts, not from memory** — each was re-read from the
 JSON/report copied into `data/`, `tables/`, `figures/` (or referenced by path for large gitignored files).
 
-**Branch:** `supply-lift-editing` · **bundle curated at HEAD:** `44ac837`.
+**Branch:** `supply-lift-editing` · **bundle curated at HEAD:** `44ac837` (initial `0ffe731`); updated
+2026-07-09 with the landed rollout-allocation eval + SF supply-lift fidelity.
 **Source-of-truth ledger:** `.superpowers/sdd/progress.md` (+ task reports in `.superpowers/sdd/`).
 
 ## Datasets (gitignored source dirs)
@@ -16,7 +17,8 @@ JSON/report copied into `data/`, `tables/`, `figures/` (or referenced by path fo
 | oracle | `famail_temporal/analysis/supply_lift_oracle_out/oracle.json` | commit `0fac8f7` (Task 1) |
 | BC sweep | `famail_temporal/results/weighted_bc_sweep/supply_lift_v1_shz_primary_filtered_6seed/` | manifest git_sha `e8f7d26` (dirty) |
 | prior rollout (trim-only) | `famail_temporal/baselines/external_fairness/results/option_a_rollout/summary.json` | 2026-07-07 run |
-| rollout (supply-lift) PENDING | `famail_temporal/baselines/external_fairness/results/option_a_rollout_supplylift/` | running 2026-07-09 |
+| rollout (supply-lift) | `famail_temporal/baselines/external_fairness/results/option_a_rollout_supplylift/summary.json` | 2026-07-09 run |
+| SF fidelity (supply-lift) | g5 scratchpad `g5_fidelity_{a,b}_result_sf12.json`; durable record = `.superpowers/sdd/g5-fidelity-report.md` "SF supply-lift fidelity" | 2026-07-09 |
 
 Tooling commits: filter `2e8a83c`, recount `--persist-grids` `edfdb6e`, channel decomposition `8605915`,
 decomposition unit tests `9d6e5cc`, SF replay-identification fix `e8f7d26`.
@@ -82,13 +84,26 @@ All from `data/shz_primary_filtered_channel_decomposition.json` (migrant, distri
 | trim-only SF +0.0139 comparator | | `PAPER/second-dataset/` FINDINGS §2 |
 | raw-dir total -0.0363 (persists post-filter) | | `.superpowers/sdd/task-11e-sf-eval-report.md` §4 |
 
-## §6 Fidelity (Shenzhen)
+## §6 Fidelity
+### §6.1 Shenzhen
 | claim | value | source |
 |---|---|---|
 | Fidelity-A gate PASSED | matched 0.8489 / mismatched 0.1920 | `.superpowers/sdd/task-11a-report.md` (filtered) |
 | Fidelity-A filtered edited-combined 0.8457 vs raw 0.8489 (-0.0033) | | `.superpowers/sdd/task-11a-report.md` |
 | Fidelity-A mode split trim -0.0059 / lift -0.0031 | trim 0.8428, lift 0.8457, raw 0.8487 | `.superpowers/sdd/g5-fidelity-report.md` §1 (unfiltered) |
 | Fidelity-B lift 0.2645 vs trim 0.1601 (~1.65x); trim-only ref 0.1689 | | `.superpowers/sdd/g5-fidelity-report.md` §2 |
+
+### §6.2 SF (filtered corpus, sf_12 discriminator)
+All from `.superpowers/sdd/g5-fidelity-report.md` "SF supply-lift fidelity" (scoring on
+`..._supply_lift_v1_sf12_filtered`, batch 32; scripts env-parameterized `run_g5_fidelity_{a,b}.py`).
+| claim | value | source / cross-check |
+|---|---|---|
+| Fidelity-A gate PASSED | matched 0.9578 / mismatched 0.0344 (n 240/240; separation 0.92) | g5 report; **cross-check to ~1e-7**: `PAPER/second-dataset/data/eval_l1v2_sf12_metrics.json` `gate` (0.9578103/0.0343547) — cite the **sources node** per house precedence, not the multiseed mean |
+| Fidelity-A raw 0.9578 -> edited-combined 0.9581 (+0.0003) | == published trim-only raw->edited (+0.0003; sources.edited 0.9581168) | g5 report; `eval_l1v2_sf12_metrics.json` `sources.raw/edited.fidelity_a` |
+| Fidelity-A trim-mode 0.9582 / lift-mode 0.9577 | lift n=236 pairs, 12 drivers | g5 report SF table |
+| Fidelity-B trim 0.1087 ~= published trim-only 0.1058 | | g5 report; `eval_l1v2_sf12_metrics.json` `sources.edited.fidelity_b` 0.10578 |
+| Fidelity-B lift 0.2649 ~= Shenzhen lift 0.2645 (city-independent cost) | combined 0.1145; all edited scored (1324+629, no sampling) | g5 report SF table + §2 (SZ) |
+| Profile-dominance caveat maintained (SF A = weak instrument) | | g5 report SF section; `PAPER/second-dataset/` FINDINGS §5 |
 
 ## §7 Weighted-BC sweep (filtered PRIMARY corpus)
 All paired diffs from `data/weighted_bc_paired_stats.json`; identity gate from `data/weighted_bc_manifest.json`.
@@ -113,11 +128,16 @@ All paired diffs from `data/weighted_bc_paired_stats.json`; identity gate from `
 | SF F_causal +0.0223 -> +0.0328 | | `data/sf12_filtered_metrics.json`; `.superpowers/sdd/task-11a-report.md` |
 | Rule adopted 2026-07-08 (precedes numbers) | user_decision_date 2026-07-08 | both `*_PROVENANCE.md` |
 
-## §9 Rollout eval (PENDING)
-| claim | source |
-|---|---|
-| Supply-lift rollout running 2026-07-09 (smoke passed, full 6-seed launched) | `famail_temporal/baselines/external_fairness/results/option_a_rollout_supplylift/run.log` |
-| Prior trim-only negative (bar to beat) | `data/rollout_trimonly_prior_summary.json` (see §1) |
+## §9 Rollout-allocation eval (landed 2026-07-09)
+Supply-lift = `data/rollout_supplylift_summary.json`; prior trim-only = `data/rollout_trimonly_prior_summary.json`.
+Key = `<arm>.MigrantRatio.pickups.share_D_delta` (allocation) / `...states.share_D_delta` (cruising).
+| claim | value (supply-lift vs prior) | keys |
+|---|---|---|
+| w30 pickup drain attenuated ~40%, not reversed | -0.0028992 (0/6, p=.03125) vs -0.0048082 (0/6, p=.03125); ratio 0.603 | `edited_w30.MigrantRatio.pickups.share_D_delta` both files |
+| w10 | -0.0022843 (0/6, .03125) vs -0.0032695 (0/6, .03125) | `edited_w10....pickups...` |
+| w1 | -0.0008250 (0/6, .03125) vs +0.0003361 (3/6, .5625 n.s.) | `edited....pickups...` |
+| seeking-STATE share n.s. all arms, both eras | supply-lift p = .3125/.21875/.84375 (w1/w10/w30); prior p = .84375/.09375/.5625 | `edited*.MigrantRatio.states.share_D_delta` both files |
+| prior baseline framing 0.0500 -> 0.0452 @ w30 | | `LEVELING_DOWN_MECHANISM.md` §6.4 reference rows (see §1) |
 
 ## §10 Limitations
 | claim | source |
@@ -125,4 +145,5 @@ All paired diffs from `data/weighted_bc_paired_stats.json`; identity gate from `
 | SF tier-2 recount deferred (tier2_grid null) | `data/sf12_filtered_channel_decomposition.json` `tier2_grid`; `.superpowers/sdd/task-11e-sf-eval-report.md` §5 |
 | SF raw adjacency 14.9% / GPS gaps to 18.6 cells | `.superpowers/sdd/task-11e-sf-eval-report.md` §1 |
 | 2 alternate SZ feature sets deferred | `.superpowers/sdd/progress.md` Task-10 checkpoint scope (e) |
-| SF supply-lift fidelity not run; SF trim-only Fidelity-A 0.958 is a different corpus | `PAPER/second-dataset/` FINDINGS §6 |
+| Rollout allocation attenuated, not reversed (honest boundary) | `data/rollout_supplylift_summary.json` (see §9) |
+| SF Fidelity-A weak instrument (profile-dominated, 236 lift pairs) | `.superpowers/sdd/g5-fidelity-report.md` SF section (see §6.2) |

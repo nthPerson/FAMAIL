@@ -17,15 +17,16 @@ Shenzhen PRIMARY (filtered): F_causal **+0.0222** (vs +0.0144 trim-only); the un
 ratio **rises for the first time** (`mean(Y|D)` +0.047, CI excl. 0), with the **supply channel significant on both
 cities** (SZ +0.009 tier-1 / +0.024 tier-2 distinct-taxi; SF +0.020). Central caveat: on **SF** the *external*
 metrics all improve (incl. the migrant axis) but the **total** `mean(Y|D)` is net-negative — the demand-endogeneity
-tension in `FINDINGS.md` §5.2, presented both ways. **Rollout-allocation eval is PENDING (§9 stub).**
+tension in `FINDINGS.md` §5.2, presented both ways. Downstream **rollout allocation** still tilts away from poor
+areas — the trim-era drain is **attenuated ~40% (−0.0048 -> −0.0029 at w30), not reversed** (§9, the honest boundary).
 
 ## Contents
 - `FINDINGS.md`, `README.md`, `data_provenance.md`.
 - `data/` — committed copies of the small JSON/PROVENANCE artifacts (the gitignored run outputs are the source of
   truth; these are the durable record). Filtered-run `metrics.json` + `channel_decomposition.json` +
   `supply_recount.json` + `PROVENANCE.md` for both cities; external-fairness JSON for both; the weighted-BC sweep
-  (`paired_stats` / `dose_response` / `manifest`); the Stage-0 `oracle.json`; the prior trim-only rollout
-  `summary.json` (the negative baseline the pending eval must beat).
+  (`paired_stats` / `dose_response` / `manifest`); the Stage-0 `oracle.json`; both rollout-allocation
+  `summary.json`s (supply-lift + the prior trim-only negative baseline).
 - `tables/` — the per-city external-fairness report tables (`shenzhen-primary-filtered.md`, `sf12-filtered.md`):
   supply/demand levels, DP, DI, Theil, all with paired-bootstrap 95% CIs.
 - `figures/` — the per-city external-fairness forest plots (`*_delta.png`).
