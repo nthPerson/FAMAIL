@@ -476,6 +476,43 @@ def test_lift_survives_float32_negative_epsilon_demand():
     assert len(h.iterations) > 0
 
 
+def test_lift_tripwire_fires_on_large_negative_residual():
+    """Companion to test_lift_survives_float32_negative_epsilon_demand: the
+    lift-branch clamp (modifier.py, immediately before ``torch.clamp(base_3d,
+    min=0.0)``) is preceded by a tripwire assert that ``base_3d > -1e-5``
+    everywhere. The clamp is justified ONLY for ~1e-9-scale float32 ULP
+    persist drift (the -1.86e-9 case above must still pass through it
+    silently); a residual of -1e-4 is four orders of magnitude larger than
+    any observed ULP drift and must instead be treated as an accounting bug
+    and raise loudly, not be silently masked by the clamp."""
+    bundle = _make_synthetic_bundle(N_cells_per_block=30, seed=3)
+    x, y, tb = _interior_active_cell(bundle)
+    t_block = hour_to_block_index(time_bucket_to_hour(tb))
+    gy = bundle.pickup_3d.shape[1]
+
+    obj = FAMAILObjective(bundle, alpha_spatial=1.0, alpha_causal=0.0,
+                          alpha_fidelity=0.0)
+    m = TrajectoryModifier(objective=obj, bundle=bundle, max_iterations=3,
+                           alpha=1.0, diagnostics_enabled=False)
+
+    # Plant a residual four orders of magnitude past the ULP floor, at an
+    # active unit in a DIFFERENT time block (same placement convention as
+    # the ULP-drift test above).
+    planted = None
+    for i in range(bundle.unit_map.n_units):
+        t2 = bundle.unit_map.to_time_block(i)
+        if t2 != t_block:
+            fc = bundle.unit_map.to_flat_cell(i)
+            planted = (fc // gy, fc % gy, t2)
+            break
+    assert planted is not None
+    m._base_pickup_3d[planted[0], planted[1], planted[2]] = -1e-4
+
+    traj = _stay_trajectory(x, y, tb, n=6)
+    with pytest.raises(AssertionError, match="accounting bug"):
+        m.modify_single(traj, mode="lift")
+
+
 def test_lift_skip_on_infeasible_repair_reverts_cleanly(monkeypatch):
     """When tail repair is infeasible (apply_tail_perturbation -> None), lift
     skips the edit entirely: the shared demand grid AND the dS accumulator are

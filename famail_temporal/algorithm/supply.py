@@ -28,7 +28,7 @@ def state_presence_mass(n_hours_per_block: np.ndarray, n_days: int, t_block: int
     Compute the mass per state (mean-hourly).
 
     Args:
-        n_hours_per_block: (24,) array of hours per time block (e.g., all 1s for hourly).
+        n_hours_per_block: (n_blocks,) array of hours per time block (e.g., all 1s for hourly).
         n_days: number of days in the dataset.
         t_block: time block index into n_hours_per_block.
 
@@ -68,7 +68,8 @@ def soft_delta_supply(
     device = probs_batch.device
     dtype = probs_batch.dtype
 
-    # Infer k from probs shape; assume (B, ns, ns) where ns = 2k+1
+    # Infer k from probs shape: (B, ns, ns) where ns = 2k+1, enforced by the
+    # assert below (not merely assumed).
     ns = probs_batch.shape[1]
     assert ns == PRESENCE_KERNEL_SIZE, (
         f"probs window size {ns} != PRESENCE_KERNEL_SIZE {PRESENCE_KERNEL_SIZE}: "
@@ -245,6 +246,14 @@ def assemble_edit_plan(
     from ``lift_scored`` (already sorted descending by score), skipping duplicates
     (trim precedence), non-positive scores, and respecting the lift budget.
 
+    The trim-first ordering of the returned plan is load-bearing, not
+    cosmetic: the lift branch in ``modifier.py`` sanitizes the shared demand
+    grid (clamps ULP-negative float32 persist residuals) before it reads it,
+    while the trim path does not. A caller that executes lift entries before
+    trim entries from this plan would let a trim edit read an unsanitized
+    grid and risk a crash in ``compute_fspatial``. Callers must preserve
+    this ordering (the runner's lift-selection block does, by construction).
+
     Args:
         trim_indices: trajectory indices to trim, in the order they should appear.
         lift_scored: [(idx, score), ...] sorted descending by score.
@@ -301,9 +310,14 @@ def lift_candidates(
     "mass" is ``state_presence_mass`` at that state's time block. A
     trajectory's score is the max over delta of this linearized gain
     (fast screen; the optimizer refines the actual delta). delta=(0,0) is
-    excluded from the candidate set — it is always exactly 0 by
-    construction, so including or excluding it can never change any
-    trajectory's best score or the resulting ranking.
+    excluded from the candidate set because it is always exactly 0 by
+    construction. For a trajectory whose best NONZERO-delta score is
+    negative, excluding (0,0) DOES change that trajectory's reported best
+    score (it would otherwise be 0, i.e. delta=(0,0) wins). This does not
+    affect the resulting ranking of any trajectory that is actually
+    selected: ``assemble_edit_plan`` drops non-positive scores outright, so
+    the exclusion is outcome-invariant for the plan, not score-invariant
+    in general.
 
     Returns ``[(trajectory_idx, score), ...]`` sorted descending by score.
     """

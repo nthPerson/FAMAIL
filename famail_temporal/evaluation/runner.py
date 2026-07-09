@@ -462,6 +462,16 @@ def run_experiment(
         # lift is disabled (TAIL_LEN<=0 or LIFT_BUDGET==0); this is exactly
         # the G1 legacy configuration, so the legacy path pays zero extra
         # compute and carries zero extra risk.
+        #
+        # Pass-ordering assumption (load-bearing, not incidental): every lift
+        # edit below runs after ALL trim edits from run_editing_rounds have
+        # already persisted. The lift branch in modifier.py sanitizes the
+        # shared demand grid (clamps ULP-negative float32 persist residuals)
+        # before it reads it; the trim path does not. Reordering this block
+        # ahead of the trim loop, or interleaving trim and lift edits, would
+        # let a trim read an unsanitized grid and risk a crash in
+        # compute_fspatial. See assemble_edit_plan's docstring (supply.py)
+        # and the invariant comment at the modifier's lift clamp.
         lift_histories: List[ModificationHistory] = []
         lift_scores: List[float] = []
         if lift_enabled:

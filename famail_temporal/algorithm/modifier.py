@@ -250,6 +250,13 @@ class TrajectoryModifier:
         TAIL_LEN > 0 → tail translation; on infeasible repair, fall back to
         the legacy pickup-only move (counted) so the pickup NEVER differs
         from legacy (G3).
+
+        Precondition: ``best_cumulative_delta`` must already be clipped so
+        that ``original_pickup + best_cumulative_delta`` stays within
+        ``config.GRID_DIMS``. The only caller (the ST-iFGSM loop above)
+        guarantees this every iteration via its post-clip re-sync of
+        ``cumulative_delta``, so it holds for free here -- direct callers
+        that bypass the loop must clip the delta themselves before calling.
         """
         # G3: must match legacy persist cell arithmetic exactly. Legacy applies
         # the FRACTIONAL delta (apply_perturbation: clip(coord + delta, 0,
@@ -486,6 +493,22 @@ class TrajectoryModifier:
             # data-cleaning op per lift trajectory on a constant (no-autograd)
             # tensor. The trim/legacy path is untouched: its tensor ops and
             # objective inputs stay byte-identical (G1/G3).
+            #
+            # Ordering invariant: this sanitization exists ONLY on the lift
+            # branch. A trim edit reads the shared demand grid unguarded, so
+            # a trim executed AFTER a lift edit within the same run would
+            # inherit an unsanitized (possibly ULP-negative) grid and can
+            # crash in compute_fspatial. Trim edits must always precede lift
+            # edits within a run unless the trim read path gains this same
+            # sanitization -- see assemble_edit_plan's docstring (supply.py)
+            # and the runner's lift-selection block, both of which encode
+            # (and depend on) this ordering.
+            assert (base_3d > -1e-5).all(), (
+                "demand grid residual below -1e-5: accounting bug, not "
+                "float32 ULP drift (observed persist-chain drift at this "
+                "scale is ~1e-9; the clamp below is justified only for that "
+                "noise floor, not for a genuinely negative demand count)."
+            )
             base_3d = torch.clamp(base_3d, min=0.0)
             n_states = trajectory.n_states
             l_eff = max(0, min(config.TAIL_LEN, n_states - 2))
