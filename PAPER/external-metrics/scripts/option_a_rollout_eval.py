@@ -53,9 +53,9 @@ from famail_temporal.baselines.gan.rollout import generate_trajectories
 from famail_temporal.baselines.gan.sequences import unflat_cell
 from famail_temporal.utils.seeding import set_all_seeds
 
-EDIT_DIR = Path("/home/robert/FAMAIL/famail_temporal/results/"
+DEFAULT_EDIT_DIR = Path("/home/robert/FAMAIL/famail_temporal/results/"
                 "2026-06-29T12-06-55_k-10000_causal_emphasis_no-dedup_cleaned_hcm")
-OUT_DIR = Path("/home/robert/FAMAIL/famail_temporal/baselines/external_fairness/"
+DEFAULT_OUT_DIR = Path("/home/robert/FAMAIL/famail_temporal/baselines/external_fairness/"
                "results/option_a_rollout")
 AXES = ["MigrantRatio", "CompPerCapita", "AvgHousingPricePerSqM"]
 
@@ -130,7 +130,16 @@ def main():
     ap.add_argument("--arms", type=str, default="raw,edited,edited_w10,edited_w30")
     ap.add_argument("--epochs", type=int, default=20)
     ap.add_argument("--device", default="auto")
+    ap.add_argument("--edit-dir", type=str, default=str(DEFAULT_EDIT_DIR),
+                     help="Dir containing histories.pkl for the edited corpus "
+                          "(default: legacy trim-only k-10000 causal-emphasis run).")
+    ap.add_argument("--out-dir", type=str, default=str(DEFAULT_OUT_DIR),
+                     help="Output dir for policy_*.json / summary.json "
+                          "(default: legacy option_a_rollout dir).")
     args = ap.parse_args()
+
+    EDIT_DIR = Path(args.edit_dir)
+    OUT_DIR = Path(args.out_dir)
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     log = open(OUT_DIR / "run.log", "a")
