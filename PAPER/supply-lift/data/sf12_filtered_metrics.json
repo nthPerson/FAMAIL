@@ -1,0 +1,305 @@
+{
+  "provenance": {
+    "derived_from": "famail_temporal/results/2026-07-08T22-43-06_supply_lift_v1_sf12",
+    "derived_from_experiment_id": "2026-07-08T22-43-06_supply_lift_v1_sf12",
+    "derived_from_git_sha": "8605915",
+    "filter_rule": "An edit is applied only when a king-compliant repair exists (max(|dx|,|dy|) <= 1 on every consecutive step). Trim edits that fell back to the legacy pickup-only perturbation (tapered-tail repair infeasible) are reverted to their originals, making trim symmetric with lift (which already skips on infeasible).",
+    "user_decision_date": "2026-07-08",
+    "tool": "famail_temporal.analysis.filter_infeasible_trims",
+    "n_reverted_infeasible_trim": 47,
+    "reverted_trajectory_ids": [
+      "1886",
+      "4529",
+      "4817",
+      "3858",
+      "4810",
+      "5276",
+      "5655",
+      "263",
+      "2404",
+      "2771",
+      "2141",
+      "2538",
+      "4073",
+      "8822",
+      "566",
+      "3806",
+      "449",
+      "2881",
+      "9513",
+      "5788",
+      "7986",
+      "6097",
+      "4108",
+      "7727",
+      "5726",
+      "6564",
+      "8474",
+      "988",
+      "5882",
+      "3155",
+      "4191",
+      "4050",
+      "4923",
+      "7887",
+      "951",
+      "5052",
+      "2456",
+      "8618",
+      "9223",
+      "8286",
+      "7026",
+      "6534",
+      "4160",
+      "1595",
+      "8319",
+      "2524",
+      "4561"
+    ],
+    "legacy_reproduction_note": "The published legacy trim numbers remain reproducible via TAIL_LEN=0; nothing in the source dir is modified by this tool.",
+    "delta_supply_reconstruction_equivalence": {
+      "max_abs_diff": 0.0,
+      "sum_recon": -0.08333073277026415,
+      "sum_persisted": -0.08333073277026415,
+      "allclose_atol_1e-5": true
+    },
+    "violator_identification": "replay: a trim history is a violator iff replaying the modifier's own fallback decision (apply_tail_perturbation(delta_int, TAIL_LEN, GRID_DIMS) on the ORIGINAL, with delta_int recovered from the int pickup cells and TAIL_LEN/GRID_DIMS from this run's config_snapshot) returns None \u2014 the exact condition under which the editor fell back to the legacy pickup-only move. City-robust: pre-existing raw-data king-move violations (e.g. SF Cabspotting GPS gaps, ~15% of raw trajectories) do not affect it. Cross-checked: every EDIT-INTRODUCED king violation (a violating transition at an index where the original's same-index transition was compliant) lies within the replayed fallback set, and none occur in the lift block.",
+    "identification_counts": {
+      "n_fallback_replayed": 47,
+      "n_edit_introduced_violations": 44
+    },
+    "compliance": {
+      "source": {
+        "n": 2000,
+        "n_modified_king_compliant": 1707,
+        "n_original_king_compliant": 1702,
+        "absolute_modified_compliance_frac": 0.8535,
+        "absolute_original_compliance_frac": 0.851,
+        "n_edits_introducing_violations": 44,
+        "edit_relative_compliance_frac": 0.978
+      },
+      "filtered": {
+        "n": 1953,
+        "n_modified_king_compliant": 1707,
+        "n_original_king_compliant": 1659,
+        "absolute_modified_compliance_frac": 0.8740399385560675,
+        "absolute_original_compliance_frac": 0.8494623655913979,
+        "n_edits_introducing_violations": 0,
+        "edit_relative_compliance_frac": 1.0
+      }
+    }
+  },
+  "dataset": {
+    "n_trajectories": 10887,
+    "n_drivers": 12,
+    "n_active_units": 4230
+  },
+  "effective_alphas": {
+    "alpha_spatial": 0.2,
+    "alpha_causal": 0.7,
+    "alpha_fidelity": 0.1
+  },
+  "config_snapshot": {
+    "ACCEPT_RULE": "objective",
+    "ACTIVE_SUPPLY_THRESHOLD": 0.5,
+    "ALPHA_CAUSAL": 0.7,
+    "ALPHA_FIDELITY": 0.1,
+    "ALPHA_SPATIAL": 0.2,
+    "ANNEAL_TEMPERATURE": true,
+    "CACHE_DIR": "/home/robert/FAMAIL/famail_temporal/cache/sf_12",
+    "CITY": "sf12",
+    "CONVERGENCE_TOL": 1e-06,
+    "DEFAULT_SEED": 42,
+    "DEMAND_FLOOR": 0.5,
+    "DEMOGRAPHIC_FEATURES": [
+      "AvgHousingPricePerSqM",
+      "CompPerCapita",
+      "MigrantRatio"
+    ],
+    "DIAGNOSTICS_ENABLED": true,
+    "DISCRIMINATOR_CHECKPOINT_DIR": "/home/robert/FAMAIL/famail_temporal/discriminator_checkpoints",
+    "DISCRIMINATOR_CHECKPOINT_FILENAME": "sf_12/best.pt",
+    "EPS": 1e-08,
+    "EPSILON_BALL": 2.0,
+    "EPSILON_CAP": 2.0,
+    "GRID_DIMS": [
+      32,
+      30
+    ],
+    "ITERATIVE_TOPK_MAX_EDITS": 1,
+    "LIFT_BUDGET": null,
+    "MAX_ITERATIONS": 50,
+    "MAX_ROUNDS": 1,
+    "MIN_ACTIVE_UNITS_PER_BLOCK": 10,
+    "MIN_TOTAL_ACTIVE_UNITS": 100,
+    "N_TIME_BUCKETS": 288,
+    "PACKAGE_ROOT": "/home/robert/FAMAIL/famail_temporal",
+    "PATIENCE": 10,
+    "ROUND_CONVERGENCE_TOL": null,
+    "ROUND_PATIENCE": 2,
+    "SOFT_NEIGHBORHOOD_SIZE": 5,
+    "SOURCE_DATA_DIR": "/home/robert/FAMAIL/famail_temporal/source_data/second_dataset/sf_source_12",
+    "STEP_SIZE_ALPHA": 0.1,
+    "STE_ENABLED": false,
+    "SUPPLY_FLOOR": 0.1,
+    "T": 24,
+    "TAIL_LEN": 4,
+    "TAIL_TAPER": [
+      0.25,
+      0.5,
+      0.75,
+      1.0
+    ],
+    "TAU_MAX": 1.0,
+    "TAU_MIN": 0.1,
+    "TIME_BLOCKS": [
+      [
+        "hour_00",
+        0,
+        1
+      ],
+      [
+        "hour_01",
+        1,
+        2
+      ],
+      [
+        "hour_02",
+        2,
+        3
+      ],
+      [
+        "hour_03",
+        3,
+        4
+      ],
+      [
+        "hour_04",
+        4,
+        5
+      ],
+      [
+        "hour_05",
+        5,
+        6
+      ],
+      [
+        "hour_06",
+        6,
+        7
+      ],
+      [
+        "hour_07",
+        7,
+        8
+      ],
+      [
+        "hour_08",
+        8,
+        9
+      ],
+      [
+        "hour_09",
+        9,
+        10
+      ],
+      [
+        "hour_10",
+        10,
+        11
+      ],
+      [
+        "hour_11",
+        11,
+        12
+      ],
+      [
+        "hour_12",
+        12,
+        13
+      ],
+      [
+        "hour_13",
+        13,
+        14
+      ],
+      [
+        "hour_14",
+        14,
+        15
+      ],
+      [
+        "hour_15",
+        15,
+        16
+      ],
+      [
+        "hour_16",
+        16,
+        17
+      ],
+      [
+        "hour_17",
+        17,
+        18
+      ],
+      [
+        "hour_18",
+        18,
+        19
+      ],
+      [
+        "hour_19",
+        19,
+        20
+      ],
+      [
+        "hour_20",
+        20,
+        21
+      ],
+      [
+        "hour_21",
+        21,
+        22
+      ],
+      [
+        "hour_22",
+        22,
+        23
+      ],
+      [
+        "hour_23",
+        23,
+        24
+      ]
+    ]
+  },
+  "k_modified": 1953,
+  "metrics_before": {
+    "f_spatial": 0.18462900817394257,
+    "f_causal": 0.8751505613327026,
+    "gini_dsr": 0.8265665769577026,
+    "gini_asr": 0.8041752576828003
+  },
+  "metrics_after": {
+    "f_spatial": 0.20265249907970428,
+    "f_causal": 0.9079159498214722,
+    "gini_dsr": 0.789490282535553,
+    "gini_asr": 0.8052045106887817
+  },
+  "deltas": {
+    "f_spatial": 0.01802349090576172,
+    "f_causal": 0.03276538848876953,
+    "gini_dsr": -0.03707629442214966,
+    "gini_asr": 0.0010292530059814453
+  },
+  "n_trim": 1324,
+  "n_lift": 629,
+  "n_skipped_infeasible_trim": 47,
+  "n_taper_infeasible_lift": 1,
+  "supply_totals": {
+    "added": 109.7433279925026,
+    "removed": 109.8266588486731
+  }
+}

@@ -1,0 +1,459 @@
+{
+ "budget": 10000,
+ "tail_len": 4,
+ "semantics_arg": "both",
+ "n_candidates": 5538,
+ "n_applied": 2571,
+ "n_skipped": 2967,
+ "n_trajectories_len_ge3": 80427,
+ "n_trajectories_total": 95297,
+ "N_D": 6950,
+ "ceiling_fraction": 0.882001468770145,
+ "ceiling_distinct_seeking": 0.827377966066145,
+ "baseline_mean_Y_D": 7.073447554576566,
+ "g0_threshold": 0.3,
+ "runtime_seconds": 16.002780712995445,
+ "top_examples": [
+  {
+   "trajectory_id": 54438,
+   "driver": 29,
+   "tail_len": 1,
+   "delta": [
+    1,
+    -2
+   ],
+   "pickup_old": [
+    16,
+    29,
+    23
+   ],
+   "pickup_new": [
+    17,
+    27,
+    23
+   ],
+   "fraction_gain": 13.471257110488223,
+   "distinct_gain": 13.30052198135602,
+   "apply_rank": 1834
+  },
+  {
+   "trajectory_id": 33690,
+   "driver": 16,
+   "tail_len": 1,
+   "delta": [
+    1,
+    -2
+   ],
+   "pickup_old": [
+    18,
+    27,
+    23
+   ],
+   "pickup_new": [
+    19,
+    25,
+    23
+   ],
+   "fraction_gain": 13.448408740691026,
+   "distinct_gain": 13.611748015264581,
+   "apply_rank": 287
+  },
+  {
+   "trajectory_id": 43542,
+   "driver": 24,
+   "tail_len": 4,
+   "delta": [
+    2,
+    -1
+   ],
+   "pickup_old": [
+    18,
+    28,
+    13
+   ],
+   "pickup_new": [
+    20,
+    27,
+    13
+   ],
+   "fraction_gain": 13.327506391588068,
+   "distinct_gain": 12.69526133415167,
+   "apply_rank": 1
+  },
+  {
+   "trajectory_id": 61171,
+   "driver": 32,
+   "tail_len": 4,
+   "delta": [
+    2,
+    0
+   ],
+   "pickup_old": [
+    18,
+    27,
+    13
+   ],
+   "pickup_new": [
+    20,
+    27,
+    13
+   ],
+   "fraction_gain": 12.719580710769216,
+   "distinct_gain": 12.7376129234825,
+   "apply_rank": 598
+  },
+  {
+   "trajectory_id": 65788,
+   "driver": 36,
+   "tail_len": 4,
+   "delta": [
+    2,
+    0
+   ],
+   "pickup_old": [
+    17,
+    30,
+    23
+   ],
+   "pickup_new": [
+    19,
+    30,
+    23
+   ],
+   "fraction_gain": 12.635608919431448,
+   "distinct_gain": 12.888888029562757,
+   "apply_rank": 592
+  },
+  {
+   "trajectory_id": 63910,
+   "driver": 35,
+   "tail_len": 4,
+   "delta": [
+    1,
+    0
+   ],
+   "pickup_old": [
+    17,
+    29,
+    22
+   ],
+   "pickup_new": [
+    18,
+    29,
+    22
+   ],
+   "fraction_gain": 12.581028290336548,
+   "distinct_gain": 12.558332582066484,
+   "apply_rank": 3
+  },
+  {
+   "trajectory_id": 63880,
+   "driver": 35,
+   "tail_len": 4,
+   "delta": [
+    2,
+    -2
+   ],
+   "pickup_old": [
+    19,
+    29,
+    22
+   ],
+   "pickup_new": [
+    21,
+    27,
+    22
+   ],
+   "fraction_gain": 12.564523432611686,
+   "distinct_gain": 12.022063117719192,
+   "apply_rank": 283
+  },
+  {
+   "trajectory_id": 52877,
+   "driver": 29,
+   "tail_len": 4,
+   "delta": [
+    2,
+    -2
+   ],
+   "pickup_old": [
+    19,
+    28,
+    21
+   ],
+   "pickup_new": [
+    21,
+    26,
+    21
+   ],
+   "fraction_gain": 12.542837786826096,
+   "distinct_gain": 12.66651503709583,
+   "apply_rank": 590
+  },
+  {
+   "trajectory_id": 47062,
+   "driver": 26,
+   "tail_len": 4,
+   "delta": [
+    1,
+    -1
+   ],
+   "pickup_old": [
+    17,
+    30,
+    0
+   ],
+   "pickup_new": [
+    18,
+    29,
+    0
+   ],
+   "fraction_gain": 12.486607044167556,
+   "distinct_gain": 11.916666576017931,
+   "apply_rank": 5
+  },
+  {
+   "trajectory_id": 42634,
+   "driver": 23,
+   "tail_len": 4,
+   "delta": [
+    2,
+    1
+   ],
+   "pickup_old": [
+    18,
+    27,
+    22
+   ],
+   "pickup_new": [
+    20,
+    28,
+    22
+   ],
+   "fraction_gain": 12.41217705267289,
+   "distinct_gain": 11.54358656901672,
+   "apply_rank": 1373
+  },
+  {
+   "trajectory_id": 9314,
+   "driver": 5,
+   "tail_len": 4,
+   "delta": [
+    2,
+    -1
+   ],
+   "pickup_old": [
+    19,
+    26,
+    22
+   ],
+   "pickup_new": [
+    21,
+    25,
+    22
+   ],
+   "fraction_gain": 12.293154054731072,
+   "distinct_gain": 12.282737390134013,
+   "apply_rank": 6
+  },
+  {
+   "trajectory_id": 42921,
+   "driver": 23,
+   "tail_len": 4,
+   "delta": [
+    2,
+    -2
+   ],
+   "pickup_old": [
+    19,
+    29,
+    0
+   ],
+   "pickup_new": [
+    21,
+    27,
+    0
+   ],
+   "fraction_gain": 12.249522975332335,
+   "distinct_gain": 10.690495196950932,
+   "apply_rank": 632
+  },
+  {
+   "trajectory_id": 43777,
+   "driver": 24,
+   "tail_len": 2,
+   "delta": [
+    2,
+    0
+   ],
+   "pickup_old": [
+    18,
+    28,
+    22
+   ],
+   "pickup_new": [
+    20,
+    28,
+    22
+   ],
+   "fraction_gain": 12.167298188123963,
+   "distinct_gain": 12.037810564952892,
+   "apply_rank": 2318
+  },
+  {
+   "trajectory_id": 80968,
+   "driver": 43,
+   "tail_len": 4,
+   "delta": [
+    2,
+    -2
+   ],
+   "pickup_old": [
+    18,
+    26,
+    21
+   ],
+   "pickup_new": [
+    20,
+    24,
+    21
+   ],
+   "fraction_gain": 12.08217860407443,
+   "distinct_gain": 12.26151315640194,
+   "apply_rank": 108
+  },
+  {
+   "trajectory_id": 42970,
+   "driver": 23,
+   "tail_len": 2,
+   "delta": [
+    1,
+    2
+   ],
+   "pickup_old": [
+    18,
+    28,
+    12
+   ],
+   "pickup_new": [
+    19,
+    30,
+    12
+   ],
+   "fraction_gain": 11.959515643786315,
+   "distinct_gain": 11.961995800319588,
+   "apply_rank": 503
+  },
+  {
+   "trajectory_id": 63918,
+   "driver": 35,
+   "tail_len": 4,
+   "delta": [
+    2,
+    -2
+   ],
+   "pickup_old": [
+    19,
+    28,
+    22
+   ],
+   "pickup_new": [
+    21,
+    26,
+    22
+   ],
+   "fraction_gain": 11.852612652582675,
+   "distinct_gain": 11.94827808083383,
+   "apply_rank": 606
+  },
+  {
+   "trajectory_id": 38072,
+   "driver": 18,
+   "tail_len": 4,
+   "delta": [
+    2,
+    -1
+   ],
+   "pickup_old": [
+    18,
+    28,
+    7
+   ],
+   "pickup_new": [
+    20,
+    27,
+    7
+   ],
+   "fraction_gain": 11.761274994323754,
+   "distinct_gain": 12.086756614538764,
+   "apply_rank": 121
+  },
+  {
+   "trajectory_id": 90949,
+   "driver": 47,
+   "tail_len": 4,
+   "delta": [
+    2,
+    0
+   ],
+   "pickup_old": [
+    18,
+    27,
+    7
+   ],
+   "pickup_new": [
+    20,
+    27,
+    7
+   ],
+   "fraction_gain": 11.673800090725633,
+   "distinct_gain": 11.774108734557625,
+   "apply_rank": 459
+  },
+  {
+   "trajectory_id": 63781,
+   "driver": 35,
+   "tail_len": 4,
+   "delta": [
+    2,
+    -2
+   ],
+   "pickup_old": [
+    18,
+    30,
+    23
+   ],
+   "pickup_new": [
+    20,
+    28,
+    23
+   ],
+   "fraction_gain": 11.575551163372538,
+   "distinct_gain": 11.160119046946459,
+   "apply_rank": 2129
+  },
+  {
+   "trajectory_id": 63483,
+   "driver": 34,
+   "tail_len": 4,
+   "delta": [
+    2,
+    -2
+   ],
+   "pickup_old": [
+    19,
+    29,
+    11
+   ],
+   "pickup_new": [
+    21,
+    27,
+    11
+   ],
+   "fraction_gain": 11.513455989534453,
+   "distinct_gain": 11.170021652440056,
+   "apply_rank": 132
+  }
+ ],
+ "notes": "Greedy upper bound (not a true optimum): best-first over an initial per-trajectory 24-delta scan, re-scored once against running grids at pop time, applied if re-scored gain > 0. Net of the pickup's relocated demand mass. distinct_seeking is an approximation from a static original-corpus presence index (own-cell removal always conservatively gated to zero); exact raw-GPS recount is deferred to Task 9."
+}
