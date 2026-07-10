@@ -154,8 +154,8 @@ def attack_trajectories(
                     improved = p < (best_p - convergence_tol)
                     upd = improved & live
                     best_delta[upd] = delta[upd]
-                    best_p = torch.where(improved & live, p, best_p)
-                    stall = torch.where(improved & live, torch.zeros_like(stall),
+                    best_p = torch.where(upd, p, best_p)
+                    stall = torch.where(upd, torch.zeros_like(stall),
                                         stall + live.long())
                     iters += live.long()
                     d_new = (delta - step * grad.sign()).clamp_(-epsilon, epsilon)
@@ -163,6 +163,23 @@ def attack_trajectories(
                     delta.data *= mask_f            # padding stays zero
                 if not bool((stall < patience).any()):
                     break
+            # Score the FINAL applied step. The loop scores `delta` at the TOP of
+            # each iteration (before stepping), so the iterate produced by the
+            # last step is never scored inside the loop — for fgsm
+            # (max_iterations=1) that means the single full-budget signed step
+            # would be discarded and the initialization returned instead. Score
+            # it here (no gradient, no further step) so every applied step is
+            # eligible to be kept as the best iterate. Gated by `stall < patience`
+            # so a step that only stalled a row is not kept, preserving the
+            # iFGSM best-iterate/patience semantics.
+            with torch.no_grad():
+                x_adv = x_orig.clone()
+                x_adv[..., :2] = x_orig[..., :2] + delta * mask_f
+                p = disc(x_orig, x_adv, mask1=mask, mask2=mask,
+                         profile_1=prof, profile_2=prof).reshape(-1)
+                keep = (p < (best_p - convergence_tol)) & (stall < patience)
+                best_delta[keep] = delta[keep]
+                best_p = torch.where(keep, p, best_p)
             best_delta = best_delta.detach() * mask_f
 
         x_final = x_orig.clone()

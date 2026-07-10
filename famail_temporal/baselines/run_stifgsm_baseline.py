@@ -22,6 +22,7 @@ import time
 from pathlib import Path
 
 import numpy as np
+import torch
 
 from famail_temporal import config
 from famail_temporal.baselines.stifgsm_baseline import (
@@ -30,6 +31,18 @@ from famail_temporal.baselines.stifgsm_baseline import (
 
 
 # --------------------------------------------------------------- seams --------
+def _resolve_device(device: str) -> str:
+    """Resolve the ``auto`` sentinel to a concrete torch device string.
+
+    ``torch.device("auto")`` raises, so the documented ``--device auto`` run-book
+    would crash; resolve it here to ``cuda`` when a GPU is visible else ``cpu``.
+    Any explicit value (``cpu``/``cuda``/``cuda:0``/...) passes through unchanged.
+    """
+    if device == "auto":
+        return "cuda" if torch.cuda.is_available() else "cpu"
+    return device
+
+
 def _load_bundle():
     from famail_temporal.data.loader import DataBundle
     return DataBundle.load()
@@ -275,9 +288,10 @@ def parse_args(argv=None):
 
 def run_baseline(args) -> Path:
     city = os.environ.get("FAMAIL_CITY", "shenzhen")
+    device = _resolve_device(args.device)
 
     bundle = _load_bundle()
-    disc = _load_disc(args.device)
+    disc = _load_disc(device)
     profiles = _driver_profiles(bundle)
 
     edit_ids = _edit_trajectory_ids(args.edit_dir)
@@ -288,7 +302,7 @@ def run_baseline(args) -> Path:
     outcomes = attack_trajectories(
         trajs, disc, profiles, args.mode,
         epsilon=args.epsilon, step=args.step, max_iterations=args.max_iterations,
-        seed=args.seed, device=args.device, batch_size=args.batch_size,
+        seed=args.seed, device=device, batch_size=args.batch_size,
         random_start=args.random_start,
     )
 
@@ -318,7 +332,7 @@ def run_baseline(args) -> Path:
 
     if args.score_fidelity:
         fidelity = score_fidelity(arm_dir, disc, bundle,
-                                  device=args.device, seed=args.seed)
+                                  device=device, seed=args.seed)
         print(f"[baseline] fidelity_a={fidelity['fidelity_a']['mean']:.4f} "
               f"gate_passed={fidelity['gate']['passed']} "
               f"fidelity_b={fidelity['fidelity_b']['aggregate']:.4f}")

@@ -31,6 +31,25 @@ class StubDisc(torch.nn.Module):
         return torch.sigmoid(-diff.sum(dim=(1, 2, 3)) / denom)
 
 
+class AsymDisc(torch.nn.Module):
+    """Asymmetric stand-in: p = sigmoid(mean over masked xy of (x2 - x1)).
+
+    A linear +x/+y pull: p rises with x2, so its gradient at delta=0 is NONZERO
+    (unlike the symmetric StubDisc). Descending p therefore drives x2 (= the
+    perturbed trajectory) in the -x/-y direction — a signed step actually MOVES
+    the trajectory, which is exactly what a discarded-step bug would fail to do.
+    """
+    def forward(self, x1, x2, mask1=None, mask2=None, profile_1=None, profile_2=None):
+        diff = x2[..., :2] - x1[..., :2]
+        if mask2 is not None:
+            m = mask2.unsqueeze(-1).float()
+            diff = diff * m
+            denom = m.sum(dim=(1, 2, 3)).clamp(min=1.0)
+        else:
+            denom = torch.tensor(float(diff[0].numel()), device=diff.device)
+        return torch.sigmoid(diff.sum(dim=(1, 2, 3)) / denom)
+
+
 def _traj(tid, n_states=5, x0=10.0, y0=20.0, driver=7):
     states = [TrajectoryState(x_grid=x0 + i, y_grid=y0 + i, time_bucket=3, day_index=1)
               for i in range(n_states)]
@@ -140,6 +159,33 @@ def test_fgsm_equals_ifgsm_single_fullstep_no_random_start():
                             epsilon=2.0, step=2.0, max_iterations=1, seed=0,
                             random_start=False)
     np.testing.assert_array_equal(a[0].perturbed_xy, b[0].perturbed_xy)
+
+
+def test_fgsm_applies_signed_step():
+    # Asymmetric disc: p rises with x2, so one full-budget descent step moves
+    # EVERY coordinate by -epsilon. random_start=False -> delta starts at 0, so
+    # the ONLY signal that the step was applied (and kept, not discarded like the
+    # init) is the trajectory actually moving by exactly epsilon in -x/-y.
+    traj = _traj(1, n_states=5)
+    orig = np.array([[s.x_grid, s.y_grid] for s in traj.states])
+    out = attack_trajectories([traj], AsymDisc(), _profiles(), "fgsm",
+                              epsilon=2.0, step=0.1, max_iterations=8, patience=3,
+                              convergence_tol=0.0, seed=0, random_start=False)[0]
+    np.testing.assert_allclose(out.perturbed_xy, orig - 2.0, atol=1e-6)
+    assert out.final_p < 0.5   # p(original) = sigmoid(0) = 0.5 (identical inputs)
+
+
+def test_ifgsm_descends_below_fgsm_or_equal():
+    # Iterative descent must reach a p no worse than the single full-budget step
+    # on the same asymmetric stub (both saturate at the epsilon-ball corner).
+    traj = _traj(1, n_states=5)
+    fgsm = attack_trajectories([traj], AsymDisc(), _profiles(), "fgsm",
+                               epsilon=2.0, step=0.1, max_iterations=8, patience=3,
+                               convergence_tol=0.0, seed=0, random_start=False)[0]
+    ifgsm = attack_trajectories([traj], AsymDisc(), _profiles(), "ifgsm",
+                                epsilon=2.0, step=0.5, max_iterations=8, patience=3,
+                                convergence_tol=0.0, seed=0, random_start=False)[0]
+    assert ifgsm.final_p <= fgsm.final_p + 1e-6
 
 
 def test_discretize_rounds_clamps_and_freezes_time():

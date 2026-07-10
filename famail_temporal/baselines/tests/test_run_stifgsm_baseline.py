@@ -45,6 +45,19 @@ def test_run_baseline_end_to_end(tmp_path, monkeypatch):
         assert len(pickle.load(f)) == 2
 
 
+def test_device_auto_resolves_to_cpu_without_cuda(tmp_path, monkeypatch):
+    # The documented run-book passes `--device auto`; torch.device("auto") raises,
+    # so it must be resolved first. On a CUDA-less machine it must yield "cpu".
+    import torch
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
+    args = rb.parse_args([
+        "--edit-dir", str(tmp_path), "--mode", "random", "--device", "auto",
+        "--seed", "0",
+    ])
+    assert rb._resolve_device(args.device) == "cpu"          # does not raise
+    assert rb._resolve_device("cpu") == "cpu"                 # explicit passthrough
+
+
 def test_score_fidelity_writes_block(tmp_path, monkeypatch):
     # Two DIFFERENT drivers so the identity gate has >= 1 mismatched pair.
     trajs = [_traj(1, driver=7), _traj(2, n_states=3, driver=8)]

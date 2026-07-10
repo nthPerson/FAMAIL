@@ -150,7 +150,7 @@ PI-facing diagrams live in the research vault: `research-vault/FAMAIL/famail_tem
 ## Mission 3 baselines (built, awaiting GPU)
 
 Adds the data-augmentation baseline comparison spec'd in
-[`docs/superpowers/sdd/`](../../docs/superpowers/sdd/) (2026-07-09): three
+[`docs/superpowers/specs/2026-07-09-mission3-data-aug-baselines-design.md`](../../docs/superpowers/specs/2026-07-09-mission3-data-aug-baselines-design.md) (2026-07-09): three
 vanilla data-augmentation editors (**ST-iFGSM**, **FGSM**, **random**) that
 attack the same trajectories the FAMAIL headline edited, packaged and rescored
 the identical way, so the comparison table (Task 5) has a real
