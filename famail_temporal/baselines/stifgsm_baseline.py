@@ -5,6 +5,18 @@ discriminator on (original, perturbed) same-driver pairs over the CONTINUOUS
 float-grid seeking states — the discriminator's native input space — with a
 per-coordinate cumulative L-inf budget. Deliberately independent of
 famail_temporal/algorithm/ (the frozen editor is untouched).
+
+The gradient modes (`ifgsm`/`fgsm`) implement iFGSM/FGSM with PGD-style random
+start (the default, `random_start=True`): delta is initialized to a uniform
+draw inside the epsilon ball before the sign-gradient iterations begin. With
+`random_start=False` these are exactly the textbook vanilla iFGSM/FGSM (delta
+starts at 0). The random start is not cosmetic: for a Siamese head scoring
+same/different via an |emb1-emb2|-style distance, the (original, original)
+pair — i.e. delta=0 — is a stationary point (the distance is even/symmetric
+in delta around the origin, so its subgradient there is 0). A pure
+sign-gradient method reads `sign(0) == 0` and can never leave that point;
+random start escapes it. `random_start` is ignored by `mode="random"`, which
+never uses gradients.
 """
 from __future__ import annotations
 
@@ -65,6 +77,7 @@ def attack_trajectories(
     seed: int = 0,
     device: str = "cpu",
     batch_size: int = 256,
+    random_start: bool = True,
 ) -> List[AttackOutcome]:
     if mode not in ("ifgsm", "fgsm", "random"):
         raise ValueError(f"unknown mode '{mode}'")
@@ -91,10 +104,15 @@ def attack_trajectories(
         mask_f = mask.unsqueeze(-1).float()          # (B,1,L,1) freeze padding
 
         if mode == "random":
-            g = torch.Generator(device="cpu").manual_seed(seed)
-            signs = torch.randint(0, 2, (bsz, 1, lmax, 2), generator=g,
-                                  dtype=torch.float32).mul_(2).sub_(1).to(dev)
-            delta = (signs * epsilon) * mask_f
+            # Per-trajectory seeding (seed + global list index), mirroring the
+            # gradient branch's random start, so results are batch-invariant:
+            # each row draws only its own true length, independent of bsz/lmax.
+            delta = torch.zeros(bsz, 1, lmax, 2, device=dev)
+            for i, ln in enumerate(lens):
+                gi = torch.Generator(device="cpu").manual_seed(seed + start + i)
+                signs = torch.randint(0, 2, (ln, 2), generator=gi,
+                                      dtype=torch.float32).mul_(2).sub_(1)
+                delta[i, 0, :ln, :] = (signs * epsilon).to(dev)
             x_adv = x_orig.clone()
             x_adv[..., :2] = x_orig[..., :2] + delta
             with torch.no_grad():
@@ -102,15 +120,18 @@ def attack_trajectories(
                          profile_1=prof, profile_2=prof).reshape(-1)
             best_delta, best_p, iters = delta, p, torch.ones_like(p, dtype=torch.long)
         else:
-            # Random start within the epsilon ball (per-trajectory, seed- and
-            # global-index-derived so batch_size is invariant): a symmetric
-            # loss landscape has zero gradient at delta=0, which would leave a
-            # pure sign-gradient iterate stuck at the origin forever.
+            # PGD-style random start within the epsilon ball (per-trajectory,
+            # seed- and global-index-derived so batch_size is invariant): a
+            # symmetric loss landscape has zero gradient at delta=0, which
+            # would leave a pure sign-gradient iterate stuck at the origin
+            # forever. When random_start=False, delta starts at exactly 0
+            # (textbook vanilla iFGSM/FGSM).
             delta_init = torch.zeros(bsz, 1, lmax, 2, device=dev)
-            for i, ln in enumerate(lens):
-                gi = torch.Generator(device="cpu").manual_seed(seed + start + i)
-                noise = (torch.rand(ln, 2, generator=gi) * 2 - 1) * epsilon
-                delta_init[i, 0, :ln, :] = noise.to(dev)
+            if random_start:
+                for i, ln in enumerate(lens):
+                    gi = torch.Generator(device="cpu").manual_seed(seed + start + i)
+                    noise = (torch.rand(ln, 2, generator=gi) * 2 - 1) * epsilon
+                    delta_init[i, 0, :ln, :] = noise.to(dev)
             delta = delta_init.clone().requires_grad_(True)
             best_p = torch.full((bsz,), float("inf"), device=dev)
             best_delta = torch.zeros_like(delta)

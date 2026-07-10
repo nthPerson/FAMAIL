@@ -1,6 +1,5 @@
 """Tests for the ST-iFGSM/FGSM/random baseline attack engine."""
 import numpy as np
-import pytest
 import torch
 
 from famail_temporal.baselines.stifgsm_baseline import AttackOutcome, attack_trajectories
@@ -94,3 +93,42 @@ def test_padding_states_untouched_and_shapes():
     outs = _run("ifgsm", trajs=trajs)
     assert outs[0].perturbed_xy.shape == (5, 2)
     assert outs[1].perturbed_xy.shape == (2, 2)  # no padding rows leak out
+
+
+def test_random_mode_batched_equals_sequential():
+    trajs = [_traj(i, n_states=3 + (i % 4)) for i in range(6)]
+    big = attack_trajectories(trajs, StubDisc(), _profiles(), "random", epsilon=2.0,
+                              seed=0, batch_size=6)
+    one = attack_trajectories(trajs, StubDisc(), _profiles(), "random", epsilon=2.0,
+                              seed=0, batch_size=1)
+    for a, b in zip(big, one):
+        np.testing.assert_array_equal(a.perturbed_xy, b.perturbed_xy)
+
+
+def test_random_mode_multi_chunk_invariance():
+    trajs = [_traj(i, n_states=3 + (i % 4)) for i in range(6)]
+    a4 = attack_trajectories(trajs, StubDisc(), _profiles(), "random", epsilon=2.0,
+                             seed=0, batch_size=4)
+    a6 = attack_trajectories(trajs, StubDisc(), _profiles(), "random", epsilon=2.0,
+                             seed=0, batch_size=6)
+    for x, y in zip(a4, a6):
+        np.testing.assert_array_equal(x.perturbed_xy, y.perturbed_xy)
+
+
+def test_random_start_false_is_stationary_on_symmetric_stub():
+    out = attack_trajectories([_traj(1)], StubDisc(), _profiles(), "ifgsm",
+                              epsilon=2.0, step=0.1, max_iterations=8, patience=3,
+                              convergence_tol=0.0, seed=0, random_start=False)[0]
+    orig = np.array([[s.x_grid, s.y_grid] for s in _traj(1).states])
+    np.testing.assert_array_equal(out.perturbed_xy, orig)
+    assert out.final_p == 0.5
+
+
+def test_fgsm_equals_ifgsm_single_fullstep_no_random_start():
+    a = attack_trajectories([_traj(1)], StubDisc(), _profiles(), "fgsm",
+                            epsilon=2.0, step=0.1, max_iterations=8, seed=0,
+                            random_start=False)
+    b = attack_trajectories([_traj(1)], StubDisc(), _profiles(), "ifgsm",
+                            epsilon=2.0, step=2.0, max_iterations=1, seed=0,
+                            random_start=False)
+    np.testing.assert_array_equal(a[0].perturbed_xy, b[0].perturbed_xy)
