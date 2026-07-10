@@ -115,3 +115,67 @@ def test_sample_duplicates_empty_pool_hard_error():
 def test_sample_duplicates_dose_zero_is_empty():
     pools = {a: np.arange(5) for a in EQUITY_AXES}
     assert dov.sample_duplicates(pools, n_corpus=5, dose=0, seed=0) == []
+
+
+def test_make_phantom_rigid_shift_and_identity():
+    src = _traj([(3, 3), (4, 3), (4, 4)], "t9", driver="real_driver")
+    spec = dov.DuplicateSpec(source_index=0, stratum="MigrantRatio",
+                             eligible_axes=("MigrantRatio",), offset=(1, -1),
+                             phantom_id="phantom_targeted_s0_000000",
+                             with_replacement=False)
+    ph, n_clipped = dov.make_phantom(src, spec, grid_dims=(48, 90))
+    assert n_clipped == 0
+    assert ph.driver_id == "phantom_targeted_s0_000000"
+    assert ph.driver_id != src.driver_id
+    assert str(src.trajectory_id) in str(ph.trajectory_id)
+    # rigid: every state shifted by exactly (1, -1); times/days unchanged
+    for s_src, s_ph in zip(src.states, ph.states):
+        assert (s_ph.x_grid, s_ph.y_grid) == (s_src.x_grid + 1, s_src.y_grid - 1)
+        assert s_ph.time_bucket == s_src.time_bucket
+        assert s_ph.day_index == s_src.day_index
+    # source untouched (deep copy)
+    assert (src.states[0].x_grid, src.states[0].y_grid) == (3.0, 3.0)
+
+
+def test_make_phantom_clips_at_boundary_and_counts():
+    src = _traj([(0, 0), (1, 0)], "t10")
+    spec = dov.DuplicateSpec(source_index=0, stratum="CompPerCapita",
+                             eligible_axes=("CompPerCapita",), offset=(-1, -1),
+                             phantom_id="p", with_replacement=False)
+    ph, n_clipped = dov.make_phantom(src, spec, grid_dims=(48, 90))
+    assert n_clipped == 2                        # both states clipped in x and/or y
+    assert (ph.states[0].x_grid, ph.states[0].y_grid) == (0.0, 0.0)
+    assert (ph.states[1].x_grid, ph.states[1].y_grid) == (0.0, 0.0)
+
+
+def test_adjacency_preserved_without_clipping():
+    from famail_temporal.baselines.stifgsm_baseline import adjacency_violation_rate
+    src = _traj([(5, 5), (6, 5), (6, 6), (7, 6)], "t11")
+    spec = dov.DuplicateSpec(source_index=0, stratum="MigrantRatio",
+                             eligible_axes=("MigrantRatio",), offset=(1, 1),
+                             phantom_id="p", with_replacement=False)
+    ph, n_clipped = dov.make_phantom(src, spec, grid_dims=(48, 90))
+    assert n_clipped == 0
+    assert adjacency_violation_rate([ph]) == adjacency_violation_rate([src])
+
+
+def test_escape_fractions():
+    masks = dov.disadvantaged_cell_masks(_selected_grid())      # migrant D rows 4-5
+    src = _traj([(5, 1), (4, 1), (3, 1)], "t12")                # origin row 5; pickup row 3
+    spec = dov.DuplicateSpec(source_index=0, stratum="MigrantRatio",
+                             eligible_axes=("MigrantRatio",), offset=(-1, 0),
+                             phantom_id="p", with_replacement=False)
+    ph, _ = dov.make_phantom(src, spec, grid_dims=(6, 4))
+    fr = dov.escape_fractions([spec], [ph], masks)
+    # shifted origin = row 4 (still D) -> no escape; shifted pickup = row 2 (outside D)
+    assert fr == {"origin_escape_frac": 0.0, "pickup_outside_frac": 1.0}
+
+
+def test_escape_fractions_placebo_none():
+    spec = dov.DuplicateSpec(source_index=0, stratum=dov.PLACEBO,
+                             eligible_axes=(), offset=(1, 0),
+                             phantom_id="p", with_replacement=False)
+    ph, _ = dov.make_phantom(_traj([(2, 2), (3, 2)], "t13"), spec, grid_dims=(6, 4))
+    fr = dov.escape_fractions([spec], [ph],
+                              dov.disadvantaged_cell_masks(_selected_grid()))
+    assert fr == {"origin_escape_frac": None, "pickup_outside_frac": None}

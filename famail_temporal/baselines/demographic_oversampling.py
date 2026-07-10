@@ -146,3 +146,57 @@ def sample_duplicates(
     else:
         raise ValueError(f"unknown variant {variant!r}")
     return specs
+
+
+def make_phantom(
+    traj: Trajectory, spec: DuplicateSpec,
+    grid_dims: Tuple[int, int] | None = None,
+) -> Tuple[Trajectory, int]:
+    """Rigid-shift deep copy of `traj` under the phantom driver ID.
+
+    Every state is displaced by the SAME (dx, dy) (the "second taxi ran the
+    same route one street over" story), clipped to grid bounds; time buckets
+    and day indices unchanged. Returns (phantom, n_clipped_states) where a
+    state counts as clipped if the clip changed its shifted coordinate.
+    """
+    gx, gy = grid_dims if grid_dims is not None else config.GRID_DIMS
+    dx, dy = spec.offset
+    ph = traj.clone()
+    ph.trajectory_id = f"{spec.phantom_id}::of::{traj.trajectory_id}"
+    ph.driver_id = spec.phantom_id
+    n_clipped = 0
+    for s in ph.states:
+        nx = min(max(s.x_grid + dx, 0.0), float(gx - 1))
+        ny = min(max(s.y_grid + dy, 0.0), float(gy - 1))
+        if nx != s.x_grid + dx or ny != s.y_grid + dy:
+            n_clipped += 1
+        s.x_grid, s.y_grid = nx, ny
+    return ph, n_clipped
+
+
+def escape_fractions(
+    specs: Sequence[DuplicateSpec], phantoms: Sequence[Trajectory],
+    masks: Dict[str, np.ndarray],
+) -> Dict[str, float | None]:
+    """Post-shift diagnostics over TARGETED duplicates (placebo strata skipped):
+
+    - origin_escape_frac: fraction whose shifted ORIGIN left the drawing
+      stratum's disadvantaged region set (pre-shift it was inside by
+      construction).
+    - pickup_outside_frac: fraction whose shifted PICKUP lies outside that
+      set (descriptive — where the fabricated demand lands; pickups may be
+      outside even pre-shift).
+    """
+    n = o_esc = p_out = 0
+    for spec, ph in zip(specs, phantoms):
+        mask = masks.get(spec.stratum)
+        if mask is None:
+            continue
+        n += 1
+        ox, oy = origin_cell(ph)
+        px, py = ph.pickup_cell
+        o_esc += 0 if mask[ox, oy] else 1
+        p_out += 0 if mask[px, py] else 1
+    if n == 0:
+        return {"origin_escape_frac": None, "pickup_outside_frac": None}
+    return {"origin_escape_frac": o_esc / n, "pickup_outside_frac": p_out / n}
