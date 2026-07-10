@@ -144,3 +144,74 @@ python -m famail_temporal.baselines.gan.run_b0_adversarial --mle-epochs 5 --adv-
 ```
 
 PI-facing diagrams live in the research vault: `research-vault/FAMAIL/famail_temporal/diagrams/` (experimental design + fairness×retention Pareto).
+
+---
+
+## Mission 3 baselines (built, awaiting GPU)
+
+Adds the data-augmentation baseline comparison spec'd in
+[`docs/superpowers/sdd/`](../../docs/superpowers/sdd/) (2026-07-09): three
+vanilla data-augmentation editors (**ST-iFGSM**, **FGSM**, **random**) that
+attack the same trajectories the FAMAIL headline edited, packaged and rescored
+the identical way, so the comparison table (Task 5) has a real
+apples-to-apples row set alongside FAMAIL and raw. **ST-iFGSM is a FIDELITY
+baseline, not a fairness one** (Meeting-41 framing) — it demonstrates a
+plausible off-the-shelf adversarial-perturbation alternative, not a
+competing fairness method.
+
+Module `famail_temporal/baselines/{stifgsm_baseline,run_stifgsm_baseline,assemble_baseline_table}.py`
+(+ 3 test files) built via Tasks 1-6; frozen-algorithm gate + this run-book =
+Task 7. Not yet run against the real headline dir — needs the GPU, currently
+held by the alpha-sweep (`famail_temporal/results/alpha_sweep/driver.sh --status`).
+
+### Run-book (execute once the GPU is free)
+
+```bash
+# 1) Attack the same trajectories the headline edited, 3 arms (~minutes/arm on GPU).
+H=famail_temporal/results/2026-07-08T14-03-03_supply_lift_v1_shz_primary_filtered
+for MODE in ifgsm fgsm random; do
+  python -m famail_temporal.baselines.run_stifgsm_baseline \
+    --edit-dir "$H" --mode "$MODE" --seed 0 --device auto --score-fidelity
+done
+# Each invocation prints its packaged arm dir, e.g.
+#   famail_temporal/results/<ts>_baseline_<mode>_shenzhen/
+# with metrics.json["arm" | "fairness" | "fidelity"] populated
+# (package_arm + _rescore + score_fidelity, run_stifgsm_baseline.py).
+
+# 1b) Vanilla-no-op demonstration variant (textbook iFGSM/FGSM init, delta=0,
+#     instead of the default PGD-style random start; --no-random-start is
+#     ignored by mode=random so only run it for ifgsm/fgsm):
+# for MODE in ifgsm fgsm; do
+#   python -m famail_temporal.baselines.run_stifgsm_baseline \
+#     --edit-dir "$H" --mode "$MODE" --seed 0 --device auto --score-fidelity \
+#     --no-random-start
+# done
+
+# 2) Per arm dir: external fairness + tier-2 supply recount (existing CLIs,
+#    no new code — reuse seam per the Task-7 brief).
+for ARM in famail_temporal/results/*_baseline_{ifgsm,fgsm,random}_shenzhen; do
+  python -m famail_temporal.baselines.run_external_fairness \
+    --edit-dir "$ARM" --dataset "baseline-$(basename "$ARM")"
+  python -m famail_temporal.analysis.supply_recount \
+    --edit-dir "$ARM" --city shenzhen --persist-grids
+done
+
+# 3) Assemble the 5-row comparison table (raw, FAMAIL, ifgsm, fgsm, random).
+#    --famail-json / --raw-json are small hand-authored stub files transcribing
+#    the already-published headline numbers (never recomputed) in the schema
+#    documented at the top of assemble_baseline_table.py.
+python -m famail_temporal.baselines.assemble_baseline_table \
+  --arm-dirs famail_temporal/results/*_baseline_ifgsm_shenzhen \
+             famail_temporal/results/*_baseline_fgsm_shenzhen \
+             famail_temporal/results/*_baseline_random_shenzhen \
+  --famail-json famail_temporal/baselines/famail_headline_stub.json \
+  --raw-json famail_temporal/baselines/raw_stub.json \
+  --out famail_temporal/baselines/baseline_table
+```
+
+### Gate — verified 2026-07-09
+
+`python -m pytest famail_temporal/ -q` → **849 passed, 8 skipped** (0 failed);
+`git diff main -- famail_temporal/algorithm/ famail_temporal/evaluation/runner.py | wc -l` →
+**0** (frozen-algorithm gate holds — Task 2 only *imports* `ModificationHistory`,
+modifies nothing in the editing algorithm or the evaluation runner).
