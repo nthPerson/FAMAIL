@@ -140,3 +140,49 @@ def test_run_dose_zero_grids_identity(tmp_path, monkeypatch):
                             "--seed", "0", "--out-root", str(tmp_path)]))
     assert np.array_equal(captured["D"], np.float64(bundle.pickup_3d))
     assert np.array_equal(captured["S"], np.float64(bundle.active_taxis_3d))
+
+
+def _fake_arm_dir(tmp_path, variant, dose, seed, d_fc, d_dp):
+    d = tmp_path / f"x_baseline_demo_oversample_{variant}_d{dose}_s{seed}_shenzhen"
+    (d / "external_fairness").mkdir(parents=True)
+    (d / "metrics.json").write_text(json.dumps({
+        "arm": {"mode": f"oversample-{variant}-d{dose}", "variant": variant,
+                "dose": dose, "seed": seed, "n_edited": dose,
+                "corpus_inflation": dose / 100.0},
+        "fairness": {"f_causal_before": 0.8, "f_causal_after": 0.8 + d_fc,
+                     "f_spatial_before": 0.1, "f_spatial_after": 0.1,
+                     "deltas": {"f_causal": d_fc, "f_spatial": 0.0}},
+    }))
+    (d / "external_fairness" / "external_fairness.json").write_text(json.dumps({
+        "meta": {}, "theil": {"before": 0.2, "after": 0.19, "delta": -0.01,
+                              "delta_ci": [-0.02, 0.0], "n_dropped": 0},
+        "metrics": {"MigrantRatio": {"district_extremes": {
+            "demographic_parity": {"before": 0.5, "after": 0.5 - d_dp,
+                                   "delta": -d_dp, "delta_ci": [-d_dp, -d_dp]},
+            "disparate_impact": {"before": 0.6, "after": 0.65, "delta": 0.05,
+                                 "delta_ci": [0.0, 0.1]},
+        }}},
+    }))
+    return d
+
+
+def test_summarize_arms(tmp_path):
+    dirs = [
+        _fake_arm_dir(tmp_path, "targeted", 5, 0, d_fc=0.01, d_dp=0.02),
+        _fake_arm_dir(tmp_path, "targeted", 10, 0, d_fc=0.02, d_dp=0.04),
+        _fake_arm_dir(tmp_path, "placebo", 10, 0, d_fc=0.001, d_dp=0.001),
+    ]
+    md = rdo.summarize_arms(dirs)
+    assert "oversample-targeted-d10" in md
+    assert "+0.0200" in md                      # targeted d10 ΔF_causal
+    assert "placebo" in md
+
+
+def test_summarize_cli_writes_outputs(tmp_path):
+    dirs = [_fake_arm_dir(tmp_path, "targeted", 5, 0, 0.01, 0.02),
+            _fake_arm_dir(tmp_path, "placebo", 5, 0, 0.0, 0.0)]
+    out = tmp_path / "summary_out"
+    rc = rdo.main(["--summarize", *map(str, dirs), "--out", str(out)])
+    assert rc == 0
+    assert (out / "summary.md").exists()
+    assert (out / "dose_response.png").exists()

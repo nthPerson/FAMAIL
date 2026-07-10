@@ -92,13 +92,20 @@ def _external(bundle, D_after, S_after, arm_dir, meta, seed, B):
 def parse_args(argv=None):
     ap = argparse.ArgumentParser(
         prog="famail_temporal.baselines.run_demographic_oversampling")
-    ap.add_argument("--variant", choices=["targeted", PLACEBO], required=True)
-    ap.add_argument("--dose", type=int, required=True)
+    ap.add_argument("--variant", choices=["targeted", PLACEBO])
+    ap.add_argument("--dose", type=int)
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--bootstrap", type=int, default=1000)
     ap.add_argument("--out-root", type=Path,
                     default=Path(config.PACKAGE_ROOT) / "results")
-    return ap.parse_args(argv)
+    ap.add_argument("--summarize", nargs="+", type=Path, default=None,
+                    help="Arm dirs to summarize into a dose-response table+figure")
+    ap.add_argument("--out", type=Path, default=None,
+                    help="--summarize output dir")
+    args = ap.parse_args(argv)
+    if args.summarize is None and (args.variant is None or args.dose is None):
+        ap.error("--variant and --dose are required (unless --summarize)")
+    return args
 
 
 def run(args) -> Path:
@@ -169,8 +176,78 @@ def run(args) -> Path:
     return arm_dir
 
 
+def _arm_row(arm_dir: Path) -> dict:
+    meta = json.loads((arm_dir / "metrics.json").read_text())
+    ext = json.loads(
+        (arm_dir / "external_fairness" / "external_fairness.json").read_text())
+    mig = ext["metrics"]["MigrantRatio"]["district_extremes"]
+    return {
+        "mode": meta["arm"]["mode"],
+        "variant": meta["arm"]["variant"],
+        "dose": meta["arm"]["dose"],
+        "seed": meta["arm"]["seed"],
+        "corpus_inflation": meta["arm"].get("corpus_inflation"),
+        "d_f_causal": meta["fairness"]["deltas"]["f_causal"],
+        "d_f_spatial": meta["fairness"]["deltas"]["f_spatial"],
+        "d_dp_migrant": mig["demographic_parity"]["delta"],
+        "d_di_migrant": mig["disparate_impact"]["delta"],
+        "d_theil": ext["theil"]["delta"],
+    }
+
+
+def summarize_arms(arm_dirs) -> str:
+    rows = sorted((_arm_row(Path(d)) for d in arm_dirs),
+                  key=lambda r: (r["variant"], r["dose"], r["seed"]))
+    lines = [
+        "# Demographic Oversampling — dose-response summary", "",
+        "| Arm | seed | inflation | ΔF_causal | ΔF_spatial | ΔDP (migrant/extremes) "
+        "| ΔDI (migrant/extremes) | ΔTheil |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|",
+    ]
+    for r in rows:
+        lines.append(
+            f"| {r['mode']} | {r['seed']} | {r['corpus_inflation']:.3f} "
+            f"| {r['d_f_causal']:+.4f} | {r['d_f_spatial']:+.4f} "
+            f"| {r['d_dp_migrant']:+.4f} | {r['d_di_migrant']:+.4f} "
+            f"| {r['d_theil']:+.4f} |")
+    return "\n".join(lines)
+
+
+def _dose_figure(arm_dirs, out_path: Path) -> None:
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    rows = [_arm_row(Path(d)) for d in arm_dirs]
+    fig, ax = plt.subplots(figsize=(6, 4))
+    for variant, marker in (("targeted", "o"), (PLACEBO, "s")):
+        pts = sorted((r for r in rows if r["variant"] == variant),
+                     key=lambda r: r["dose"])
+        if pts:
+            ax.plot([r["dose"] for r in pts], [r["d_f_causal"] for r in pts],
+                    marker=marker, label=f"{variant} ΔF_causal")
+            ax.plot([r["dose"] for r in pts], [r["d_dp_migrant"] for r in pts],
+                    marker=marker, ls="--", label=f"{variant} ΔDP migrant")
+    ax.axhline(0.0, color="grey", lw=0.8)
+    ax.set_xlabel("dose (duplicates)")
+    ax.set_ylabel("Δ (after − before)")
+    ax.legend(fontsize=8)
+    fig.tight_layout()
+    fig.savefig(out_path, dpi=150)
+    plt.close(fig)
+
+
 def main(argv=None) -> int:
-    run(parse_args(argv))
+    args = parse_args(argv)
+    if args.summarize:
+        out = args.out or Path(config.PACKAGE_ROOT) / "baselines" / \
+            "demographic_oversampling_results"
+        out.mkdir(parents=True, exist_ok=True)
+        (out / "summary.md").write_text(summarize_arms(args.summarize))
+        _dose_figure(args.summarize, out / "dose_response.png")
+        print(f"[demo_oversample] wrote {out / 'summary.md'}", flush=True)
+        return 0
+    run(args)
     return 0
 
 
