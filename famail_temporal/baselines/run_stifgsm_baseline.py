@@ -101,6 +101,150 @@ def _select_trajectories(bundle, edit_ids):
     return [by_id[tid] for tid in edit_ids if tid in by_id]
 
 
+# ------------------------------------------------------------ fidelity --------
+def score_fidelity(arm_dir, disc, bundle, *, device, seed: int = 0,
+                   pairs_per_driver: int = 20, batch_size: int = 64) -> dict:
+    """Fidelity-A/B for a packaged arm dir; writes metrics.json["fidelity"].
+
+    READ-THEN-REUSE: mirrors the established Level-1 v2 protocol
+    (`run_level1_table_v2.py:508-534` pairing pass + `:536-552` gate/A and
+    `:570-608` Fidelity-B), reusing its helpers verbatim-in-shape:
+
+    - matched pairs  = (original branch, edited branch), SAME driver, built by
+      `fidelity_eval.build_identity_branch` via `_build_source_pairs`
+      (run_level1_table_v2.py:158) with the driver's real-context pool + profile;
+    - mismatched     = original branches across DIFFERENT drivers (partner
+      d' = next driver, v2's modulo protocol) — the real-anchored gate low;
+    - gate matched   = (original-of-d, disjoint second real sample of d) — the
+      v2 raw-source convention (run_level1_table_v2.py:481-493), falling back
+      to with-replacement sampling when the pool is too small;
+    - Fidelity-B     = 5-key distributional JS (`trajectory_statistics` +
+      `stat_ranges` + `distributional_fidelity`, keys=_STAT_KEYS_V2) plus
+      `terminal_cell_distribution_js`, edited (modified) vs original, with the
+      aggregate = mean over all 6 components (v2's `_b_component`).
+
+    The arm's originals ARE real trajectories, so both the context pool and the
+    gate anchor come from `bundle.trajectories` grouped by driver (originals as
+    fallback for drivers absent from the bundle). All discriminator use is
+    frozen/forward-only through fidelity_eval.
+    """
+    import random
+
+    from famail_temporal.baselines import fidelity_eval as fe
+    from famail_temporal.baselines.gan.drivers import group_by_driver
+    from famail_temporal.baselines.run_level1_table_v2 import (
+        _build_source_pairs, _real_context_tensors, _terminal_pickups_from_trajs,
+    )
+
+    arm_dir = Path(arm_dir)
+    # Internal Mission-3 artifact written by our own package_arm (trusted).
+    with open(arm_dir / "histories.pkl", "rb") as f:
+        histories = pickle.load(f)
+    if not histories:
+        raise ValueError(f"empty histories.pkl in {arm_dir}")
+
+    hist_by_driver = {}
+    for h in histories:
+        hist_by_driver.setdefault(int(h.modified.driver_id), []).append(h)
+    drivers = sorted(hist_by_driver)
+
+    groups = group_by_driver(bundle.trajectories)
+    profiles = _driver_profiles(bundle)
+    zeros11 = np.zeros(11, dtype=np.float32)
+    rng = random.Random(seed)
+
+    # ---- Pass 1: per-driver slot-0 sets + context (v2 lines 456-506) ----
+    real_slot0_by_d, raw_slot0_by_d, edited_slot0_by_d = {}, {}, {}
+    real_context_by_d, prof_by_d = {}, {}
+    for d in drivers:
+        hs = hist_by_driver[d][:pairs_per_driver]
+        real_pool = groups.get(d) or [h.original for h in hist_by_driver[d]]
+        real_context_by_d[d] = _real_context_tensors(real_pool)
+        prof = profiles.get(d)
+        prof_by_d[d] = zeros11 if prof is None else prof
+        real_slot0_by_d[d] = [fe.real_to_disc_tensor(h.original) for h in hs]
+        edited_slot0_by_d[d] = [fe.real_to_disc_tensor(h.modified) for h in hs]
+        # Gate matched partner: DISJOINT second real sample of d (v2:481-493);
+        # too few disjoint -> sample WITH REPLACEMENT (degrades to overlap).
+        orig_ids = {h.original.trajectory_id for h in hist_by_driver[d]}
+        disjoint = [t for t in real_pool if t.trajectory_id not in orig_ids]
+        n_take = len(real_slot0_by_d[d])
+        if len(disjoint) >= n_take:
+            raw_slot0_by_d[d] = [fe.real_to_disc_tensor(t) for t in disjoint[:n_take]]
+        else:
+            raw_slot0_by_d[d] = [
+                fe.real_to_disc_tensor(real_pool[rng.randrange(len(real_pool))])
+                for _ in range(n_take)
+            ]
+
+    # ---- Pass 2: pair d against mismatch partner d' = next driver (v2:508-534).
+    # "raw" source anchors the gate; source_slot0_other for raw is d''s ORIGINAL
+    # branches (originals are real), per the arm protocol's gate-anchor spec.
+    matched = {"raw": [], "edited": []}
+    mismatched = {"raw": [], "edited": []}
+    slot0 = {"raw": raw_slot0_by_d, "edited": edited_slot0_by_d}
+    other = {"raw": real_slot0_by_d, "edited": edited_slot0_by_d}
+    for k, d in enumerate(drivers):
+        dprime = drivers[(k + 1) % len(drivers)]
+        if not real_slot0_by_d[d]:
+            continue
+        for name in ("raw", "edited"):
+            m, mm = _build_source_pairs(
+                real_slot0=real_slot0_by_d[d],
+                source_slot0=slot0[name][d],
+                source_slot0_other=other[name][dprime],
+                real_context=real_context_by_d[d],
+                source_context_other=real_context_by_d[dprime],
+                profile_d=prof_by_d[d], profile_dp=prof_by_d[dprime], rng=rng,
+            )
+            matched[name].extend(m)
+            mismatched[name].extend(mm)
+
+    # ---- gate (real-anchored) + edited Fidelity-A (v2:536-552) ----
+    gate = fe.identity_validation_gate(
+        disc, matched_pairs=matched["raw"], mismatched_pairs=mismatched["raw"],
+        batch_size=batch_size, device=device,
+    )
+    a_match = fe.humid_identity_fidelity(
+        disc, matched["edited"], batch_size=batch_size, device=device)
+    a_mis = fe.humid_identity_fidelity(
+        disc, mismatched["edited"], batch_size=batch_size, device=device)
+    fidelity_a = {
+        "mean": float(a_match["mean"]),
+        "std": float(a_match["std"]),
+        "n": int(a_match["n"]),
+        "separation": float(a_match["mean"] - a_mis["mean"]),
+        "trusted": bool(gate["passed"]),
+    }
+
+    # ---- Fidelity-B: edited vs original (v2:570-608) ----
+    originals = [h.original for h in histories]
+    modifieds = [h.modified for h in histories]
+    raw_stats = [fe.trajectory_statistics(t) for t in originals]
+    edited_stats = [fe.trajectory_statistics(t) for t in modifieds]
+    ranges = fe.stat_ranges([raw_stats, edited_stats], keys=fe._STAT_KEYS_V2)
+    dist = fe.distributional_fidelity(
+        edited_stats, raw_stats, ranges=ranges, keys=fe._STAT_KEYS_V2)
+    tjs = fe.terminal_cell_distribution_js(
+        _terminal_pickups_from_trajs(modifieds),
+        _terminal_pickups_from_trajs(originals),
+    )
+    per_stat = {k: float(v) for k, v in dist["per_stat"].items()}
+    fidelity_b = {
+        "per_stat": per_stat,
+        "terminal_cell_js": float(tjs),
+        # v2's _b_component aggregate: mean over the 5 stat JS + terminal-cell JS.
+        "aggregate": float(np.mean(list(per_stat.values()) + [float(tjs)])),
+    }
+
+    fidelity = {"fidelity_a": fidelity_a, "gate": gate, "fidelity_b": fidelity_b}
+    meta_path = arm_dir / "metrics.json"
+    meta = json.loads(meta_path.read_text()) if meta_path.exists() else {}
+    meta["fidelity"] = fidelity
+    meta_path.write_text(json.dumps(meta, indent=2))
+    return fidelity
+
+
 # ------------------------------------------------------------------ cli -------
 def parse_args(argv=None):
     p = argparse.ArgumentParser(
@@ -121,6 +265,10 @@ def parse_args(argv=None):
     p.add_argument("--no-random-start", dest="random_start", action="store_false",
                    help="Use textbook-vanilla iFGSM/FGSM init (delta=0) instead of "
                         "PGD-style random start; ignored by mode=random.")
+    p.add_argument("--score-fidelity", action="store_true",
+                   help="Also score identity Fidelity-A (+ real-anchored gate) and "
+                        "discriminator-free Fidelity-B on the packaged arm, writing "
+                        "metrics.json['fidelity'].")
     p.set_defaults(random_start=True)
     return p.parse_args(argv)
 
@@ -167,6 +315,13 @@ def run_baseline(args) -> Path:
     meta = json.loads(meta_path.read_text())
     meta["fairness"] = fairness
     meta_path.write_text(json.dumps(meta, indent=2))
+
+    if args.score_fidelity:
+        fidelity = score_fidelity(arm_dir, disc, bundle,
+                                  device=args.device, seed=args.seed)
+        print(f"[baseline] fidelity_a={fidelity['fidelity_a']['mean']:.4f} "
+              f"gate_passed={fidelity['gate']['passed']} "
+              f"fidelity_b={fidelity['fidelity_b']['aggregate']:.4f}")
 
     d_causal = fairness["deltas"]["f_causal"]
     d_spatial = fairness["deltas"]["f_spatial"]
