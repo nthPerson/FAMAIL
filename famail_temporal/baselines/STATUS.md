@@ -3,7 +3,7 @@
 Living status of the GAN-baseline work that motivates and evaluates FAMAIL trajectory editing.
 Design spec: [`docs/superpowers/specs/2026-05-27-famail-gan-baselines-design.md`](../../docs/superpowers/specs/2026-05-27-famail-gan-baselines-design.md).
 
-**Last updated:** 2026-06-08
+**Last updated:** 2026-07-10
 
 ---
 
@@ -228,9 +228,9 @@ modifies nothing in the editing algorithm or the evaluation runner).
   originally scored-then-stepped, so the single FGSM step was discarded and the arm returned its
   initialization; fixed (post-step scoring pass) + a dedicated gradient-path test. Any FGSM numbers must come
   from the corrected engine (commit `6da3d27`+).
-- **Fidelity is trivially high for a resampling baseline.** For the planned Demographic-Oversampling arm
-  (below), duplicated trajectories *are* real, so Fidelity-A ≈ perfect / Fidelity-B ≈ 0 by construction — the
-  axis of interest there is fairness lift vs. corpus inflation / fabricated demand, not the discriminator.
+- **Fidelity is trivially high for a resampling baseline.** For the Demographic-Oversampling arm (below,
+  built + run), duplicated trajectories *are* real, so Fidelity-A ≈ perfect / Fidelity-B ≈ 0 by construction —
+  the axis of interest there is fairness lift vs. corpus inflation / fabricated demand, not the discriminator.
 
 ### 4th arm — Demographic Oversampling (BUILT + RUN)
 
@@ -252,6 +252,12 @@ runner. Design spec:
 [`docs/superpowers/specs/2026-07-09-demographic-oversampling-baseline-design.md`](../../docs/superpowers/specs/2026-07-09-demographic-oversampling-baseline-design.md);
 plan:
 [`docs/superpowers/plans/2026-07-09-demographic-oversampling-baseline.md`](../../docs/superpowers/plans/2026-07-09-demographic-oversampling-baseline.md).
+
+**Deferred:** the spec §3.3 comparison-table row (this arm placed beside raw/FAMAIL/ifgsm/fgsm/random via
+`assemble_baseline_table`) is not yet assembled — ingestion of this arm's `metrics.json` schema is already
+tested (`test_arm_metrics_ingest_into_baseline_table`), but the row is held until the three perturbation
+arms' (ifgsm/fgsm/random) GPU runs complete, so the full 6-row table lands together with the rest of the
+Mission-3 GPU run-book.
 
 ### Run-book (executed 2026-07-10, CPU only, Shenzhen v1)
 
@@ -295,9 +301,17 @@ $PY -m famail_temporal.baselines.run_demographic_oversampling \
 **Headline (targeted vs. placebo, matched budget k/dose = 10,000):** targeted mean ΔF_causal =
 **+0.0153** (seeds +0.0175 / +0.0141 / +0.0144), dose-monotone (+0.0059 @2,500 → +0.0097 @5,000 →
 +0.0153 @10,000), vs. **placebo mean ΔF_causal = −0.0172** — fabrication *without* demographic
-targeting **degrades** F_causal. Placebo ΔDP explodes (+1.49 @5,000, +2.77 to +2.81 @10,000):
-uniform fabricated supply spikes advantaged-cell service ratios (floored-demand cells dominate the
-gap). Targeted ΔDI improves monotonically with dose (+0.035 → +0.083); targeted ΔDP is mixed (−0.18
+targeting **degrades** F_causal. Placebo ΔDP explodes (+1.49 @5,000, +2.77 to +2.81 @10,000): measured
+directly from the d10,000 s0 arms' `external_fairness/external_fairness.json`
+(`metrics.MigrantRatio.district_extremes.supply_demand_ratio`), uniform fabricated supply raises
+`mean_advantaged` by **+3.22** (21.27 → 24.49) while `mean_disadvantaged`
+rises only **+0.45** (7.07 → 7.52) — most of the placebo's fabricated supply lands in already-advantaged
+cells (consistent with, but not solely explained by, `service_ratio_Y` dividing by `max(demand,
+DEMAND_FLOOR)`: floored-demand cells amplify any added supply). Even **targeted** oversampling raises
+`mean_advantaged` by **+3.15** (21.27 → 24.42) alongside `mean_disadvantaged`'s own +3.09 lift (7.07 →
+10.16) — demographic targeting concentrates the *demand-side* draw but the additive *supply* trails still
+leak into advantaged cells regardless of variant. Targeted ΔDI improves monotonically with dose (+0.035 →
++0.083); targeted ΔDP is mixed (−0.18
 at low dose, +0.06 to +0.27 at d10,000 — DP is the scale-sensitive gap metric, consistent with the
 DP≡gap caveat in `PAPER/external-metrics/FINDINGS.md`). ΔTheil is small and positive in every arm.
 
@@ -319,15 +333,37 @@ corpus inflation.
 - **Corpus inflation equals the dose**: `n_edited / n_corpus`, reported per arm, never hidden. At the
   real Shenzhen PRIMARY corpus (`n_corpus = 95,297` seeking trajectories), d10,000 = **10.5%**
   inflation of the whole corpus.
+- **SUPPLY_FLOOR asymmetry**: `additive_supply` adds phantom presence on top of the already
+  floor-clamped production `active_taxis_3d` grid (`config.SUPPLY_FLOOR = 0.1`, applied in
+  `data/aggregation.py`'s `aggregate_active_taxis`), not on top of an unclamped true recount. In cells
+  where the true recount sat below the floor, the additive S′ can therefore slightly exceed what a true
+  recount-plus-phantoms would show — a conservative convention for the FAMAIL contrast (it can only
+  flatter, never penalize, the naive baseline), and it applies identically to both the before and after
+  sides so it cannot bias the reported delta.
 
 **Additional diagnostics disclosed per arm (review-verified against `metrics.json`):**
 - `origin_escape_frac` (fraction of shifted origins that leave the targeted disadvantaged region) =
   **0.177–0.189** across doses/seeds — higher than naively expected; a boundary-geometry property of
   the rigid radius-1 shift near region edges, consistent across all targeted arms (not a bug).
-- `n_with_replacement` = **1,759** at d10,000 (~17.6% of the 10,000 draws) — the migrant/housing/comp
-  axis pools are quota-split ≈3,334 each, and at least one axis's disadvantaged-origin pool is smaller
-  than its quota, so the with-replacement fallback engages exactly as the spec's error-handling
-  section requires (flagged, never silent).
+- `n_with_replacement` = **1,759** at d10,000 (~17.6% of the 10,000 draws), all of them in the
+  **MigrantRatio** stratum (0 for AvgHousingPricePerSqM / CompPerCapita; measured from
+  `duplicates.pkl` of the `..._targeted_d10000_s0_shenzhen` arm dir — `Counter(s.stratum for s in specs
+  if s.with_replacement)` → `{"MigrantRatio": 1759}`) — the with-replacement fallback engages exactly as
+  the spec's error-handling section requires (flagged, never silent). Root cause (verified via
+  `eligible_pools`, real Shenzhen PRIMARY corpus): MigrantRatio's disadvantaged-origin pool and
+  CompPerCapita's are the **same 4,907 trajectories** (`pools["MigrantRatio"] == pools["CompPerCapita"]`
+  exactly, disjoint from Housing's 41,964-trajectory pool). Because `EQUITY_AXES` order draws
+  CompPerCapita's 3,333-quota first from that shared pool, only 1,574 members remain unclaimed when
+  MigrantRatio's turn comes (`quota 3,333 − 1,574 without-replacement = 1,759 with-replacement`,
+  matching the measured count exactly) — the corpus cannot supply the budget-parity dose for this axis
+  without re-duplication once a sibling axis has already drawn from the identical pool. Within
+  MigrantRatio's 3,333 specs only **2,590 distinct source trajectories** appear (measured: `len({s.source_index
+  for s in specs if s.stratum == "MigrantRatio"})`); across all 10,000 specs in the arm only **8,241**
+  distinct source trajectories appear in total (`10,000 − 1,759`, exact — every with-replacement draw in
+  this run happened to land on a trajectory some non-with-replacement draw had already claimed, since the
+  shared 4,907-trajectory pool is fully exhausted between CompPerCapita's and MigrantRatio's own
+  non-with-replacement allocations). A limitation of naive oversampling worth stating plainly: FAMAIL needs
+  no re-duplication to reach its ΔF_causal gain at the same budget.
 - `adjacency_violation_rate` = **0.0** in all 9 arms — the rigid whole-trajectory shift preserves
   internal adjacency exactly, as designed.
 
