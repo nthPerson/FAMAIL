@@ -213,25 +213,47 @@ def summarize_arms(arm_dirs) -> str:
     return "\n".join(lines)
 
 
+def _aggregate_by_dose(rows, variant: str, key: str):
+    """Mean + [lo, hi] min-max error bars per dose, for one variant/metric,
+    across repeated (variant, dose) rows (multiple seeds)."""
+    by_dose: dict[int, list[float]] = {}
+    for r in rows:
+        if r["variant"] == variant:
+            by_dose.setdefault(r["dose"], []).append(r[key])
+    doses = sorted(by_dose)
+    vals = [by_dose[d] for d in doses]
+    means = np.array([float(np.mean(v)) for v in vals])
+    lo = means - np.array([float(np.min(v)) for v in vals])
+    hi = np.array([float(np.max(v)) for v in vals]) - means
+    return doses, means, np.vstack([lo, hi])
+
+
 def _dose_figure(arm_dirs, out_path: Path) -> None:
+    """Two side-by-side panels sharing the dose x-axis: ΔF_causal (left) and
+    ΔDP migrant/extremes (right). Repeated (variant, dose) rows (multiple
+    seeds) are aggregated to a mean with error bars spanning min-max."""
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
     rows = [_arm_row(Path(d)) for d in arm_dirs]
-    fig, ax = plt.subplots(figsize=(6, 4))
+    fig, (ax_fc, ax_dp) = plt.subplots(1, 2, figsize=(10, 4), sharex=True)
     for variant, marker in (("targeted", "o"), (PLACEBO, "s")):
-        pts = sorted((r for r in rows if r["variant"] == variant),
-                     key=lambda r: r["dose"])
-        if pts:
-            ax.plot([r["dose"] for r in pts], [r["d_f_causal"] for r in pts],
-                    marker=marker, label=f"{variant} ΔF_causal")
-            ax.plot([r["dose"] for r in pts], [r["d_dp_migrant"] for r in pts],
-                    marker=marker, ls="--", label=f"{variant} ΔDP migrant")
-    ax.axhline(0.0, color="grey", lw=0.8)
-    ax.set_xlabel("dose (duplicates)")
-    ax.set_ylabel("Δ (after − before)")
-    ax.legend(fontsize=8)
+        doses, means, err = _aggregate_by_dose(rows, variant, "d_f_causal")
+        if doses:
+            ax_fc.errorbar(doses, means, yerr=err, marker=marker, capsize=3,
+                           label=variant)
+        doses, means, err = _aggregate_by_dose(rows, variant, "d_dp_migrant")
+        if doses:
+            ax_dp.errorbar(doses, means, yerr=err, marker=marker, capsize=3,
+                           label=variant)
+
+    for ax, title in ((ax_fc, "ΔF_causal"), (ax_dp, "ΔDP (migrant/extremes)")):
+        ax.axhline(0.0, color="grey", lw=0.8)
+        ax.set_xlabel("dose (duplicates)")
+        ax.set_ylabel("Δ (after − before)")
+        ax.set_title(title, fontsize=9)
+        ax.legend(fontsize=8)
     fig.tight_layout()
     fig.savefig(out_path, dpi=150)
     plt.close(fig)
