@@ -1,5 +1,6 @@
 """Tests for the ST-iFGSM/FGSM/random baseline attack engine."""
 import json
+import math
 import pickle
 
 import numpy as np
@@ -177,4 +178,9 @@ def test_package_arm_roundtrip(tmp_path):
     assert float(hists[0].modified.states[-1].x_grid).is_integer()
     meta = json.loads((arm_dir / "metrics.json").read_text())
     assert meta["arm"]["mode"] == "random"
-    assert "adjacency_violation_rate" in meta["arm"]
+    assert meta["arm"]["n_edited"] == 2
+    assert isinstance(meta["arm"]["mean_final_p"], float)
+    assert math.isfinite(meta["arm"]["mean_final_p"])
+    assert isinstance(meta["arm"]["mean_iterations"], float)
+    assert meta["arm"]["mean_iterations"] >= 0
+    assert 0.0 <= meta["arm"]["adjacency_violation_rate"] <= 1.0
