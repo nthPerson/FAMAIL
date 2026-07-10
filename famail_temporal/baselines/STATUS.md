@@ -215,3 +215,29 @@ python -m famail_temporal.baselines.assemble_baseline_table \
 `git diff main -- famail_temporal/algorithm/ famail_temporal/evaluation/runner.py | wc -l` →
 **0** (frozen-algorithm gate holds — Task 2 only *imports* `ModificationHistory`,
 modifies nothing in the editing algorithm or the evaluation runner).
+
+### Paper-facing notes (carry into the write-up)
+
+- **Naming — these arms are "iFGSM / FGSM with random restart," NOT "vanilla ST-iFGSM."** The frozen
+  driver-identity discriminator is a stationary point at an identical (original, original) pair — its
+  |emb₁−emb₂| head has zero subgradient there — so a textbook vanilla iFGSM/FGSM starting at δ=0 cannot move
+  and produces a *no-op* editor. The gradient arms therefore start from a PGD-style random point inside the
+  ε-ball by necessity. `--no-random-start` is retained precisely to **demonstrate the vanilla no-op
+  empirically** (a legitimate ablation row). The paper must label the arms accordingly.
+- **Correctness catch (methodology rigor).** The final whole-branch review caught that the attack loop
+  originally scored-then-stepped, so the single FGSM step was discarded and the arm returned its
+  initialization; fixed (post-step scoring pass) + a dedicated gradient-path test. Any FGSM numbers must come
+  from the corrected engine (commit `6da3d27`+).
+- **Fidelity is trivially high for a resampling baseline.** For the planned Demographic-Oversampling arm
+  (below), duplicated trajectories *are* real, so Fidelity-A ≈ perfect / Fidelity-B ≈ 0 by construction — the
+  axis of interest there is fairness lift vs. corpus inflation / fabricated demand, not the discriminator.
+
+### Planned 4th arm — Demographic Oversampling (new branch)
+
+A **resampling** baseline (not perturbation): duplicate real seeking trajectories originating in under-served
+demographic cells to shift the service balance — the naive cousin of the **supply-lift** editor and a direct
+empirical probe of the leveling-down / demand-endogeneity limitation. Selected from the lit-scan
+(`DATA_AUG_BASELINE_CANDIDATES.md`, Candidate 4). Load-bearing design decision: rebuild the grid **additively
+with BOTH demand (pickups) and supply (seeking presence, via tier-2 supply recount)** — demand-only is
+perverse. To be built on a fresh branch off `main` via brainstorm→spec→plan; scored by the same harness + a
+random-oversampling placebo.

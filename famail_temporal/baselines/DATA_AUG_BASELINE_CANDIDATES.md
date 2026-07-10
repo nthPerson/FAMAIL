@@ -134,6 +134,17 @@ three, to show no fairness improvement.
 
 ## Candidate 4 — Fairness-aware data augmentation via demographic subgroup oversampling
 
+> **✅ SELECTED 2026-07-09 (user decision) — human name: "Demographic Oversampling".** To be implemented on a
+> NEW branch off `main` via brainstorm→spec→plan. Locked-in-principle design: a *resampling* baseline that
+> duplicates (with light jitter) real seeking trajectories originating in under-served demographic cells;
+> rebuild the fairness grid **additively with BOTH demand (pickups) AND supply (seeking presence, via the
+> tier-2 supply recount)** — the load-bearing decision; demand-only is perverse. Frame as the naive baseline
+> for the **supply-lift** editor (lifting-up) and a direct probe of the demand-endogeneity / leveling-down
+> limitation; report a small oversampling dose-response + a random-oversampling placebo, on the same fidelity
+> + external-metrics harness. Disclose: duplicates trivially pass fidelity (they are real), so the cost is
+> corpus inflation / fabricated (unobserved) demand, not realism. Cost S–M (the memo's "S" is optimistic once
+> the additive grid builder + supply recount + dose levels are included).
+
 **Citation:** Ioannis Pastaltzidis, N. Dimitriou, K. Quezada-Tavárez, S. Aidinlis, Thomas
 Marquenie, Agata Gurzawska, D. Tzovaras. "Data augmentation for fairness-aware machine learning:
 Preventing algorithmic bias in law enforcement systems." *2022 ACM Conference on Fairness,
