@@ -1,8 +1,15 @@
 """Tests for the ST-iFGSM/FGSM/random baseline attack engine."""
+import json
+import pickle
+
 import numpy as np
 import torch
 
-from famail_temporal.baselines.stifgsm_baseline import AttackOutcome, attack_trajectories
+from famail_temporal.algorithm.modifier import ModificationHistory
+from famail_temporal.baselines.stifgsm_baseline import (
+    AttackOutcome, adjacency_violation_rate, attack_trajectories,
+    discretize_outcome, package_arm,
+)
 from famail_temporal.utils.trajectory import Trajectory, TrajectoryState
 
 
@@ -132,3 +139,42 @@ def test_fgsm_equals_ifgsm_single_fullstep_no_random_start():
                             epsilon=2.0, step=2.0, max_iterations=1, seed=0,
                             random_start=False)
     np.testing.assert_array_equal(a[0].perturbed_xy, b[0].perturbed_xy)
+
+
+def test_discretize_rounds_clamps_and_freezes_time():
+    traj = _traj(1, n_states=3, x0=0.4, y0=88.6)   # y walks past the 90-row edge
+    out = AttackOutcome(trajectory_id=1,
+                        perturbed_xy=np.array([[-1.2, 88.6], [0.4, 89.7], [2.6, 91.2]]),
+                        final_p=0.1, iterations_run=3,
+                        delta=np.zeros((3, 2)))
+    d = discretize_outcome(traj, out, grid_dims=(48, 90))
+    xs = [(s.x_grid, s.y_grid) for s in d.states]
+    assert xs == [(0.0, 89.0), (0.0, 89.0), (3.0, 89.0)]        # round + clamp in-grid
+    assert all(float(v[0]).is_integer() and float(v[1]).is_integer() for v in xs)
+    assert [s.time_bucket for s in d.states] == [s.time_bucket for s in traj.states]
+    assert d.trajectory_id == traj.trajectory_id and d.driver_id == traj.driver_id
+
+
+def test_adjacency_violation_rate_crafted():
+    ok = _traj(1, n_states=3)                       # unit steps -> compliant
+    bad = Trajectory(trajectory_id=2, driver_id=7, states=[
+        TrajectoryState(1.0, 1.0, 3, 1), TrajectoryState(4.0, 1.0, 3, 1)])  # dx=3
+    assert adjacency_violation_rate([ok]) == 0.0
+    assert adjacency_violation_rate([bad]) == 1.0
+    assert adjacency_violation_rate([ok, bad]) == 0.5
+
+
+def test_package_arm_roundtrip(tmp_path):
+    trajs = [_traj(1), _traj(2, n_states=3)]
+    outs = attack_trajectories(trajs, StubDisc(), _profiles(), "random",
+                               epsilon=2.0, seed=0)
+    arm_dir = package_arm(trajs, outs, tmp_path / "arm",
+                          arm_config={"mode": "random", "epsilon": 2.0, "seed": 0})
+    with open(arm_dir / "histories.pkl", "rb") as f:
+        hists = pickle.load(f)
+    assert len(hists) == 2 and isinstance(hists[0], ModificationHistory)
+    assert hists[0].original.states[0].x_grid == trajs[0].states[0].x_grid
+    assert float(hists[0].modified.states[-1].x_grid).is_integer()
+    meta = json.loads((arm_dir / "metrics.json").read_text())
+    assert meta["arm"]["mode"] == "random"
+    assert "adjacency_violation_rate" in meta["arm"]

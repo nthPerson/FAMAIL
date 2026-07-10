@@ -20,13 +20,18 @@ never uses gradients.
 """
 from __future__ import annotations
 
+import copy
+import json
+import pickle
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Dict, List
 
 import numpy as np
 import torch
 
 from famail_temporal import config
+from famail_temporal.algorithm.modifier import ModificationHistory
 from famail_temporal.utils.trajectory import Trajectory
 
 
@@ -172,3 +177,63 @@ def attack_trajectories(
                 delta=best_delta[i, 0, :s].detach().cpu().double().numpy(),
             ))
     return outcomes
+
+
+def discretize_outcome(traj: Trajectory, outcome: AttackOutcome,
+                       grid_dims) -> Trajectory:
+    """Round attacked coords to grid ints, clamp in-grid. Vanilla: NO repair."""
+    gx, gy = int(grid_dims[0]), int(grid_dims[1])
+    mod = copy.deepcopy(traj)
+    for i, s in enumerate(mod.states):
+        s.x_grid = float(min(max(round(float(outcome.perturbed_xy[i, 0])), 0), gx - 1))
+        s.y_grid = float(min(max(round(float(outcome.perturbed_xy[i, 1])), 0), gy - 1))
+    return mod
+
+
+def adjacency_violation_rate(trajs: List[Trajectory]) -> float:
+    """Fraction of trajectories with any consecutive step max(|dx|,|dy|) > 1."""
+    if not trajs:
+        return 0.0
+    bad = 0
+    for t in trajs:
+        for a, b in zip(t.states, t.states[1:]):
+            if max(abs(b.x_grid - a.x_grid), abs(b.y_grid - a.y_grid)) > 1:
+                bad += 1
+                break
+    return bad / len(trajs)
+
+
+def package_arm(originals: List[Trajectory], outcomes: List[AttackOutcome],
+                out_dir, arm_config: dict) -> Path:
+    """Discretize attacked trajectories and write an arm results dir.
+
+    Writes ``histories.pkl`` (a ``List[ModificationHistory]``, pickled — an
+    internal Mission-3 pipeline artifact produced and consumed only by this
+    codebase's own Task 3 loader, not data from an untrusted source) and
+    ``metrics.json`` (a JSON config-snapshot + per-arm attack-stats skeleton).
+    """
+    out_dir = Path(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    grid_dims = config.GRID_DIMS
+    histories, modified = [], []
+    for traj, out in zip(originals, outcomes):
+        mod = discretize_outcome(traj, out, grid_dims)
+        modified.append(mod)
+        histories.append(ModificationHistory(
+            original=copy.deepcopy(traj), modified=mod,
+            converged=True, total_iterations=out.iterations_run,
+            final_objective=out.final_p,
+        ))
+    with open(out_dir / "histories.pkl", "wb") as f:
+        pickle.dump(histories, f)
+    meta = {
+        "arm": {
+            **arm_config,
+            "n_edited": len(histories),
+            "adjacency_violation_rate": adjacency_violation_rate(modified),
+            "mean_final_p": float(np.mean([o.final_p for o in outcomes])) if outcomes else float("nan"),
+            "mean_iterations": float(np.mean([o.iterations_run for o in outcomes])) if outcomes else 0.0,
+        },
+    }
+    (out_dir / "metrics.json").write_text(json.dumps(meta, indent=2))
+    return out_dir
