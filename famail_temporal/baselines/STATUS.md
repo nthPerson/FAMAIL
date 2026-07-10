@@ -232,12 +232,105 @@ modifies nothing in the editing algorithm or the evaluation runner).
   (below), duplicated trajectories *are* real, so Fidelity-A ≈ perfect / Fidelity-B ≈ 0 by construction — the
   axis of interest there is fairness lift vs. corpus inflation / fabricated demand, not the discriminator.
 
-### Planned 4th arm — Demographic Oversampling (new branch)
+### 4th arm — Demographic Oversampling (BUILT + RUN)
 
-A **resampling** baseline (not perturbation): duplicate real seeking trajectories originating in under-served
-demographic cells to shift the service balance — the naive cousin of the **supply-lift** editor and a direct
-empirical probe of the leveling-down / demand-endogeneity limitation. Selected from the lit-scan
-(`DATA_AUG_BASELINE_CANDIDATES.md`, Candidate 4). Load-bearing design decision: rebuild the grid **additively
-with BOTH demand (pickups) and supply (seeking presence, via tier-2 supply recount)** — demand-only is
-perverse. To be built on a fresh branch off `main` via brainstorm→spec→plan; scored by the same harness + a
-random-oversampling placebo.
+A **resampling** baseline (not perturbation): duplicate real seeking trajectories originating in
+demographically disadvantaged regions (all three `EQUITY_AXES`, region-extremes convention) under fresh
+phantom driver IDs, rebuild the demand + supply grids **additively on both channels** (demand-only is
+perverse — it adds demand to already under-served cells and lowers their service ratio), and rescore the
+identical way as the other three Mission-3 arms. The naive cousin of the **supply-lift (trim+lift)** editor
+and a direct empirical probe of the demand-endogeneity / leveling-down limitation
+(`PAPER/external-metrics/FINDINGS.md`) — a duplicate's pickup is *unobserved* demand, and the arm quantifies
+how much apparent fairness pure fabrication buys, at what corpus-inflation cost. Selected from the lit-scan
+(`DATA_AUG_BASELINE_CANDIDATES.md`, Candidate 4, Pastaltzidis et al. FAccT'22); scored alongside a
+random-oversampling **placebo** (identical machinery, sources drawn uniformly over the whole corpus) that
+isolates demographic *targeting* from mere corpus *inflation*.
+
+Module `famail_temporal/baselines/{demographic_oversampling,run_demographic_oversampling}.py` (+2 test
+files, 23 new tests) built via Tasks 1-6 on this branch, zero changes to the frozen editor or evaluation
+runner. Design spec:
+[`docs/superpowers/specs/2026-07-09-demographic-oversampling-baseline-design.md`](../../docs/superpowers/specs/2026-07-09-demographic-oversampling-baseline-design.md);
+plan:
+[`docs/superpowers/plans/2026-07-09-demographic-oversampling-baseline.md`](../../docs/superpowers/plans/2026-07-09-demographic-oversampling-baseline.md).
+
+### Run-book (executed 2026-07-10, CPU only, Shenzhen v1)
+
+```bash
+# 1) Symlink the gitignored data into the worktree (see plan Task 6 Step 1), then smoke-test
+#    with a dose-100 run before the real matrix.
+
+# 2) Run the 9-arm matrix (sequential, CPU; minutes per arm).
+PY=/home/robert/FAMAIL/.venv/bin/python
+for spec in "targeted 2500 0" "targeted 5000 0" "targeted 10000 0" \
+            "targeted 10000 1" "targeted 10000 2" \
+            "placebo 5000 0" "placebo 10000 0" "placebo 10000 1" "placebo 10000 2"; do
+  set -- $spec
+  $PY -m famail_temporal.baselines.run_demographic_oversampling \
+      --variant "$1" --dose "$2" --seed "$3" \
+      2>&1 | tee -a famail_temporal/results/demo_oversample_runs.log
+done
+
+# 3) Assemble the summary (dose-response table + figure).
+$PY -m famail_temporal.baselines.run_demographic_oversampling \
+  --summarize famail_temporal/results/*_baseline_demo_oversample_*_shenzhen \
+  --out famail_temporal/baselines/demographic_oversampling_results
+```
+
+### Results — 9-arm dose-response (2026-07-10)
+
+`famail_temporal/baselines/demographic_oversampling_results/summary.md`:
+
+| Arm | seed | inflation | ΔF_causal | ΔF_spatial | ΔDP (migrant/extremes) | ΔDI (migrant/extremes) | ΔTheil |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| oversample-placebo-d5000 | 0 | 0.052 | -0.0099 | +0.0078 | +1.4904 | -0.0154 | +0.0071 |
+| oversample-placebo-d10000 | 0 | 0.105 | -0.0179 | +0.0139 | +2.7730 | -0.0255 | +0.0118 |
+| oversample-placebo-d10000 | 1 | 0.105 | -0.0168 | +0.0140 | +2.7733 | -0.0262 | +0.0110 |
+| oversample-placebo-d10000 | 2 | 0.105 | -0.0169 | +0.0136 | +2.8115 | -0.0268 | +0.0125 |
+| oversample-targeted-d2500 | 0 | 0.026 | +0.0059 | +0.0018 | -0.1759 | +0.0348 | +0.0016 |
+| oversample-targeted-d5000 | 0 | 0.052 | +0.0097 | +0.0030 | -0.1737 | +0.0557 | +0.0035 |
+| oversample-targeted-d10000 | 0 | 0.105 | +0.0175 | +0.0052 | +0.0601 | +0.0835 | +0.0087 |
+| oversample-targeted-d10000 | 1 | 0.105 | +0.0141 | +0.0051 | +0.2662 | +0.0762 | +0.0083 |
+| oversample-targeted-d10000 | 2 | 0.105 | +0.0144 | +0.0054 | +0.1930 | +0.0805 | +0.0086 |
+
+**Headline (targeted vs. placebo, matched budget k/dose = 10,000):** targeted mean ΔF_causal =
+**+0.0153** (seeds +0.0175 / +0.0141 / +0.0144), dose-monotone (+0.0059 @2,500 → +0.0097 @5,000 →
++0.0153 @10,000), vs. **placebo mean ΔF_causal = −0.0172** — fabrication *without* demographic
+targeting **degrades** F_causal. Placebo ΔDP explodes (+1.49 @5,000, +2.77 to +2.81 @10,000):
+uniform fabricated supply spikes advantaged-cell service ratios (floored-demand cells dominate the
+gap). Targeted ΔDI improves monotonically with dose (+0.035 → +0.083); targeted ΔDP is mixed (−0.18
+at low dose, +0.06 to +0.27 at d10,000 — DP is the scale-sensitive gap metric, consistent with the
+DP≡gap caveat in `PAPER/external-metrics/FINDINGS.md`). ΔTheil is small and positive in every arm.
+
+**FAMAIL comparator (side by side, not recomputed):** the trim+lift SZ headline
+(`famail_temporal/results/2026-07-08T14-03-03_supply_lift_v1_shz_primary_filtered`) is **ΔF_causal =
++0.0222**. At the same k = 10,000 edit/duplicate budget, this naive baseline reaches **+0.0153 mean**
+while fabricating **10.5% of the corpus**; FAMAIL redistributes real observed behavior at **zero**
+corpus inflation.
+
+### Disclosures (spec §2/§3.3, carried verbatim)
+
+- **Phantom drivers and their pickups are fabricated, unobserved supply and demand** — each duplicate
+  is a synthetic driver (fresh namespaced plate ID) added under the "an extra taxi ran the same
+  seeking run" story; nothing about it was actually observed in the data.
+- **Duplicated trajectories trivially pass fidelity checks by construction** — they are (near-)copies
+  of real trajectories, so Fidelity-A/B are not meaningfully discriminative here. **Fidelity is NOT
+  scored for this arm** (the axis of interest is fairness lift vs. corpus inflation / fabricated
+  demand, not the discriminator).
+- **Corpus inflation equals the dose**: `n_edited / n_corpus`, reported per arm, never hidden. At the
+  real Shenzhen PRIMARY corpus (`n_corpus = 95,297` seeking trajectories), d10,000 = **10.5%**
+  inflation of the whole corpus.
+
+**Additional diagnostics disclosed per arm (review-verified against `metrics.json`):**
+- `origin_escape_frac` (fraction of shifted origins that leave the targeted disadvantaged region) =
+  **0.177–0.189** across doses/seeds — higher than naively expected; a boundary-geometry property of
+  the rigid radius-1 shift near region edges, consistent across all targeted arms (not a bug).
+- `n_with_replacement` = **1,759** at d10,000 (~17.6% of the 10,000 draws) — the migrant/housing/comp
+  axis pools are quota-split ≈3,334 each, and at least one axis's disadvantaged-origin pool is smaller
+  than its quota, so the with-replacement fallback engages exactly as the spec's error-handling
+  section requires (flagged, never silent).
+- `adjacency_violation_rate` = **0.0** in all 9 arms — the rigid whole-trajectory shift preserves
+  internal adjacency exactly, as designed.
+
+Dose-response figure:
+[`demographic_oversampling_results/dose_response.png`](demographic_oversampling_results/dose_response.png)
+(targeted vs. placebo ΔF_causal and ΔDP-migrant lines vs. dose).
