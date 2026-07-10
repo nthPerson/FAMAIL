@@ -179,3 +179,96 @@ def test_escape_fractions_placebo_none():
     fr = dov.escape_fractions([spec], [ph],
                               dov.disadvantaged_cell_masks(_selected_grid()))
     assert fr == {"origin_escape_frac": None, "pickup_outside_frac": None}
+
+
+def _stub_bundle(gx=48, gy=90, n_days=2):
+    from famail_temporal import config as cfg
+    from famail_temporal.data.aggregation import block_n_hours
+    T = cfg.T
+    return SimpleNamespace(
+        pickup_3d=np.zeros((gx, gy, T), dtype=np.float32),
+        active_taxis_3d=np.zeros((gx, gy, T), dtype=np.float32),
+        n_hours_per_block=np.array([block_n_hours(t) for t in range(T)],
+                                   dtype=np.int32),
+        n_days=n_days,
+    )
+
+
+def test_additive_demand_mass_conservation_and_placement():
+    from famail_temporal.baselines.datasets import pickup_mass, pickup_unit_of
+    b = _stub_bundle()
+    phantoms = [_traj([(3, 3), (4, 4)], "p1"), _traj([(7, 8), (9, 9)], "p2")]
+    D = dov.additive_demand(b, phantoms)
+    assert D.dtype == np.float64
+    expected = sum(pickup_mass(b, pickup_unit_of(ph)[2]) for ph in phantoms)
+    assert np.isclose(D.sum() - np.float64(b.pickup_3d).sum(), expected)
+    cx, cy, t = pickup_unit_of(phantoms[0])
+    assert D[cx, cy, t] == pytest.approx(pickup_mass(b, t))
+
+
+def test_additive_supply_distinct_count_semantics():
+    b = _stub_bundle()
+    # two states of ONE phantom in the same cell/hour -> counted ONCE
+    ph = _traj([(10, 10), (10, 10), (11, 10)], "p3", time_bucket=13)
+    S = dov.additive_supply(b, [ph])
+    from famail_temporal.data.aggregation import (
+        hour_to_block_index, time_bucket_to_hour,
+    )
+    t = hour_to_block_index(time_bucket_to_hour(13))
+    unit = 1.0 / (float(b.n_hours_per_block[t]) * b.n_days)
+    # states[-1] (the pickup) is EXCLUDED from supply; the two remaining
+    # states are both at (10, 10) -> the 5x5 neighborhood around each is
+    # identical -> every covered cell gets exactly ONE unit, not two.
+    assert S[10, 10, t] == pytest.approx(unit)
+    assert S[8, 8, t] == pytest.approx(unit)          # 5x5 reach (K=2)
+    assert S[13, 10, t] == 0.0                        # outside the neighborhood
+    # two DISTINCT phantoms in the same cell/hour -> counted TWICE
+    ph2 = _traj([(10, 10), (11, 10)], "p4", time_bucket=13)
+    S2 = dov.additive_supply(b, [ph, ph2])
+    assert S2[10, 10, t] == pytest.approx(2 * unit)
+
+
+def test_additive_supply_matches_production_counter_on_fixture():
+    """Pin additive_supply to the PRODUCTION tier-2 convention: the same pings
+    pushed through build_active_taxis_counts + aggregate_active_taxis must
+    reproduce additive_supply's delta on every cell the phantom covers."""
+    import pandas as pd
+    from famail_temporal.data.aggregation import aggregate_active_taxis
+    from famail_temporal.data.source_generation.views.active_taxis import (
+        build_active_taxis_counts,
+    )
+    from famail_temporal import config as cfg
+
+    b = _stub_bundle(n_days=1)
+    ph = _traj([(10, 10), (12, 11), (12, 12)], "pfix", time_bucket=13, day=0)
+    S = dov.additive_supply(b, [ph])
+
+    # The production path: raw pings are 1-indexed; the terminal state is the
+    # pickup-transition -> give it passenger_indicator=1 so the production
+    # counter drops it too (mirrors the supply-only convention).
+    hour = 1  # time_bucket 13 -> hour 1 (1-indexed 5-min buckets, 12/hour)
+    rows = [
+        {"plate_id": "pfix", "x_grid": 10 + 1, "y_grid": 10 + 1,
+         "hour": hour, "day_index": 0, "passenger_indicator": 0},
+        {"plate_id": "pfix", "x_grid": 12 + 1, "y_grid": 11 + 1,
+         "hour": hour, "day_index": 0, "passenger_indicator": 0},
+        {"plate_id": "pfix", "x_grid": 12 + 1, "y_grid": 12 + 1,
+         "hour": hour, "day_index": 0, "passenger_indicator": 1},   # pickup
+    ]
+    counts = build_active_taxis_counts(pd.DataFrame(rows))
+    agg = aggregate_active_taxis(counts, n_days=1)
+
+    covered = S > 0
+    assert covered.any()
+    # Where the phantom contributed, production and additive agree exactly.
+    assert np.allclose(S[covered], agg[covered])
+    # Where it didn't, production shows only its SUPPLY_FLOOR.
+    assert np.all(agg[~covered] <= cfg.SUPPLY_FLOOR + 1e-12)
+
+
+def test_additive_grids_dose_zero_identity():
+    b = _stub_bundle()
+    b.pickup_3d = np.random.default_rng(0).random(b.pickup_3d.shape).astype(np.float32)
+    b.active_taxis_3d = np.random.default_rng(1).random(b.active_taxis_3d.shape).astype(np.float32)
+    assert np.array_equal(dov.additive_demand(b, []), np.float64(b.pickup_3d))
+    assert np.array_equal(dov.additive_supply(b, []), np.float64(b.active_taxis_3d))

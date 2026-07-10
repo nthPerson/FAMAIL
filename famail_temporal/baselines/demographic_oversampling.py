@@ -200,3 +200,46 @@ def escape_fractions(
     if n == 0:
         return {"origin_escape_frac": None, "pickup_outside_frac": None}
     return {"origin_escape_frac": o_esc / n, "pickup_outside_frac": p_out / n}
+
+
+def additive_demand(bundle, phantoms: Sequence[Trajectory]) -> np.ndarray:
+    """D' = bundle.pickup_3d + one pickup-event mass per phantom (float64).
+
+    Existing per-event mass convention (datasets.pickup_mass), ADDED — never
+    relocated, never floored (the subtraction floor in the substitution path
+    has no additive counterpart)."""
+    D = bundle.pickup_3d.astype(np.float64)
+    for ph in phantoms:
+        cx, cy, t = pickup_unit_of(ph)
+        D[cx, cy, t] += pickup_mass(bundle, t)
+    return D
+
+
+def additive_supply(bundle, phantoms: Sequence[Trajectory]) -> np.ndarray:
+    """S' = bundle.active_taxis_3d + tier-2 phantom presence (float64).
+
+    Mirrors the production counter exactly (views/active_taxis.py +
+    aggregate_active_taxis): a driver counts at (cell, hour, day) if >=1 of
+    its empty pings falls in the (2K+1)x(2K+1) neighborhood; distinct per
+    (driver, cell, hour, day); mean-hourly normalization divides each block
+    by n_hours_per_block[t] * n_days. Phantom driver IDs are fresh, so their
+    contributions are independent of the real fleet and purely additive — no
+    raw-GPS resegmentation. The terminal (pickup-transition) state is
+    EXCLUDED — supply-only, the analysis/supply_recount.py convention."""
+    gx, gy = bundle.active_taxis_3d.shape[:2]
+    k = sg_config.NEIGHBORHOOD_K
+    S = bundle.active_taxis_3d.astype(np.float64)
+    for ph in phantoms:
+        covered = set()
+        for s in ph.states[:-1]:
+            x0, y0 = int(s.x_grid), int(s.y_grid)
+            hour = time_bucket_to_hour(s.time_bucket)
+            for dx in range(-k, k + 1):
+                for dy in range(-k, k + 1):
+                    x, y = x0 + dx, y0 + dy
+                    if 0 <= x < gx and 0 <= y < gy:
+                        covered.add((x, y, hour, s.day_index))
+        for x, y, hour, _day in covered:
+            t = hour_to_block_index(hour)
+            S[x, y, t] += 1.0 / (float(bundle.n_hours_per_block[t]) * bundle.n_days)
+    return S
