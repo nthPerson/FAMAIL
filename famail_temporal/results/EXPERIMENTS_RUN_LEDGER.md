@@ -65,3 +65,4 @@ dirs, logs in `famail_temporal/results/alpha_sweep/<tag>.log`). Oversampling-arm
 
 | queue | status | start (UTC) | end (UTC) | wall | git | frozen-gate | config | artifact dir | command |
 |---|---|---|---|---|---|---|---|---|---|
+| Q0 | DONE | 2026-07-11T10:30:24Z | 2026-07-11T10:30:25Z | 0:00:01 | 477c1bb | frozen-gate:PASS | PRIMARY; summary over 5 sweep points + anchor | famail_temporal/results/alpha_sweep/summary | python -m famail_temporal.analysis.alpha_sweep_summary |

@@ -1,0 +1,77 @@
+{
+  "rows": [
+    {
+      "tag": "s00_c90_f10",
+      "alphas": [
+        0.0,
+        0.9,
+        0.1
+      ],
+      "d_f_spatial": 0.005732007324695587,
+      "d_f_causal": 0.022095322608947754,
+      "is_anchor": false,
+      "source": "/home/robert/FAMAIL/famail_temporal/results/2026-07-09T17-11-50_alpha_sweep_s00_c90_f10_filtered"
+    },
+    {
+      "tag": "s10_c80_f10",
+      "alphas": [
+        0.1,
+        0.8,
+        0.1
+      ],
+      "d_f_spatial": 0.006111912429332733,
+      "d_f_causal": 0.022561073303222656,
+      "is_anchor": false,
+      "source": "/home/robert/FAMAIL/famail_temporal/results/2026-07-10T02-06-37_alpha_sweep_s10_c80_f10_filtered"
+    },
+    {
+      "tag": "headline",
+      "alphas": [
+        0.2,
+        0.7,
+        0.1
+      ],
+      "d_f_spatial": 0.006357468664646149,
+      "d_f_causal": 0.022217631340026855,
+      "is_anchor": true,
+      "source": "/home/robert/FAMAIL/famail_temporal/results/2026-07-08T14-03-03_supply_lift_v1_shz_primary_filtered"
+    },
+    {
+      "tag": "s35_c55_f10",
+      "alphas": [
+        0.35,
+        0.55,
+        0.1
+      ],
+      "d_f_spatial": 0.007578454911708832,
+      "d_f_causal": 0.021684646606445312,
+      "is_anchor": false,
+      "source": "/home/robert/FAMAIL/famail_temporal/results/2026-07-10T10-32-00_alpha_sweep_s35_c55_f10_filtered"
+    },
+    {
+      "tag": "s55_c35_f10",
+      "alphas": [
+        0.55,
+        0.35,
+        0.1
+      ],
+      "d_f_spatial": 0.009439855813980103,
+      "d_f_causal": 0.0227164626121521,
+      "is_anchor": false,
+      "source": "/home/robert/FAMAIL/famail_temporal/results/2026-07-10T17-45-40_alpha_sweep_s55_c35_f10_filtered"
+    },
+    {
+      "tag": "s80_c10_f10",
+      "alphas": [
+        0.8,
+        0.1,
+        0.1
+      ],
+      "d_f_spatial": 0.011708371341228485,
+      "d_f_causal": 0.018539905548095703,
+      "is_anchor": false,
+      "source": "/home/robert/FAMAIL/famail_temporal/results/2026-07-10T23-30-57_alpha_sweep_s80_c10_f10_filtered"
+    }
+  ],
+  "pending": []
+}
