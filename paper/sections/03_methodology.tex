@@ -133,3 +133,53 @@ $(\Delta F_{\mathrm{spatial}}, \Delta F_{\mathrm{causal}})$ frontier.
 % TODO(alpha-sweep): finalize frontier sentence when 5/5 lands (~2026-07-11 AM);
 % partial 4-point finding: frontier flat (dF_causal +0.0217..+0.0226), shipped point on it.
 % src: famail_temporal/results/alpha_sweep/summary/ (pending)
+
+\subsection{Attribution: Localizing the Deficit and the Remedy}\label{sec:attribution}
+
+The objective is optimized one trajectory at a time, so FAMAIL must decide
+which trajectories are worth a slot in the edit budget. It uses two
+attribution mechanisms, one per editing mode (\S\ref{sec:editor}). The first
+locates where existing unfairness concentrates --- it attributes the
+\emph{deficit}. The second locates where added taxi presence would most
+improve fairness --- it attributes the \emph{remedy}.
+
+\textbf{Deficit attribution (drives trim).} Because $M$ and $I-H$ are
+idempotent, the explained share $r^{2}_{\mathrm{demo}}$ of
+Eq.~\eqref{eq:fcausal} admits an exact per-unit decomposition,
+\begin{equation}\label{eq:unit-attr}
+r^{2}_{\mathrm{demo}}
+\;=\; \sum_i \frac{(MR)_i^{2} - \bigl((I-H)R\bigr)_i^{2}}{R^{\top}MR},
+\end{equation}
+a mathematically exact partition of the fairness deficit across active units
+rather than a heuristic saliency; a signed variant separates over- from
+under-served units. The trajectories whose pickups land in the
+highest-deficit units are the ones trim edits.
+% src: PAPER/argument/03_fairness_theory.md (per-cell attribution)
+
+\textbf{Supply-gradient attribution (drives lift).} The second mechanism asks,
+at every active unit simultaneously: \emph{how much fairer would service be
+with marginally more taxi presence here?} Instantiating a zero supply
+perturbation $\Delta S$ and differentiating the full objective, a single
+backward pass answers all $N \approx 34{,}500$ what-ifs at once, yielding a
+value-of-presence map over the city. Its $F_{\mathrm{causal}}$ component has
+the closed form
+\begin{equation}\label{eq:supply-grad}
+\frac{\partial F_{\mathrm{causal}}}{\partial S_i}
+\;=\; \frac{2}{R^{\top}MR}\;
+\frac{\bigl((I-H)R\bigr)_i - F_{\mathrm{causal}}\,(MR)_i}{\max(D_i,\, d_0)},
+\end{equation}
+against which the automatic gradient is verified.
+% src: PAPER/supply-lift/LIFT_ALGORITHM_REFERENCE.md §4.1 (autograd-verified closed form)
+
+To turn the map into candidates, each trajectory's tail --- its last $\ell$
+seeking states and pickup --- is rigidly translated by every integer offset
+$\delta \in [-\varepsilon, \varepsilon]^2 \setminus \{0\}$, and the linearized
+gain of a translation is the presence-mass-weighted change in the
+($5{\times}5$ box-summed) gradient over the tail's positions. A trajectory's
+score is its best offset, and all ${\approx}95$k trajectories in the corpus
+are ranked by score. The screen only \emph{nominates}: every selected
+trajectory is subsequently re-optimized individually under the full objective
+(\S\ref{sec:editor}), which derives the actual move. In assembling the edit
+budget, trim's selection takes precedence and lift fills the remaining slots
+with positive-score nominees.
+% src: PAPER/supply-lift/LIFT_ALGORITHM_REFERENCE.md §4.2–4.3 (screen; plan assembly)
