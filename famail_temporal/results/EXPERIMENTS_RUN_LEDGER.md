@@ -1,0 +1,67 @@
+# Experiments run ledger
+
+Committed reproducibility ledger for the experiments-section campaign
+(`docs/superpowers/plans/2026-07-11-experiments-section.md`). **Nothing runs without a
+ledger row**: every campaign run is wrapped by
+`python -m famail_temporal.analysis.run_ledger start|finish`, which appends/patches a row
+here, writes `<artifact-dir>/environment.json` (python/torch/CUDA/GPU + pip-freeze hash),
+and on `finish` appends SHA-256 checksums of `<artifact-dir>/*.json` + `*.npz` to
+`<artifact-dir>/PROVENANCE.md`.
+
+Columns:
+
+| column | meaning |
+|---|---|
+| queue | campaign queue id (Q0–Q8 stages) or `B*` for backfilled pre-campaign artifacts |
+| status | `LAUNCHED` → `DONE` (live rows); `DONE (backfilled)` / `RUNNING (backfilled)` for pre-campaign rows |
+| start (UTC) | row-append time (live) or what the artifact preserves (backfill; dir-name timestamps are local) |
+| end (UTC) | `finish` time (live) or the artifact's recorded `timestamp_utc` (backfill) |
+| wall | end − start (live) or the artifact's recorded runtime (backfill; `-` if not preserved) |
+| git | short SHA at launch (backfill: the artifact's recorded `git_sha`; `(dirty)` as recorded) |
+| frozen-gate | `PASS` iff `git diff main -- famail_temporal/algorithm/ famail_temporal/evaluation/runner.py` is empty at launch; `n/a` for backfill (not evaluated at run time) |
+| config | config/feature-set note + environment-capture note |
+| artifact dir | results directory |
+| command | exact command (backfill: transcribed verbatim from the artifact's manifest/metrics/run-book) |
+
+## Backfill (pre-campaign artifacts the paper cites; rows recorded post hoc 2026-07-11)
+
+These runs predate the ledger. Commands are transcribed from what the artifacts actually
+preserve — `metrics.json .command_line`, `weighted_bc_manifest.json .argv`,
+`famail_temporal/baselines/STATUS.md` "4th arm" run-book, and
+`famail_temporal/results/alpha_sweep/driver.sh` — never reconstructed from memory.
+Environment capture is marked `env: post-hoc/manifest` (recoverable from the run's own
+manifest/metrics) or `env: not recorded`. The α-sweep points were launched via the
+committed driver (`nohup setsid bash famail_temporal/results/alpha_sweep/driver.sh >>
+driver.log 2>&1 &`); each point = editor run + `python -m
+famail_temporal.analysis.filter_infeasible_trims --edit-dir <run dir>` (the `_filtered`
+dirs, logs in `famail_temporal/results/alpha_sweep/<tag>.log`). Oversampling-arm
+`metrics.json` records only `arm`/`fairness`/`runtime_s` (no git SHA); the arms were run
+2026-07-10 on the demo-oversample branch merged to `main` as `238acec..fad017b`.
+
+| queue | status | start (UTC) | end (UTC) | wall | git | frozen-gate | config | artifact dir | command |
+|---|---|---|---|---|---|---|---|---|---|
+| B-SZ-HEADLINE | DONE (backfilled) | 2026-07-08T14-03-03 (local, dir name) | 2026-07-09T04:56:53Z | - | 85c6dbc (dirty) | frozen-gate:n/a | SZ PRIMARY, trim+lift, k=10000, α=(0.2,0.7,0.1); env: post-hoc/manifest (`metrics.json` config_snapshot + git_sha) | famail_temporal/results/2026-07-08T14-03-03_supply_lift_v1_shz_primary | /home/robert/FAMAIL/famail_temporal/evaluation/runner.py --name supply_lift_v1_shz_primary -k 10000 --device cuda --override ALPHA_SPATIAL=0.2 --override ALPHA_CAUSAL=0.7 --override ALPHA_FIDELITY=0.1 |
+| B-SZ-FILTER | DONE (backfilled) | 2026-07-08 (PROVENANCE.md "user decision: 2026-07-08") | - | - | 85c6dbc (source sha; filter tool commit 2e8a83c) | frozen-gate:n/a | infeasible-trim filter derivation (115 trims reverted → 9,885 edits); full derivation in dir's PROVENANCE.md + metrics.json `.provenance`; env: post-hoc/manifest | famail_temporal/results/2026-07-08T14-03-03_supply_lift_v1_shz_primary_filtered | python -m famail_temporal.analysis.filter_infeasible_trims --edit-dir famail_temporal/results/2026-07-08T14-03-03_supply_lift_v1_shz_primary |
+| B-SF-HEADLINE | DONE (backfilled) | 2026-07-08T22-43-06 (local, dir name) | 2026-07-09T06:24:23Z | - | 8605915 (dirty) | frozen-gate:n/a | SF sf12 (config CITY=sf12 via FAMAIL_CITY env), trim+lift, k=2000, α=(0.2,0.7,0.1); env: post-hoc/manifest | famail_temporal/results/2026-07-08T22-43-06_supply_lift_v1_sf12 | /home/robert/FAMAIL/famail_temporal/evaluation/runner.py --name supply_lift_v1_sf12 -k 2000 --device cuda --override ALPHA_SPATIAL=0.2 --override ALPHA_CAUSAL=0.7 --override ALPHA_FIDELITY=0.1 |
+| B-SF-FILTER | DONE (backfilled) | - | - | - | 8605915 (source sha, per metrics.json `.provenance.derived_from_git_sha`) | frozen-gate:n/a | infeasible-trim filter derivation (SF: 1371→1324 trim); PROVENANCE.md in dir; env: post-hoc/manifest | famail_temporal/results/2026-07-08T22-43-06_supply_lift_v1_sf12_filtered | python -m famail_temporal.analysis.filter_infeasible_trims --edit-dir famail_temporal/results/2026-07-08T22-43-06_supply_lift_v1_sf12 |
+| B-BC-SWEEP | DONE (backfilled) | 2026-07-09T16:37:11Z (manifest timestamp_utc) | - | - | e8f7d26 (dirty) | frozen-gate:n/a | SZ weighted-BC sweep, 6 seeds, w=10/20/30 + placebo + most-fair; env: post-hoc/manifest (`weighted_bc_manifest.json .env`: python 3.12.3, torch 2.11.0+cu130, CUDA 13.0, RTX 3070, host mf-pc; discriminator sha256 + gate recorded) | famail_temporal/results/weighted_bc_sweep/supply_lift_v1_shz_primary_filtered_6seed | /home/robert/FAMAIL/famail_temporal/baselines/run_weighted_bc_smoke.py --edit-dir famail_temporal/results/2026-07-08T14-03-03_supply_lift_v1_shz_primary_filtered --seeds 0,1,2,3,4,5 --weights 10,20,30 --placebo 10,30 --most-fair 10,20,30 --out-dir famail_temporal/results/weighted_bc_sweep/supply_lift_v1_shz_primary_filtered_6seed |
+| B-OS-T2500-S0 | DONE (backfilled) | 2026-07-10T00-39-51 (local, dir name) | - | 20.9s (metrics.json runtime_s) | not recorded | frozen-gate:n/a | demo-oversample targeted d=2500 s=0, CPU, Shenzhen v1; env: not recorded | famail_temporal/results/2026-07-10T00-39-51_baseline_demo_oversample_targeted_d2500_s0_shenzhen | python -m famail_temporal.baselines.run_demographic_oversampling --variant targeted --dose 2500 --seed 0 |
+| B-OS-T5000-S0 | DONE (backfilled) | 2026-07-10T00-47-07 (local, dir name) | - | 22.8s (metrics.json runtime_s) | not recorded | frozen-gate:n/a | demo-oversample targeted d=5000 s=0, CPU, Shenzhen v1; env: not recorded | famail_temporal/results/2026-07-10T00-47-07_baseline_demo_oversample_targeted_d5000_s0_shenzhen | python -m famail_temporal.baselines.run_demographic_oversampling --variant targeted --dose 5000 --seed 0 |
+| B-OS-T10000-S0 | DONE (backfilled) | 2026-07-10T00-47-33 (local, dir name) | - | 23.2s (metrics.json runtime_s) | not recorded | frozen-gate:n/a | demo-oversample targeted d=10000 s=0, CPU, Shenzhen v1; env: not recorded | famail_temporal/results/2026-07-10T00-47-33_baseline_demo_oversample_targeted_d10000_s0_shenzhen | python -m famail_temporal.baselines.run_demographic_oversampling --variant targeted --dose 10000 --seed 0 |
+| B-OS-T10000-S1 | DONE (backfilled) | 2026-07-10T00-47-59 (local, dir name) | - | 24.4s (metrics.json runtime_s) | not recorded | frozen-gate:n/a | demo-oversample targeted d=10000 s=1, CPU, Shenzhen v1; env: not recorded | famail_temporal/results/2026-07-10T00-47-59_baseline_demo_oversample_targeted_d10000_s1_shenzhen | python -m famail_temporal.baselines.run_demographic_oversampling --variant targeted --dose 10000 --seed 1 |
+| B-OS-T10000-S2 | DONE (backfilled) | 2026-07-10T00-48-26 (local, dir name) | - | 23.7s (metrics.json runtime_s) | not recorded | frozen-gate:n/a | demo-oversample targeted d=10000 s=2, CPU, Shenzhen v1; env: not recorded | famail_temporal/results/2026-07-10T00-48-26_baseline_demo_oversample_targeted_d10000_s2_shenzhen | python -m famail_temporal.baselines.run_demographic_oversampling --variant targeted --dose 10000 --seed 2 |
+| B-OS-P5000-S0 | DONE (backfilled) | 2026-07-10T00-48-51 (local, dir name) | - | 21.5s (metrics.json runtime_s) | not recorded | frozen-gate:n/a | demo-oversample placebo d=5000 s=0, CPU, Shenzhen v1; env: not recorded | famail_temporal/results/2026-07-10T00-48-51_baseline_demo_oversample_placebo_d5000_s0_shenzhen | python -m famail_temporal.baselines.run_demographic_oversampling --variant placebo --dose 5000 --seed 0 |
+| B-OS-P10000-S0 | DONE (backfilled) | 2026-07-10T00-49-16 (local, dir name) | - | 21.5s (metrics.json runtime_s) | not recorded | frozen-gate:n/a | demo-oversample placebo d=10000 s=0, CPU, Shenzhen v1; env: not recorded | famail_temporal/results/2026-07-10T00-49-16_baseline_demo_oversample_placebo_d10000_s0_shenzhen | python -m famail_temporal.baselines.run_demographic_oversampling --variant placebo --dose 10000 --seed 0 |
+| B-OS-P10000-S1 | DONE (backfilled) | 2026-07-10T00-49-41 (local, dir name) | - | 23.5s (metrics.json runtime_s) | not recorded | frozen-gate:n/a | demo-oversample placebo d=10000 s=1, CPU, Shenzhen v1; env: not recorded | famail_temporal/results/2026-07-10T00-49-41_baseline_demo_oversample_placebo_d10000_s1_shenzhen | python -m famail_temporal.baselines.run_demographic_oversampling --variant placebo --dose 10000 --seed 1 |
+| B-OS-P10000-S2 | DONE (backfilled) | 2026-07-10T00-50-07 (local, dir name) | - | 22.4s (metrics.json runtime_s) | not recorded | frozen-gate:n/a | demo-oversample placebo d=10000 s=2, CPU, Shenzhen v1; env: not recorded | famail_temporal/results/2026-07-10T00-50-07_baseline_demo_oversample_placebo_d10000_s2_shenzhen | python -m famail_temporal.baselines.run_demographic_oversampling --variant placebo --dose 10000 --seed 2 |
+| B-ALPHA-S00C90 | DONE (backfilled) | 2026-07-09T17-11-50 (local, dir name) | 2026-07-10T09:04:29Z | - | 238acec (dirty) | frozen-gate:n/a | α-sweep point (0.0,0.9,0.1), SZ PRIMARY k=10000, via alpha_sweep/driver.sh; + filter_infeasible_trims → `_filtered`; env: post-hoc/manifest | famail_temporal/results/2026-07-09T17-11-50_alpha_sweep_s00_c90_f10 (+ `_filtered`) | /home/robert/FAMAIL/famail_temporal/evaluation/runner.py -k 10000 --name alpha_sweep_s00_c90_f10 --device auto --override ALPHA_SPATIAL=0.0 --override ALPHA_CAUSAL=0.9 --override ALPHA_FIDELITY=0.1 |
+| B-ALPHA-S10C80 | DONE (backfilled) | 2026-07-10T02-06-37 (local, dir name) | 2026-07-10T17:29:54Z | - | fad017b (dirty) | frozen-gate:n/a | α-sweep point (0.1,0.8,0.1), SZ PRIMARY k=10000, via alpha_sweep/driver.sh; + filter_infeasible_trims → `_filtered`; env: post-hoc/manifest | famail_temporal/results/2026-07-10T02-06-37_alpha_sweep_s10_c80_f10 (+ `_filtered`) | /home/robert/FAMAIL/famail_temporal/evaluation/runner.py -k 10000 --name alpha_sweep_s10_c80_f10 --device auto --override ALPHA_SPATIAL=0.1 --override ALPHA_CAUSAL=0.8 --override ALPHA_FIDELITY=0.1 |
+| B-ALPHA-S35C55 | DONE (backfilled) | 2026-07-10T10-32-00 (local, dir name) | 2026-07-11T00:44:14Z | - | fad017b (dirty) | frozen-gate:n/a | α-sweep point (0.35,0.55,0.1), SZ PRIMARY k=10000, via alpha_sweep/driver.sh; + filter_infeasible_trims → `_filtered`; env: post-hoc/manifest | famail_temporal/results/2026-07-10T10-32-00_alpha_sweep_s35_c55_f10 (+ `_filtered`) | /home/robert/FAMAIL/famail_temporal/evaluation/runner.py -k 10000 --name alpha_sweep_s35_c55_f10 --device auto --override ALPHA_SPATIAL=0.35 --override ALPHA_CAUSAL=0.55 --override ALPHA_FIDELITY=0.1 |
+| B-ALPHA-S55C35 | DONE (backfilled) | 2026-07-10T17-45-40 (local, dir name) | 2026-07-11T06:29:21Z | - | 5677961 (dirty) | frozen-gate:n/a | α-sweep point (0.55,0.35,0.1), SZ PRIMARY k=10000, via alpha_sweep/driver.sh; + filter_infeasible_trims → `_filtered`; env: post-hoc/manifest | famail_temporal/results/2026-07-10T17-45-40_alpha_sweep_s55_c35_f10 (+ `_filtered`) | /home/robert/FAMAIL/famail_temporal/evaluation/runner.py -k 10000 --name alpha_sweep_s55_c35_f10 --device auto --override ALPHA_SPATIAL=0.55 --override ALPHA_CAUSAL=0.35 --override ALPHA_FIDELITY=0.1 |
+| B-ALPHA-S80C10 | RUNNING (backfilled) | ~2026-07-11T06:29Z (after S55C35 finished; live pid observed 2026-07-11) | - | - | - (metrics.json not yet written) | frozen-gate:n/a | α-sweep point (0.8,0.1,0.1), SZ PRIMARY k=10000, via alpha_sweep/driver.sh (5th/last point; driver will also filter); env: will be in metrics.json on completion | (created on completion: famail_temporal/results/*_alpha_sweep_s80_c10_f10) | python -m famail_temporal.evaluation.runner -k 10000 --name alpha_sweep_s80_c10_f10 --device auto --override ALPHA_SPATIAL=0.8 --override ALPHA_CAUSAL=0.1 --override ALPHA_FIDELITY=0.1 |
+| B-ALPHA-ANCHOR | DONE (backfilled) | - | - | - | 85c6dbc (dirty) | frozen-gate:n/a | α-sweep anchor (0.2,0.7,0.1) = the SZ headline run (row B-SZ-HEADLINE / B-SZ-FILTER); no separate run — `alpha_sweep_summary` consumes its `_filtered` dir as the 6th point | famail_temporal/results/2026-07-08T14-03-03_supply_lift_v1_shz_primary_filtered | (same run as B-SZ-HEADLINE; no separate command) |
+
+## Campaign rows (live; appended by `run_ledger.py` — keep this table last in the file)
+
+| queue | status | start (UTC) | end (UTC) | wall | git | frozen-gate | config | artifact dir | command |
+|---|---|---|---|---|---|---|---|---|---|
