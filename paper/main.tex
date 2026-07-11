@@ -1,0 +1,48 @@
+% FAMAIL — KDD manuscript.
+% Source of truth for writing is THIS repo; Robert ports completed sections to the
+% shared Overleaf for Dr. Zhang's review. Build: latexmk -pdf main.tex
+% Conventions: see README.md in this directory (trim+lift canonical, F_causal label
+% + associational caveat, provenance comments on every load-bearing number, etc.).
+\documentclass[sigconf,review,anonymous]{acmart}
+% KDD is double-blind: `anonymous` hides the author block; `review` adds line numbers.
+% Remove `review` for the PI-facing PDF if line numbers distract.
+\settopmatter{printacmref=false}
+\setcopyright{none}
+
+\begin{document}
+
+\title{FAMAIL: Fairness-Aware Trajectory Editing as Data Augmentation for
+Imitation-Learned Mobility Models}
+% Working title — revisit with PI before submission.
+
+% Author list/order provisional — PI decision; hidden by the `anonymous` option.
+\author{Robert Ashe}
+\affiliation{%
+  \institution{San Diego State University}
+  \city{San Diego}\state{CA}\country{USA}}
+\email{robertashe@sdsu.edu} % placeholder address — confirm before de-anonymizing
+\author{Xin Zhang}
+\affiliation{%
+  \institution{San Diego State University}
+  \city{San Diego}\state{CA}\country{USA}}
+\email{xzhang@sdsu.edu} % placeholder address — confirm before de-anonymizing
+
+\begin{abstract}
+Draft abstract lands in a later task (plan Task 9).
+\end{abstract}
+
+\keywords{fairness, imitation learning, data augmentation, trajectory editing,
+urban mobility}
+
+\maketitle
+
+\input{sections/01_introduction}
+\input{sections/02_related_work}
+\input{sections/03_methodology}
+\input{sections/04_experiments}
+\input{sections/05_conclusion}
+
+\bibliographystyle{ACM-Reference-Format}
+\bibliography{refs}
+
+\end{document}
