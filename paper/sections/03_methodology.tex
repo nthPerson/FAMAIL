@@ -1,6 +1,6 @@
 \section{Methodology}\label{sec:method}
-% Remaining subsections land in plan Tasks 4-8:
-% 3.2 objective · 3.3 attribution (two mechanisms) ·
+% Remaining subsections land in plan Tasks 5-8:
+% 3.3 attribution (two mechanisms) ·
 % 3.4 leveling-down mechanism · 3.5 trim+lift editor · 3.6 downstream recipe.
 
 \subsection{Problem Formulation}\label{sec:problem}
@@ -40,3 +40,96 @@ $\varepsilon = 2$ grid cells --- and generates nothing.
 % src: LIFT_ALGORITHM_REFERENCE.md §3 (EPSILON_BALL, budget)
 The edited slice is then upweighted during downstream training so that its
 fairness is not averaged away (\S\ref{sec:downstream}).
+
+\subsection{The Fairness Objective}\label{sec:objective}
+
+FAMAIL edits trajectories by gradient ascent on a single differentiable
+objective that combines demographic fairness, spatial equity, and realism.
+
+\textbf{Demand-adjusted demographic fairness ($F_{\mathrm{causal}}$, primary).}
+Raw parity across neighborhoods is the wrong target: taxi service legitimately
+tracks demand, and a business district \emph{should} see more pickups than a
+quiet residential block. We therefore measure fairness only in the component of
+service that demand does not explain --- the logic of conditional statistical
+parity \cite{corbettdavies2017}, which restricts disparities to those not
+explained by permitted factors. Stage one fits a flexible power basis $g_0(D)$
+from per-unit demand to the service ratio and takes the residual
+$R_i = Y_i - g_0(D_i)$; stage two asks how much of that residual the
+demographics explain. With $X$ the z-scored demographic design matrix, $H$ the
+projection onto $[\mathbf{1}, X]$, and $M$ the centering matrix,
+\begin{equation}\label{eq:fcausal}
+F_{\mathrm{causal}}
+\;=\; \frac{R^{\top}(I-H)\,R}{R^{\top}M\,R}
+\;=\; 1 - r^{2}_{\mathrm{demo}} .
+\end{equation}
+By the Frisch--Waugh--Lovell theorem \cite{frischwaugh1933,lovell1963}, this
+residualize-then-project construction recovers exactly the demographic
+coefficients of the full multiple regression, so $r^{2}_{\mathrm{demo}}$ is
+interpretable as the share of demand-adjusted service inequity attributable to
+demographics; measuring fairness by how well a protected attribute predicts an
+outcome follows the fairness-as-predictability logic of \cite{feldman2015}.
+Boundary cases orient the scale: $R \in \operatorname{span}(X)$ gives
+$F_{\mathrm{causal}} = 0$ (fully unfair), and $R \perp X$ gives $1$ (fully
+fair).
+% src: PAPER/objective-motivation/MOTIVATION.md; PAPER/argument/03_fairness_theory.md
+
+Two caveats are load-bearing. First, $F_{\mathrm{causal}}$ is an
+\emph{associational} quantity --- the partial $R^2$ of a cross-sectional
+regression on observational district-level demographics, with no
+identification and no counterfactual; the ``causal'' in the name is
+historical. With about ten district profiles the association is ecological,
+and we make no individual-level claims. Second, adjusting for demand treats
+recorded demand as exogenous; but demand recorded where service has
+historically been thin is itself suppressed by that under-service. We return
+to this in \S\ref{sec:leveling}, where the same assumption turns out to bound
+what a demand-only editor can achieve.
+% src: PAPER/objective-motivation/MOTIVATION.md (associational caveat; demand endogeneity)
+
+\textbf{Spatial equity ($F_{\mathrm{spatial}}$, secondary).} Independent of
+demographics, service should also be spread evenly relative to the taxi supply
+actually present. We include a Gini-based term over supply-normalized service
+rates --- pickups per active taxi and dropoffs per active taxi, per unit ---
+the most widely used inequality index in transportation-equity research
+\cite{horchergraham2021,karner2024}, in a differentiable pairwise form so it
+can enter the gradient objective:
+$F_{\mathrm{spatial}} = 1 - \tfrac{1}{2}\bigl(\mathrm{Gini}(\mathrm{DSR}) +
+\mathrm{Gini}(\mathrm{ASR})\bigr)$. Being demographic-independent, it acts as
+a spatial smoothness regularizer complementing $F_{\mathrm{causal}}$.
+% src: PAPER/argument/03_fairness_theory.md
+
+\textbf{Realism guardrail ($F_{\mathrm{fidelity}}$).} An edit that improves
+fairness by producing trajectories no real driver would generate is useless
+for training a realistic demand model. Because individual mobility signatures
+are highly identifying --- the premise of the trajectory-user-linking
+literature \cite{gao2017tuler,zhou2018tulvae,miao2020deeptul} --- we score
+realism with a frozen driver-identity discriminator of the ST-SiameseNet
+family \cite{ren2020stsiamese}: an edited trajectory that still reads as its
+driver has preserved human fidelity. The discriminator is trained once and
+never updated during editing, avoiding the instability of a live adversarial
+game \cite{hoermon2016}. We state its role honestly: under the small, bounded
+edits FAMAIL makes, its gradient with respect to the edit is near zero, so it
+serves as a realism \emph{guardrail} rather than a driver of edits;
+distributional collapse is monitored separately at evaluation time with a
+Jensen--Shannon check over aggregate mobility statistics \cite{feng2020simulate}.
+% src: PAPER/objective-motivation/MOTIVATION.md (F_fidelity guardrail framing)
+
+\textbf{Scalarization.} The three terms combine linearly,
+\begin{equation}\label{eq:objective}
+\mathcal{L} \;=\; \alpha_{\mathrm{sp}} F_{\mathrm{spatial}}
++ \alpha_{\mathrm{ca}} F_{\mathrm{causal}}
++ \alpha_{\mathrm{fi}} F_{\mathrm{fidelity}},
+\qquad \alpha = (0.2,\; 0.7,\; 0.1).
+\end{equation}
+% src: PAPER/objective-motivation/MOTIVATION.md ("Why these weights")
+The weights were selected under an explicit criterion --- maximize the
+demographic-fairness gain subject to the spatial term not degrading
+($\Delta F_{\mathrm{spatial}} \ge 0$) --- and the causal-heavy weighting
+reflects, rather than forces, where the editable signal lies: the objective's
+gradient geometry is dominated by $F_{\mathrm{causal}}$, the spatial gradient
+is far smaller and never overrides it, and the fidelity gradient is dormant
+under bounded edits. An empirical Pareto sweep over the weight simplex
+confirms that the adopted point lies on the
+$(\Delta F_{\mathrm{spatial}}, \Delta F_{\mathrm{causal}})$ frontier.
+% TODO(alpha-sweep): finalize frontier sentence when 5/5 lands (~2026-07-11 AM);
+% partial 4-point finding: frontier flat (dF_causal +0.0217..+0.0226), shipped point on it.
+% src: famail_temporal/results/alpha_sweep/summary/ (pending)

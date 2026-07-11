@@ -8,6 +8,13 @@
 % Remove `review` for the PI-facing PDF if line numbers distract.
 \settopmatter{printacmref=false}
 \setcopyright{none}
+% Local-build font shim: this machine lacks the Libertine/newtxmath Type-1 fonts
+% acmart prefers, and pdfTeX's microtype font expansion fails on the bitmap
+% fallbacks once math appears. Disabling expansion keeps the local compile gate
+% meaningful; Overleaf (full TeX Live) renders the proper ACM fonts regardless.
+% To restore the ACM look locally: sudo apt install texlive-fonts-extra, then
+% delete this line.
+\microtypesetup{expansion=false}
 
 \begin{document}
 
