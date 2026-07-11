@@ -62,7 +62,89 @@ supply/demand-ratio gap --- one number, reported once); \emph{disparate impact}
 therefore \{DI, DP/gap, Theil\} plus the descriptive levels.
 % src: PAPER/external-metrics/FINDINGS.md §1, §4.3 (DP≡gap disclosure)
 
-% 5.2 Data-level fairness (Shenzhen) lands here (plan Task 6).
+\subsection{Data-Level Fairness (Shenzhen)}\label{sec:exp-data-level}
+
+\textbf{Optimized metrics.} Editing raises $F_{\mathrm{causal}}$ from 0.7988
+to 0.8210 ($+0.0222$) and $F_{\mathrm{spatial}}$ from 0.1034 to 0.1098
+($+0.0064$) --- ring (i) numbers, reported for completeness rather than as
+evidence.
+% src: PAPER/supply-lift/data/shz_primary_filtered_metrics.json (deltas)
+
+\textbf{External metrics (ring iii).} Every established instrument moves
+toward fairness with bootstrap intervals excluding zero
+(Table~\ref{tab:external-sz}, migrant axis, district extremes; the remaining
+axis $\times$ grouping cells behave the same way). The gap closes from both
+ends: the advantaged group's over-service falls (21.27 $\to$ 20.46) while the
+disadvantaged group's service \emph{rises} (7.0734 $\to$ 7.1203).
+
+\begin{table}[t]
+\caption{Shenzhen external fairness, before $\to$ after editing (migrant axis,
+district extremes; paired bootstrap, $B{=}1{,}000$).}
+\label{tab:external-sz}
+\begin{tabular}{lrrr}
+\toprule
+metric & before & after & $\Delta$ [95\% CI] \\
+\midrule
+Disparate impact ($\uparrow$) & 0.3325 & 0.3480 & $+0.0155$ [$+0.0128, +0.0182$] \\ % lint-allow: coincidental CI bound (supply-lift DI interval, not the trim-only headline delta)
+DP gap ($\downarrow$) & 14.199 & 13.341 & $-0.858$ [$-0.960, -0.757$] \\
+Theil ($\downarrow$) & 0.1550 & 0.1468 & $-0.0082$ [$-0.0092, -0.0072$] \\
+$\mathrm{mean}(Y \mid \mathrm{disadv.})$ ($\uparrow$) & 7.0734 & 7.1203 & $+0.0468$ [$+0.0022, +0.0932$] \\
+$\mathrm{mean}(Y \mid \mathrm{adv.})$ & 21.272 & 20.462 & $-0.811$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+% src: PAPER/supply-lift/tables/shenzhen-primary-filtered.md (MigrantRatio district_extremes block + Theil)
+
+\textbf{The lift-up claim rides the supply channel.} The
+$\mathrm{mean}(Y \mid \mathrm{disadv.})$ rise is a ring-(ii)
+\emph{design-targeted} quantity --- the lift mechanism was aimed at it --- so
+we decompose it rather than celebrate it. Evaluating $Y$ at
+$(S,D) \to (S,D') \to (S',D')$ splits the delta exactly into a demand move and
+a supply move (Table~\ref{tab:channels}). The demand channel (pickup
+relocation) carries large variance and is not significant; the supply channel
+(rerouted tails adding presence) is significant under \emph{both} accounting
+conventions: $+0.0091$ under tier-1 (the optimizer's fractional-presence
+convention) and $+0.0242$ under tier-2, which re-counts supply from raw GPS as
+distinct taxis per neighborhood-hour with the edited tails substituted. The
+recount machinery reproduces the production supply grid exactly (MAE 0.0) and
+matched 100\% of edit histories to raw pings, so tier-2 is the honest
+semantics, not an approximation.
+% src: PAPER/supply-lift/data/shz_primary_filtered_channel_decomposition.json; FINDINGS.md §4 (tiers, G2 validity)
+
+\begin{table}[t]
+\caption{Channel decomposition of $\Delta\,\mathrm{mean}(Y \mid \mathrm{disadv.})$,
+Shenzhen migrant axis ($B{=}2{,}000$).}
+\label{tab:channels}
+\begin{tabular}{lrrc}
+\toprule
+channel & $\Delta$ & 95\% CI & sig.? \\
+\midrule
+Supply (tier-1) & $+0.0091$ & [$+0.0054, +0.0130$] & \textbf{yes} \\
+Supply (tier-2, distinct-taxi) & $+0.0242$ & [$+0.0208, +0.0279$] & \textbf{yes} \\
+Demand (pickup relocation) & $+0.0378$ & [$-0.0065, +0.0836$] & no \\
+Total & $+0.0468$ & [$+0.0022, +0.0932$] & yes \\
+\bottomrule
+\end{tabular}
+\end{table}
+% src: PAPER/supply-lift/data/shz_primary_filtered_channel_decomposition.json (via FINDINGS.md §4 table)
+
+\textbf{Realism.} Fidelity-A is stable (edited 0.8457 vs.\ raw 0.8489;
+lift-mode edits are, if anything, less identity-damaging than trim-mode:
+$-0.0031$ vs.\ $-0.0059$). Fidelity-B shows lift's expected distributional
+cost --- whole-tail relocation shifts trajectory-shape statistics more than a
+pickup-only move (lift-mode 0.2645 vs.\ trim-mode 0.1601) --- a by-design
+trade-off we disclose rather than net out.
+% src: PAPER/supply-lift/FINDINGS.md §6.1 (G5 fidelity battery)
+
+\textbf{Provenance disclosures.} About 5\% of trim edits (115/2{,}455) had no
+king-compliant repair and were reverted post hoc; the rule was adopted before
+its metric effects were computed, and it moved every metric favorably --- the
+infeasible edits were actively counterproductive. The pre-build oracle gate
+bounded the supply-channel headroom at $+0.786$ on
+$\mathrm{mean}(Y \mid \mathrm{disadv.})$ --- $2.6\times$ the pre-registered
+go/no-go threshold of $+0.3$ (full accounting $+0.882$); the realized $+0.047$
+sits far below the unconstrained ceiling, as a realism-bounded editor should.
+% src: PAPER/supply-lift/FINDINGS.md §8 (skip-on-infeasible); §1.3 + data/oracle.json (G0 ceilings)
 
 \subsection{Ablation: Trim-Only versus Trim+Lift}\label{sec:exp-ablation}
 
