@@ -318,3 +318,23 @@ mechanism. A unified single-pass editor --- supply endogenous everywhere, the
 gradient choosing each edit's character --- is a natural extension we leave
 as future work.
 % src: docs/presentations/meeting_42_update/trim_plus_lift_explainer.md §3; LIFT_ALGORITHM_REFERENCE.md §14
+
+\subsection{Downstream Recipe: Upweighted Imitation}\label{sec:downstream}
+
+Editing alone is necessary but not sufficient. The edited slice is small by
+design --- roughly a tenth of the corpus --- and a vanilla behavior-cloning
+objective, weighting every demonstration equally, averages it away and
+relearns the original bias; we verify this null empirically
+(\S\ref{sec:experiments}). FAMAIL therefore \emph{upweights} the edited
+demonstrations in the imitation loss --- instance reweighing for fairness
+\cite{kamirancalders2012}, a member of the pre-processing family alongside
+disparate-impact repair \cite{feldman2015}, transplanted to imitation
+learning. Whether the recovery is specific to the \emph{edit}, rather than an
+artifact of oversampling or of selecting fair data, is tested against two
+controls --- upweighting a size-matched random subset, and upweighting the
+already-fairest trajectories --- with outcomes reported in
+\S\ref{sec:experiments}. This intervention targets, on the training data, the
+same demand-model bias that in-processing regularization has addressed at the
+model level \cite{zheng2023}; FAMAIL moves the intervention to the
+demonstrations themselves.
+% src: PAPER/objective-motivation/MOTIVATION.md (downstream pairing); PAPER/argument/04_evaluation.md §1 (controls)
