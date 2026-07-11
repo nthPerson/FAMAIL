@@ -190,7 +190,69 @@ to the demand-only editor but the difference between redistributing service
 and providing it.
 % src: PAPER/supply-lift/FINDINGS.md §3 (the key qualitative change paragraph)
 
-% 5.4 Downstream propagation (Shenzhen) lands here (plan Task 8).
+\subsection{Downstream Propagation (Shenzhen)}\label{sec:exp-downstream}
+
+\textbf{Data quality (four sources).} Table~\ref{tab:l1} scores the raw,
+edited, BC-generated, and GAN-generated corpora on fairness and both fidelity
+axes, with generators trained from scratch for this comparison and Fidelity-A
+gated by the real-anchored identity check
+(\S\ref{sec:objective}). The claim under test: the edited corpus is the
+fairest source that remains faithful on both realism axes.
+% TODO(run:Q3 -> famail_temporal/results/level1_table_v2/supply_lift_shz_5seed/level1_v2_multiseed.json) all L1 cells
+
+\begin{table}[t]
+\caption{Data-quality comparison, four sources (Shenzhen; seed means; cells
+land with campaign stage Q3).}
+\label{tab:l1}
+\begin{tabular}{lrrr}
+\toprule
+source & $F_{\mathrm{causal}}$ & Fid.-A ($\uparrow$) & Fid.-B ($\downarrow$) \\
+\midrule
+raw & X.XXXX & X.XXX & 0.000 \\ % TODO(run:Q3 -> level1_v2_multiseed.json)
+\textbf{edited (trim+lift)} & X.XXXX & X.XXX & X.XXX \\ % TODO(run:Q3 -> level1_v2_multiseed.json)
+bc-generated & X.XXXX & X.XXX & X.XXX \\ % TODO(run:Q3 -> level1_v2_multiseed.json)
+gan-generated & X.XXXX & X.XXX & X.XXX \\ % TODO(run:Q3 -> level1_v2_multiseed.json)
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Vanilla training averages the edit away.} A driver-conditioned BC
+policy trained on the edited corpus at uniform weight is not fairer than one
+trained on raw: paired $\Delta F_{\mathrm{causal}} = +0.0023$ ($p = .156$,
+n.s.) --- the null that motivates the upweighting recipe of
+\S\ref{sec:downstream}.
+% src: PAPER/supply-lift/FINDINGS.md §7 (w=1 arm), data/weighted_bc_paired_stats.json
+
+\textbf{Upweighting recovers it, edit-specifically.} With the edited
+demonstrations upweighted, the paired gain is monotone in the weight and
+sign-unanimous across all six seeds: $+0.0232$ (w10), $+0.0280$ (w20),
+$+0.0310$ (w30), each $p = .031$ (6/6) with $t$-intervals excluding zero.
+New under trim+lift: $F_{\mathrm{spatial}}$ \emph{also} propagates
+($+0.0042 \to +0.0048 \to +0.0057$, all 6/6) --- the demand-only corpus never
+achieved this. Both controls are null (random placebo $-0.0011$/$-0.0027$;
+most-fair select $+0.0034$/$+0.0014$/$+0.0007$), so the recovery is driven by
+the edit, not by oversampling or selection. Fidelity-A is unchanged at every
+weight; Fidelity-B rises modestly with weight ($+0.0157$ at w30), the same
+disclosed trade-off family as the data-level cost.
+% src: PAPER/supply-lift/FINDINGS.md §7 (sweep table incl. F_spatial propagation + controls + fidelity)
+
+\textbf{Model-level variance.} A paired baseline-vs-FAMAIL comparison at
+uniform weight:
+$\Delta F_{\mathrm{causal}} = $ X.XXXX $\pm$ X.XXXX (expected null --- the
+companion to the vanilla-transfer null).
+% TODO(run:Q5 -> famail_temporal/results/variance_suite/supply_lift_shz_5seed/aggregate.json)
+
+\textbf{The honest boundary: allocation behavior.} Metric propagation is not
+the whole story. Rolling out the trained policies and measuring the share of
+pickups they allocate to disadvantaged areas, the share still tilts
+\emph{away}: $-0.0029$ at w30 (0/6 seeds positive, $p = .031$), against
+$-0.0048$ under the demand-only corpus % lint-allow: ablation-context rollout comparison
+--- attenuated by ${\sim}40\%$, not reversed --- and policies do not learn to
+\emph{cruise} disadvantaged areas (seeking-state shares n.s.\ in every arm).
+We claim the data-level lift-up and the metric propagation; we disclose the
+allocation boundary, which motivates training-side allocation constraints as
+future work rather than further data-side editing alone.
+% src: PAPER/supply-lift/data/rollout_supplylift_summary.json + rollout_trimonly_prior_summary.json; FINDINGS.md §9
 
 \subsection{Data-Augmentation Baselines}\label{sec:exp-baselines}
 
