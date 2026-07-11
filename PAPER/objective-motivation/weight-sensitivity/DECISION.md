@@ -1,13 +1,18 @@
 # Weight-decision memo — α-Pareto sweep complete (Q0 hard checkpoint)
 
-**Date:** 2026-07-11 · **Status:** ⏸ REOPENED with new evidence (same day). The first decision
-(re-anchor to (0.55, 0.35, 0.1), on the two-axis frontier) was **halted mid-execution** when the
-promoted corpus's channel decomposition showed the tier-1 supply channel significantly NEGATIVE and
-Δmean(Y|D) n.s. — the lift-up claim does not survive at α_spatial = 0.55. The frontier was then
-extended with ring-2/ring-3 columns for every sweep point
-([`EXTENDED_FRONTIER.md`](EXTENDED_FRONTIER.md)): the lift-up declines monotonically with α_spatial,
-and the amended three-ring criterion selects **(0.1, 0.8, 0.1)**. Awaiting Robert's final weight
-decision on the complete table.
+**Date:** 2026-07-11 · **Status:** ✅ DECIDED (Robert, 2026-07-11, second decision): **RE-ANCHOR to
+(0.1, 0.8, 0.1)** — the amended three-ring criterion's selection on the extended frontier
+([`EXTENDED_FRONTIER.md`](EXTENDED_FRONTIER.md)). History: the first same-day decision (re-anchor to
+(0.55, 0.35, 0.1) on the two-axis frontier) was halted mid-execution when the promoted corpus's
+channel decomposition showed the tier-1 supply channel significantly NEGATIVE and Δmean(Y|D) n.s. —
+the lift-up claim does not survive at α_spatial = 0.55; the frontier was then extended with
+ring-2/ring-3 columns for every point, revealing the monotone lift-up/α_spatial trade-off. The
+adopted (0.1, 0.8, 0.1) weakly dominates the prior (0.2, 0.7, 0.1) headline on every reported column
+except noise-scale ΔF_spatial, and strengthens the lift-up claim (tier-1 +0.0176 vs +0.0091; tier-2
++0.0411 vs +0.0242). Amended criterion, stated for the paper: maximize ΔF_causal subject to
+ΔF_spatial ≥ 0 AND the supply-channel lift-up significant under both accounting tiers. The s10
+replication run remains scheduled before camera-ready (pre-commitment to report both runs); SF at
+(0.1, 0.8, 0.1) will be reported whatever it shows.
 · **Artifacts:** [`EXTENDED_FRONTIER.md`](EXTENDED_FRONTIER.md) (the decision table),
 [`alpha_sweep_summary.md`](alpha_sweep_summary.md) (ring-1 table),
 [`alpha_pareto.png`](alpha_pareto.png) (scatter), [`alpha_sweep_summary.json`](alpha_sweep_summary.json).

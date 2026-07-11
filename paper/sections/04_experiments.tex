@@ -20,10 +20,14 @@ no editable fairness gradient.
 % src: PAPER/argument/02_datasets.md (sf12 selection, density matching)
 
 \textbf{Editor configuration.} All edited corpora use the trim+lift editor of
-\S\ref{sec:editor} with $\alpha = (0.2, 0.7, 0.1)$, $\varepsilon = 2$, and the
-skip-on-infeasible rule. Shenzhen: $k = 10{,}000$ (2{,}340 trim + 7{,}545 lift
-after filtering); San Francisco: $k = 2{,}000$ (1{,}324 trim + 629 lift).
-% src: PAPER/supply-lift/FINDINGS.md §2, §8 (budget splits post-filter)
+\S\ref{sec:editor} with $\alpha = (0.1, 0.8, 0.1)$ --- the configuration the
+three-ring selection criterion picks on the measured frontier
+(\S\ref{sec:exp-robustness}) --- $\varepsilon = 2$, and the
+skip-on-infeasible rule. Shenzhen: $k = 10{,}000$ (2{,}337 trim + 7{,}545
+lift after filtering); San Francisco: $k = 2{,}000$
+(X{,}XXX trim + XXX lift). % TODO(run:R1 -> <ts>_supply_lift_a10_sf12_filtered/metrics.json) SF split
+% src: famail_temporal/results/2026-07-10T02-06-37_alpha_sweep_s10_c80_f10_filtered/metrics.json (SZ split)
+% src: PAPER/objective-motivation/weight-sensitivity/DECISION.md + EXTENDED_FRONTIER.md (decision 2026-07-11)
 
 \textbf{Protocol and statistics.} Every model-based comparison uses paired
 seeds (identical seeding before each arm), so per-seed differences cancel
@@ -65,17 +69,18 @@ therefore \{DI, DP/gap, Theil\} plus the descriptive levels.
 \subsection{Data-Level Fairness (Shenzhen)}\label{sec:exp-data-level}
 
 \textbf{Optimized metrics.} Editing raises $F_{\mathrm{causal}}$ from 0.7988
-to 0.8210 ($+0.0222$) and $F_{\mathrm{spatial}}$ from 0.1034 to 0.1098
-($+0.0064$) --- ring (i) numbers, reported for completeness rather than as
+to 0.8214 ($+0.0226$) and $F_{\mathrm{spatial}}$ from 0.1034 to 0.1095
+($+0.0061$) --- ring (i) numbers, reported for completeness rather than as
 evidence.
-% src: PAPER/supply-lift/data/shz_primary_filtered_metrics.json (deltas)
+% src: famail_temporal/results/2026-07-10T02-06-37_alpha_sweep_s10_c80_f10_filtered/metrics.json
 
 \textbf{External metrics (ring iii).} Every established instrument moves
 toward fairness with bootstrap intervals excluding zero
 (Table~\ref{tab:external-sz}, migrant axis, district extremes; the remaining
 axis $\times$ grouping cells behave the same way). The gap closes from both
-ends: the advantaged group's over-service falls (21.27 $\to$ 20.46) while the
-disadvantaged group's service \emph{rises} (7.0734 $\to$ 7.1203).
+ends: the advantaged group's over-service falls ($21.27 \to 20.44$) while the
+disadvantaged group's service \emph{rises} ($7.073 \to 7.126$).
+% src: famail_temporal/baselines/external_fairness/results/shenzhen-primary-supplylift-s10/external_fairness.json
 
 \begin{table}[t]
 \caption{Shenzhen external fairness, before $\to$ after editing (migrant axis,
@@ -85,15 +90,16 @@ district extremes; paired bootstrap, $B{=}1{,}000$).}
 \toprule
 metric & before & after & $\Delta$ [95\% CI] \\
 \midrule
-Disparate impact ($\uparrow$) & 0.3325 & 0.3480 & $+0.0155$ [$+0.0128, +0.0182$] \\ % lint-allow: coincidental CI bound (supply-lift DI interval, not the trim-only headline delta)
-DP gap ($\downarrow$) & 14.199 & 13.341 & $-0.858$ [$-0.960, -0.757$] \\
-Theil ($\downarrow$) & 0.1550 & 0.1468 & $-0.0082$ [$-0.0092, -0.0072$] \\
-$\mathrm{mean}(Y \mid \mathrm{disadv.})$ ($\uparrow$) & 7.0734 & 7.1203 & $+0.0468$ [$+0.0022, +0.0932$] \\
-$\mathrm{mean}(Y \mid \mathrm{adv.})$ & 21.272 & 20.462 & $-0.811$ \\
+Disparate impact ($\uparrow$) & 0.3325 & 0.3487 & $+0.0162$ [$+0.0136, +0.0189$] \\
+DP gap ($\downarrow$) & 14.199 & 13.309 & $-0.890$ [$-0.992, -0.785$] \\
+Theil ($\downarrow$) & 0.1550 & 0.1463 & $-0.0087$ [$-0.0097, -0.0076$] \\
+$\mathrm{mean}(Y \mid \mathrm{disadv.})$ ($\uparrow$) & 7.0734 & 7.1263 & $+0.0529$ [$+0.0086, +0.0989$] \\
+$\mathrm{mean}(Y \mid \mathrm{adv.})$ & 21.272 & 20.435 & $-0.837$ \\
 \bottomrule
 \end{tabular}
 \end{table}
-% src: PAPER/supply-lift/tables/shenzhen-primary-filtered.md (MigrantRatio district_extremes block + Theil)
+% src: famail_temporal/baselines/external_fairness/results/shenzhen-primary-supplylift-s10/external_fairness.json
+% (before-edit values are alpha-independent; identical cleaned base data)
 
 \textbf{The lift-up claim rides the supply channel.} The
 $\mathrm{mean}(Y \mid \mathrm{disadv.})$ rise is a ring-(ii)
@@ -103,13 +109,13 @@ $(S,D) \to (S,D') \to (S',D')$ splits the delta exactly into a demand move and
 a supply move (Table~\ref{tab:channels}). The demand channel (pickup
 relocation) carries large variance and is not significant; the supply channel
 (rerouted tails adding presence) is significant under \emph{both} accounting
-conventions: $+0.0091$ under tier-1 (the optimizer's fractional-presence
-convention) and $+0.0242$ under tier-2, which re-counts supply from raw GPS as
-distinct taxis per neighborhood-hour with the edited tails substituted. The
-recount machinery reproduces the production supply grid exactly (MAE 0.0) and
-matched 100\% of edit histories to raw pings, so tier-2 is the honest
-semantics, not an approximation.
-% src: PAPER/supply-lift/data/shz_primary_filtered_channel_decomposition.json; FINDINGS.md §4 (tiers, G2 validity)
+conventions --- tier-1 (the optimizer's fractional-presence convention) and
+tier-2, which re-counts supply from raw GPS as distinct taxis per
+neighborhood-hour with the edited tails substituted. The recount machinery
+reproduces the production supply grid exactly (MAE 0.0) with 100\% history
+matching, so tier-2 is the honest semantics, not an approximation.
+% src: <s10>/channel_decomposition.json + <s10>/supply_recount.json
+% src (recount validity properties): PAPER/supply-lift/FINDINGS.md §4 (G2, machinery unchanged)
 
 \begin{table}[t]
 \caption{Channel decomposition of $\Delta\,\mathrm{mean}(Y \mid \mathrm{disadv.})$,
@@ -119,30 +125,29 @@ Shenzhen migrant axis ($B{=}2{,}000$).}
 \toprule
 channel & $\Delta$ & 95\% CI & sig.? \\
 \midrule
-Supply (tier-1) & $+0.0091$ & [$+0.0054, +0.0130$] & \textbf{yes} \\
-Supply (tier-2, distinct-taxi) & $+0.0242$ & [$+0.0208, +0.0279$] & \textbf{yes} \\
-Demand (pickup relocation) & $+0.0378$ & [$-0.0065, +0.0836$] & no \\
-Total & $+0.0468$ & [$+0.0022, +0.0932$] & yes \\
+Supply (tier-1) & $+0.0176$ & [$+0.0128, +0.0225$] & \textbf{yes} \\ % lint-allow: coincidental CI bound (s10 tier-1 interval, not the trim-only headline delta)
+Supply (tier-2, distinct-taxi) & $+0.0411$ & [$+0.0346, +0.0479$] & \textbf{yes} \\
+Demand (pickup relocation) & $+0.0352$ & [$-0.0095, +0.0814$] & no \\
+Total & $+0.0529$ & [$+0.0086, +0.0989$] & yes \\
 \bottomrule
 \end{tabular}
 \end{table}
-% src: PAPER/supply-lift/data/shz_primary_filtered_channel_decomposition.json (via FINDINGS.md §4 table)
+% src: famail_temporal/results/2026-07-10T02-06-37_alpha_sweep_s10_c80_f10_filtered/channel_decomposition.json
 
-\textbf{Realism.} Fidelity-A is stable (edited 0.8457 vs.\ raw 0.8489;
-lift-mode edits are, if anything, less identity-damaging than trim-mode:
-$-0.0031$ vs.\ $-0.0059$). Fidelity-B shows lift's expected distributional
-cost --- whole-tail relocation shifts trajectory-shape statistics more than a
-pickup-only move (lift-mode 0.2645 vs.\ trim-mode 0.1601) --- a by-design
-trade-off we disclose rather than net out.
-% src: PAPER/supply-lift/FINDINGS.md §6.1 (G5 fidelity battery)
+\textbf{Realism.} Fidelity-A stability and lift's expected Fidelity-B
+distributional cost (whole-tail relocation shifts trajectory-shape statistics
+more than a pickup-only move) are re-measured on the adopted corpus:
+X.XXX vs.\ raw X.XXX (Fidelity-A); lift-mode X.XXX vs.\ trim-mode X.XXX
+(Fidelity-B) --- a by-design trade-off we disclose rather than net out.
+% TODO(run:Q3 -> level1_v2 on the s10 corpus: corpus-level Fid-A/Fid-B; mode split from the G5-style battery if re-run)
 
-\textbf{Provenance disclosures.} About 5\% of trim edits (115/2{,}455) had no
+\textbf{Provenance disclosures.} About 5\% of trim edits (118/2{,}455) had no
 king-compliant repair and were reverted post hoc; the rule was adopted before
 its metric effects were computed, and it moved every metric favorably --- the
 infeasible edits were actively counterproductive. The pre-build oracle gate
 bounded the supply-channel headroom at $+0.786$ on
 $\mathrm{mean}(Y \mid \mathrm{disadv.})$ --- $2.6\times$ the pre-registered
-go/no-go threshold of $+0.3$ (full accounting $+0.882$); the realized $+0.047$
+go/no-go threshold of $+0.3$ (full accounting $+0.882$); the realized $+0.053$
 sits far below the unconstrained ceiling, as a realism-bounded editor should.
 % src: PAPER/supply-lift/FINDINGS.md §8 (skip-on-infeasible); §1.3 + data/oracle.json (G0 ceilings)
 
@@ -166,25 +171,26 @@ that.
  & trim-only & trim+lift \\
 \midrule
 \multicolumn{3}{l}{\emph{Shenzhen (primary)}} \\
-$\Delta F_{\mathrm{causal}}$ & $+0.0144$ & $\mathbf{+0.0222}$ \\ % lint-allow: ablation
-$\Delta F_{\mathrm{spatial}}$ & $-0.0009$ & $\mathbf{+0.0064}$ \\ % lint-allow: ablation
-$\Delta\,\mathrm{mean}(Y \mid \mathrm{disadv.})$ & $+0.000$ (flat) & $\mathbf{+0.047}$ (CI excl.\ 0) \\
+$\Delta F_{\mathrm{causal}}$ & X.XXXX & $\mathbf{+0.0226}$ \\ % TODO(run:R2 -> trim-only@alpha* SZ metrics.json)
+$\Delta F_{\mathrm{spatial}}$ & X.XXXX & $\mathbf{+0.0061}$ \\ % TODO(run:R2)
+$\Delta\,\mathrm{mean}(Y \mid \mathrm{disadv.})$ & X.XXX & $\mathbf{+0.053}$ (CI excl.\ 0) \\ % TODO(run:R2 trim-only cell)
 \multicolumn{3}{l}{\emph{San Francisco (external validity)}} \\
-$\Delta F_{\mathrm{causal}}$ & $+0.0139$ & $\mathbf{+0.0328}$ \\ % lint-allow: ablation
-Migrant DP gap & n.s. & $\mathbf{-0.076}$ (CI excl.\ 0) \\
+$\Delta F_{\mathrm{causal}}$ & X.XXXX & X.XXXX \\ % TODO(run:R2 SF trim-only + R1 SF trim+lift)
+Migrant DP gap & X & X \\ % TODO(run:R2 + R1 external fairness)
 \bottomrule
 \end{tabular}
 \end{table}
-% src: PAPER/argument/05_results_shenzhen.md §1 (trim-only SZ); PAPER/argument/06_results_sf.md §1 (trim-only SF);
-% src: PAPER/supply-lift/FINDINGS.md §3, §5.1 (trim+lift both cities);
-% src: PAPER/external-metrics/FINDINGS.md §3-4 (trim-only SF migrant n.s.; SZ disadvantaged level flat 7.0734->7.0734)
+% src (trim+lift SZ col): famail_temporal/results/2026-07-10T02-06-37_alpha_sweep_s10_c80_f10_filtered/
+% metrics.json + channel_decomposition.json (mean(Y|D) total +0.0529 CI [+0.0086,+0.0989])
+% NOTE(re-anchor): both columns at alpha*=(0.1,0.8,0.1); trim-only baselines re-run at alpha* (R2)
+% so the ablation isolates the lift mechanism at the adopted weights, not a weight change.
 
-Three rows carry the qualitative story. Under trim-only, the disadvantaged
-group's service level is numerically unchanged (7.0734 before and after on the
-migrant axis) --- the entire fairness improvement comes from reducing
-over-service. Under trim+lift the same level rises, with a bootstrap interval
-excluding zero, and the previously immovable San Francisco migrant axis becomes
-significant. The secondary spatial metric flips from a small cost to a gain.
+Three rows carry the qualitative story, and the structural expectation from
+\S\ref{sec:leveling} --- trim-only improves fairness with the disadvantaged
+group's service level numerically unchanged (leveling down), while trim+lift
+raises that level --- is re-verified at the adopted weights.
+% TODO(run:R2 -> trim-only external fairness: confirm the flat-disadvantaged-level row at alpha*)
+The secondary spatial metric flips from a small cost to a gain.
 Per Table~\ref{tab:ablation}, the lift mechanism is not an incremental tweak
 to the demand-only editor but the difference between redistributing service
 and providing it.
@@ -218,23 +224,19 @@ gan-generated & X.XXXX & X.XXX & X.XXX \\ % TODO(run:Q3 -> level1_v2_multiseed.j
 
 \textbf{Vanilla training averages the edit away.} A driver-conditioned BC
 policy trained on the edited corpus at uniform weight is not fairer than one
-trained on raw: paired $\Delta F_{\mathrm{causal}} = +0.0023$ ($p = .156$,
+trained on raw: paired $\Delta F_{\mathrm{causal}} = $ X.XXXX (expected
 n.s.) --- the null that motivates the upweighting recipe of
 \S\ref{sec:downstream}.
-% src: PAPER/supply-lift/FINDINGS.md §7 (w=1 arm), data/weighted_bc_paired_stats.json
+% TODO(run:R4 -> weighted_bc_sweep/alpha_sweep_s10_c80_f10_filtered_6seed/paired_stats.json, w=1 arm)
 
 \textbf{Upweighting recovers it, edit-specifically.} With the edited
-demonstrations upweighted, the paired gain is monotone in the weight and
-sign-unanimous across all six seeds: $+0.0232$ (w10), $+0.0280$ (w20),
-$+0.0310$ (w30), each $p = .031$ (6/6) with $t$-intervals excluding zero.
-New under trim+lift: $F_{\mathrm{spatial}}$ \emph{also} propagates
-($+0.0042 \to +0.0048 \to +0.0057$, all 6/6) --- the demand-only corpus never
-achieved this. Both controls are null (random placebo $-0.0011$/$-0.0027$;
-most-fair select $+0.0034$/$+0.0014$/$+0.0007$), so the recovery is driven by
-the edit, not by oversampling or selection. Fidelity-A is unchanged at every
-weight; Fidelity-B rises modestly with weight ($+0.0157$ at w30), the same
-disclosed trade-off family as the data-level cost.
-% src: PAPER/supply-lift/FINDINGS.md §7 (sweep table incl. F_spatial propagation + controls + fidelity)
+demonstrations upweighted, the paired gain is expected monotone in the weight
+and sign-unanimous: X.XXXX (w10), X.XXXX (w20), X.XXXX (w30), with
+$t$-intervals and both control arms (random placebo; most-fair select)
+reported alongside; whether $F_{\mathrm{spatial}}$ also propagates --- as it
+did on the prior trim+lift corpus, which the demand-only corpus never
+achieved --- is re-measured here, as are the per-weight Fidelity-A/B effects.
+% TODO(run:R4 -> weighted_bc_sweep/alpha_sweep_s10_c80_f10_filtered_6seed/paired_stats.json) full dose-response + controls + F_spatial propagation + fidelity
 
 \textbf{Model-level variance.} A paired baseline-vs-FAMAIL comparison at
 uniform weight:
@@ -244,11 +246,12 @@ companion to the vanilla-transfer null).
 
 \textbf{The honest boundary: allocation behavior.} Metric propagation is not
 the whole story. Rolling out the trained policies and measuring the share of
-pickups they allocate to disadvantaged areas, the share still tilts
-\emph{away}: $-0.0029$ at w30 (0/6 seeds positive, $p = .031$), against
-$-0.0048$ under the demand-only corpus % lint-allow: ablation-context rollout comparison
---- attenuated by ${\sim}40\%$, not reversed --- and policies do not learn to
-\emph{cruise} disadvantaged areas (seeking-state shares n.s.\ in every arm).
+pickups they allocate to disadvantaged areas, the prior trim+lift corpus
+showed the share still tilting \emph{away} --- attenuated roughly $40\%$
+versus the demand-only corpus, but not reversed --- and policies did not
+learn to \emph{cruise} disadvantaged areas (seeking-state shares n.s.). This
+suite re-runs on the adopted corpus: X.XXXX at w30 (X/6 seeds).
+% TODO(run:R5 -> rollout-allocation eval on the s10 corpus) allocation cells; prior-era numbers cited qualitatively above
 We claim the data-level lift-up and the metric propagation; we disclose the
 allocation boundary, which motivates training-side allocation constraints as
 future work rather than further data-side editing alone.
@@ -283,7 +286,7 @@ the matched dose $d = 10{,}000$, targeted oversampling improves
 $F_{\mathrm{causal}}$ by $+0.0153$ (dose-monotone:
 $+0.0059 \to +0.0097 \to +0.0153$) --- but it fabricates 10.5\% of the corpus
 to get there, where FAMAIL redistributes observed behavior at zero inflation
-and reaches $+0.0222$. The untargeted placebo (same fabrication, no targeting)
+and reaches $+0.0226$. The untargeted placebo (same fabrication, no targeting)
 \emph{degrades} fairness ($-0.0172$), so the gain is targeting-specific; and
 the placebo's DP gap explodes ($+2.8$) because fabricated supply lands
 predominantly in already-advantaged cells --- a measured demonstration that
@@ -304,7 +307,7 @@ rows land with campaign stage Q1.}
 arm & $\Delta F_{\mathrm{causal}}$ & $\Delta F_{\mathrm{spatial}}$ & inflation \\
 \midrule
 raw (reference) & --- & --- & 0\% \\
-\textbf{FAMAIL trim+lift} & $\mathbf{+0.0222}$ & $+0.0064$ & 0\% \\
+\textbf{FAMAIL trim+lift} & $\mathbf{+0.0226}$ & $+0.0061$ & 0\% \\
 iFGSM (rand.\ restart) & X.XXXX & X.XXXX & 0\% \\ % TODO(run:Q1 -> famail_temporal/baselines/baseline_table/)
 FGSM (rand.\ restart) & X.XXXX & X.XXXX & 0\% \\ % TODO(run:Q1 -> famail_temporal/baselines/baseline_table/)
 random jitter & X.XXXX & X.XXXX & 0\% \\ % TODO(run:Q1 -> famail_temporal/baselines/baseline_table/)
@@ -319,18 +322,26 @@ demog.\ oversampling (targeted) & $+0.0153$ & --- & 10.5\% \\
 
 \subsection{Robustness and Sensitivity}\label{sec:exp-robustness}
 
-\textbf{Weight sensitivity.} Fig.~\ref{fig:alpha-pareto} reports the empirical
-$(\Delta F_{\mathrm{spatial}}, \Delta F_{\mathrm{causal}})$ frontier over the
-weight simplex (five sweep points plus the adopted configuration, all run
-through the identical trim+lift pipeline).
-% TODO(run:Q0 -> PAPER/objective-motivation/weight-sensitivity/alpha_pareto.png + summary md) frontier sentence + figure land with the Q0 checkpoint
+\textbf{Weight sensitivity.} Fig.~\ref{fig:alpha-pareto} reports the weight
+sweep: six full editing runs across the simplex, each scored on all three
+metric rings. The optimized $\Delta F_{\mathrm{causal}}$ is flat (within
+$0.001$) for $\alpha_{\mathrm{sp}} \in [0, 0.55]$, while the ring-(ii)
+supply-channel lift-up declines monotonically with $\alpha_{\mathrm{sp}}$ ---
+significant on both tiers only for $\alpha_{\mathrm{sp}} \le 0.2$ --- and
+ring-(iii) instruments improve significantly at every point. The adopted
+$(0.1, 0.8, 0.1)$ is the three-ring criterion's selection; the sweep shows
+the choice is robust on the primary axis and load-bearing only for the
+lift-up property.
+% src: PAPER/objective-motivation/weight-sensitivity/EXTENDED_FRONTIER.md (full table + criterion)
 
 \begin{figure}[t]
   \centering
-  % TODO(run:Q0): \includegraphics[width=\linewidth]{figures/alpha_pareto.png}
-  \fbox{\parbox{0.9\linewidth}{\centering\vspace{1.5em}$\alpha$-Pareto frontier
-  figure --- lands with campaign stage Q0.\vspace{1.5em}}}
-  \caption{Empirical weight-sensitivity frontier (placeholder pending Q0).}
+  % TODO(figure): two-panel extended-frontier figure — panel A the (dF_spatial, dF_causal)
+  % scatter (flat), panel B the lift-up channels vs alpha_sp (monotone decline, sig markers).
+  % Data: PAPER/objective-motivation/weight-sensitivity/EXTENDED_FRONTIER.md.
+  \fbox{\parbox{0.9\linewidth}{\centering\vspace{1.5em}Extended weight-sensitivity
+  frontier figure --- placeholder.\vspace{1.5em}}}
+  \caption{Weight sweep across three metric rings (placeholder).}
   \label{fig:alpha-pareto}
 \end{figure}
 
@@ -349,18 +360,17 @@ with campaign stages Q6--Q8).}
  & \{hous,comp,migr\} & \{hous,gdp,comp\} & +logpopdens \\
 \midrule
 before-edit $F_{\mathrm{causal}}$ & 0.7988 & X.XXXX & X.XXXX \\ % TODO(run:Q6 -> per-set filtered metrics.json)
-editor $\Delta F_{\mathrm{causal}}$ & $+0.0222$ & X.XXXX & X.XXXX \\ % TODO(run:Q6 -> per-set filtered metrics.json)
-DI $\Delta$ (migrant/extremes) & $+0.0155$ & X.XXXX & X.XXXX \\ % TODO(run:Q7 -> per-set external_fairness.json)
-Theil $\Delta$ & $-0.0082$ & X.XXXX & X.XXXX \\ % TODO(run:Q7 -> per-set external_fairness.json)
+editor $\Delta F_{\mathrm{causal}}$ & $+0.0226$ & X.XXXX & X.XXXX \\ % TODO(run:Q6 -> per-set filtered metrics.json)
+DI $\Delta$ (migrant/extremes) & $+0.0162$ & X.XXXX & X.XXXX \\ % TODO(run:Q7 -> per-set external_fairness.json)
+Theil $\Delta$ & $-0.0087$ & X.XXXX & X.XXXX \\ % TODO(run:Q7 -> per-set external_fairness.json)
 L1: edited fairest faithful? & see~\ref{tab:l1} & X & X \\ % TODO(run:Q8 -> per-set level1_v2_multiseed.json)
-vanilla-BC null (w1) & $+0.0023$ n.s. & X.XXXX & X.XXXX \\ % TODO(run:Q8 -> per-set weighted-bc paired_stats.json)
-weighted-BC w30 & $+0.0310$ & X.XXXX & X.XXXX \\ % TODO(run:Q8 -> per-set weighted-bc paired_stats.json)
+vanilla-BC null (w1) & see~\S\ref{sec:exp-downstream} & X.XXXX & X.XXXX \\ % TODO(run:R4 PRIMARY + Q8 per-set)
+weighted-BC w30 & see~\S\ref{sec:exp-downstream} & X.XXXX & X.XXXX \\ % TODO(run:R4 PRIMARY + Q8 per-set)
 variance (b0 vs FAMAIL) & see~\S\ref{sec:exp-downstream} & X & X \\ % TODO(run:Q8 -> per-set variance aggregate.json)
 \bottomrule
 \end{tabular}
 \end{table}
-% src (PRIMARY column): PAPER/supply-lift/data/shz_primary_filtered_metrics.json;
-% PAPER/supply-lift/tables/shenzhen-primary-filtered.md; FINDINGS.md §7
+% src (PRIMARY column): s10 corpus metrics.json + shenzhen-primary-supplylift-s10 external_fairness.json
 
 \textbf{Filtering is not a substitute.} Removing the $K$ least-fair
 trajectories instead of editing them does not reproduce the gain:
@@ -374,34 +384,32 @@ fidelity change; because $F_{\mathrm{causal}}$ is city-specific and
 associational (ACS proxies, not hukou), San Francisco tests whether the
 \emph{conclusions} reproduce, never whether magnitudes match.
 
-\textbf{Data level.} $F_{\mathrm{causal}}$ rises 0.8752 $\to$ 0.9079
-($+0.0328$), $F_{\mathrm{spatial}}$ $+0.0180$, with Fidelity-A stable (edited
-0.9581 vs.\ raw 0.9578) and lift's Fidelity-B cost (0.2649) almost identical
-to Shenzhen's (0.2645) --- the distributional trade-off is city-independent.
-Every external instrument improves: Theil $-0.0081$ (CI excludes 0), and the
-migrant axis --- immovable under demand-only editing --- becomes significant
-under the district-extremes convention (DP $-0.0758$, CI $[-0.1141, -0.0317]$;
-DI $+0.0061$). Under the median-split convention the migrant axis remains
-n.s.\ --- the SF sample is 12 drivers and we state the grouping dependence
-rather than choose the favorable one.
-% src: PAPER/supply-lift/data/sf12_filtered_metrics.json; tables/sf12-filtered.md; FINDINGS.md §5.1, §6.2
+\textbf{Data level.} $F_{\mathrm{causal}}$ rises X.XXXX $\to$ X.XXXX
+(X.XXXX), $F_{\mathrm{spatial}}$ X.XXXX, with Fidelity-A stability and
+lift's Fidelity-B cost re-measured on the adopted corpus; the external
+instruments (Theil; the migrant axis under both grouping conventions, with
+any grouping dependence stated rather than hidden) are scored identically to
+Shenzhen.
+% TODO(run:R1 -> <ts>_supply_lift_a10_sf12_filtered/metrics.json + sf12-supplylift-a10 external_fairness.json) all data-level cells
+% NOTE: on the prior (0.2,0.7,0.1) corpus the migrant axis — immovable under demand-only editing —
+% became significant under district-extremes; whether that reproduces at the adopted weights is
+% reported as measured.
 
-\textbf{The supply channel replicates; the ratio does not.} The supply channel
-is again positive and significant ($+0.0195$, CI $[+0.0112, +0.0279]$) ---
-tier-1 accounting only, a \emph{lower bound} on Shenzhen's evidence (the
-distinct-taxi tier-2 recount is not yet plumbed for the SF pipeline). But
-unlike Shenzhen, lift also reroutes \emph{pickups} into under-served cells, so
-recorded demand there rises and the total
-$\mathrm{mean}(Y \mid \mathrm{disadv.})$ moves net-negative ($-0.0330$, CI
-excludes 0). Two readings coexist and we present both. Under the ratio
-reading, the SF lifting-up claim does not hold and should be withheld. Under
-the external-metrics reading, more rides \emph{served} in under-served areas
-is a demand-side parity gain --- DP, DI, and Theil all improve significantly
---- and the falling ratio reflects exactly the demand endogeneity of
-\S\ref{sec:leveling}: recorded demand was suppressed, and serving it raises
-the denominator.
+\textbf{The supply channel and the ratio reading.} On the prior trim+lift
+corpus, SF exhibited a genuine cross-metric tension: the supply channel
+replicated (positive, significant, tier-1-labeled as a lower bound --- the
+distinct-taxi tier-2 recount is not plumbed for the SF pipeline), yet lift
+also rerouted \emph{pickups} into under-served cells, raising recorded demand
+there and pushing the total $\mathrm{mean}(Y \mid \mathrm{disadv.})$
+net-negative. If the tension reproduces at the adopted weights, we present
+both readings: under the ratio reading the SF lifting-up claim is withheld;
+under the external-metrics reading, more rides \emph{served} in under-served
+areas is a demand-side parity gain, and the falling ratio reflects exactly
+the demand endogeneity of \S\ref{sec:leveling} --- recorded demand was
+suppressed, and serving it raises the denominator.
+% TODO(run:R1 -> <ts>_supply_lift_a10_sf12_filtered/channel_decomposition.json) SF channel cells + whether the tension reproduces at a10
 % TODO(PI-framing): Zhang decision — which SF fairness story leads; both readings kept until then.
-% src: PAPER/supply-lift/data/sf12_filtered_channel_decomposition.json; FINDINGS.md §5.2, §10
+% src (prior-corpus tension, cited qualitatively): PAPER/supply-lift/FINDINGS.md §5.2, §10
 
 \textbf{Downstream.} The four-source data-quality table, the weighted-BC
 recovery with controls, and the model-level variance suite rerun on the SF

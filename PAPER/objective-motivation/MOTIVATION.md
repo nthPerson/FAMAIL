@@ -151,17 +151,23 @@ full Pillar-2 experimental results live in [`../argument/04_evaluation.md`](../a
 
 ---
 
-## Why these weights — the multi-objective scalarization
+## Why these weights — the empirically selected scalarization
 
-FAMAIL combines three competing objectives by **linear scalarization** into a single differentiable `L`. The
-causal-emphasis weights `α = (0.2, 0.7, 0.1)` were selected under an explicit criterion — *maximize the
-demographic-fairness gain `ΔF_causal` while holding the spatial term non-degrading (`ΔF_spatial ≥ 0`)* — and
-adopted after they matched the pure-causal `(0, 1, 0)` configuration's fairness gain without "gaming" a single
-metric (i.e., with the spatial and fidelity terms active and `F_spatial` held flat). The shipped configuration
-yields `ΔF_causal = +0.0128` with `ΔF_spatial = +0.0003`. The weighting is principled rather than arbitrary
-because the objective's gradient geometry is strongly causal-dominated: `F_causal` drives ~97.5% of
-gradient-sign decisions, `F_spatial`'s gradient is roughly 20× smaller (so it never overrides the causal
-direction), and `F_fidelity` is dormant at ε = 2 (the bounded edit keeps every move inside the training
-distribution). A causal-heavy weighting therefore reflects, rather than forces, where the editable signal lies.
-A full `(ΔF_spatial, ΔF_causal)` Pareto sweep over the weight simplex is reported as a sensitivity analysis to
-confirm the frontier around the adopted point.
+FAMAIL combines three competing objectives by **linear scalarization** into a single differentiable `L`.
+The adopted weights **`α = (0.1, 0.8, 0.1)`** are selected *empirically*, by sweeping the weight simplex
+(fidelity fixed at 0.1) with full trim+lift editing runs and scoring every point on **all three metric
+rings** — the optimized metrics, the design-targeted supply/demand family, and the external instruments
+(`PAPER/objective-motivation/weight-sensitivity/EXTENDED_FRONTIER.md`; decision record `DECISION.md`,
+2026-07-11). The sweep exposes an asymmetry the optimized metrics alone would hide: `ΔF_causal` is **flat**
+(within 0.001) across `α_spatial ∈ [0, 0.55]`, while the **supply-channel lift-up of the under-served group
+declines monotonically** with `α_spatial`, losing significance beyond `α_spatial = 0.2` — at spatial-heavy
+weights the value-of-presence map is dominated by evenness rather than the demographic residual, and the
+editor reverts to leveling down. The selection criterion is therefore three-part: *maximize `ΔF_causal`
+subject to (i) `ΔF_spatial ≥ 0` and (ii) the supply-channel lift-up remaining significant under both
+accounting tiers.* `(0.1, 0.8, 0.1)` is the frontier's best point under this criterion
+(`ΔF_causal = +0.0226`, `ΔF_spatial = +0.0061`, lift-up tier-1 `+0.0176` / tier-2 `+0.0411`, both
+CI-significant). Two properties make the choice robust rather than delicate: the primary gain is
+insensitive to the weights over a wide range, and `F_fidelity` is dormant at ε = 2 (the bounded edit keeps
+every move inside the training distribution) — the discriminator constrains, but does not steer, the
+optimization. A causal-heavy weighting thus reflects, rather than forces, where the editable *lifting-up*
+signal lies; the full three-ring sweep is reported as the sensitivity analysis.

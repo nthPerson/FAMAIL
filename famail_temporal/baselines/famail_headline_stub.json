@@ -1,13 +1,13 @@
 {
-  "_src": "PAPER/supply-lift/FINDINGS.md §3 (Shenzhen PRIMARY filtered headline); hand-authored stub for assemble_baseline_table — headline numbers transcribed, never recomputed. n_edited = 2,340 surviving trim + 7,545 lift (post skip-on-infeasible filter, FINDINGS §8).",
+  "_src": "famail_temporal/results/2026-07-10T02-06-37_alpha_sweep_s10_c80_f10_filtered/metrics.json (the re-anchored (0.1,0.8,0.1) SZ headline corpus, DECISION.md 2026-07-11); hand-authored stub for assemble_baseline_table — headline numbers transcribed, never recomputed. n_edited = 2,337 surviving trim + 7,545 lift (post skip-on-infeasible filter).",
   "arm": {
     "mode": "famail-trim+lift",
-    "n_edited": 9885
+    "n_edited": 9882
   },
   "fairness": {
     "f_causal_before": 0.79880,
-    "f_causal_after": 0.82101,
+    "f_causal_after": 0.82136,
     "f_spatial_before": 0.10343,
-    "f_spatial_after": 0.10978
+    "f_spatial_after": 0.10954
   }
 }

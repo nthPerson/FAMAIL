@@ -119,22 +119,27 @@ Jensen--Shannon check over aggregate mobility statistics \cite{feng2020simulate}
 \mathcal{L} \;=\; \alpha_{\mathrm{sp}} F_{\mathrm{spatial}}
 + \alpha_{\mathrm{ca}} F_{\mathrm{causal}}
 + \alpha_{\mathrm{fi}} F_{\mathrm{fidelity}},
-\qquad \alpha = (0.2,\; 0.7,\; 0.1).
+\qquad \alpha = (0.1,\; 0.8,\; 0.1).
 \end{equation}
-% src: PAPER/objective-motivation/MOTIVATION.md ("Why these weights")
-The weights were selected under an explicit criterion --- maximize the
-demographic-fairness gain subject to the spatial term not degrading
-($\Delta F_{\mathrm{spatial}} \ge 0$) --- and the causal-heavy weighting
-reflects, rather than forces, where the editable signal lies: the objective's
-gradient geometry is dominated by $F_{\mathrm{causal}}$, the spatial gradient
-is far smaller and never overrides it, and the fidelity gradient is dormant
-under bounded edits. A full
-$(\Delta F_{\mathrm{spatial}}, \Delta F_{\mathrm{causal}})$ Pareto sweep over
-the weight simplex is reported as a sensitivity analysis around the adopted
-point (\S\ref{sec:experiments}).
-% TODO(alpha-sweep): finalize frontier sentence when 5/5 lands (~2026-07-11 AM);
-% partial 4-point finding: frontier flat (dF_causal +0.0217..+0.0226), shipped point on it.
-% src: famail_temporal/results/alpha_sweep/summary/ (pending)
+% src: PAPER/objective-motivation/weight-sensitivity/ (EXTENDED_FRONTIER.md + DECISION.md, 2026-07-11)
+The weights are selected \emph{empirically}: we sweep the weight simplex
+(fidelity fixed at 0.1) with full editing runs, and score every sweep point
+not only on the optimized metrics but on the design-targeted and external
+rings as well (\S\ref{sec:exp-robustness}). The sweep exposes an asymmetry
+the optimized metrics alone would hide: $\Delta F_{\mathrm{causal}}$ is flat
+(within $0.001$) across $\alpha_{\mathrm{sp}} \in [0, 0.55]$, but the
+supply-channel lift-up of the under-served group declines monotonically as
+$\alpha_{\mathrm{sp}}$ grows, losing significance beyond
+$\alpha_{\mathrm{sp}} = 0.2$. We therefore select by a three-part criterion
+--- maximize $\Delta F_{\mathrm{causal}}$ subject to
+$\Delta F_{\mathrm{spatial}} \ge 0$ \emph{and} the supply-channel lift-up
+remaining significant under both accounting tiers --- which the adopted
+configuration satisfies as the frontier's best point. Two properties make
+the choice robust rather than delicate: the primary gain is insensitive to
+the weights over a wide range, and the fidelity gradient is dormant under
+bounded edits --- the discriminator constrains, but does not steer, the
+optimization.
+% src: PAPER/objective-motivation/weight-sensitivity/EXTENDED_FRONTIER.md (flatness, monotone lift-up, criterion)
 
 \subsection{Attribution: Localizing the Deficit and the Remedy}\label{sec:attribution}
 
