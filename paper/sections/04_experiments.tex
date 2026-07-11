@@ -171,9 +171,9 @@ that.
  & trim-only & trim+lift \\
 \midrule
 \multicolumn{3}{l}{\emph{Shenzhen (primary)}} \\
-$\Delta F_{\mathrm{causal}}$ & X.XXXX & $\mathbf{+0.0226}$ \\ % TODO(run:R2 -> trim-only@alpha* SZ metrics.json)
-$\Delta F_{\mathrm{spatial}}$ & X.XXXX & $\mathbf{+0.0061}$ \\ % TODO(run:R2)
-$\Delta\,\mathrm{mean}(Y \mid \mathrm{disadv.})$ & X.XXX & $\mathbf{+0.053}$ (CI excl.\ 0) \\ % TODO(run:R2 trim-only cell)
+$\Delta F_{\mathrm{causal}}$ & $+0.0146$ & $\mathbf{+0.0226}$ \\ % lint-allow: ablation
+$\Delta F_{\mathrm{spatial}}$ & $-0.0011$ & $\mathbf{+0.0061}$ \\ % lint-allow: ablation
+$\Delta\,\mathrm{mean}(Y \mid \mathrm{disadv.})$ & $+0.000$ (flat) & $\mathbf{+0.053}$ (CI excl.\ 0) \\ % lint-allow: ablation — trim-only level 7.0734->7.0734 exactly
 \multicolumn{3}{l}{\emph{San Francisco (external validity)}} \\
 $\Delta F_{\mathrm{causal}}$ & X.XXXX & $\mathbf{+0.0316}$ \\ % TODO(run:R2 SF trim-only cell)
 Migrant DP gap & X & $\mathbf{-0.073}$ (CI excl.\ 0) \\ % TODO(run:R2 trim-only cell)
@@ -186,10 +186,14 @@ Migrant DP gap & X & $\mathbf{-0.073}$ (CI excl.\ 0) \\ % TODO(run:R2 trim-only 
 % so the ablation isolates the lift mechanism at the adopted weights, not a weight change.
 
 Three rows carry the qualitative story, and the structural expectation from
-\S\ref{sec:leveling} --- trim-only improves fairness with the disadvantaged
-group's service level numerically unchanged (leveling down), while trim+lift
-raises that level --- is re-verified at the adopted weights.
-% TODO(run:R2 -> trim-only external fairness: confirm the flat-disadvantaged-level row at alpha*)
+\S\ref{sec:leveling} re-verifies exactly at the adopted weights: under
+trim-only, every external instrument still improves significantly (DP
+$-0.611$, DI $+0.0098$, Theil $-0.0059$, all CIs excluding zero) --- but the
+disadvantaged group's service level is unchanged to four decimals
+($7.0734 \to 7.0734$) while the advantaged level falls; the improvement is
+pure leveling-down. Under trim+lift the same level rises with a bootstrap
+interval excluding zero.
+% src: famail_temporal/baselines/external_fairness/results/shenzhen-trimonly-a10/external_fairness.json
 The secondary spatial metric flips from a small cost to a gain.
 Per Table~\ref{tab:ablation}, the lift mechanism is not an incremental tweak
 to the demand-only editor but the difference between redistributing service

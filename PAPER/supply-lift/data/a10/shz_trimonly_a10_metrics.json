@@ -1,0 +1,269 @@
+{
+  "experiment_id": "2026-07-11T12-11-31_trimonly_a10_shz",
+  "timestamp_utc": "2026-07-11T20:43:05+00:00",
+  "git_sha": "1560c31",
+  "git_dirty": true,
+  "command_line": "/home/robert/FAMAIL/famail_temporal/evaluation/runner.py -k 10000 --name trimonly_a10_shz --device auto --override ALPHA_SPATIAL=0.1 --override ALPHA_CAUSAL=0.8 --override ALPHA_FIDELITY=0.1 --override TAIL_LEN=0",
+  "config_snapshot": {
+    "ACCEPT_RULE": "objective",
+    "ACTIVE_SUPPLY_THRESHOLD": 0.5,
+    "ALPHA_CAUSAL": 0.8,
+    "ALPHA_FIDELITY": 0.1,
+    "ALPHA_SPATIAL": 0.1,
+    "ANNEAL_TEMPERATURE": true,
+    "CACHE_DIR": "/home/robert/FAMAIL/famail_temporal/cache",
+    "CITY": "shenzhen",
+    "CONVERGENCE_TOL": 1e-06,
+    "DEFAULT_SEED": 42,
+    "DEMAND_FLOOR": 0.5,
+    "DEMOGRAPHIC_FEATURES": [
+      "AvgHousingPricePerSqM",
+      "CompPerCapita",
+      "MigrantRatio"
+    ],
+    "DIAGNOSTICS_ENABLED": true,
+    "DISCRIMINATOR_CHECKPOINT_DIR": "/home/robert/FAMAIL/famail_temporal/discriminator_checkpoints",
+    "DISCRIMINATOR_CHECKPOINT_FILENAME": "default/best.pt",
+    "EPS": 1e-08,
+    "EPSILON_BALL": 2.0,
+    "EPSILON_CAP": 2.0,
+    "GRID_DIMS": [
+      48,
+      90
+    ],
+    "ITERATIVE_TOPK_MAX_EDITS": 1,
+    "LIFT_BUDGET": null,
+    "MAX_ITERATIONS": 50,
+    "MAX_ROUNDS": 1,
+    "MIN_ACTIVE_UNITS_PER_BLOCK": 10,
+    "MIN_TOTAL_ACTIVE_UNITS": 100,
+    "N_TIME_BUCKETS": 288,
+    "PACKAGE_ROOT": "/home/robert/FAMAIL/famail_temporal",
+    "PATIENCE": 10,
+    "ROUND_CONVERGENCE_TOL": null,
+    "ROUND_PATIENCE": 2,
+    "SOFT_NEIGHBORHOOD_SIZE": 5,
+    "SOURCE_DATA_DIR": "/home/robert/FAMAIL/famail_temporal/source_data",
+    "STEP_SIZE_ALPHA": 0.1,
+    "STE_ENABLED": false,
+    "SUPPLY_FLOOR": 0.1,
+    "T": 24,
+    "TAIL_LEN": 0,
+    "TAIL_TAPER": [
+      0.25,
+      0.5,
+      0.75,
+      1.0
+    ],
+    "TAU_MAX": 1.0,
+    "TAU_MIN": 0.1,
+    "TIME_BLOCKS": [
+      [
+        "hour_00",
+        0,
+        1
+      ],
+      [
+        "hour_01",
+        1,
+        2
+      ],
+      [
+        "hour_02",
+        2,
+        3
+      ],
+      [
+        "hour_03",
+        3,
+        4
+      ],
+      [
+        "hour_04",
+        4,
+        5
+      ],
+      [
+        "hour_05",
+        5,
+        6
+      ],
+      [
+        "hour_06",
+        6,
+        7
+      ],
+      [
+        "hour_07",
+        7,
+        8
+      ],
+      [
+        "hour_08",
+        8,
+        9
+      ],
+      [
+        "hour_09",
+        9,
+        10
+      ],
+      [
+        "hour_10",
+        10,
+        11
+      ],
+      [
+        "hour_11",
+        11,
+        12
+      ],
+      [
+        "hour_12",
+        12,
+        13
+      ],
+      [
+        "hour_13",
+        13,
+        14
+      ],
+      [
+        "hour_14",
+        14,
+        15
+      ],
+      [
+        "hour_15",
+        15,
+        16
+      ],
+      [
+        "hour_16",
+        16,
+        17
+      ],
+      [
+        "hour_17",
+        17,
+        18
+      ],
+      [
+        "hour_18",
+        18,
+        19
+      ],
+      [
+        "hour_19",
+        19,
+        20
+      ],
+      [
+        "hour_20",
+        20,
+        21
+      ],
+      [
+        "hour_21",
+        21,
+        22
+      ],
+      [
+        "hour_22",
+        22,
+        23
+      ],
+      [
+        "hour_23",
+        23,
+        24
+      ]
+    ]
+  },
+  "config_overrides": {
+    "ALPHA_SPATIAL": 0.1,
+    "ALPHA_CAUSAL": 0.8,
+    "ALPHA_FIDELITY": 0.1,
+    "TAIL_LEN": 0
+  },
+  "diagnostics_enabled": false,
+  "effective_alphas": {
+    "alpha_spatial": 0.1,
+    "alpha_causal": 0.8,
+    "alpha_fidelity": 0.1
+  },
+  "dataset": {
+    "n_trajectories": 95297,
+    "n_drivers": 50,
+    "n_active_units": 34524
+  },
+  "k_modified": 2455,
+  "metrics_before": {
+    "f_spatial": 0.10342705994844437,
+    "f_causal": 0.7987951040267944,
+    "gini_dsr": 0.8980926275253296,
+    "gini_asr": 0.8950532674789429
+  },
+  "metrics_after": {
+    "f_spatial": 0.10233278572559357,
+    "f_causal": 0.8133583068847656,
+    "gini_dsr": 0.9002813100814819,
+    "gini_asr": 0.8950532674789429
+  },
+  "deltas": {
+    "f_spatial": -0.0010942742228507996,
+    "f_causal": 0.014563202857971191,
+    "gini_dsr": 0.0021886825561523438,
+    "gini_asr": 0.0
+  },
+  "convergence_summary": {
+    "n_converged": 2452,
+    "n_max_iter": 3,
+    "mean_total_iterations": 31.972708757637474,
+    "mean_final_grad_norm": 5.223279020431676e-07
+  },
+  "rounds": [
+    {
+      "round_index": 1,
+      "n_edited": 2455,
+      "f_causal": 0.8133583068847656,
+      "delta_f_causal": 0.014563202857971191,
+      "pool_size": 2455
+    }
+  ],
+  "diagnostics_summary": null,
+  "artifact_paths": {
+    "grid_before": "grid_before.pkl",
+    "grid_after": "grid_after.pkl",
+    "augmented_trajs_before": "augmented_trajs_before.pkl",
+    "augmented_trajs_after": "augmented_trajs_after.pkl",
+    "modified_trajectory_ids": "modified_trajectory_ids.json",
+    "histories": "histories.pkl",
+    "trajectories_csv": "trajectories.csv",
+    "per_unit_attribution_csv": "per_unit_attribution.csv",
+    "attribution_distribution": "attribution_distribution.npz",
+    "convergence_curve": "convergence_curve.npz",
+    "delta_supply_3d": "delta_supply_3d.npz"
+  },
+  "file_sizes_bytes": {
+    "grid_before": 1763321,
+    "grid_after": 1763321,
+    "augmented_trajs_before": 103395995,
+    "augmented_trajs_after": 103395995,
+    "modified_trajectory_ids": 226280,
+    "histories": 13349207,
+    "trajectories_csv": 1003542,
+    "per_unit_attribution_csv": 6993175,
+    "attribution_distribution": 392310,
+    "convergence_curve": 3972,
+    "delta_supply_3d": 1062
+  },
+  "n_trim": 2455,
+  "n_lift": 0,
+  "n_taper_infeasible_trim": 0,
+  "n_taper_infeasible_lift": 0,
+  "supply_totals": {
+    "added": 0.0,
+    "removed": 0.0
+  }
+}
