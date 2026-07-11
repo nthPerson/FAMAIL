@@ -231,3 +231,90 @@ behavior into under-served cells. Before building this mechanism we bounded
 its headroom with a greedy oracle, which cleared a pre-registered go/no-go
 threshold on the supply channel alone (\S\ref{sec:experiments}).
 % src: LIFT_ALGORITHM_REFERENCE.md §1-2 (dY/dS; oracle gate G0; numbers stay in Experiments)
+
+\begin{figure*}[t]
+  \centering
+  % TODO(figure): three-panel overview — (1) the service gap (over-served cluster vs
+  % under-served area); (2) trim: pickups nudged out of hotspots (levels down);
+  % (3) lift: value-of-presence heat map + a tail bending into the glow (lifts up).
+  % Design candidate: docs/presentations/meeting_42_update/trim_plus_lift_explainer.md §4.
+  \fbox{\parbox{0.9\textwidth}{\centering\vspace{2em}Method overview figure --- placeholder.\vspace{2em}}}
+  \caption{FAMAIL trim+lift editing overview (placeholder).}
+  \label{fig:overview}
+\end{figure*}
+
+\subsection{The Trim+Lift Editor}\label{sec:editor}
+
+\textbf{Shared machinery.} Both editing modes repurpose bounded adversarial
+perturbation \cite{goodfellow2015fgsm,kurakin2017ifgsm}, in its
+spatio-temporal instantiation \cite{hu2023stifgsm}, \emph{constructively} ---
+in the spirit of algorithmic recourse
+\cite{ustun2019recourse,wachter2018counterfactual}, where the same
+counterfactual-perturbation tooling that finds a minimal input change to flip
+a decision instead prescribes a minimal, bounded, beneficial change. Per
+iteration, the edit offset takes a signed-gradient step under a cumulative
+$L_\infty$ clip,
+\begin{equation}\label{eq:step}
+\delta \leftarrow \mathrm{clip}\bigl(\eta \cdot
+\mathrm{sign}(\nabla_{\delta}\,\mathcal{L}),\, -\varepsilon,\, \varepsilon\bigr),
+\qquad
+\delta_{\mathrm{total}} \leftarrow
+\mathrm{clip}(\delta_{\mathrm{total}} + \delta,\, -\varepsilon,\, \varepsilon),
+\end{equation}
+so no pickup ever moves more than $\varepsilon = 2$ cells from its recorded
+location, regardless of iteration count --- the $\varepsilon$-bound
+reinterpreted as an identity-preservation budget rather than an attack-stealth
+budget. The discrete grid is bridged by temperature-annealed soft cell
+assignment \cite{jang2017gumbel,maddison2017concrete,bengio2013ste} over the
+same $5{\times}5$ window used to aggregate supply, moving from broad early
+exploration to precise late assignment; the best iterate is kept.
+% src: PAPER/objective-motivation/MOTIVATION.md (editor); PAPER/argument/03_fairness_theory.md
+
+\textbf{Trim.} The demand-side mode: pickups selected by deficit attribution
+relocate within the $\varepsilon$-ball, pulling recorded demand out of
+over-served hotspots. Its optimization path is exactly the demand-only
+editor's.
+
+\textbf{Lift.} Trajectories nominated by supply-gradient attribution have
+their whole seeking tail translated: the pickup moves by the full offset
+$\delta$, earlier tail states move by linearly tapered fractions
+$w_j = j/\ell$ ($0.25/0.5/0.75/1.0$ at $\ell = 4$), and the anchor state
+before the tail never moves --- so the trajectory physically cruises through
+the under-served area before picking up rather than teleporting into it. The
+moved states carry their supply with them, differentiably: each seeking state
+contributes $1/12$ of an hourly presence unit over its $5{\times}5$
+neighborhood to the supply perturbation $\Delta S$, and the objective
+evaluates supply as $\mathrm{clamp}(S + \Delta S,\, s_0)$ with supply floor
+$s_0 = 0.1$. Supply is thus \emph{endogenous}: the optimizer sees the supply
+consequences of its own moves and is rewarded for providing service where it
+improves fairness, not merely for redistributing demand. The fidelity term
+scores the actual rerouted tail at every iteration, and each completed edit
+updates a shared running state, so later edits optimize against the city as
+earlier edits left it.
+% src: PAPER/supply-lift/LIFT_ALGORITHM_REFERENCE.md §3, §5-6 (taper, presence mass, floors, live fidelity tail)
+
+\textbf{Physical validity.} The source data is preprocessed --- following the
+pipeline of \cite{zhang2022cgail} --- to satisfy a king-move rule: consecutive
+states move at most one cell per axis, $\max(|dx|,|dy|) \le 1$. Edits should
+not be held to a lower standard than the data they edit; a bounded two-cell
+pickup move would silently violate the very rule the source trajectories are
+filtered on. Discretized edits therefore pass through an exact
+backward-reachability repair that returns the king-compliant assignment
+nearest the tapered targets, or reports that none exists; \emph{infeasible
+edits are skipped}, uniformly in both modes.
+% src: LIFT_ALGORITHM_REFERENCE.md §3 (king-move rule), §6 (repair, skip-on-infeasible)
+
+\textbf{Budget and phase order.} Trim retains its deficit-attribution
+selection; lift fills the remaining budget with positive-score nominees ---
+on the primary city, $k = 10{,}000$ splits into 2{,}455 trim and 7{,}545 lift
+edits --- and the supply gradient is computed on the post-trim state.
+% src: LIFT_ALGORITHM_REFERENCE.md §4.3, §5 (budget split, phase order)
+The two-phase structure is a scientific control, not an algorithmic
+necessity. Freezing trim keeps its optimization identical to the demand-only
+editor, which buys two properties: demand-only results reproduce exactly
+inside the combined run, and the trim-only versus trim+lift comparison is a
+clean ablation in which every difference is attributable to the new
+mechanism. A unified single-pass editor --- supply endogenous everywhere, the
+gradient choosing each edit's character --- is a natural extension we leave
+as future work.
+% src: docs/presentations/meeting_42_update/trim_plus_lift_explainer.md §3; LIFT_ALGORITHM_REFERENCE.md §14
