@@ -24,9 +24,9 @@ no editable fairness gradient.
 three-ring selection criterion picks on the measured frontier
 (\S\ref{sec:exp-robustness}) --- $\varepsilon = 2$, and the
 skip-on-infeasible rule. Shenzhen: $k = 10{,}000$ (2{,}337 trim + 7{,}545
-lift after filtering); San Francisco: $k = 2{,}000$
-(X{,}XXX trim + XXX lift). % TODO(run:R1 -> <ts>_supply_lift_a10_sf12_filtered/metrics.json) SF split
+lift after filtering); San Francisco: $k = 2{,}000$ (1{,}330 trim + 629 lift).
 % src: famail_temporal/results/2026-07-10T02-06-37_alpha_sweep_s10_c80_f10_filtered/metrics.json (SZ split)
+% src: famail_temporal/results/2026-07-11T11-31-55_supply_lift_a10_sf12_filtered/metrics.json (SF split)
 % src: PAPER/objective-motivation/weight-sensitivity/DECISION.md + EXTENDED_FRONTIER.md (decision 2026-07-11)
 
 \textbf{Protocol and statistics.} Every model-based comparison uses paired
@@ -175,8 +175,8 @@ $\Delta F_{\mathrm{causal}}$ & X.XXXX & $\mathbf{+0.0226}$ \\ % TODO(run:R2 -> t
 $\Delta F_{\mathrm{spatial}}$ & X.XXXX & $\mathbf{+0.0061}$ \\ % TODO(run:R2)
 $\Delta\,\mathrm{mean}(Y \mid \mathrm{disadv.})$ & X.XXX & $\mathbf{+0.053}$ (CI excl.\ 0) \\ % TODO(run:R2 trim-only cell)
 \multicolumn{3}{l}{\emph{San Francisco (external validity)}} \\
-$\Delta F_{\mathrm{causal}}$ & X.XXXX & X.XXXX \\ % TODO(run:R2 SF trim-only + R1 SF trim+lift)
-Migrant DP gap & X & X \\ % TODO(run:R2 + R1 external fairness)
+$\Delta F_{\mathrm{causal}}$ & X.XXXX & $\mathbf{+0.0316}$ \\ % TODO(run:R2 SF trim-only cell)
+Migrant DP gap & X & $\mathbf{-0.073}$ (CI excl.\ 0) \\ % TODO(run:R2 trim-only cell)
 \bottomrule
 \end{tabular}
 \end{table}
@@ -384,32 +384,36 @@ fidelity change; because $F_{\mathrm{causal}}$ is city-specific and
 associational (ACS proxies, not hukou), San Francisco tests whether the
 \emph{conclusions} reproduce, never whether magnitudes match.
 
-\textbf{Data level.} $F_{\mathrm{causal}}$ rises X.XXXX $\to$ X.XXXX
-(X.XXXX), $F_{\mathrm{spatial}}$ X.XXXX, with Fidelity-A stability and
-lift's Fidelity-B cost re-measured on the adopted corpus; the external
-instruments (Theil; the migrant axis under both grouping conventions, with
-any grouping dependence stated rather than hidden) are scored identically to
-Shenzhen.
-% TODO(run:R1 -> <ts>_supply_lift_a10_sf12_filtered/metrics.json + sf12-supplylift-a10 external_fairness.json) all data-level cells
-% NOTE: on the prior (0.2,0.7,0.1) corpus the migrant axis — immovable under demand-only editing —
-% became significant under district-extremes; whether that reproduces at the adopted weights is
-% reported as measured.
+\textbf{Data level.} $F_{\mathrm{causal}}$ rises 0.8752 $\to$ 0.9067
+($+0.0316$), $F_{\mathrm{spatial}}$ $+0.0139$, with Fidelity-A stability and
+lift's Fidelity-B cost re-measured on this corpus by the downstream suite
+(pending below). Every external instrument improves: Theil $-0.0079$
+(CI $[-0.0094, -0.0065]$), and the migrant axis --- immovable under
+demand-only editing --- is significant under \emph{both} grouping
+conventions on the DP gap (district extremes $-0.0729$,
+CI $[-0.1132, -0.0259]$; median split $-0.0370$, CI $[-0.0733, -0.0002]$),
+with DI significant under district extremes ($+0.0058$,
+CI $[+0.0004, +0.0103]$) and n.s.\ under median split --- a grouping
+dependence we state rather than hide (the SF sample is 12 drivers).
+% src: PAPER/supply-lift/data/a10/sf12_a10_metrics.json + sf12_a10_external_fairness.json
 
-\textbf{The supply channel and the ratio reading.} On the prior trim+lift
-corpus, SF exhibited a genuine cross-metric tension: the supply channel
-replicated (positive, significant, tier-1-labeled as a lower bound --- the
-distinct-taxi tier-2 recount is not plumbed for the SF pipeline), yet lift
-also rerouted \emph{pickups} into under-served cells, raising recorded demand
-there and pushing the total $\mathrm{mean}(Y \mid \mathrm{disadv.})$
-net-negative. If the tension reproduces at the adopted weights, we present
-both readings: under the ratio reading the SF lifting-up claim is withheld;
-under the external-metrics reading, more rides \emph{served} in under-served
-areas is a demand-side parity gain, and the falling ratio reflects exactly
-the demand endogeneity of \S\ref{sec:leveling} --- recorded demand was
-suppressed, and serving it raises the denominator.
-% TODO(run:R1 -> <ts>_supply_lift_a10_sf12_filtered/channel_decomposition.json) SF channel cells + whether the tension reproduces at a10
+\textbf{The supply channel replicates; the ratio does not.} The supply
+channel is again positive and significant ($+0.0209$,
+CI $[+0.0122, +0.0300]$) --- tier-1 accounting only, a \emph{lower bound} on
+Shenzhen's evidence (the distinct-taxi tier-2 recount is not plumbed for the
+SF pipeline). But as on the prior corpus, lift also reroutes \emph{pickups}
+into under-served cells, raising recorded demand there: the demand channel is
+significantly negative ($-0.0533$, CI $[-0.0798, -0.0298]$) and the total
+$\mathrm{mean}(Y \mid \mathrm{disadv.})$ moves net-negative ($-0.0324$, CI
+excludes 0). Two readings coexist and we present both. Under the ratio
+reading, the SF lifting-up claim does not hold and should be withheld. Under
+the external-metrics reading, more rides \emph{served} in under-served areas
+is a demand-side parity gain --- DP, DI, and Theil all improve --- and the
+falling ratio reflects exactly the demand endogeneity of
+\S\ref{sec:leveling}: recorded demand was suppressed, and serving it raises
+the denominator.
 % TODO(PI-framing): Zhang decision — which SF fairness story leads; both readings kept until then.
-% src (prior-corpus tension, cited qualitatively): PAPER/supply-lift/FINDINGS.md §5.2, §10
+% src: PAPER/supply-lift/data/a10/sf12_a10_channel_decomposition.json
 
 \textbf{Downstream.} The four-source data-quality table, the weighted-BC
 recovery with controls, and the model-level variance suite rerun on the SF

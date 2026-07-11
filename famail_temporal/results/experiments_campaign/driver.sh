@@ -53,7 +53,7 @@ mkdir -p "$STATE_DIR/ledger"
 # three-ring criterion's selection. SZ = the promoted s10 sweep corpus (headline-grade,
 # no re-run; ring-2/3 scores already computed by R0X); SF = the r-chain re-edit.
 SHZ_FILTERED=$RESULTS/2026-07-10T02-06-37_alpha_sweep_s10_c80_f10_filtered
-SF_FILTERED=__R1_PENDING__  # set to the <ts>_supply_lift_a10_sf12_filtered dir when the r-chain lands; q2/q4/q5-sf refuse while unset
+SF_FILTERED=$RESULTS/2026-07-11T11-31-55_supply_lift_a10_sf12_filtered
 OVR_D2500=$RESULTS/2026-07-10T00-39-51_baseline_demo_oversample_targeted_d2500_s0_shenzhen
 OVR_D5000=$RESULTS/2026-07-10T00-47-07_baseline_demo_oversample_targeted_d5000_s0_shenzhen
 OVR_D10000=$RESULTS/2026-07-10T00-47-33_baseline_demo_oversample_targeted_d10000_s0_shenzhen

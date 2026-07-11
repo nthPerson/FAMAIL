@@ -1,0 +1,61 @@
+{
+  "edit_dir": "famail_temporal/results/2026-07-10T02-06-37_alpha_sweep_s10_c80_f10_filtered",
+  "group_axis": "MigrantRatio",
+  "disadvantaged_high": true,
+  "N_D": 6950,
+  "bootstrap": {
+    "B": 2000,
+    "seed": 0,
+    "ci": 0.95
+  },
+  "tier2_grid": "famail_temporal/results/2026-07-10T02-06-37_alpha_sweep_s10_c80_f10_filtered/S_tier2_after.npz",
+  "levels": {
+    "mean_Y_D_before": 7.073447554576566,
+    "mean_Y_D_after_tier1": 7.12631248901423,
+    "mean_Y_D_after_tier2": 7.149735851873765
+  },
+  "channels": {
+    "demand": {
+      "point": 0.03523454618010725,
+      "ci_lo": -0.009540639916240583,
+      "ci_hi": 0.0813991076390205,
+      "significant": false
+    },
+    "supply": {
+      "point": 0.017630388257556143,
+      "ci_lo": 0.012777869201905918,
+      "ci_hi": 0.022487249377020332,
+      "significant": true
+    },
+    "total": {
+      "point": 0.052864934437663394,
+      "ci_lo": 0.008646089049363306,
+      "ci_hi": 0.09891111988490273,
+      "significant": true
+    },
+    "supply_first": {
+      "point": 0.01898476241210249,
+      "ci_lo": 0.014035724337943905,
+      "ci_hi": 0.02389139989504402,
+      "significant": true
+    },
+    "demand_second": {
+      "point": 0.0338801720255609,
+      "ci_lo": -0.010805796138893735,
+      "ci_hi": 0.07976324454535222,
+      "significant": false
+    },
+    "supply_tier2": {
+      "point": 0.04105375111709149,
+      "ci_lo": 0.03459845518427636,
+      "ci_hi": 0.04787323592172629,
+      "significant": true
+    },
+    "total_tier2": {
+      "point": 0.07628829729719874,
+      "ci_lo": 0.03149259210886901,
+      "ci_hi": 0.12318210642020742,
+      "significant": true
+    }
+  }
+}
