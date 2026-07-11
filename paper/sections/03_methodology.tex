@@ -1,4 +1,42 @@
 \section{Methodology}\label{sec:method}
-% Subsections land in plan Tasks 3-8:
-% 3.1 problem formulation · 3.2 objective · 3.3 attribution (two mechanisms) ·
+% Remaining subsections land in plan Tasks 4-8:
+% 3.2 objective · 3.3 attribution (two mechanisms) ·
 % 3.4 leveling-down mechanism · 3.5 trim+lift editor · 3.6 downstream recipe.
+
+\subsection{Problem Formulation}\label{sec:problem}
+
+We study taxi service allocation on a city discretized into $0.01^{\circ}$ grid
+cells $g$ and hourly time blocks $t$; a pair $i=(g,t)$ with recorded activity is
+an \emph{active unit}. Each active unit carries a demand $D_i$ --- its recorded
+pickups --- and a supply $S_i$ --- active-taxi presence, aggregated over the
+$5{\times}5$ cell neighborhood to match how a cruising taxi is visible to nearby
+demand. Service received relative to demand is the \emph{service ratio}
+$Y_i = S_i / \max(D_i, d_0)$, where the demand floor $d_0 = 0.5$ prevents
+near-empty cells from producing unbounded ratios.
+% src: PAPER/supply-lift/LIFT_ALGORITHM_REFERENCE.md §3 (conventions table)
+
+Each cell additionally carries demographic covariates $x_i$ describing its
+neighborhood: housing price, per-capita compensation, and migrant population
+share. These covariates resolve at district granularity --- about ten distinct
+profiles on the primary city --- which bounds the resolution of any demographic
+analysis built on them (\S\ref{sec:objective}).
+% src: PAPER/argument/02_datasets.md
+
+The data itself is a corpus $\mathcal{T}$ of real per-driver trajectories, each
+a sequence of passenger-seeking states ending in a pickup. The trajectories,
+not the aggregate grids, are the editable objects: $D$ and $S$ are
+deterministic aggregations of $\mathcal{T}$, so moving where a driver seeks and
+picks up moves demand and supply with it.
+
+\textbf{Task.} Given a corpus $\mathcal{T}$ whose service allocation is
+demographically inequitable, produce an edited corpus $\mathcal{T}'$ that
+(i) is measurably fairer; (ii) remains realistic at the level of individual
+trajectories --- a frozen driver-identity discriminator must still recognize
+every edited trajectory as its driver; and (iii) transfers its fairness into a
+policy trained on it by imitation. FAMAIL is a \emph{data-augmentation} method:
+it edits a small, attribution-targeted slice of the real trajectories --- at
+most $k = 10{,}000$ of them, each perturbed within an $L_\infty$ ball of radius
+$\varepsilon = 2$ grid cells --- and generates nothing.
+% src: LIFT_ALGORITHM_REFERENCE.md §3 (EPSILON_BALL, budget)
+The edited slice is then upweighted during downstream training so that its
+fairness is not averaged away (\S\ref{sec:downstream}).
