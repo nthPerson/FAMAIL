@@ -61,3 +61,49 @@ supply/demand-ratio gap --- one number, reported once); \emph{disparate impact}
 (grouping-independent). The honest count of distinct external instruments is
 therefore \{DI, DP/gap, Theil\} plus the descriptive levels.
 % src: PAPER/external-metrics/FINDINGS.md §1, §4.3 (DP≡gap disclosure)
+
+% 5.2 Data-level fairness (Shenzhen) lands here (plan Task 6).
+
+\subsection{Ablation: Trim-Only versus Trim+Lift}\label{sec:exp-ablation}
+
+Because trim's optimization is frozen inside the combined editor
+(\S\ref{sec:editor}), running the editor with the lift phase disabled
+reproduces the demand-only editor exactly, and every difference in
+Table~\ref{tab:ablation} is attributable to the lift mechanism. The ablation
+certifies the design claim of \S\ref{sec:leveling}: a demand-only editor
+improves fairness metrics while leaving the under-served group's absolute
+service untouched --- leveling down --- and the supply channel is what changes
+that.
+
+\begin{table}[t]
+\caption{Trim-only versus trim+lift at matched budgets. CI = paired-bootstrap
+95\% interval; n.s. = interval includes zero.}
+\label{tab:ablation}
+\begin{tabular}{lrr}
+\toprule
+ & trim-only & trim+lift \\
+\midrule
+\multicolumn{3}{l}{\emph{Shenzhen (primary)}} \\
+$\Delta F_{\mathrm{causal}}$ & $+0.0144$ & $\mathbf{+0.0222}$ \\ % lint-allow: ablation
+$\Delta F_{\mathrm{spatial}}$ & $-0.0009$ & $\mathbf{+0.0064}$ \\ % lint-allow: ablation
+$\Delta\,\mathrm{mean}(Y \mid \mathrm{disadv.})$ & $+0.000$ (flat) & $\mathbf{+0.047}$ (CI excl.\ 0) \\
+\multicolumn{3}{l}{\emph{San Francisco (external validity)}} \\
+$\Delta F_{\mathrm{causal}}$ & $+0.0139$ & $\mathbf{+0.0328}$ \\ % lint-allow: ablation
+Migrant DP gap & n.s. & $\mathbf{-0.076}$ (CI excl.\ 0) \\
+\bottomrule
+\end{tabular}
+\end{table}
+% src: PAPER/argument/05_results_shenzhen.md §1 (trim-only SZ); PAPER/argument/06_results_sf.md §1 (trim-only SF);
+% src: PAPER/supply-lift/FINDINGS.md §3, §5.1 (trim+lift both cities);
+% src: PAPER/external-metrics/FINDINGS.md §3-4 (trim-only SF migrant n.s.; SZ disadvantaged level flat 7.0734->7.0734)
+
+Three rows carry the qualitative story. Under trim-only, the disadvantaged
+group's service level is numerically unchanged (7.0734 before and after on the
+migrant axis) --- the entire fairness improvement comes from reducing
+over-service. Under trim+lift the same level rises, with a bootstrap interval
+excluding zero, and the previously immovable San Francisco migrant axis becomes
+significant. The secondary spatial metric flips from a small cost to a gain.
+Per Table~\ref{tab:ablation}, the lift mechanism is not an incremental tweak
+to the demand-only editor but the difference between redistributing service
+and providing it.
+% src: PAPER/supply-lift/FINDINGS.md §3 (the key qualitative change paragraph)
