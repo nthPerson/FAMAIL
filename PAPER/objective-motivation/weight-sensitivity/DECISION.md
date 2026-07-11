@@ -1,7 +1,15 @@
 # Weight-decision memo — α-Pareto sweep complete (Q0 hard checkpoint)
 
-**Date:** 2026-07-11 · **Status:** ⏸ AWAITING ROBERT'S KEEP-VS-RE-ANCHOR DECISION — no campaign stage
-launches before it. · **Artifacts:** [`alpha_sweep_summary.md`](alpha_sweep_summary.md) (table),
+**Date:** 2026-07-11 · **Status:** ⏸ REOPENED with new evidence (same day). The first decision
+(re-anchor to (0.55, 0.35, 0.1), on the two-axis frontier) was **halted mid-execution** when the
+promoted corpus's channel decomposition showed the tier-1 supply channel significantly NEGATIVE and
+Δmean(Y|D) n.s. — the lift-up claim does not survive at α_spatial = 0.55. The frontier was then
+extended with ring-2/ring-3 columns for every sweep point
+([`EXTENDED_FRONTIER.md`](EXTENDED_FRONTIER.md)): the lift-up declines monotonically with α_spatial,
+and the amended three-ring criterion selects **(0.1, 0.8, 0.1)**. Awaiting Robert's final weight
+decision on the complete table.
+· **Artifacts:** [`EXTENDED_FRONTIER.md`](EXTENDED_FRONTIER.md) (the decision table),
+[`alpha_sweep_summary.md`](alpha_sweep_summary.md) (ring-1 table),
 [`alpha_pareto.png`](alpha_pareto.png) (scatter), [`alpha_sweep_summary.json`](alpha_sweep_summary.json).
 Sweep provenance: 5 points × (k=10,000 SZ PRIMARY, trim+lift editor, infeasible-trim filter) + the
 shipped headline as anchor; ledger row Q0.
