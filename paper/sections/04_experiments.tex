@@ -366,3 +366,60 @@ variance (b0 vs FAMAIL) & see~\S\ref{sec:exp-downstream} & X & X \\ % TODO(run:Q
 trajectories instead of editing them does not reproduce the gain:
 X.XXXX. % TODO(run:Q7 -> famail_temporal/results/analysis/pareto_supplylift/pareto_points.csv) one-sentence filter@K result
 % (trim-era precedent: filtering LOWERED F_causal while editing raised it — re-verified under trim+lift by Q7)
+
+\subsection{External Validity: San Francisco}\label{sec:exp-sf}
+
+The entire protocol reruns on San Francisco with no algorithm, metric, or
+fidelity change; because $F_{\mathrm{causal}}$ is city-specific and
+associational (ACS proxies, not hukou), San Francisco tests whether the
+\emph{conclusions} reproduce, never whether magnitudes match.
+
+\textbf{Data level.} $F_{\mathrm{causal}}$ rises 0.8752 $\to$ 0.9079
+($+0.0328$), $F_{\mathrm{spatial}}$ $+0.0180$, with Fidelity-A stable (edited
+0.9581 vs.\ raw 0.9578) and lift's Fidelity-B cost (0.2649) almost identical
+to Shenzhen's (0.2645) --- the distributional trade-off is city-independent.
+Every external instrument improves: Theil $-0.0081$ (CI excludes 0), and the
+migrant axis --- immovable under demand-only editing --- becomes significant
+under the district-extremes convention (DP $-0.0758$, CI $[-0.1141, -0.0317]$;
+DI $+0.0061$). Under the median-split convention the migrant axis remains
+n.s.\ --- the SF sample is 12 drivers and we state the grouping dependence
+rather than choose the favorable one.
+% src: PAPER/supply-lift/data/sf12_filtered_metrics.json; tables/sf12-filtered.md; FINDINGS.md §5.1, §6.2
+
+\textbf{The supply channel replicates; the ratio does not.} The supply channel
+is again positive and significant ($+0.0195$, CI $[+0.0112, +0.0279]$) ---
+tier-1 accounting only, a \emph{lower bound} on Shenzhen's evidence (the
+distinct-taxi tier-2 recount is not yet plumbed for the SF pipeline). But
+unlike Shenzhen, lift also reroutes \emph{pickups} into under-served cells, so
+recorded demand there rises and the total
+$\mathrm{mean}(Y \mid \mathrm{disadv.})$ moves net-negative ($-0.0330$, CI
+excludes 0). Two readings coexist and we present both. Under the ratio
+reading, the SF lifting-up claim does not hold and should be withheld. Under
+the external-metrics reading, more rides \emph{served} in under-served areas
+is a demand-side parity gain --- DP, DI, and Theil all improve significantly
+--- and the falling ratio reflects exactly the demand endogeneity of
+\S\ref{sec:leveling}: recorded demand was suppressed, and serving it raises
+the denominator.
+% TODO(PI-framing): Zhang decision — which SF fairness story leads; both readings kept until then.
+% src: PAPER/supply-lift/data/sf12_filtered_channel_decomposition.json; FINDINGS.md §5.2, §10
+
+\textbf{Downstream.} The four-source data-quality table, the weighted-BC
+recovery with controls, and the model-level variance suite rerun on the SF
+trim+lift corpus:
+% TODO(run:Q4 -> famail_temporal/results/level1_table_v2/supply_lift_sf12_5seed/level1_v2_multiseed.json) SF L1 cells
+% TODO(run:Q2 -> famail_temporal/results/weighted_bc_sweep/supply_lift_v1_sf12_filtered_6seed/paired_stats.json) SF WBC dose-response + controls
+% TODO(run:Q5 -> famail_temporal/results/variance_suite/supply_lift_sf12_5seed/aggregate.json) SF variance
+results land with campaign stages Q2/Q4/Q5. The demand-only-era precedent
+(recovery $+0.0387$ at w30 with \emph{both} controls negative) is cited only
+as the expectation these reruns test, within the ablation's sanctioned scope.
+% lint-allow: ablation — SF trim-era WBC precedent named as expectation, replaced by Q2 numbers
+
+\textbf{SF caveat block.} ACS foreign-born share proxies the migrant axis (not
+hukou); the 12-driver density-matched subsample is small; 14.9\% of raw
+Cabspotting trajectories violate king-move adjacency at source (GPS gaps), so
+absolute compliance is unattainable --- the edited corpus is \emph{more}
+compliant than raw (87.4\% vs.\ 85.0\%), and the cross-city gate is
+edit-relative compliance (100\%); whether the GAN-generated source collapses
+distributionally is a city-dependent property and the fresh Q4 run's outcome
+is reported as-is.
+% src: PAPER/argument/07_limitations.md §5-7; PAPER/supply-lift/FINDINGS.md §10
