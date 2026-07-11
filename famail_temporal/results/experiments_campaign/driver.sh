@@ -63,7 +63,7 @@ STUB_RAW=famail_temporal/baselines/raw_stub.json
 
 # ---- stage DONE markers
 Q1_MARKER=famail_temporal/baselines/baseline_table/baseline_table.md
-Q2_MARKER=$RESULTS/weighted_bc_sweep/supply_lift_v1_sf12_filtered_6seed/paired_stats.json
+Q2_MARKER=$RESULTS/weighted_bc_sweep/supply_lift_a10_sf12_filtered_6seed/paired_stats.json
 Q3_MARKER=$RESULTS/level1_table_v2/supply_lift_shz_5seed/level1_v2_multiseed.json
 Q4_MARKER=$RESULTS/level1_table_v2/supply_lift_sf12_5seed/level1_v2_multiseed.json
 Q5_MARKER_SHZ=$RESULTS/variance_suite/supply_lift_shz_5seed/aggregate.json
@@ -297,8 +297,8 @@ stage_q1() {
 stage_q2() {
   require_primary
   if [ -f "$Q2_MARKER" ]; then log_echo "q2 already DONE ($Q2_MARKER) — skip"; return 0; fi
-  local cmd="FAMAIL_CITY=sf12 python -m famail_temporal.baselines.run_weighted_bc_smoke --edit-dir $SF_FILTERED --seeds 0,1,2,3,4,5 --weights 10,20,30 --placebo 10,30 --most-fair 10,20,30 --out-dir $RESULTS/weighted_bc_sweep/supply_lift_v1_sf12_filtered_6seed"
-  ledger_run "Q2" "$RESULTS/weighted_bc_sweep/supply_lift_v1_sf12_filtered_6seed" "PRIMARY / sf12" "$cmd"
+  local cmd="FAMAIL_CITY=sf12 python -m famail_temporal.baselines.run_weighted_bc_smoke --edit-dir $SF_FILTERED --seeds 0,1,2,3,4,5 --weights 10,20,30 --placebo 10,30 --most-fair 10,20,30 --out-dir $RESULTS/weighted_bc_sweep/supply_lift_a10_sf12_filtered_6seed"
+  ledger_run "Q2" "$RESULTS/weighted_bc_sweep/supply_lift_a10_sf12_filtered_6seed" "PRIMARY / sf12" "$cmd"
   [ -f "$Q2_MARKER" ] || { log_echo "!!! q2 marker missing after run — see $LOG"; exit 1; }
   log_echo "q2 COMPLETE: $Q2_MARKER"
 }
