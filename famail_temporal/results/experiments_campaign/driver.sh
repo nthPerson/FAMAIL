@@ -48,8 +48,11 @@ STATE_DIR=$RESULTS/experiments_campaign
 mkdir -p "$STATE_DIR/ledger"
 
 # ---- fixed inputs (headline trim+lift filtered corpora + oversampling s0 arms)
-SHZ_FILTERED=$RESULTS/2026-07-08T14-03-03_supply_lift_v1_shz_primary_filtered
-SF_FILTERED=$RESULTS/2026-07-08T22-43-06_supply_lift_v1_sf12_filtered
+# RE-ANCHOR (Robert, 2026-07-11; PAPER/objective-motivation/weight-sensitivity/DECISION.md):
+# headline corpora are the alpha*=(0.55,0.35,0.1) runs. SZ = the promoted s55 sweep
+# corpus (headline-grade, no re-run); SF = the R1 re-edit at alpha*.
+SHZ_FILTERED=$RESULTS/2026-07-10T17-45-40_alpha_sweep_s55_c35_f10_filtered
+SF_FILTERED=__R1_PENDING__  # set to the <ts>_supply_lift_a55_sf12_filtered dir when R1 lands; q2/q4/q5-sf refuse while unset
 OVR_D2500=$RESULTS/2026-07-10T00-39-51_baseline_demo_oversample_targeted_d2500_s0_shenzhen
 OVR_D5000=$RESULTS/2026-07-10T00-47-07_baseline_demo_oversample_targeted_d5000_s0_shenzhen
 OVR_D10000=$RESULTS/2026-07-10T00-47-33_baseline_demo_oversample_targeted_d10000_s0_shenzhen
