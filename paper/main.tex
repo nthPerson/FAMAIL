@@ -35,7 +35,28 @@ Imitation-Learned Mobility Models}
 \email{xzhang@sdsu.edu} % placeholder address — confirm before de-anonymizing
 
 \begin{abstract}
-Draft abstract lands in a later task (plan Task 9).
+% DRAFT (2026-07-11) — pending final results; numbers below are committed headline
+% values. % src: PAPER/supply-lift/FINDINGS.md; PAPER/external-metrics/FINDINGS.md;
+% PAPER/baselines/demographic-oversampling/FINDINGS.md
+Demand models learned by imitation from urban mobility data inherit the
+demographic service inequity encoded in their demonstrations. We present
+FAMAIL, a fairness-oriented data-augmentation method that \emph{edits}, rather
+than regenerates, a small attribution-targeted slice of real taxi
+trajectories, then upweights the edited demonstrations so the fairness
+survives training. The editor combines two bounded, gradient-guided mechanisms
+under one differentiable objective: \emph{trim} relocates pickups out of
+over-served hotspots, and \emph{lift} reroutes drivers' final seeking minutes
+into under-served areas, with the supply consequences of each move made
+differentiable and endogenous to the objective. A frozen driver-identity
+discriminator bounds every edit to preserve realism. On two cities (Shenzhen;
+San Francisco), editing improves established fairness measures that the
+objective never optimizes --- demographic parity, disparate impact, and the
+Theil index --- and, unlike demand-only editing, raises the under-served
+group's service ratio through a statistically robust supply channel rather
+than by leveling down. Upweighted behavior cloning propagates the data-level
+gains into trained policies edit-specifically: random-upweighting and
+select-the-fairest controls are null, and a naive demographic-oversampling
+baseline degrades fairness despite fabricating 10.5\% of the corpus.
 \end{abstract}
 
 \keywords{fairness, imitation learning, data augmentation, trajectory editing,
