@@ -189,3 +189,68 @@ Per Table~\ref{tab:ablation}, the lift mechanism is not an incremental tweak
 to the demand-only editor but the difference between redistributing service
 and providing it.
 % src: PAPER/supply-lift/FINDINGS.md §3 (the key qualitative change paragraph)
+
+% 5.4 Downstream propagation (Shenzhen) lands here (plan Task 8).
+
+\subsection{Data-Augmentation Baselines}\label{sec:exp-baselines}
+
+None of the baselines below optimizes a fairness objective; they are
+\emph{editing-quality} baselines that test whether FAMAIL's gains come from
+its objective or merely from bounded perturbation (or corpus resampling)
+per se. Fairness is accordingly \emph{expected not to improve} under the
+perturbation arms.
+% src: PAPER/baselines/README.md (Meeting-41 framing)
+
+\textbf{Perturbation arms.} Three arms attack the same trajectories the
+headline edit selected, at the same $\varepsilon = 2$: iterative and
+single-step signed-gradient attacks on the frozen identity discriminator, and
+a seeded random-jitter placebo. A naming note required for correctness: the
+gradient arms are \emph{iFGSM/FGSM with random restart} --- the frozen Siamese
+identity head has zero subgradient at an identical pair, so a textbook attack
+initialized at $\delta = 0$ is a provable no-op; we retain the $\delta = 0$
+initialization as an ablation row to demonstrate exactly that.
+% src: famail_temporal/baselines/STATUS.md (paper-facing notes: random-restart naming, vanilla no-op)
+Results: Table~\ref{tab:baselines}.
+% TODO(run:Q1 -> famail_temporal/baselines/baseline_table/ + PAPER/baselines/comparison/) perturbation-arm rows pending GPU stage q1
+
+\textbf{Demographic oversampling.} The naive lifting-up baseline: duplicate
+real trajectories originating in demographically disadvantaged regions (all
+three equity axes, phantom driver IDs, rigid $\pm 1$-cell jitter), rebuilding
+demand \emph{and} supply additively, at doses matched to FAMAIL's budget. At
+the matched dose $d = 10{,}000$, targeted oversampling improves
+$F_{\mathrm{causal}}$ by $+0.0153$ (dose-monotone:
+$+0.0059 \to +0.0097 \to +0.0153$) --- but it fabricates 10.5\% of the corpus
+to get there, where FAMAIL redistributes observed behavior at zero inflation
+and reaches $+0.0222$. The untargeted placebo (same fabrication, no targeting)
+\emph{degrades} fairness ($-0.0172$), so the gain is targeting-specific; and
+the placebo's DP gap explodes ($+2.8$) because fabricated supply lands
+predominantly in already-advantaged cells --- a measured demonstration that
+ratio metrics can be gamed by fabrication, the demand-endogeneity concern of
+\S\ref{sec:leveling} made concrete. Two disclosures: the corpus cannot even
+supply the matched dose honestly (only 8{,}241 distinct disadvantaged-origin
+trajectories exist, so 1{,}759 draws are re-duplications), and fidelity is not
+scored for this arm --- duplicates of real trajectories pass any realism check
+by construction.
+% src: PAPER/baselines/demographic-oversampling/FINDINGS.md §2-5
+
+\begin{table}[t]
+\caption{Cross-arm comparison at matched budgets (Shenzhen). Perturbation-arm
+rows land with campaign stage Q1.}
+\label{tab:baselines}
+\begin{tabular}{lrrr}
+\toprule
+arm & $\Delta F_{\mathrm{causal}}$ & $\Delta F_{\mathrm{spatial}}$ & inflation \\
+\midrule
+raw (reference) & --- & --- & 0\% \\
+\textbf{FAMAIL trim+lift} & $\mathbf{+0.0222}$ & $+0.0064$ & 0\% \\
+iFGSM (rand.\ restart) & X.XXXX & X.XXXX & 0\% \\ % TODO(run:Q1 -> famail_temporal/baselines/baseline_table/)
+FGSM (rand.\ restart) & X.XXXX & X.XXXX & 0\% \\ % TODO(run:Q1 -> famail_temporal/baselines/baseline_table/)
+random jitter & X.XXXX & X.XXXX & 0\% \\ % TODO(run:Q1 -> famail_temporal/baselines/baseline_table/)
+demog.\ oversampling (targeted) & $+0.0153$ & --- & 10.5\% \\
+\quad placebo (untargeted) & $-0.0172$ & --- & 10.5\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+% src: PAPER/supply-lift/FINDINGS.md §3 (FAMAIL row); PAPER/baselines/demographic-oversampling/FINDINGS.md §2 (oversampling rows)
+% NOTE: oversampling F_spatial cells rendered as em-dash pending the Q1 table assembly,
+% which ingests the arms' metrics.json uniformly (assemble_baseline_table schema).
