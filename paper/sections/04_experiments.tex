@@ -316,3 +316,53 @@ demog.\ oversampling (targeted) & $+0.0153$ & --- & 10.5\% \\
 % src: PAPER/supply-lift/FINDINGS.md §3 (FAMAIL row); PAPER/baselines/demographic-oversampling/FINDINGS.md §2 (oversampling rows)
 % NOTE: oversampling F_spatial cells rendered as em-dash pending the Q1 table assembly,
 % which ingests the arms' metrics.json uniformly (assemble_baseline_table schema).
+
+\subsection{Robustness and Sensitivity}\label{sec:exp-robustness}
+
+\textbf{Weight sensitivity.} Fig.~\ref{fig:alpha-pareto} reports the empirical
+$(\Delta F_{\mathrm{spatial}}, \Delta F_{\mathrm{causal}})$ frontier over the
+weight simplex (five sweep points plus the adopted configuration, all run
+through the identical trim+lift pipeline).
+% TODO(run:Q0 -> PAPER/objective-motivation/weight-sensitivity/alpha_pareto.png + summary md) frontier sentence + figure land with the Q0 checkpoint
+
+\begin{figure}[t]
+  \centering
+  % TODO(run:Q0): \includegraphics[width=\linewidth]{figures/alpha_pareto.png}
+  \fbox{\parbox{0.9\linewidth}{\centering\vspace{1.5em}$\alpha$-Pareto frontier
+  figure --- lands with campaign stage Q0.\vspace{1.5em}}}
+  \caption{Empirical weight-sensitivity frontier (placeholder pending Q0).}
+  \label{fig:alpha-pareto}
+\end{figure}
+
+\textbf{Demographic-feature-set robustness.} $F_{\mathrm{causal}}$ is
+feature-set-specific, so every layer of the argument is re-measured under two
+alternate demographic sets (Table~\ref{tab:featsets}). The claim is
+directional reproduction, not magnitude equality --- absolute
+$F_{\mathrm{causal}}$ scales shift with the feature set by construction.
+
+\begin{table}[t]
+\caption{Feature-set robustness under trim+lift (alternate-set columns land
+with campaign stages Q6--Q8).}
+\label{tab:featsets}
+\begin{tabular}{lrrr}
+\toprule
+ & \{hous,comp,migr\} & \{hous,gdp,comp\} & +logpopdens \\
+\midrule
+before-edit $F_{\mathrm{causal}}$ & 0.7988 & X.XXXX & X.XXXX \\ % TODO(run:Q6 -> per-set filtered metrics.json)
+editor $\Delta F_{\mathrm{causal}}$ & $+0.0222$ & X.XXXX & X.XXXX \\ % TODO(run:Q6 -> per-set filtered metrics.json)
+DI $\Delta$ (migrant/extremes) & $+0.0155$ & X.XXXX & X.XXXX \\ % TODO(run:Q7 -> per-set external_fairness.json)
+Theil $\Delta$ & $-0.0082$ & X.XXXX & X.XXXX \\ % TODO(run:Q7 -> per-set external_fairness.json)
+L1: edited fairest faithful? & see~\ref{tab:l1} & X & X \\ % TODO(run:Q8 -> per-set level1_v2_multiseed.json)
+vanilla-BC null (w1) & $+0.0023$ n.s. & X.XXXX & X.XXXX \\ % TODO(run:Q8 -> per-set weighted-bc paired_stats.json)
+weighted-BC w30 & $+0.0310$ & X.XXXX & X.XXXX \\ % TODO(run:Q8 -> per-set weighted-bc paired_stats.json)
+variance (b0 vs FAMAIL) & see~\S\ref{sec:exp-downstream} & X & X \\ % TODO(run:Q8 -> per-set variance aggregate.json)
+\bottomrule
+\end{tabular}
+\end{table}
+% src (PRIMARY column): PAPER/supply-lift/data/shz_primary_filtered_metrics.json;
+% PAPER/supply-lift/tables/shenzhen-primary-filtered.md; FINDINGS.md §7
+
+\textbf{Filtering is not a substitute.} Removing the $K$ least-fair
+trajectories instead of editing them does not reproduce the gain:
+X.XXXX. % TODO(run:Q7 -> famail_temporal/results/analysis/pareto_supplylift/pareto_points.csv) one-sentence filter@K result
+% (trim-era precedent: filtering LOWERED F_causal while editing raised it — re-verified under trim+lift by Q7)
