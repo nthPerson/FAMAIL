@@ -1,10 +1,63 @@
 \section{Experiments}\label{sec:experiments}
-% STUB — filled by a later task.
-% Assemble from: PAPER/supply-lift/FINDINGS.md (+ tables/) = headline & channel decomposition;
-% PAPER/external-metrics/FINDINGS.md = external-metrics protocol & results;
-% PAPER/baselines/ = 6-row comparison (pending GPU runs) + demographic-oversampling FINDINGS;
-% PAPER/by_feature_set/ = 3-feature-set robustness; PAPER/second-dataset/ = SF external validity;
-% PAPER/argument/04_evaluation.md = two-pillar design + statistical conventions.
-% Disclosure ledger to carry: rollout-allocation drain attenuated ~40% NOT reversed;
-% leveling-down caveat; skip-on-infeasible provenance; tier-1 vs tier-2 supply accounting;
-% SF mean(Y|D) tension (open PI framing).
+% Remaining subsections land per plan Tasks 5-10 (5.2-5.7 in plan numbering).
+% Disclosure ledger for this section: rollout-allocation drain attenuated ~40% NOT
+% reversed; leveling-down; skip-on-infeasible provenance; tier-1 vs tier-2 supply
+% accounting; SF mean(Y|D) tension (open PI framing).
+
+\subsection{Experimental Setup}\label{sec:exp-setup}
+
+\textbf{Datasets.} The primary city is Shenzhen: a 50-driver sample of real taxi
+GPS trajectories on a $48{\times}90$ grid of $0.01^{\circ}$ cells, with
+district-level demographics. Raw data contained per-driver ``stuck-GPS'' pickup
+sinks (single plates emitting thousands of phantom pickups); a signature rule
+removed 106{,}677 phantom pickups before any experiment.
+% src: PAPER/argument/02_datasets.md (grid, cleanup counts)
+The external-validity city is San Francisco (Cabspotting): a 12-driver,
+fleet-density-matched subsample (\texttt{sf12}, $32{\times}30$ grid) with the
+same demographic feature names filled from ACS tract values. Density matching
+is required --- the full 536-taxi fleet saturates the supply measure and leaves
+no editable fairness gradient.
+% src: PAPER/argument/02_datasets.md (sf12 selection, density matching)
+
+\textbf{Editor configuration.} All edited corpora use the trim+lift editor of
+\S\ref{sec:editor} with $\alpha = (0.2, 0.7, 0.1)$, $\varepsilon = 2$, and the
+skip-on-infeasible rule. Shenzhen: $k = 10{,}000$ (2{,}340 trim + 7{,}545 lift
+after filtering); San Francisco: $k = 2{,}000$ (1{,}324 trim + 629 lift).
+% src: PAPER/supply-lift/FINDINGS.md §2, §8 (budget splits post-filter)
+
+\textbf{Protocol and statistics.} Every model-based comparison uses paired
+seeds (identical seeding before each arm), so per-seed differences cancel
+shared seed noise. With $n = 6$ paired seeds the two-sided Wilcoxon signed-rank
+$p$ floors at $0.03125$, attained exactly when all six seeds share a sign; we
+therefore read effects from the mean $\Delta$, its $t$-interval, and
+dose-response monotonicity, and treat $p = 0.031$ only as a sign-unanimity
+certificate. Suites with $n = 5$ seeds cannot reach $p < 0.05$ (floor 0.0625)
+and are reported as effect-versus-noise. Data-level before/after deltas on
+grid metrics carry paired unit-level bootstrap intervals ($B = 1{,}000$,
+percentile); units are spatially correlated and demographics are
+district-constant, so these intervals are first-order.
+% src: PAPER/argument/04_evaluation.md §3; PAPER/external-metrics/FINDINGS.md §1, §5
+
+\textbf{Metric firewall.} We separate three rings of metrics and label every
+claim accordingly: (i) \emph{optimized} --- $F_{\mathrm{spatial}}$,
+$F_{\mathrm{causal}}$, $F_{\mathrm{fidelity}}$, the quantities the editor's
+gradient sees; (ii) \emph{design-targeted but not optimized} --- the
+supply/demand ratio family ($\mathrm{mean}(Y)$ by group), which the lift
+mechanism was aimed at, so improvement there is confirmatory; and (iii)
+\emph{genuinely external} --- demographic parity, disparate impact, the Theil
+index, per-group service levels, and the distinct-taxi supply recount, none of
+which appear in the objective. ``Improves metrics it never optimizes'' claims
+ride ring (iii) only.
+% src: PAPER/supply-lift/LIFT_ALGORITHM_REFERENCE.md §13
+
+\textbf{External fairness instruments.} On the service ratio $Y$ over active
+units, grouped per equity axis (housing price, compensation, migrant share; two
+grouping conventions --- district extremes and median split): the two group
+\emph{levels} $\mathrm{mean}(Y \mid \mathrm{disadvantaged})$ and
+$\mathrm{mean}(Y \mid \mathrm{advantaged})$; \emph{demographic parity} (DP), the
+signed gap between them (on a continuous outcome DP \emph{is} the
+supply/demand-ratio gap --- one number, reported once); \emph{disparate impact}
+(DI), their ratio (1 = parity); and the between-region \emph{Theil} index
+(grouping-independent). The honest count of distinct external instruments is
+therefore \{DI, DP/gap, Theil\} plus the descriptive levels.
+% src: PAPER/external-metrics/FINDINGS.md §1, §4.3 (DP≡gap disclosure)
