@@ -22,6 +22,9 @@ PAPER/
   feature_selection/     the demographic-feature vetting + cross-set comparison
   reviews/               two adversarial-review reports + the 29 confirmed findings
   second-dataset/        ⟂ SEPARABLE second-city (SF Cabspotting) dual-claim validation — Shenzhen-independent
+  baselines/             ⟂ SEPARABLE data-augmentation baseline arms (Mission 3), one subdir per approach:
+                           demographic-oversampling/ ✅ run · ifgsm/ fgsm/ random-jitter/ ⏳ pending GPU ·
+                           comparison/ = the eventual 6-row cross-arm table (see baselines/README.md)
 ```
 
 Everything above `second-dataset/` is the **Shenzhen (primary)** study. `second-dataset/` is a **deliberately
