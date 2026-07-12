@@ -4,14 +4,15 @@
 
 We study taxi service allocation on a city discretized into $0.01^{\circ}$ grid
 cells $g$ and hourly time blocks $t$; a pair $i=(g,t)$ with recorded activity is
-an \emph{active unit}. Each active unit carries a demand $D_i$ --- its recorded
+an \emph{active unit}, and $N$ denotes their count ($N \approx 34{,}500$ on the
+primary city). Each active unit carries a demand $D_i$ --- its recorded
 pickups --- and a supply $S_i$ --- active-taxi presence, aggregated over the
 $5{\times}5$ cell neighborhood to match how a cruising taxi is visible to nearby
 demand. Service received relative to demand is the \emph{service ratio}
 $Y_i = S_i / \max(D_i, d_0)$, where the demand floor $d_0 = 0.5$ prevents
 near-empty cells from producing unbounded ratios.
 % src: PAPER/argument/02_datasets.md (0.01° grid, hourly blocks);
-% src: PAPER/supply-lift/LIFT_ALGORITHM_REFERENCE.md §3 (floors, 5×5 presence)
+% src: PAPER/supply-lift/LIFT_ALGORITHM_REFERENCE.md §3 (floors, 5×5 presence); §4.1 (N = 34,524 active units, Shenzhen)
 
 Each cell additionally carries demographic covariates $x_i$ describing its
 neighborhood: housing price, per-capita compensation, and migrant population
@@ -182,31 +183,46 @@ optimization.
 
 The objective is optimized one trajectory at a time, so FAMAIL must decide
 which trajectories are worth a slot in the edit budget. It uses two
-attribution mechanisms, one per editing mode (\S\ref{sec:editor}). The first
-locates where existing unfairness concentrates --- it attributes the
-\emph{deficit}. The second locates where added taxi presence would most
-improve fairness --- it attributes the \emph{remedy}.
+attribution mechanisms, one per editing mode (\S\ref{sec:editor}).
+\emph{Demand deficit attribution} locates where existing unfairness
+concentrates, and drives the demand-side mode; \emph{supply-gradient
+attribution} locates where added taxi presence would most improve fairness,
+and drives the supply-side mode. The first attributes the deficit; the
+second, the remedy.
 
-\textbf{Deficit attribution (drives trim).} Because $M$ and $I-H$ are
+\textbf{Demand deficit attribution (drives trim).} Because $M$ and $I-H$ are
 idempotent, the explained share $r^{2}_{\mathrm{demo}}$ of
 Eq.~\eqref{eq:fcausal} admits an exact per-unit decomposition,
 \begin{equation}\label{eq:unit-attr}
 r^{2}_{\mathrm{demo}}
 \;=\; \sum_i \frac{(MR)_i^{2} - \bigl((I-H)R\bigr)_i^{2}}{R^{\top}MR},
 \end{equation}
-a mathematically exact partition of the fairness deficit across active units
-rather than a heuristic saliency; a signed variant separates over- from
-under-served units. The trajectories whose pickups land in the
-highest-deficit units are the ones trim edits.
+a mathematically exact partition of the fairness deficit across active units; 
+a signed variant separates over- from under-served units. The trajectories 
+whose pickups land in the highest-deficit units are the ones trim edits.
 % src: PAPER/argument/03_fairness_theory.md (per-cell attribution)
 
 \textbf{Supply-gradient attribution (drives lift).} The second mechanism asks,
-at every active unit simultaneously: \emph{how much fairer would service be
-with marginally more taxi presence here?} Instantiating a zero supply
-perturbation $\Delta S$ and differentiating the full objective, a single
-backward pass answers all $N \approx 34{,}500$ what-ifs at once, yielding a
-value-of-presence map over the city. Its $F_{\mathrm{causal}}$ component has
-the closed form
+of every active unit: \emph{how much fairer would the city's service be with
+marginally more taxi presence here, at this hour?} The quantity that answers
+it is the gradient of the objective with respect to supply, evaluated at the
+city's current state. To obtain it, we give the objective an auxiliary
+\emph{supply-perturbation} input $\Delta S \in \mathbb{R}^{N}$ --- one entry
+of hypothetical added taxi presence per active unit --- and have it evaluate
+supply as $S + \Delta S$ in every term of the objective where supply
+appears: the service ratio $Y$ inside $F_{\mathrm{causal}}$ and the rate
+denominators of $F_{\mathrm{spatial}}$. At $\Delta S = 0$ the objective's
+value is untouched; the input exists so that automatic differentiation with
+respect to it reads out $\partial \mathcal{L} / \partial S_i$ at the city's
+current supply ($\Delta S = 0$) --- the marginal fairness effect of added
+presence at each of the $N \approx 34{,}500$ active units, all obtained
+from a single backward pass. (The same $\Delta S$ pathway later
+carries the real supply consequences of lift edits, \S\ref{sec:editor}.)
+The result is a \emph{value-of-presence} map over the city: large where
+added presence would most repair the fairness terms --- units starved of
+supply relative to their demand and demographic profile --- and small or
+negative where presence is already abundant. The map's
+$F_{\mathrm{causal}}$ component has the closed form
 \begin{equation}\label{eq:supply-grad}
 \frac{\partial F_{\mathrm{causal}}}{\partial S_i}
 \;=\; \frac{2}{R^{\top}MR}\;
@@ -215,13 +231,19 @@ the closed form
 against which the automatic gradient is verified.
 % src: PAPER/supply-lift/LIFT_ALGORITHM_REFERENCE.md §4.1 (autograd-verified closed form)
 
-To turn the map into candidates, each trajectory's tail --- its last $\ell$
-seeking states and pickup --- is rigidly translated by every integer offset
-$\delta \in [-\varepsilon, \varepsilon]^2 \setminus \{0\}$, and the linearized
-gain of a translation is the presence-mass-weighted change in the
-($5{\times}5$ box-summed) gradient over the tail's positions. A trajectory's
-score is its best offset, and all ${\approx}95$k trajectories in the corpus
-are ranked by score.
+To turn the map into candidates, the screen asks which drivers already pass
+close enough to high-value territory that a bounded detour would take them
+into it. Each trajectory's tail --- its last $\ell$ seeking states and
+pickup --- is rigidly translated by every nonzero integer offset
+$\delta \in [-\varepsilon, \varepsilon]^{2}$, and each
+translation is scored by its linearized gain: the value-of-presence
+collected at the tail's new positions minus that at its old ones, each
+state weighted by the presence mass it carries and the map summed over the
+same $5{\times}5$ window through which presence spreads
+(\S\ref{sec:problem}). A trajectory's score is its best offset, and all
+${\approx}95$k trajectories in the corpus are ranked by score --- the
+screen thus favors trajectories that already nearly serve the right areas,
+bending real behavior rather than inventing it.
 % src: PAPER/supply-lift/data/oracle.json (n_trajectories_total 95,297)
 The screen only \emph{nominates}: every selected
 trajectory is subsequently re-optimized individually under the full objective
@@ -247,7 +269,7 @@ group rather than pulling others down \cite{zietlow2022}.
 
 The behavior is the constrained optimum of the demand-only problem, not an
 optimizer artifact, for three compounding structural reasons. First,
-selection: deficit attribution (Eq.~\eqref{eq:unit-attr}) concentrates in
+selection: demand deficit attribution (Eq.~\eqref{eq:unit-attr}) concentrates in
 over-served, high-residual cells, so under-served cells are never edit
 candidates. Second, leverage: with supply frozen,
 $\partial Y_i / \partial D_i = -S_i / D_i^{2}$ makes padding demand into
@@ -316,9 +338,9 @@ same $5{\times}5$ window used to aggregate supply, moving from broad early
 exploration to precise late assignment; the best iterate is kept.
 % src: PAPER/objective-motivation/MOTIVATION.md (editor); PAPER/argument/03_fairness_theory.md
 
-\textbf{Trim.} The demand-side mode: pickups selected by deficit attribution
-relocate within the $\varepsilon$-ball, pulling recorded demand out of
-over-served hotspots. Its optimization path is exactly the demand-only
+\textbf{Trim.} The demand-side mode: pickups selected by demand deficit
+attribution relocate within the $\varepsilon$-ball, pulling recorded demand
+out of over-served hotspots. Its optimization path is exactly the demand-only
 editor's.
 
 \textbf{Lift.} Trajectories nominated by supply-gradient attribution have
@@ -354,8 +376,9 @@ computed (\S\ref{sec:experiments}).
 % src: LIFT_ALGORITHM_REFERENCE.md §3 (king-move rule), §6 (repair; lift skips in-loop);
 % src: PAPER/supply-lift/FINDINGS.md §8 (trim post-filter 115/2,455 ≈ 5%; rule-first disclosure)
 
-\textbf{Budget and phase order.} Trim retains its deficit-attribution
-selection; lift fills the remaining budget with positive-score nominees ---
+\textbf{Budget and phase order.} Trim retains its selection by demand
+deficit attribution; lift fills the remaining budget with positive-score
+nominees ---
 on the primary city, $k = 10{,}000$ splits into 2{,}455 trim and 7{,}545 lift
 edits --- and the supply gradient is computed on the post-trim state.
 % src: LIFT_ALGORITHM_REFERENCE.md §4.3, §5 (budget split, phase order)

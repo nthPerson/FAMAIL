@@ -22,9 +22,9 @@ demonstrations biased \cite{zheng2023}, so the objective and the training
 signal pull against each other at every step. Generative repair replaces
 the data wholesale, but rewriting an entire distribution risks trading
 realism for the fairness score and makes any improvement hard to attribute
-to anything in particular. FAMAIL takes a third position, as \emph{data
-augmentation}: keep the real corpus, edit the small slice of it where
-attribution says the unfairness lives, and generate nothing. At most $k$
+to anything in particular. FAMAIL takes a third position. As \emph{data
+augmentation}, it keeps the real corpus, edits the small slice of it where
+attribution says the unfairness lives, and generates nothing. At most $k$
 trajectories are edited ($k = 10{,}000$ on the primary city, about a tenth
 of the corpus), each perturbed within a two-cell ball under a frozen
 driver-identity discriminator, so realism is inherited from the data
@@ -37,7 +37,7 @@ away.
 The subtlety is not measuring unfairness but repairing it honestly.
 FAMAIL's first editing mode, \emph{trim}, moves only demand: it relocates
 recorded pickups out of over-served hotspots, and on the primary city it
-improves the external fairness measures --- by \emph{leveling down}. Every
+improves measured fairness --- by \emph{leveling down}. Every
 one of the 2{,}455 pickups it edits originates in an advantaged cell, and
 the under-served group's service never moves; the classic leveling-down
 objection to equalization \cite{parfit1997,mittelstadt2024} applies

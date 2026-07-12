@@ -34,6 +34,10 @@ Both must pass before every commit. Warnings are tolerated during drafting; erro
    tier-2 recount, channel decomposition. "Improves metrics we never optimized"
    claims ride ring (iii) only.
 9. **No product/tool names** anywhere.
+10. **Mechanism names (renamed 2026-07-11):** trim's selector is **"demand deficit
+    attribution"** (formerly "deficit attribution"); lift's is "supply-gradient
+    attribution". Use the full name wherever the mechanism is meant; generic uses
+    of "deficit" (e.g. "fairness deficit", "highest-deficit units") stay as-is.
 
 ## Layout
 
