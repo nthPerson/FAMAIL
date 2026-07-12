@@ -342,12 +342,15 @@ lift-up property.
 
 \begin{figure}[t]
   \centering
-  % TODO(figure): two-panel extended-frontier figure — panel A the (dF_spatial, dF_causal)
-  % scatter (flat), panel B the lift-up channels vs alpha_sp (monotone decline, sig markers).
-  % Data: PAPER/objective-motivation/weight-sensitivity/EXTENDED_FRONTIER.md.
-  \fbox{\parbox{0.9\linewidth}{\centering\vspace{1.5em}Extended weight-sensitivity
-  frontier figure --- placeholder.\vspace{1.5em}}}
-  \caption{Weight sweep across three metric rings (placeholder).}
+  \includegraphics[width=\linewidth]{figures/extended_frontier.pdf}
+  \caption{The weight sweep, scored beyond the optimized metrics. (A) On the
+  optimized plane, $\Delta F_{\mathrm{causal}}$ is flat across
+  $\alpha_{\mathrm{sp}} \in [0, 0.55]$. (B) The design-targeted lift-up
+  declines monotonically with spatial weight and is significant on both
+  supply tiers only for $\alpha_{\mathrm{sp}} \le 0.2$ (filled = 95\% CI
+  excludes 0). The adopted $(0.1, 0.8, 0.1)$ is the three-part criterion's
+  selection.}
+  % src: PAPER/objective-motivation/weight-sensitivity/extended_frontier.json via paper/figures/make_figures.py
   \label{fig:alpha-pareto}
 \end{figure}
 

@@ -123,13 +123,21 @@ lands its remaining suites.
 1. **The weight re-anchor + extended frontier** (§3.3) — walk Zhang through the two-decision story and
    the three-ring table; confirm he's comfortable with (0.1, 0.8, 0.1) and with presenting the
    incomplete-basis finding openly in the sensitivity subsection.
-2. **The SF framing decision is now unavoidable (PI call, flagged in the draft):** at α\* the SF tension
-   reproduces — supply channel positive-significant (+0.0209) but total mean(Y|D) net-negative (−0.0324)
-   because lift also routes pickups into under-served cells. The draft presents BOTH readings (ratio
-   reading: withhold the SF lift-up claim; external-metrics reading: DP/DI/Theil all improve, and the
-   falling ratio is the demand-endogeneity mechanism). Zhang picks which reading leads.
-   Note: SF's migrant DP is now significant under **both** grouping conventions at α\* — stronger than
-   the Meeting-42-era caveat.
+2. **⚠️ DECISION REQUIRED — the SF fairness framing (PI call, blocking a `% TODO(PI-framing)` marker in
+   `paper/sections/04_experiments.tex`, §"External Validity: San Francisco").** At α\* the SF tension
+   reproduces exactly: the supply channel is positive-significant (**+0.0209**, CI [+0.0122, +0.0300])
+   but lift also routes *pickups* into under-served cells, so recorded demand there rises and the total
+   mean(Y|D) is net-negative (**−0.0324**, CI excludes 0; demand channel −0.0533\*). The draft presents
+   BOTH readings side by side and Zhang picks which leads:
+   - **Ratio reading:** the SF lifting-up claim is withheld (the S/D ratio for the under-served group falls).
+   - **External-metrics reading:** more rides *served* in under-served areas is a demand-side parity gain
+     — DP, DI, and Theil all improve, and the falling ratio is precisely the demand-endogeneity mechanism
+     the paper's §3.4 predicts (recorded demand was suppressed; serving it raises the denominator).
+   Supporting context that strengthens the external-metrics reading since Meeting 42: SF's migrant DP is
+   now significant under **both** grouping conventions at α\* (extremes −0.0729\*, median-split −0.0370\*);
+   the SF weighted-BC recovery reproduces (+0.0332 @ w30, 6/6, controls fail); and the SF four-source
+   table reproduces with fresh generators (edited fairest 0.9067, identity-faithful). Whichever reading
+   leads, the other stays disclosed — the decision is about *emphasis*, not omission.
 3. **Ablation is COMPLETE and textbook** (his "really necessary" item): at identical weights/budget,
    trim-only = +0.0146 F_causal, *negative* F_spatial, disadvantaged level flat to 4 decimals
    (7.0734 → 7.0734) — pure leveling-down; trim+lift = +0.0226, +0.0061, +0.053 lift-up (CI excl. 0).

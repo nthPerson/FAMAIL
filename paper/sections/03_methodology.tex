@@ -302,12 +302,16 @@ threshold on the supply channel alone (\S\ref{sec:experiments}).
 
 \begin{figure*}[t]
   \centering
-  % TODO(figure): three-panel overview — (1) the service gap (over-served cluster vs
-  % under-served area); (2) trim: pickups nudged out of hotspots (levels down);
-  % (3) lift: value-of-presence heat map + a tail bending into the glow (lifts up).
-  % Design candidate: docs/presentations/meeting_42_update/trim_plus_lift_explainer.md §4.
-  \fbox{\parbox{0.9\textwidth}{\centering\vspace{2em}Method overview figure --- placeholder.\vspace{2em}}}
-  \caption{FAMAIL trim+lift editing overview (placeholder).}
+  % DRAFT figure (paper/figures/make_figures.py). The production Figure 1 is in
+  % progress via external tooling — variants spec: PAPER/figures/figure-1.md.
+  \includegraphics[width=0.92\textwidth]{figures/method_overview.pdf}
+  \caption{FAMAIL's two editing modes on a stylized city. (1) The service gap:
+  taxi presence concentrates in over-served areas while under-served areas
+  carry unmet pickups. (2) \emph{Trim} relocates excess pickups out of
+  hotspots --- improving fairness metrics by leveling down. (3) \emph{Lift}
+  reroutes a trajectory's final seeking states into the cells where the
+  supply gradient says added presence most improves fairness, carrying its
+  taxi presence with it.}
   \label{fig:overview}
 \end{figure*}
 
