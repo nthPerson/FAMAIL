@@ -234,7 +234,7 @@ stage_q1() {
     if [ -n "$d" ]; then
       log_echo "q1 arm $mode (random-start) already complete: $d (skip)"
     else
-      cmd="python -m famail_temporal.baselines.run_stifgsm_baseline --edit-dir $SHZ_FILTERED --mode $mode --seed 0 --device cpu --score-fidelity"
+      cmd="python -m famail_temporal.baselines.run_stifgsm_baseline --edit-dir $SHZ_FILTERED --mode $mode --seed 0 --device auto --score-fidelity"
       ledger_start "Q1-arm-$mode" "$STATE_DIR/ledger/Q1-arm-$mode" "PRIMARY / shenzhen / $mode random-start" "$cmd"
       run_logged "$cmd"
       d=$(find_arm_dir "$mode" true)
@@ -249,7 +249,7 @@ stage_q1() {
     if [ -n "$d" ]; then
       log_echo "q1 arm $mode (--no-random-start) already complete: $d (skip)"
     else
-      cmd="python -m famail_temporal.baselines.run_stifgsm_baseline --edit-dir $SHZ_FILTERED --mode $mode --seed 0 --device cpu --score-fidelity --no-random-start"
+      cmd="python -m famail_temporal.baselines.run_stifgsm_baseline --edit-dir $SHZ_FILTERED --mode $mode --seed 0 --device auto --score-fidelity --no-random-start"
       ledger_start "Q1-arm-$mode-nors" "$STATE_DIR/ledger/Q1-arm-$mode-nors" "PRIMARY / shenzhen / $mode --no-random-start ablation" "$cmd"
       run_logged "$cmd"
       d=$(find_arm_dir "$mode" false)
