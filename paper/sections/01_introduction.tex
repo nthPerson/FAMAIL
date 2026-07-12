@@ -1,6 +1,102 @@
 \section{Introduction}\label{sec:intro}
-% STUB — filled by a later task.
-% Assemble from: PAPER/argument/01_motivation_goals.md (why inequity matters; why edit
-% not generate; contributions) + PAPER/argument/00_overview.md (elevator argument).
-% Narrative spine: external-metrics leveling-down caveat MOTIVATED trim+lift
-% (Meeting-42 §3a→3b); lead with the two-pillar thesis.
+% Drafted 2026-07-12 per docs/superpowers/specs/2026-07-12-paper-prose-sections-design.md.
+% All Shenzhen numbers are committed s10-corpus values (alpha* = 0.1/0.8/0.1). The SF
+% editor delta is hard-coded (not slot-marked): run r1 landed 2026-07-11 and section 4
+% already carries the artifact-sourced value; the intro mirrors it.
+
+Demand models for urban mobility are increasingly learned by imitation:
+policies are trained to reproduce the trajectories a real fleet actually
+drove \cite{zhang2022cgail}. But trajectories carry more than behavior.
+They record the fleet's service allocation --- which neighborhoods drivers
+sought passengers in, and which they passed over --- and in real cities
+that allocation tracks who lives where: housing prices, incomes, migrant
+population share. A model that imitates such data faithfully learns the
+inequity as competence, and a model deployed to guide dispatch re-enacts
+it, sending supply where supply already went --- the feedback loop
+documented for other data-driven allocation systems
+\cite{ensign2018,lumisaac2016}.
+
+Interventions typically target one end of the pipeline or the other.
+In-processing methods regularize the model while leaving the
+demonstrations biased \cite{zheng2023}, so the objective and the training
+signal pull against each other at every step. Generative repair replaces
+the data wholesale, but rewriting an entire distribution risks trading
+realism for the fairness score and makes any improvement hard to attribute
+to anything in particular. FAMAIL takes a third position, as \emph{data
+augmentation}: keep the real corpus, edit the small slice of it where
+attribution says the unfairness lives, and generate nothing. At most $k$
+trajectories are edited ($k = 10{,}000$ on the primary city, about a tenth
+of the corpus), each perturbed within a two-cell ball under a frozen
+driver-identity discriminator, so realism is inherited from the data
+rather than re-learned. The edited demonstrations are then
+\emph{upweighted} during imitation --- instance reweighing
+\cite{kamirancalders2012} transplanted to demonstrations --- so the
+fairness of a small slice survives training instead of being averaged
+away.
+
+The subtlety is not measuring unfairness but repairing it honestly.
+FAMAIL's first editing mode, \emph{trim}, moves only demand: it relocates
+recorded pickups out of over-served hotspots, and on the primary city it
+improves the external fairness measures --- by \emph{leveling down}. Every
+one of the 2{,}455 pickups it edits originates in an advantaged cell, and
+the under-served group's service never moves; the classic leveling-down
+objection to equalization \cite{parfit1997,mittelstadt2024} applies
+literally.
+% src: PAPER/external-metrics/LEVELING_DOWN_MECHANISM.md (2,455/2,455 flow analysis)
+We show this behavior is structural --- the constrained optimum of any
+demand-only editor on this objective (\S\ref{sec:leveling}) --- and that
+diagnosis dictated the second mode. \emph{Lift} reroutes drivers' final
+seeking minutes into under-served areas and makes the supply consequences
+of the reroute differentiable and endogenous to the objective: the editor
+is rewarded for providing service where it improves fairness, not merely
+for redistributing demand. Together, trim and lift raise demand-adjusted
+demographic fairness on Shenzhen by $+0.0226$
+% src: famail_temporal/results/2026-07-10T02-06-37_alpha_sweep_s10_c80_f10_filtered/metrics.json
+and --- for the first time in this line of work --- add statistically
+robust taxi presence to the under-served group: $+0.0176$ under the
+optimizer's fractional-presence accounting (tier-1), $+0.0411$ when
+recounted as distinct taxis from raw GPS (tier-2).
+% src: famail_temporal/results/2026-07-10T02-06-37_alpha_sweep_s10_c80_f10_filtered/channel_decomposition.json
+On San Francisco the protocol reruns with no algorithm, metric, or
+fidelity change, and the conclusions reproduce ($+0.0316$;
+\S\ref{sec:exp-sf}).
+% src: famail_temporal/results/2026-07-11T11-31-55_supply_lift_a10_sf12_filtered/metrics.json (run r1)
+
+Neither edit survives training on its own. The edited slice is a tenth of
+the corpus, and a vanilla behavior-cloning objective averages it away ---
+a genuine null we verify rather than assume. Upweighting the edited
+demonstrations recovers the fairness with a monotone dose-response, and
+two controls pin the recovery to the edit itself: upweighting an
+equal-sized random subset, and upweighting the corpus's already-fairest
+trajectories, are both null. Because a fairness method scored on its own
+objective proves little, evaluation rides on established measures the
+objective never optimizes --- demographic parity, disparate impact
+($+0.0162$ on the primary city's migrant axis), and the Theil index ---
+computed before and after editing.
+% src: see §4 external-metrics table (DI row); PAPER/external-metrics/FINDINGS.md
+A targeted demographic-oversampling baseline captures only part of the
+data-level gain despite fabricating 10.5\% of the corpus, and its
+untargeted placebo degrades fairness outright.
+% src: PAPER/baselines/demographic-oversampling/FINDINGS.md
+
+\textbf{Contributions.}
+\begin{itemize}
+\item \textbf{A trim+lift trajectory editor.} Two bounded, gradient-guided
+editing modes under one differentiable objective, with the supply
+consequences of edits made endogenous to it, driven by two exact
+attribution mechanisms: demand deficit attribution localizes existing
+unfairness, and supply-gradient attribution localizes the value of added
+taxi presence.
+\item \textbf{A structural diagnosis of leveling-down.} Demand-only
+editing closes fairness gaps only from the top; we show why --- selection,
+leverage, and frozen supply --- and show that a differentiable supply
+channel is the non-perverse remedy.
+\item \textbf{A transfer recipe with edit-specificity controls.}
+Upweighted imitation carries the data-level fairness into trained
+policies, and random-upweighting and select-the-fairest controls isolate
+the edit as the cause.
+\item \textbf{Two-city validation on never-optimized measures.} The full
+protocol runs on Shenzhen and San Francisco and is scored on external
+fairness measures the objective never optimizes, against a
+demographic-oversampling baseline.
+\end{itemize}
