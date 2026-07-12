@@ -1,7 +1,79 @@
 \section{Related Work}\label{sec:related}
-% STUB — filled by a later task.
-% Assemble from: PAPER/objective-motivation/MOTIVATION.md ("Contrast / novelty" blocks
-% per term) + REFERENCES.md groupings (fairness metrics; transportation equity;
-% imitation/TUL/fidelity; adversarial perturbation & recourse; leveling-down ethics;
-% feedback loops). Zheng et al. 2023 = closest applied neighbor (in-processing;
-% FAMAIL is pre-processing/data-side).
+% Drafted 2026-07-12 per docs/superpowers/specs/2026-07-12-paper-prose-sections-design.md.
+% Five themes, each closing with a one-sentence FAMAIL contrast; positioning prose only —
+% mechanism prose lives in §3. All cite keys are pre-existing refs.bib entries.
+
+\textbf{Fairness interventions in machine learning.} Algorithmic-fairness
+interventions are conventionally grouped by where they act: pre-processing
+methods repair the training data, in-processing methods constrain the
+learner, and post-processing methods adjust its outputs
+\cite{vermarubin2018,barocas2023}. FAMAIL belongs to the pre-processing
+family, whose canonical instruments --- instance reweighing
+\cite{kamirancalders2012} and disparate-impact repair of feature
+distributions \cite{feldman2015} --- were built for labeled classification
+data. The fairness notion it targets is conditional statistical parity
+\cite{corbettdavies2017}: disparities count only after permitted factors
+are adjusted for. Both instruments reappear here in unfamiliar roles ---
+reweighing applied to demonstrations rather than labeled examples, and the
+parity condition transplanted from a classifier's predictions to a
+continuous spatial service ratio and made a differentiable editing
+objective.
+
+\textbf{Fairness in urban transportation.} Transportation equity has its
+own measurement tradition, in which the Gini index over service
+distributions is the most widely used instrument
+\cite{horchergraham2021,karner2024}, alongside entropy- and
+welfare-based indices \cite{theil1967,atkinson1970,demaio2007}. On the
+modeling side, the closest neighbor to this work regularizes a ride-hailing
+demand predictor in-processing, shrinking a racial prediction-error gap
+from 0.361 to 0.084 \cite{zheng2023}. FAMAIL addresses the same
+demand-model bias one stage earlier --- on the demonstrations the model
+trains on, rather than inside its loss --- and is scored on equity
+measures its objective never optimizes.
+
+\textbf{Imitation learning for mobility, and mobility as identity.}
+Imitation learning is an established route to urban mobility models:
+conditional GAIL variants recover taxi-driver strategies from trajectories
+\cite{zhang2019cgail,zhang2022cgail}, explainable extensions expose the
+recovered policies \cite{pan2020xgail}, and neural simulators generate
+human mobility wholesale \cite{feng2020simulate}. That literature
+optimizes realism; the demographic fairness of the imitated allocation is
+not among its objectives. A parallel line establishes that individual
+mobility is highly identifying: trajectory-user linking recovers who
+generated a trace \cite{gao2017tuler,zhou2018tulvae,miao2020deeptul}, and
+Siamese verification decides whether two seeking traces share a driver
+\cite{ren2020stsiamese}. FAMAIL contributes no new generator or imitation
+algorithm; it edits the demonstrations such models consume, and it
+repurposes the identity-verification line as a frozen realism guardrail
+--- avoiding the instability of a live adversarial game
+\cite{hoermon2016}.
+
+\textbf{Adversarial perturbation and recourse.} The editing machinery
+descends from adversarial examples: bounded signed-gradient perturbations
+\cite{goodfellow2015fgsm,kurakin2017ifgsm}, instantiated
+spatio-temporally for mobility signatures by ST-iFGSM \cite{hu2023stifgsm},
+with discrete structure bridged by continuous relaxation
+\cite{jang2017gumbel,maddison2017concrete,bengio2013ste}. Algorithmic
+recourse established that the same counterfactual-perturbation tooling can
+prescribe beneficial change rather than attack
+\cite{ustun2019recourse,wachter2018counterfactual} --- for one
+individual's feature vector, to flip one decision. FAMAIL extends that
+constructive reading from the individual to the population: the bounded
+perturbation edits real trajectories to reduce demographic service
+inequity, and the $\varepsilon$-bound is reinterpreted from an
+attack-stealth budget to an identity-preservation budget.
+
+\textbf{Leveling down and feedback loops.} Two critiques frame what a
+fairness gain should mean. The leveling-down objection --- equality
+achieved by making the better-off worse rather than the worse-off better
+--- originates in the ethics of equality \cite{parfit1997} and has been
+pressed concretely against machine-learning fairness constraints
+\cite{mittelstadt2024}, with data augmentation observed to be the one
+intervention class that helps the disadvantaged group instead
+\cite{zietlow2022}. Feedback-loop analyses show that allocation systems
+trained on their own historical output entrench under-service
+\cite{ensign2018,lumisaac2016}. Both critiques are load-bearing in this
+paper: we diagnose our own demand-only editor as leveling down
+(\S\ref{sec:leveling}), build the supply channel expressly to lift up, and
+state demand endogeneity as the bound on what any demand-adjusted metric
+can see.
