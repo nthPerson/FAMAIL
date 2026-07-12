@@ -377,9 +377,13 @@ variance (b0 vs FAMAIL) & see~\S\ref{sec:exp-downstream} & X & X \\ % TODO(run:Q
 % src (PRIMARY column): s10 corpus metrics.json + shenzhen-primary-supplylift-s10 external_fairness.json
 
 \textbf{Filtering is not a substitute.} Removing the $K$ least-fair
-trajectories instead of editing them does not reproduce the gain:
-X.XXXX. % TODO(run:Q7 -> famail_temporal/results/analysis/pareto_supplylift/pareto_points.csv) one-sentence filter@K result
-% (trim-era precedent: filtering LOWERED F_causal while editing raised it — re-verified under trim+lift by Q7)
+trajectories instead of editing them does not reproduce the gain --- it
+inverts it: $F_{\mathrm{causal}}$ falls monotonically with removal
+(0.7988 $\to$ 0.7935 at the maximum $K = 2{,}455$), while editing the same
+attribution-selected slice raises it to 0.8214. On the $F_{\mathrm{causal}}$
+objective, neither selecting (\S\ref{sec:exp-downstream}, most-fair control)
+nor removing data substitutes for editing it.
+% src: famail_temporal/results/analysis/pareto_supplylift/pareto_points.csv (Q7-pareto ledger row)
 
 \subsection{External Validity: San Francisco}\label{sec:exp-sf}
 
