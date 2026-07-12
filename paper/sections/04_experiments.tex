@@ -424,19 +424,23 @@ the denominator.
 % TODO(PI-framing): Zhang decision — which SF fairness story leads; both readings kept until then.
 % src: PAPER/supply-lift/data/a10/sf12_a10_channel_decomposition.json
 
-\textbf{Downstream.} The four-source data-quality table, the weighted-BC
-recovery with controls, and the model-level variance suite rerun on the SF
-trim+lift corpus:
-% TODO(run:Q4 -> famail_temporal/results/level1_table_v2/supply_lift_sf12_5seed/level1_v2_multiseed.json) SF L1 cells
-% TODO(run:Q2 -> famail_temporal/results/weighted_bc_sweep/supply_lift_v1_sf12_filtered_6seed/paired_stats.json) SF WBC dose-response + controls
-The SF model-level variance suite is complete:
+\textbf{Downstream.} The recovery reproduces on San Francisco. Vanilla BC is
+null ($+0.0026$, 5/6, $p = .0625$); upweighting recovers the fairness with a
+monotone, sign-unanimous dose-response --- $+0.0242$ (w10), $+0.0309$ (w20),
+$+0.0332$ (w30), each 6/6 at the $p = .031$ floor with $t$-intervals
+excluding zero --- and neither control reproduces it (random placebo
+null-to-negative, $-0.0065$/$-0.0069$; most-fair select mixed, significantly
+\emph{negative} at w10 and n.s.\ above). One city difference stated plainly:
+$F_{\mathrm{spatial}}$ does \emph{not} propagate on SF ($-0.0040$ at w30,
+n.s.); the primary-city result at the adopted weights is reported in
+\S\ref{sec:exp-downstream}.
+% src: famail_temporal/results/weighted_bc_sweep/supply_lift_a10_sf12_filtered_6seed/paired_stats.json
+The SF model-level variance suite mirrors the primary city:
 $\Delta F_{\mathrm{causal}} = -0.0025 \pm 0.0029$ ($n = 5$, mixed signs,
-null), mirroring the primary city.
+null).
 % src: famail_temporal/results/variance_suite/supply_lift_sf12_5seed/ (paired per-seed diffs)
-The remaining results land with campaign stages Q2/Q4. The demand-only-era precedent
-(recovery $+0.0387$ at w30 with \emph{both} controls negative) is cited only
-as the expectation these reruns test, within the ablation's sanctioned scope.
-% lint-allow: ablation — SF trim-era WBC precedent named as expectation, replaced by Q2 numbers
+The four-source data-quality table lands with campaign stage Q4.
+% TODO(run:Q4 -> famail_temporal/results/level1_table_v2/supply_lift_sf12_5seed/level1_v2_multiseed.json) SF L1 cells
 
 \textbf{SF caveat block.} ACS foreign-born share proxies the migrant axis (not
 hukou); the 12-driver density-matched subsample is small; 14.9\% of raw
