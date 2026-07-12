@@ -439,15 +439,22 @@ The SF model-level variance suite mirrors the primary city:
 $\Delta F_{\mathrm{causal}} = -0.0025 \pm 0.0029$ ($n = 5$, mixed signs,
 null).
 % src: famail_temporal/results/variance_suite/supply_lift_sf12_5seed/ (paired per-seed diffs)
-The four-source data-quality table lands with campaign stage Q4.
-% TODO(run:Q4 -> famail_temporal/results/level1_table_v2/supply_lift_sf12_5seed/level1_v2_multiseed.json) SF L1 cells
+The four-source comparison also reproduces (generators retrained from
+scratch; identity gate passed, matched 0.958 vs.\ mismatched 0.034): the
+edited corpus is the fairest source ($F_{\mathrm{causal}}$ 0.9067 vs.\ GAN
+0.8795, raw 0.8752, BC 0.8744) while identity-faithful (Fidelity-A 0.9581
+$\approx$ raw 0.9578; Fidelity-B 0.098, the expected bounded-edit
+divergence).
+% src: famail_temporal/results/level1_table_v2/supply_lift_sf12_5seed/level1_v2_multiseed.json
 
 \textbf{SF caveat block.} ACS foreign-born share proxies the migrant axis (not
 hukou); the 12-driver density-matched subsample is small; 14.9\% of raw
 Cabspotting trajectories violate king-move adjacency at source (GPS gaps), so
 absolute compliance is unattainable --- the edited corpus is \emph{more}
 compliant than raw (87.4\% vs.\ 85.0\%), and the cross-city gate is
-edit-relative compliance (100\%); whether the GAN-generated source collapses
-distributionally is a city-dependent property and the fresh Q4 run's outcome
-is reported as-is.
+edit-relative compliance (100\%); and the GAN-generated source's
+distributional collapse is a city-dependent property --- the fresh SF run's
+GAN stayed healthy (Fidelity-B 0.039), so any collapse-based cautionary note
+applies only to the city where it is measured.
+% src: famail_temporal/results/level1_table_v2/supply_lift_sf12_5seed/level1_v2_multiseed.json (gan row)
 % src: PAPER/argument/07_limitations.md §5-7; PAPER/supply-lift/FINDINGS.md §10
