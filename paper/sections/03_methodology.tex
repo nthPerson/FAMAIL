@@ -53,15 +53,37 @@ service that demand does not explain --- the logic of conditional statistical
 parity \cite{corbettdavies2017}, which restricts disparities to those not
 explained by permitted factors. Stage one fits a flexible power basis $g_0(D)$
 from per-unit demand to the service ratio and takes the residual
-$R_i = Y_i - g_0(D_i)$; stage two asks how much of that residual the
-demographics explain. With $X$ the z-scored demographic design matrix, $H$ the
-projection onto $[\mathbf{1}, X]$, and $M$ the centering matrix,
+$R_i = Y_i - g_0(D_i)$; stage two regresses that residual on the demographics
+and asks how much they explain. We evaluate stage two in closed form rather
+than through an explicitly fitted regression: with $X$ the z-scored
+demographic matrix, $\tilde{X} = [\mathbf{1}\; X]$ its design matrix,
+$H = \tilde{X}(\tilde{X}^{\top}\tilde{X})^{-1}\tilde{X}^{\top}$ the \emph{hat
+matrix} of that regression --- the projection onto the column space of
+$\tilde{X}$ \cite{hoaglinwelsch1978} --- and $M$ the centering matrix,
 \begin{equation}\label{eq:fcausal}
 F_{\mathrm{causal}}
 \;=\; \frac{R^{\top}(I-H)\,R}{R^{\top}M\,R}
 \;=\; 1 - r^{2}_{\mathrm{demo}} .
 \end{equation}
-By the Frisch--Waugh--Lovell theorem \cite{frischwaugh1933,lovell1963}, this
+Despite its appearance, Eq.~\eqref{eq:fcausal} is nothing but the stage-two
+regression computed in closed form: the numerator is its residual sum of
+squares, the denominator its total sum of squares. The projection form is
+what makes the measure usable as an \emph{optimization objective} rather
+than a one-shot audit. Demographics are fixed attributes of the cells, so
+$H$ is a constant of the optimization: as editing moves $R$,
+Eq.~\eqref{eq:fcausal} implicitly re-fits the demographic regression exactly
+at every step, with no coefficients to refresh and nothing trained inside
+the editing loop. As a ratio of quadratic forms in $R$ it is smooth, so
+exact gradients flow from the fairness score through $Y$ to the coordinates
+being edited, and the idempotence of its projections underwrites the exact
+per-unit attribution of \S\ref{sec:attribution}. Nor is the $N \times N$
+projection ever materialized: by the normal equations,
+$R^{\top}(I-H)R = R^{\top}R -
+(\tilde{X}^{\top}R)^{\top}(\tilde{X}^{\top}\tilde{X})^{-1}(\tilde{X}^{\top}R)$,
+so each evaluation costs a few length-$N$ inner products.
+% src: objective_function/causal_fairness/f_causal_term_reformulation/chosen_formulation/OPTION_B_FORMULATION.md §3.3, §5 (constant H; implicit exact re-fit; differentiability)
+% src: famail_temporal/fairness/hat_matrices.py (compact evaluation identity; dense N×N infeasible at production N)
+By the Frisch--Waugh--Lovell theorem \cite{frischwaugh1933,lovell1963}, the
 residualize-then-project construction recovers exactly the demographic
 coefficients of the full multiple regression, so $r^{2}_{\mathrm{demo}}$ is
 interpretable as the share of demand-adjusted service inequity attributable to
@@ -86,15 +108,30 @@ what a demand-only editor can achieve.
 
 \textbf{Spatial equity ($F_{\mathrm{spatial}}$, secondary).} Independent of
 demographics, service should also be spread evenly relative to the taxi supply
-actually present. We include a Gini-based term over supply-normalized service
-rates --- pickups per active taxi and dropoffs per active taxi, per unit ---
-the most widely used inequality index in transportation-equity research
-\cite{horchergraham2021,karner2024}, in a differentiable pairwise form so it
-can enter the gradient objective:
-$F_{\mathrm{spatial}} = 1 - \tfrac{1}{2}\bigl(\mathrm{Gini}(\mathrm{DSR}) +
-\mathrm{Gini}(\mathrm{ASR})\bigr)$. Being demographic-independent, it acts as
-a spatial smoothness regularizer complementing $F_{\mathrm{causal}}$.
-% src: PAPER/argument/03_fairness_theory.md
+actually present. We track two supply-normalized service rates per active
+unit --- the \emph{demand-service ratio} $\mathrm{DSR}_i = D_i / S_i$
+(pickups per unit of taxi presence) and the \emph{arrival-service ratio}
+$\mathrm{ASR}_i = A_i / S_i$ (dropoffs per unit of taxi presence), with
+$A_i$ the unit's recorded dropoffs and $D_i$, $S_i$ as in
+\S\ref{sec:problem} --- and score the inequality of each with the Gini
+index, an inequality measure widely used in transportation-equity
+research \cite{horchergraham2021,karner2024}. The Gini enters in its
+pairwise mean-absolute-difference form, differentiable almost everywhere
+and hence usable inside the gradient objective:
+\begin{equation}\label{eq:fspatial}
+\mathrm{Gini}(x) \;=\; \frac{\sum_{i}\sum_{j}\,\lvert x_i - x_j\rvert}
+{2N^{2}\,\bar{x}},
+\qquad
+F_{\mathrm{spatial}} \;=\; 1 - \tfrac{1}{2}\bigl(\mathrm{Gini}(\mathrm{DSR})
++ \mathrm{Gini}(\mathrm{ASR})\bigr).
+\end{equation}
+As with $F_{\mathrm{causal}}$, the quadratic pairwise sum is never
+materialized: a sorted prefix-sum identity evaluates it in $O(N \log N)$
+with identical gradients. Being demographic-independent, the term acts as a
+spatial smoothness regularizer complementing $F_{\mathrm{causal}}$.
+% src: PAPER/argument/03_fairness_theory.md (F_spatial definition)
+% src: famail_temporal/fairness/spatial.py (DSR/ASR ratios; sorted-identity evaluation, no N² materialization)
+% src: famail_temporal/docs/RESEARCHER_HANDOFF.md §4 (DSR/ASR acronym expansions)
 
 \textbf{Realism guardrail ($F_{\mathrm{fidelity}}$).} An edit that improves
 fairness by producing trajectories no real driver would generate is useless
