@@ -7,11 +7,12 @@
 interventions are conventionally grouped by where they act: pre-processing
 methods repair the training data, in-processing methods constrain the
 learner, and post-processing methods adjust its outputs
-\cite{vermarubin2018,barocas2023}. FAMAIL belongs to the pre-processing
+\cite{barocas2023}. FAMAIL belongs to the pre-processing
 family, whose canonical instruments --- instance reweighing
 \cite{kamirancalders2012} and disparate-impact repair of feature
 distributions \cite{feldman2015} --- were built for labeled classification
-data. The fairness notion it targets is conditional statistical parity
+data. Among the many formal fairness definitions \cite{vermarubin2018},
+the notion FAMAIL targets is conditional statistical parity
 \cite{corbettdavies2017}: disparities count only after permitted factors
 are adjusted for. Both instruments reappear here in unfamiliar roles ---
 reweighing applied to demonstrations rather than labeled examples, and the
@@ -53,7 +54,8 @@ descends from adversarial examples: bounded signed-gradient perturbations
 \cite{goodfellow2015fgsm,kurakin2017ifgsm}, instantiated
 spatio-temporally for mobility signatures by ST-iFGSM \cite{hu2023stifgsm},
 with discrete structure bridged by continuous relaxation
-\cite{jang2017gumbel,maddison2017concrete,bengio2013ste}. Algorithmic
+\cite{jang2017gumbel,maddison2017concrete} and straight-through gradient
+estimation \cite{bengio2013ste}. Algorithmic
 recourse established that the same counterfactual-perturbation tooling can
 prescribe beneficial change rather than attack
 \cite{ustun2019recourse,wachter2018counterfactual} --- for one
@@ -71,8 +73,9 @@ pressed concretely against machine-learning fairness constraints
 \cite{mittelstadt2024}, with data augmentation observed to be the one
 intervention class that helps the disadvantaged group instead
 \cite{zietlow2022}. Feedback-loop analyses show that allocation systems
-trained on their own historical output entrench under-service
-\cite{ensign2018,lumisaac2016}. Both critiques are load-bearing in this
+trained on their own historical output entrench a self-reinforcing
+allocation bias \cite{ensign2018,lumisaac2016} --- in our domain, the
+under-service of the neighborhoods that were under-served to begin with. Both critiques are load-bearing in this
 paper: we diagnose our own demand-only editor as leveling down
 (\S\ref{sec:leveling}), build the supply channel expressly to lift up, and
 state demand endogeneity as the bound on what any demand-adjusted metric
