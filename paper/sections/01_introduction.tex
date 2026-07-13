@@ -36,7 +36,7 @@ away.
 
 The subtlety is not measuring unfairness but repairing it honestly.
 FAMAIL's first editing mode, \emph{trim}, moves only demand: it relocates
-recorded pickups out of over-served hotspots, and on the primary city it
+recorded pickups within over-served areas, and on the primary city it
 improves measured fairness --- by \emph{leveling down}. Every
 one of the 2{,}455 pickups it edits originates in an advantaged cell, and
 the under-served group's service never moves; the classic leveling-down
@@ -51,16 +51,17 @@ of the reroute differentiable and endogenous to the objective: the editor
 is rewarded for providing service where it improves fairness, not merely
 for redistributing demand. Together, trim and lift raise demand-adjusted
 demographic fairness on Shenzhen by $+0.0226$
-% src: famail_temporal/results/2026-07-10T02-06-37_alpha_sweep_s10_c80_f10_filtered/metrics.json
-and --- for the first time in this line of work --- add statistically
-robust taxi presence to the under-served group: $+0.0176$ under the
-optimizer's fractional-presence accounting (tier-1), $+0.0411$ when
-recounted as distinct taxis from raw GPS (tier-2).
-% src: famail_temporal/results/2026-07-10T02-06-37_alpha_sweep_s10_c80_f10_filtered/channel_decomposition.json
+% src: PAPER/supply-lift/data/a10/shz_a10_metrics.json (deltas.f_causal)
+and --- for the first time in our experiments --- add statistically
+robust taxi presence to the under-served group, raising its mean service
+ratio by $+0.0176$ under the optimizer's fractional-presence accounting
+(tier-1) and by $+0.0411$ when supply is recounted as distinct taxis from
+raw GPS (tier-2).
+% src: PAPER/supply-lift/data/a10/shz_a10_channel_decomposition.json (channels.supply / supply_tier2)
 On San Francisco the protocol reruns with no algorithm, metric, or
-fidelity change, and the conclusions reproduce ($+0.0316$;
-\S\ref{sec:exp-sf}).
-% src: famail_temporal/results/2026-07-11T11-31-55_supply_lift_a10_sf12_filtered/metrics.json (run r1)
+fidelity change, and the data-level, external-metric, and downstream
+conclusions reproduce ($+0.0316$; \S\ref{sec:exp-sf}).
+% src: PAPER/supply-lift/data/a10/sf12_a10_metrics.json (run r1)
 
 Neither edit survives training on its own. The edited slice is a tenth of
 the corpus, and a vanilla behavior-cloning objective averages it away ---
@@ -73,10 +74,11 @@ objective proves little, evaluation rides on established measures the
 objective never optimizes --- demographic parity, disparate impact
 ($+0.0162$ on the primary city's migrant axis), and the Theil index ---
 computed before and after editing.
-% src: see §4 external-metrics table (DI row); PAPER/external-metrics/FINDINGS.md
-A targeted demographic-oversampling baseline captures only part of the
-data-level gain despite fabricating 10.5\% of the corpus, and its
-untargeted placebo degrades fairness outright.
+% src: see §4 external-metrics table (DI row); PAPER/supply-lift/data/a10/shz_a10_external_fairness.json
+% (MigrantRatio district_extremes disparate_impact.delta)
+On the primary city, a targeted demographic-oversampling baseline captures
+only part of the data-level gain despite fabricating 10.5\% of the corpus,
+and its untargeted placebo degrades fairness outright.
 % src: PAPER/baselines/demographic-oversampling/FINDINGS.md
 
 \textbf{Contributions.}
@@ -98,5 +100,5 @@ the edit as the cause.
 \item \textbf{Two-city validation on never-optimized measures.} The full
 protocol runs on Shenzhen and San Francisco and is scored on external
 fairness measures the objective never optimizes, against a
-demographic-oversampling baseline.
+demographic-oversampling baseline on the primary city.
 \end{itemize}

@@ -37,7 +37,7 @@ Imitation-Learned Mobility Models}
 
 \begin{abstract}
 % DRAFT (2026-07-11) — pending final results; numbers below are committed headline
-% values. % src: PAPER/supply-lift/FINDINGS.md; PAPER/external-metrics/FINDINGS.md;
+% values. % src: PAPER/supply-lift/data/a10/ (alpha* headline bundle);
 % PAPER/baselines/demographic-oversampling/FINDINGS.md
 Demand models learned by imitation from urban mobility data inherit the
 demographic service inequity encoded in their demonstrations. We present
@@ -45,8 +45,9 @@ FAMAIL, a fairness-oriented data-augmentation method that \emph{edits}, rather
 than regenerates, a small attribution-targeted slice of real taxi
 trajectories, then upweights the edited demonstrations so the fairness
 survives training. The editor combines two bounded, gradient-guided mechanisms
-under one differentiable objective: \emph{trim} relocates pickups out of
-over-served hotspots, and \emph{lift} reroutes drivers' final seeking minutes
+under one differentiable objective: \emph{trim} relocates recorded pickups
+within over-served areas so their measured over-service falls, and
+\emph{lift} reroutes drivers' final seeking minutes
 into under-served areas, with the supply consequences of a lift made
 differentiable and endogenous to the objective. Every edit is confined to a
 two-cell ball, with a frozen driver-identity discriminator as a realism
@@ -54,14 +55,13 @@ guardrail. On two cities (Shenzhen; San Francisco), editing improves
 established fairness measures that the objective never optimizes ---
 demographic parity, disparate impact, and the Theil index. Where demand-only
 editing improves such measures purely by reducing over-service, the supply
-channel opened by lift adds statistically robust taxi presence to
-under-served areas in both cities: the improvement is no longer pure
-leveling-down. Upweighted behavior cloning carries the fairness-metric
-gains into trained policies edit-specifically --- random-upweighting and
-select-the-fairest controls are null --- while a targeted
-demographic-oversampling baseline captures only part of the data-level gain
-despite fabricating 10.5\% of the corpus, and its untargeted placebo degrades
-fairness outright.
+channel opened by lift adds statistically significant taxi presence to
+under-served areas in both cities. Upweighted behavior cloning carries the
+fairness-metric gains into trained policies edit-specifically ---
+random-upweighting and select-the-fairest controls are null --- while on
+Shenzhen a targeted demographic-oversampling baseline captures only part of
+the data-level gain despite fabricating 10.5\% of the corpus, and its
+untargeted placebo degrades fairness outright.
 \end{abstract}
 
 \keywords{fairness, imitation learning, data augmentation, trajectory editing,

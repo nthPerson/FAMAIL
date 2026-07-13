@@ -19,7 +19,8 @@ Both must pass before every commit. Warnings are tolerated during drafting; erro
 2. **F_causal keeps its label + associational caveat.** No causality-claim language;
    no F_demo rename (pending PI decision).
 3. **The spoken "54%" figure is banned** until grounded. Absolute deltas only
-   (+0.0222 SZ / +0.0328 SF).
+   (+0.0226 SZ / +0.0316 SF, the α\*-era headline; the 0.2-era +0.0222/+0.0328
+   are superseded — do not quote as current).
 4. **p = 0.031 never appears without** mean Δ + t-CI + monotone dose-response — it is
    the n=6 Wilcoxon sign-unanimity floor, not an effect size.
 5. **SF *reproduces* Shenzhen, never "beats" it** (F_causal is city-specific and

@@ -167,8 +167,10 @@ rings as well (\S\ref{sec:exp-robustness}). The sweep exposes an asymmetry
 the optimized metrics alone would hide: $\Delta F_{\mathrm{causal}}$ is flat
 (within $0.001$) across $\alpha_{\mathrm{sp}} \in [0, 0.55]$, but the
 supply-channel lift-up of the under-served group declines monotonically as
-$\alpha_{\mathrm{sp}}$ grows, losing significance beyond
-$\alpha_{\mathrm{sp}} = 0.2$. We therefore select by a three-part criterion
+$\alpha_{\mathrm{sp}}$ grows, and beyond $\alpha_{\mathrm{sp}} = 0.2$ it is
+no longer significant under tier-1 accounting (the tier-2 recount stays
+positive and significant at every sweep point). We therefore select by a
+three-part criterion
 --- maximize $\Delta F_{\mathrm{causal}}$ subject to
 $\Delta F_{\mathrm{spatial}} \ge 0$ \emph{and} the supply-channel lift-up
 remaining significant under both accounting tiers --- which the adopted
@@ -240,11 +242,12 @@ translation is scored by its linearized gain: the value-of-presence
 collected at the tail's new positions minus that at its old ones, each
 state weighted by the presence mass it carries and the map summed over the
 same $5{\times}5$ window through which presence spreads
-(\S\ref{sec:problem}). A trajectory's score is its best offset, and all
-${\approx}95$k trajectories in the corpus are ranked by score --- the
+(\S\ref{sec:problem}). A trajectory's score is its best offset, and every
+trajectory long enough to carry a movable tail (${\approx}80$k of the
+corpus's ${\approx}95$k) is ranked by score --- the
 screen thus favors trajectories that already nearly serve the right areas,
 bending real behavior rather than inventing it.
-% src: PAPER/supply-lift/data/oracle.json (n_trajectories_total 95,297)
+% src: PAPER/supply-lift/data/oracle.json (n_trajectories_len_ge3 80,427 of n_trajectories_total 95,297)
 The screen only \emph{nominates}: every selected
 trajectory is subsequently re-optimized individually under the full objective
 (\S\ref{sec:editor}), which derives the actual move. In assembling the edit
@@ -307,8 +310,8 @@ threshold on the supply channel alone (\S\ref{sec:experiments}).
   \includegraphics[width=0.92\textwidth]{figures/method_overview.pdf}
   \caption{FAMAIL's two editing modes on a stylized city. (1) The service gap:
   taxi presence concentrates in over-served areas while under-served areas
-  carry unmet pickups. (2) \emph{Trim} relocates excess pickups out of
-  hotspots --- improving fairness metrics by leveling down. (3) \emph{Lift}
+  carry unmet pickups. (2) \emph{Trim} relocates excess pickups within the
+  over-served area --- improving fairness metrics by leveling down. (3) \emph{Lift}
   reroutes a trajectory's final seeking states into the cells where the
   supply gradient says added presence most improves fairness, carrying its
   taxi presence with it.}
@@ -343,8 +346,9 @@ exploration to precise late assignment; the best iterate is kept.
 % src: PAPER/objective-motivation/MOTIVATION.md (editor); PAPER/argument/03_fairness_theory.md
 
 \textbf{Trim.} The demand-side mode: pickups selected by demand deficit
-attribution relocate within the $\varepsilon$-ball, pulling recorded demand
-out of over-served hotspots. Its optimization path is exactly the demand-only
+attribution relocate within the $\varepsilon$-ball, padding recorded demand
+into over-served, supply-rich cells so their measured over-service falls
+(\S\ref{sec:leveling}). Its optimization path is exactly the demand-only
 editor's.
 
 \textbf{Lift.} Trajectories nominated by supply-gradient attribution have
@@ -378,7 +382,8 @@ edits with no compliant repair (about 5\%) is reverted to the originals post
 hoc under the same rule --- a rule adopted before its metric effects were
 computed (\S\ref{sec:experiments}).
 % src: LIFT_ALGORITHM_REFERENCE.md §3 (king-move rule), §6 (repair; lift skips in-loop);
-% src: PAPER/supply-lift/FINDINGS.md §8 (trim post-filter 115/2,455 ≈ 5%; rule-first disclosure)
+% src: PAPER/supply-lift/data/a10/shz_a10_metrics.json (n_reverted_infeasible_trim 118/2,455 ≈ 4.8%);
+% PAPER/supply-lift/FINDINGS.md §8 (rule-first disclosure)
 
 \textbf{Budget and phase order.} Trim retains its selection by demand
 deficit attribution; lift fills the remaining budget with positive-score
