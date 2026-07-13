@@ -281,8 +281,11 @@ pickups they allocate to disadvantaged areas, the prior trim+lift corpus
 showed the share still tilting \emph{away} --- attenuated roughly $40\%$
 versus the demand-only corpus, but not reversed --- and policies did not
 learn to \emph{cruise} disadvantaged areas (seeking-state shares n.s.). This
-suite re-runs on the adopted corpus: X.XXXX at w30 (X/6 seeds).
-% TODO(run:R5 -> rollout-allocation eval on the s10 corpus) allocation cells; prior-era numbers cited qualitatively above
+suite re-run on the adopted corpus gives the same boundary, slightly less
+attenuated: $-0.0033$ at w30 (0/6 seeds, $p = .031$) against the demand-only
+corpus's $-0.0048$ --- roughly $31\%$ attenuation, still not a reversal ---
+with seeking-state shares n.s.\ at every weight.
+% src: famail_temporal/baselines/external_fairness/results/option_a_rollout_a10/summary.json (edited_w30.MigrantRatio.pickups.share_D_delta; states n.s.)
 We claim the data-level lift-up and the metric propagation; we disclose the
 allocation boundary, which motivates training-side allocation constraints as
 future work rather than further data-side editing alone.
