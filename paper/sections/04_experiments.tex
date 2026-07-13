@@ -300,14 +300,33 @@ perturbation arms.
 \textbf{Perturbation arms.} Three arms attack the same trajectories the
 headline edit selected, at the same $\varepsilon = 2$: iterative and
 single-step signed-gradient attacks on the frozen identity discriminator, and
-a seeded random-jitter placebo. A naming note required for correctness: the
-gradient arms are \emph{iFGSM/FGSM with random restart} --- the frozen Siamese
-identity head has zero subgradient at an identical pair, so a textbook attack
-initialized at $\delta = 0$ is a provable no-op; we retain the $\delta = 0$
-initialization as an ablation row to demonstrate exactly that.
-% src: famail_temporal/baselines/STATUS.md (paper-facing notes: random-restart naming, vanilla no-op)
+a seeded random-jitter placebo. A naming note: the gradient arms are
+\emph{iFGSM/FGSM with random restart} (PGD-style random initialization within
+the $\varepsilon$ ball). We had pre-registered $\delta = 0$-initialized
+ablation arms expecting a no-op --- a difference-mode Siamese head has zero
+subgradient at an identical pair --- but the deployed discriminator compares
+embeddings by \emph{concatenation}, which is not stationary there: measured,
+the $\delta = 0$ arms attack rather than stall (the iterative arm lands
+within $0.0002$ of its random-start twin; the single-step arm differs with
+initialization, as a one-step method must). The stationarity assumption held
+only for the head we did not deploy, and the random-start arms are the
+reported ones.
+% src: famail_temporal/results/2026-07-13T06-26-19/…06-27-50 arm metrics (nors); deployed checkpoint combination_mode="concatenation" (fidelity/model.py); gradient-at-zero verified live 2026-07-13
 Results: Table~\ref{tab:baselines}.
-% TODO(run:Q1 -> famail_temporal/baselines/baseline_table/ + PAPER/baselines/comparison/) perturbation-arm rows pending GPU stage q1
+
+The arms behave as fidelity baselines, with one result stated against the
+pre-registered expectation: random jitter \emph{does} raise
+$F_{\mathrm{causal}}$ ($+0.0135$) --- indiscriminately diffusing the selected
+trajectories diffuses their over-service too --- but it does so by breaking
+the trajectories: 98.8\% of its perturbed trajectories violate king-move
+adjacency and its distributional divergence reaches 0.447, against the
+edited corpus's disclosed 0.187 (iFGSM: 54.4\%, 0.143; FGSM: 91.4\%,
+0.339; FAMAIL edits are king-compliant by construction). Identity fidelity
+survives every arm ($\approx 0.846$, gate passed) --- at $\varepsilon = 2$
+the perturbations are too small to break driver identity, which is exactly
+why identity fidelity alone cannot rank editing quality here and the
+adjacency and distributional axes carry the comparison.
+% src: famail_temporal/baselines/baseline_table/baseline_table.json (Fid-A/Fid-B(JS)/adjacency-violation columns)
 
 \textbf{Demographic oversampling.} The naive lifting-up baseline: duplicate
 real trajectories originating in demographically disadvantaged regions (all
@@ -339,17 +358,16 @@ arm & $\Delta F_{\mathrm{causal}}$ & $\Delta F_{\mathrm{spatial}}$ & inflation \
 \midrule
 raw (reference) & --- & --- & 0\% \\
 \textbf{FAMAIL trim+lift} & $\mathbf{+0.0226}$ & $+0.0061$ & 0\% \\
-iFGSM (rand.\ restart) & X.XXXX & X.XXXX & 0\% \\ % TODO(run:Q1 -> famail_temporal/baselines/baseline_table/)
-FGSM (rand.\ restart) & X.XXXX & X.XXXX & 0\% \\ % TODO(run:Q1 -> famail_temporal/baselines/baseline_table/)
-random jitter & X.XXXX & X.XXXX & 0\% \\ % TODO(run:Q1 -> famail_temporal/baselines/baseline_table/)
-demog.\ oversampling (targeted) & $+0.0153$ & --- & 10.5\% \\
-\quad placebo (untargeted) & $-0.0172$ & --- & 10.5\% \\
+iFGSM (rand.\ restart) & $-0.0057$ & $+0.0126$ & 0\% \\
+FGSM (rand.\ restart) & $+0.0017$ & $+0.0137$ & 0\% \\
+random jitter & $+0.0135$ & $+0.0132$ & 0\% \\
+demog.\ oversampling (targeted) & $+0.0153$ & $+0.0052$ & 10.5\% \\
+\quad placebo (untargeted) & $-0.0172$ & $+0.0138$ & 10.5\% \\
 \bottomrule
 \end{tabular}
 \end{table}
-% src: PAPER/supply-lift/FINDINGS.md §3 (FAMAIL row); PAPER/baselines/demographic-oversampling/FINDINGS.md §2 (oversampling rows)
-% NOTE: oversampling F_spatial cells rendered as em-dash pending the Q1 table assembly,
-% which ingests the arms' metrics.json uniformly (assemble_baseline_table schema).
+% src: PAPER/supply-lift/FINDINGS.md §3 (FAMAIL row); famail_temporal/baselines/baseline_table/baseline_table.json (perturbation rows);
+% src: oversampling cells = 3-seed means over *_d10000_s{0,1,2} metrics.json deltas (matches the committed FINDINGS aggregation; the assembler's seed-0-only d10000 row reads +0.0175)
 
 \subsection{Robustness and Sensitivity}\label{sec:exp-robustness}
 
