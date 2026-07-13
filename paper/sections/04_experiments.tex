@@ -228,19 +228,29 @@ gan-generated & X.XXXX & X.XXX & X.XXX \\ % TODO(run:Q3 -> level1_v2_multiseed.j
 
 \textbf{Vanilla training averages the edit away.} A driver-conditioned BC
 policy trained on the edited corpus at uniform weight is not fairer than one
-trained on raw: paired $\Delta F_{\mathrm{causal}} = $ X.XXXX (expected
-n.s.) --- the null that motivates the upweighting recipe of
-\S\ref{sec:downstream}.
-% TODO(run:R4 -> weighted_bc_sweep/alpha_sweep_s10_c80_f10_filtered_6seed/paired_stats.json, w=1 arm)
+trained on raw: paired $\Delta F_{\mathrm{causal}} = +0.0022$ ($n = 6$,
+mixed signs, $p = .16$, n.s.) --- the null that motivates the upweighting
+recipe of \S\ref{sec:downstream}.
+% src: famail_temporal/results/weighted_bc_sweep/alpha_sweep_s10_c80_f10_filtered_6seed/paired_stats.json (edited arm, uniform weight)
 
 \textbf{Upweighting recovers it, edit-specifically.} With the edited
-demonstrations upweighted, the paired gain is expected monotone in the weight
-and sign-unanimous: X.XXXX (w10), X.XXXX (w20), X.XXXX (w30), with
-$t$-intervals and both control arms (random placebo; most-fair select)
-reported alongside; whether $F_{\mathrm{spatial}}$ also propagates --- as it
-did on the prior trim+lift corpus, which the demand-only corpus never
-achieved --- is re-measured here, as are the per-weight Fidelity-A/B effects.
-% TODO(run:R4 -> weighted_bc_sweep/alpha_sweep_s10_c80_f10_filtered_6seed/paired_stats.json) full dose-response + controls + F_spatial propagation + fidelity
+demonstrations upweighted, the paired gain is monotone in the weight and
+sign-unanimous: $+0.0217$ (w10), $+0.0267$ (w20), $+0.0302$ (w30), each 6/6
+at the $p = .031$ floor, $t$-interval at w30 $[+0.0264, +0.0340]$. Neither
+control reproduces it: the random-subset placebo is null-to-negative
+($-0.0014$ w10, $-0.0023$ w30, both n.s.), and most-fair selection reaches
+$+0.0033$ at w10 --- significant, but under a sixth of the edited arm's
+gain --- then fades to n.s.\ as the dose rises ($+0.0017$ w20, $+0.0009$
+w30) while the edited arms keep growing. $F_{\mathrm{spatial}}$ propagates
+on Shenzhen: already $+0.0008$ ($p = .031$) at uniform weight, rising to
+$+0.0038$/$+0.0040$/$+0.0052$ across w10/w20/w30 (each $p = .031$), while
+both controls significantly \emph{degrade} it at w30 ($-0.0012$ random,
+$-0.0027$ most-fair). Fidelity-A is unchanged at every weight
+($|\Delta| \le +0.0007$, all n.s.); Fidelity-B rises dose-monotonically
+($0.020 \to 0.027$ absolute vs.\ raw $0.013$) --- the expected signature of
+deliberately shifting population statistics toward the edited slice,
+disclosed rather than netted out.
+% src: famail_temporal/results/weighted_bc_sweep/alpha_sweep_s10_c80_f10_filtered_6seed/paired_stats.json + dose_response.json
 
 \textbf{Model-level variance.} A paired baseline-vs-FAMAIL comparison at
 uniform weight gives $\Delta F_{\mathrm{causal}} = +0.0031 \pm 0.0022$

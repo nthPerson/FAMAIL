@@ -1,0 +1,44 @@
+{
+  "timestamp_utc": "2026-07-13T00:46:10.181724+00:00",
+  "git_sha": "19712eb",
+  "git_dirty": true,
+  "argv": [
+    "/home/robert/FAMAIL/famail_temporal/baselines/run_weighted_bc_smoke.py",
+    "--edit-dir",
+    "famail_temporal/results/2026-07-10T02-06-37_alpha_sweep_s10_c80_f10_filtered",
+    "--seeds",
+    "0,1,2,3,4,5",
+    "--weights",
+    "10,20,30",
+    "--placebo",
+    "10,30",
+    "--most-fair",
+    "10,20,30",
+    "--out-dir",
+    "famail_temporal/results/weighted_bc_sweep/alpha_sweep_s10_c80_f10_filtered_6seed"
+  ],
+  "seeds": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5
+  ],
+  "edit_dir": "famail_temporal/results/2026-07-10T02-06-37_alpha_sweep_s10_c80_f10_filtered",
+  "hostname": "mf-pc",
+  "env": {
+    "python": "3.12.3",
+    "torch": "2.11.0+cu130",
+    "cuda": "13.0",
+    "gpu_name": "NVIDIA GeForce RTX 3070",
+    "numpy": "2.4.4",
+    "pandas": "3.0.2",
+    "cudnn_deterministic": false,
+    "cudnn_benchmark": false
+  },
+  "discriminator_sha256": "0623b2da0a61666b52dbf40e8949efef13b888bf747cff3ff9e230e8b4cc0f6f",
+  "gate_matched": 0.8474932399988174,
+  "gate_mismatched": 0.1930961845179836,
+  "gate_passed": true
+}
