@@ -1,0 +1,112 @@
+% Figure 1 (fig:overview) — TikZ source. This file is \input by
+% sections/03_methodology.tex inside the figure* environment; iterate HERE.
+%
+% Faithful port of the matplotlib draft (../make_figures.py::overview_figure):
+% every scatter coordinate, color, and line weight mirrors that script 1:1 so
+% the two versions can be flipped for comparison (the \includegraphics line in
+% 03_methodology.tex is commented out, not deleted).
+%
+% House constraints (PAPER/figures/figure-1.md): grayscale-safe — meaning rides
+% on shape/position, color is reinforcement only; ONE accent color (figaccent);
+% no numbers inside the figure; labels short, the caption carries the sentences.
+% Symbols: open square = taxi presence; x = pickup; dashed accent = lift reroute.
+%
+% Geometry: each panel is a 10x8 stylized city grid; 1 unit = 4.9mm, so the
+% three-panel strip is ~162mm wide (~0.92\textwidth in acmart figure*). Fonts
+% are set at true size (\footnotesize titles, \tiny labels) — no \resizebox,
+% so typography stays consistent with the manuscript at camera-ready.
+\definecolor{figink}{HTML}{1A1A1A}
+\definecolor{figgray}{HTML}{6F6F6F}
+\definecolor{figfaint}{HTML}{C9C9C9}
+\definecolor{figaccent}{HTML}{0F62FE}
+\begin{tikzpicture}[x=4.9mm, y=4.9mm, line cap=round,
+  % pickup cross: \pic[color=<c>] at (x,y) {pick};
+  pick/.pic={\draw[line width=0.7pt] (-0.15,-0.15) -- (0.15,0.15)
+             (-0.15,0.15) -- (0.15,-0.15);},
+  % taxi-presence square: \pic at (x,y) {taxi};
+  taxi/.pic={\draw[figink, fill=white, line width=0.5pt]
+             (-0.14,-0.14) rectangle (0.14,0.14);},
+  trimarrow/.style={-{Stealth[length=3.2pt]}, figink, line width=0.9pt},
+  liftdash/.style={figaccent, dashed, line width=1.1pt},
+  panelframe/.style={figgray, line width=0.6pt},
+  citygrid/.style={figfaint, line width=0.4pt}]
+
+  % ================= Panel 1: the service gap =================
+  \begin{scope}
+    \draw[citygrid, step=1] (0,0) grid (10,8);
+    \draw[panelframe] (0,0) rectangle (10,8);
+    \node[anchor=south west, font=\footnotesize, text=figink] at (0,8.2)
+      {1\,$\cdot$\,the service gap};
+    % over-served cluster (upper left): dense taxi presence, few pickups
+    \foreach \x/\y in {1.4/5.6, 2.2/6.4, 2.9/5.2, 1.8/4.6, 3.3/6.1,
+                       2.6/4.2, 1.2/6.6, 3.6/5.0, 2.0/5.5, 3.0/6.7}
+      \pic at (\x,\y) {taxi};
+    \foreach \x/\y in {1.9/5.9, 2.7/5.7, 2.4/4.9, 3.2/5.6}
+      \pic[color=figgray] at (\x,\y) {pick};
+    % under-served region (lower right): dense pickups, one taxi
+    \foreach \x/\y in {7.4/2.1, 8.2/1.6, 7.9/2.8, 8.6/2.3, 7.1/1.4,
+                       8.9/1.1, 7.6/3.1, 8.4/3.3}
+      \pic[color=figgray] at (\x,\y) {pick};
+    \pic at (7.8,1.9) {taxi};
+    \node[font=\tiny, text=figink] at (2.3,7.3) {over-served};
+    \node[font=\tiny, text=figink] at (8.0,4.1) {under-served};
+    % legend (lower left corner)
+    \pic at (0.5,1.05) {taxi};
+    \node[anchor=west, font=\tiny, text=figink] at (0.72,1.05) {taxi presence};
+    \pic[color=figgray] at (0.5,0.45) {pick};
+    \node[anchor=west, font=\tiny, text=figink] at (0.72,0.45) {pickup};
+  \end{scope}
+
+  % ================= Panel 2: trim =================
+  \begin{scope}[shift={(11.5,0)}]
+    \draw[citygrid, step=1] (0,0) grid (10,8);
+    \draw[panelframe] (0,0) rectangle (10,8);
+    \node[anchor=south west, font=\footnotesize, text=figink] at (0,8.2)
+      {2\,$\cdot$\,trim: relocate excess pickups};
+    % same city: full taxi cluster, the two unedited pickups, untouched under-served
+    \foreach \x/\y in {1.4/5.6, 2.2/6.4, 2.9/5.2, 1.8/4.6, 3.3/6.1,
+                       2.6/4.2, 1.2/6.6, 3.6/5.0, 2.0/5.5, 3.0/6.7}
+      \pic at (\x,\y) {taxi};
+    \foreach \x/\y in {2.4/4.9, 3.2/5.6}
+      \pic[color=figgray] at (\x,\y) {pick};
+    \foreach \x/\y in {7.4/2.1, 8.2/1.6, 7.9/2.8, 8.6/2.3, 7.1/1.4,
+                       8.9/1.1, 7.6/3.1, 8.4/3.3}
+      \pic[color=figgray] at (\x,\y) {pick};
+    \pic at (7.8,1.9) {taxi};
+    % two trim moves: ghosted original, short arrow (<= 2 cells), relocated pickup
+    \pic[color=figfaint] at (1.9,5.9) {pick};
+    \draw[trimarrow] (1.9,5.9) -- (3.4,6.5);
+    \pic[color=figgray] at (3.4,6.5) {pick};
+    \pic[color=figfaint] at (2.7,5.7) {pick};
+    \draw[trimarrow] (2.7,5.7) -- (4.1,4.9);
+    \pic[color=figgray] at (4.1,4.9) {pick};
+    \node[font=\tiny, text=figgray, align=center] at (8.0,6.9)
+      {levels down:\\under-served untouched};
+  \end{scope}
+
+  % ================= Panel 3: lift =================
+  \begin{scope}[shift={(23,0)}]
+    \draw[citygrid, step=1] (0,0) grid (10,8);
+    \draw[panelframe] (0,0) rectangle (10,8);
+    \node[anchor=south west, font=\footnotesize, text=figink] at (0,8.2)
+      {3\,$\cdot$\,lift: reroute seeking tails};
+    % value-of-presence glow over the under-served region (accent, 12% opacity)
+    \fill[figaccent, fill opacity=0.12] (6.6,0.6) rectangle (9.5,3.8);
+    \node[font=\tiny, text=figaccent, align=center] at (1.9,1.9)
+      {value of added\\presence (supply\\gradient)};
+    \draw[-{Stealth[length=2.8pt]}, figaccent, draw opacity=0.7,
+          line width=0.6pt] (3.4,1.9) -- (6.4,1.9);
+    % under-served marks (subset, as in the draft) + its one taxi
+    \foreach \x/\y in {7.4/2.1, 8.2/1.6, 7.9/2.8, 8.6/2.3, 7.1/1.4}
+      \pic[color=figgray] at (\x,\y) {pick};
+    \pic at (7.8,1.9) {taxi};
+    % original approach (solid ink) then the tapered reroute (dashed accent)
+    \draw[figink, line width=1pt]
+      (4.6,6.9) -- (5.4,6.2) -- (6.1,5.4) -- (6.7,4.5);
+    \draw[liftdash] (6.7,4.5) -- (7.2,3.6) -- (7.7,2.9);
+    \draw[liftdash, -{Stealth[length=3.6pt]}] (7.7,2.9) -- (8.1,2.2);
+    \pic[color=figaccent] at (8.1,2.2) {pick};
+    \node[font=\tiny, text=figink, align=center] at (3.3,7.0)
+      {seeking tail\\(tapered reroute)};
+  \end{scope}
+\end{tikzpicture}

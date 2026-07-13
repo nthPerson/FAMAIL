@@ -305,9 +305,11 @@ threshold on the supply channel alone (\S\ref{sec:experiments}).
 
 \begin{figure*}[t]
   \centering
-  % DRAFT figure (paper/figures/make_figures.py). The production Figure 1 is in
-  % progress via external tooling — variants spec: PAPER/figures/figure-1.md.
-  \includegraphics[width=0.92\textwidth]{figures/method_overview.pdf}
+  % Figure 1 is now TikZ (source: figures/figure-1/figure-1.tex — iterate THERE;
+  % variants spec: PAPER/figures/figure-1.md). The matplotlib draft below is
+  % kept commented out for comparison — flip the two lines to switch back.
+  % \includegraphics[width=0.92\textwidth]{figures/method_overview.pdf}
+  \input{figures/figure-1/figure-1}
   \caption{FAMAIL's two editing modes on a stylized city. (1) The service gap:
   taxi presence concentrates in over-served areas while under-served areas
   carry unmet pickups. (2) \emph{Trim} relocates excess pickups within the
