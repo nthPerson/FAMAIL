@@ -137,9 +137,12 @@ Total & $+0.0529$ & [$+0.0086, +0.0989$] & yes \\
 \textbf{Realism.} Fidelity-A stability and lift's expected Fidelity-B
 distributional cost (whole-tail relocation shifts trajectory-shape statistics
 more than a pickup-only move) are re-measured on the adopted corpus:
-X.XXX vs.\ raw X.XXX (Fidelity-A); lift-mode X.XXX vs.\ trim-mode X.XXX
-(Fidelity-B) --- a by-design trade-off we disclose rather than net out.
-% TODO(run:Q3 -> level1_v2 on the s10 corpus: corpus-level Fid-A/Fid-B; mode split from the G5-style battery if re-run)
+Fidelity-A 0.844 vs.\ raw 0.848; corpus-level Fidelity-B 0.187, concentrated
+in exactly the components a rerouted tail must move --- terminal cell
+(0.635), net displacement (0.147), coverage (0.142) --- while trajectory
+length, which neither edit mode alters, barely registers (0.060) --- a
+by-design trade-off we disclose rather than net out.
+% src: famail_temporal/results/level1_table_v2/supply_lift_shz_5seed/level1_v2_multiseed.json (edited row + fidelity_b_per_component)
 
 \textbf{Provenance disclosures.} About 5\% of trim edits (118/2{,}455) had no
 king-compliant repair and were reverted post hoc; the rule was adopted before
@@ -208,23 +211,35 @@ axes, with generators trained from scratch for this comparison and Fidelity-A
 gated by the real-anchored identity check
 (\S\ref{sec:objective}). The claim under test: the edited corpus is the
 fairest source that remains faithful on both realism axes.
-% TODO(run:Q3 -> famail_temporal/results/level1_table_v2/supply_lift_shz_5seed/level1_v2_multiseed.json) all L1 cells
 
 \begin{table}[t]
-\caption{Data-quality comparison, four sources (Shenzhen; seed means; cells
-land with campaign stage Q3).}
+\caption{Data-quality comparison, four sources (Shenzhen; means over five
+seeds; the GAN row's Fidelity-B is seed-bimodal --- see text).}
 \label{tab:l1}
 \begin{tabular}{lrrr}
 \toprule
 source & $F_{\mathrm{causal}}$ & Fid.-A ($\uparrow$) & Fid.-B ($\downarrow$) \\
 \midrule
-raw & X.XXXX & X.XXX & 0.000 \\ % TODO(run:Q3 -> level1_v2_multiseed.json)
-\textbf{edited (trim+lift)} & X.XXXX & X.XXX & X.XXX \\ % TODO(run:Q3 -> level1_v2_multiseed.json)
-bc-generated & X.XXXX & X.XXX & X.XXX \\ % TODO(run:Q3 -> level1_v2_multiseed.json)
-gan-generated & X.XXXX & X.XXX & X.XXX \\ % TODO(run:Q3 -> level1_v2_multiseed.json)
+raw & 0.7988 & 0.848 & 0.000 \\
+\textbf{edited (trim+lift)} & \textbf{0.8214} & 0.844 & 0.187 \\
+bc-generated & 0.7980 & 0.848 & 0.011 \\
+gan-generated & 0.8089 & 0.848 & 0.171 \\
 \bottomrule
 \end{tabular}
 \end{table}
+% src: famail_temporal/results/level1_table_v2/supply_lift_shz_5seed/level1_v2_multiseed.json
+
+The claim holds: the edited corpus is the fairest source and
+identity-faithful (Fidelity-A 0.844 $\approx$ raw 0.848; gate passed,
+matched 0.848 vs.\ mismatched 0.193), and its Fidelity-B is the bounded-edit
+divergence quantified in \S\ref{sec:exp-data-level}. One instability we
+surface rather than smooth: the Shenzhen GAN's Fidelity-B mean of 0.171
+hides a seed-bimodal split ($\pm 0.129$; three of five seeds at
+0.20--0.30, two at 0.03--0.04), and its worst seeds fail broadband ---
+length-component divergence 0.247 where the edited corpus sits at 0.060.
+The collapse mode Shenzhen generators have shown before returns in some
+seeds here, while the SF GAN stays uniformly healthy (\S\ref{sec:exp-sf}).
+% src: famail_temporal/results/level1_table_v2/supply_lift_shz_5seed/level1_v2_multiseed.json (gan fidelity_b values + per-component)
 
 \textbf{Vanilla training averages the edit away.} A driver-conditioned BC
 policy trained on the edited corpus at uniform weight is not fairer than one
