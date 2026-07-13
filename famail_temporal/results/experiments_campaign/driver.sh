@@ -353,7 +353,10 @@ run_editor_stage() {  # $1 qid-prefix, $2 runner --name, $3 config note — edit
   if [ -n "$run_dir" ]; then
     log_echo "$STAGE edit run already complete: $run_dir (skip)"
   else
-    cmd="python -m famail_temporal.evaluation.runner -k 10000 --name $name --device auto --override ALPHA_SPATIAL=0.2 --override ALPHA_CAUSAL=0.7 --override ALPHA_FIDELITY=0.1"
+    # alpha* = (0.1, 0.8, 0.1) — the adopted weights (Q0 decision). This line once
+    # carried the pre-re-anchor (0.2, 0.7, 0.1) and was caught 2026-07-13 just
+    # before q6a launch; per-set columns must be like-for-like with the headline.
+    cmd="python -m famail_temporal.evaluation.runner -k 10000 --name $name --device auto --override ALPHA_SPATIAL=0.1 --override ALPHA_CAUSAL=0.8 --override ALPHA_FIDELITY=0.1"
     ledger_start "$qid-edit" "$STATE_DIR/ledger/$qid-edit" "$note" "$cmd"
     run_logged "$cmd"
     run_dir=$(find_editor_run "$name")
