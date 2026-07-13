@@ -416,10 +416,10 @@ with campaign stages Q6--Q8).}
 \toprule
  & \{hous,comp,migr\} & \{hous,gdp,comp\} & +logpopdens \\
 \midrule
-before-edit $F_{\mathrm{causal}}$ & 0.7988 & X.XXXX & X.XXXX \\ % TODO(run:Q6 -> per-set filtered metrics.json)
-editor $\Delta F_{\mathrm{causal}}$ & $+0.0226$ & X.XXXX & X.XXXX \\ % TODO(run:Q6 -> per-set filtered metrics.json)
-DI $\Delta$ (migrant/extremes) & $+0.0162$ & X.XXXX & X.XXXX \\ % TODO(run:Q7 -> per-set external_fairness.json)
-Theil $\Delta$ & $-0.0087$ & X.XXXX & X.XXXX \\ % TODO(run:Q7 -> per-set external_fairness.json)
+before-edit $F_{\mathrm{causal}}$ & 0.7988 & 0.8069 & X.XXXX \\ % TODO(run:Q6 -> 4feat filtered metrics.json)
+editor $\Delta F_{\mathrm{causal}}$ & $+0.0226$ & $+0.0206$ & X.XXXX \\ % TODO(run:Q6 -> 4feat filtered metrics.json)
+DI $\Delta$ (migrant/extremes) & $+0.0162$ & $+0.0147$ & X.XXXX \\ % TODO(run:Q7 -> 4feat external_fairness.json)
+Theil $\Delta$ & $-0.0087$ & $-0.0080$ & X.XXXX \\ % TODO(run:Q7 -> 4feat external_fairness.json)
 L1: edited fairest faithful? & see~\ref{tab:l1} & X & X \\ % TODO(run:Q8 -> per-set level1_v2_multiseed.json)
 vanilla-BC null (w1) & see~\S\ref{sec:exp-downstream} & X.XXXX & X.XXXX \\ % TODO(run:R4 PRIMARY + Q8 per-set)
 weighted-BC w30 & see~\S\ref{sec:exp-downstream} & X.XXXX & X.XXXX \\ % TODO(run:R4 PRIMARY + Q8 per-set)

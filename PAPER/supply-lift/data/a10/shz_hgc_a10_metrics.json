@@ -1,0 +1,372 @@
+{
+  "provenance": {
+    "derived_from": "famail_temporal/results/2026-07-13T04-41-12_supply_lift_v1_shz_hgc",
+    "derived_from_experiment_id": "2026-07-13T04-41-12_supply_lift_v1_shz_hgc",
+    "derived_from_git_sha": "1e9985a",
+    "filter_rule": "An edit is applied only when a king-compliant repair exists (max(|dx|,|dy|) <= 1 on every consecutive step). Trim edits that fell back to the legacy pickup-only perturbation (tapered-tail repair infeasible) are reverted to their originals, making trim symmetric with lift (which already skips on infeasible).",
+    "user_decision_date": "2026-07-08",
+    "tool": "famail_temporal.analysis.filter_infeasible_trims",
+    "n_reverted_infeasible_trim": 114,
+    "reverted_trajectory_ids": [
+      "58948",
+      "85960",
+      "90674",
+      "5350",
+      "56504",
+      "52891",
+      "34977",
+      "60790",
+      "20283",
+      "87881",
+      "71706",
+      "66557",
+      "19947",
+      "18461",
+      "62594",
+      "6687",
+      "58139",
+      "10841",
+      "6474",
+      "73768",
+      "70077",
+      "16602",
+      "35495",
+      "62492",
+      "21703",
+      "63165",
+      "48107",
+      "53544",
+      "41158",
+      "36644",
+      "1545",
+      "65903",
+      "24556",
+      "52029",
+      "63164",
+      "81118",
+      "12478",
+      "19996",
+      "70103",
+      "3788",
+      "68392",
+      "7022",
+      "5537",
+      "49536",
+      "51378",
+      "28233",
+      "23175",
+      "32389",
+      "92607",
+      "13096",
+      "36847",
+      "37000",
+      "66875",
+      "162",
+      "49279",
+      "3347",
+      "17509",
+      "92070",
+      "79702",
+      "14720",
+      "62227",
+      "17796",
+      "27181",
+      "66931",
+      "50027",
+      "8358",
+      "87694",
+      "22431",
+      "4090",
+      "13902",
+      "42288",
+      "42214",
+      "22079",
+      "32442",
+      "48878",
+      "27568",
+      "32143",
+      "68104",
+      "22077",
+      "54259",
+      "62356",
+      "27604",
+      "78217",
+      "34120",
+      "51823",
+      "51824",
+      "28777",
+      "88895",
+      "196",
+      "61546",
+      "77306",
+      "2557",
+      "52370",
+      "89563",
+      "29409",
+      "24302",
+      "8450",
+      "18558",
+      "35384",
+      "92182",
+      "3277",
+      "50398",
+      "51825",
+      "4072",
+      "72585",
+      "66779",
+      "20497",
+      "2958",
+      "92758",
+      "66945",
+      "52874",
+      "78411",
+      "20983",
+      "49933"
+    ],
+    "legacy_reproduction_note": "The published legacy trim numbers remain reproducible via TAIL_LEN=0; nothing in the source dir is modified by this tool.",
+    "delta_supply_reconstruction_equivalence": {
+      "max_abs_diff": 0.0,
+      "sum_recon": -0.49999941885471344,
+      "sum_persisted": -0.49999941885471344,
+      "allclose_atol_1e-5": true
+    },
+    "violator_identification": "replay: a trim history is a violator iff replaying the modifier's own fallback decision (apply_tail_perturbation(delta_int, TAIL_LEN, GRID_DIMS) on the ORIGINAL, with delta_int recovered from the int pickup cells and TAIL_LEN/GRID_DIMS from this run's config_snapshot) returns None \u2014 the exact condition under which the editor fell back to the legacy pickup-only move. City-robust: pre-existing raw-data king-move violations (e.g. SF Cabspotting GPS gaps, ~15% of raw trajectories) do not affect it. Cross-checked: every EDIT-INTRODUCED king violation (a violating transition at an index where the original's same-index transition was compliant) lies within the replayed fallback set, and none occur in the lift block.",
+    "identification_counts": {
+      "n_fallback_replayed": 114,
+      "n_edit_introduced_violations": 114
+    },
+    "compliance": {
+      "source": {
+        "n": 10000,
+        "n_modified_king_compliant": 9886,
+        "n_original_king_compliant": 10000,
+        "absolute_modified_compliance_frac": 0.9886,
+        "absolute_original_compliance_frac": 1.0,
+        "n_edits_introducing_violations": 114,
+        "edit_relative_compliance_frac": 0.9886
+      },
+      "filtered": {
+        "n": 9886,
+        "n_modified_king_compliant": 9886,
+        "n_original_king_compliant": 9886,
+        "absolute_modified_compliance_frac": 1.0,
+        "absolute_original_compliance_frac": 1.0,
+        "n_edits_introducing_violations": 0,
+        "edit_relative_compliance_frac": 1.0
+      }
+    }
+  },
+  "dataset": {
+    "n_trajectories": 95297,
+    "n_drivers": 50,
+    "n_active_units": 34524
+  },
+  "effective_alphas": {
+    "alpha_spatial": 0.1,
+    "alpha_causal": 0.8,
+    "alpha_fidelity": 0.1
+  },
+  "config_snapshot": {
+    "ACCEPT_RULE": "objective",
+    "ACTIVE_SUPPLY_THRESHOLD": 0.5,
+    "ALPHA_CAUSAL": 0.8,
+    "ALPHA_FIDELITY": 0.1,
+    "ALPHA_SPATIAL": 0.1,
+    "ANNEAL_TEMPERATURE": true,
+    "CACHE_DIR": "/home/robert/FAMAIL/famail_temporal/cache",
+    "CITY": "shenzhen",
+    "CONVERGENCE_TOL": 1e-06,
+    "DEFAULT_SEED": 42,
+    "DEMAND_FLOOR": 0.5,
+    "DEMOGRAPHIC_FEATURES": [
+      "AvgHousingPricePerSqM",
+      "GDPperCapita",
+      "CompPerCapita"
+    ],
+    "DIAGNOSTICS_ENABLED": true,
+    "DISCRIMINATOR_CHECKPOINT_DIR": "/home/robert/FAMAIL/famail_temporal/discriminator_checkpoints",
+    "DISCRIMINATOR_CHECKPOINT_FILENAME": "default/best.pt",
+    "EPS": 1e-08,
+    "EPSILON_BALL": 2.0,
+    "EPSILON_CAP": 2.0,
+    "GRID_DIMS": [
+      48,
+      90
+    ],
+    "ITERATIVE_TOPK_MAX_EDITS": 1,
+    "LIFT_BUDGET": null,
+    "MAX_ITERATIONS": 50,
+    "MAX_ROUNDS": 1,
+    "MIN_ACTIVE_UNITS_PER_BLOCK": 10,
+    "MIN_TOTAL_ACTIVE_UNITS": 100,
+    "N_TIME_BUCKETS": 288,
+    "PACKAGE_ROOT": "/home/robert/FAMAIL/famail_temporal",
+    "PATIENCE": 10,
+    "ROUND_CONVERGENCE_TOL": null,
+    "ROUND_PATIENCE": 2,
+    "SOFT_NEIGHBORHOOD_SIZE": 5,
+    "SOURCE_DATA_DIR": "/home/robert/FAMAIL/famail_temporal/source_data",
+    "STEP_SIZE_ALPHA": 0.1,
+    "STE_ENABLED": false,
+    "SUPPLY_FLOOR": 0.1,
+    "T": 24,
+    "TAIL_LEN": 4,
+    "TAIL_TAPER": [
+      0.25,
+      0.5,
+      0.75,
+      1.0
+    ],
+    "TAU_MAX": 1.0,
+    "TAU_MIN": 0.1,
+    "TIME_BLOCKS": [
+      [
+        "hour_00",
+        0,
+        1
+      ],
+      [
+        "hour_01",
+        1,
+        2
+      ],
+      [
+        "hour_02",
+        2,
+        3
+      ],
+      [
+        "hour_03",
+        3,
+        4
+      ],
+      [
+        "hour_04",
+        4,
+        5
+      ],
+      [
+        "hour_05",
+        5,
+        6
+      ],
+      [
+        "hour_06",
+        6,
+        7
+      ],
+      [
+        "hour_07",
+        7,
+        8
+      ],
+      [
+        "hour_08",
+        8,
+        9
+      ],
+      [
+        "hour_09",
+        9,
+        10
+      ],
+      [
+        "hour_10",
+        10,
+        11
+      ],
+      [
+        "hour_11",
+        11,
+        12
+      ],
+      [
+        "hour_12",
+        12,
+        13
+      ],
+      [
+        "hour_13",
+        13,
+        14
+      ],
+      [
+        "hour_14",
+        14,
+        15
+      ],
+      [
+        "hour_15",
+        15,
+        16
+      ],
+      [
+        "hour_16",
+        16,
+        17
+      ],
+      [
+        "hour_17",
+        17,
+        18
+      ],
+      [
+        "hour_18",
+        18,
+        19
+      ],
+      [
+        "hour_19",
+        19,
+        20
+      ],
+      [
+        "hour_20",
+        20,
+        21
+      ],
+      [
+        "hour_21",
+        21,
+        22
+      ],
+      [
+        "hour_22",
+        22,
+        23
+      ],
+      [
+        "hour_23",
+        23,
+        24
+      ]
+    ]
+  },
+  "k_modified": 9886,
+  "metrics_before": {
+    "f_spatial": 0.10342705994844437,
+    "f_causal": 0.8069279193878174,
+    "gini_dsr": 0.8980926275253296,
+    "gini_asr": 0.8950532674789429
+  },
+  "metrics_after": {
+    "f_spatial": 0.10905348509550095,
+    "f_causal": 0.8275397419929504,
+    "gini_dsr": 0.8870386481285095,
+    "gini_asr": 0.8948543667793274
+  },
+  "deltas": {
+    "f_spatial": 0.00562642514705658,
+    "f_causal": 0.020611822605133057,
+    "gini_dsr": -0.011053979396820068,
+    "gini_asr": -0.00019890069961547852
+  },
+  "n_trim": 2179,
+  "n_lift": 7707,
+  "n_skipped_infeasible_trim": 114,
+  "n_taper_infeasible_lift": 4,
+  "supply_totals": {
+    "added": 1662.616693528369,
+    "removed": 1663.116692589596
+  }
+}
