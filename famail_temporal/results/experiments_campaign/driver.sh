@@ -280,6 +280,12 @@ stage_q1() {
     fi
     if [ -f "$arm/supply_recount.json" ]; then
       log_echo "q1 supply recount already done for $base (skip)"
+    elif [ ! -f "$arm/delta_supply_3d.npz" ]; then
+      # supply_recount's tier-1 pass hard-requires the EDITOR's delta_supply_3d.npz,
+      # which perturbation arms never produce (run-book step 2 was unexecutable as
+      # written — first surfaced on the 2026-07-13 GPU run). No paper cell consumes
+      # a per-arm tier-1 recount; histories.pkl persists the raw material regardless.
+      log_echo "q1 supply recount SKIPPED for $base (no delta_supply_3d.npz — editor-only artifact)"
     else
       cmd="python -m famail_temporal.analysis.supply_recount --edit-dir $arm --city shenzhen --persist-grids"
       ledger_run "Q1-recount-$base" "$arm" "PRIMARY / shenzhen" "$cmd"
