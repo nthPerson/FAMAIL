@@ -1,112 +1,199 @@
 % Figure 1 (fig:overview) — TikZ source. This file is \input by
 % sections/03_methodology.tex inside the figure* environment; iterate HERE.
 %
-% Faithful port of the matplotlib draft (../make_figures.py::overview_figure):
-% every scatter coordinate, color, and line weight mirrors that script 1:1 so
-% the two versions can be flipped for comparison (the \includegraphics line in
-% 03_methodology.tex is commented out, not deleted).
+% v2 (redesign on Robert's notes, 2026-07-12):
+%   1. QUANTIZATION IS VISIBLE: every pickup/taxi mark is snapped to a cell
+%      center and sized to fill most of its cell — the grid is the data model.
+%   2. CITY UNDER THE GRID: a stylized street network (gray arterials + minor
+%      roads, cGAIL-figure style) drawn natively in TikZ under each grid, plus
+%      a district boundary (dash, follows cell edges) splitting an advantaged
+%      district (white) from a disadvantaged one (light gray tint) — districts
+%      carry the demographics semantics.
+%   3. Trim edits are vermillion arrows with a legend; Panel 3 is a 2x detail
+%      view of the under-served district (zoom box marked in Panel 2) showing
+%      BOTH the original tail and the rerouted tail, with a legend; the
+%      value-of-presence glow is now QUANTIZED (per-cell accent shading).
 %
-% House constraints (PAPER/figures/figure-1.md): grayscale-safe — meaning rides
-% on shape/position, color is reinforcement only; ONE accent color (figaccent);
-% no numbers inside the figure; labels short, the caption carries the sentences.
-% Symbols: open square = taxi presence; x = pickup; dashed accent = lift reroute.
+% Color scheme (supersedes the one-accent note in PAPER/figures/figure-1.md):
+%   TWO hues, colorblind-safe pair — blue #0F62FE = lift/supply-side,
+%   vermillion #D55E00 = trim/demand-side edits. Both redundant with shape
+%   (dash pattern / arrowheads), so meaning survives grayscale. Roads,
+%   districts, and marks stay in the gray ramp.
 %
-% Geometry: each panel is a 10x8 stylized city grid; 1 unit = 4.9mm, so the
-% three-panel strip is ~162mm wide (~0.92\textwidth in acmart figure*). Fonts
-% are set at true size (\footnotesize titles, \tiny labels) — no \resizebox,
-% so typography stays consistent with the manuscript at camera-ready.
+% Geometry: Panels 1-2 = the full 10x8-cell city (1 cell = 1 unit = 4.9mm).
+% Panel 3 = the city sub-window x in [5,10], y in [0,4] at 2x zoom (1 city
+% cell = 2 panel units), so cells visibly enlarge — honest zoom semantics.
+% No \resizebox: fonts are true manuscript size.
 \definecolor{figink}{HTML}{1A1A1A}
 \definecolor{figgray}{HTML}{6F6F6F}
 \definecolor{figfaint}{HTML}{C9C9C9}
 \definecolor{figaccent}{HTML}{0F62FE}
-\begin{tikzpicture}[x=4.9mm, y=4.9mm, line cap=round,
-  % pickup cross: \pic[color=<c>] at (x,y) {pick};
-  pick/.pic={\draw[line width=0.7pt] (-0.15,-0.15) -- (0.15,0.15)
-             (-0.15,0.15) -- (0.15,-0.15);},
-  % taxi-presence square: \pic at (x,y) {taxi};
-  taxi/.pic={\draw[figink, fill=white, line width=0.5pt]
-             (-0.14,-0.14) rectangle (0.14,0.14);},
-  trimarrow/.style={-{Stealth[length=3.2pt]}, figink, line width=0.9pt},
+\definecolor{figtrim}{HTML}{D55E00}
+\definecolor{figroad}{HTML}{BFBFBF}
+\definecolor{figminor}{HTML}{DCDCDC}
+\begin{tikzpicture}[x=4.9mm, y=4.9mm, line cap=round, line join=round,
+  % cell-scale marks (panels 1-2): \pic[color=<c>] at (cell center) {pick};
+  pick/.pic={\draw[line width=0.9pt] (-0.26,-0.26) -- (0.26,0.26)
+             (-0.26,0.26) -- (0.26,-0.26);},
+  taxi/.pic={\draw[figink, fill=white, line width=0.7pt]
+             (-0.26,-0.26) rectangle (0.26,0.26);},
+  % 2x marks for the Panel-3 detail view
+  pickz/.pic={\draw[line width=1.1pt] (-0.5,-0.5) -- (0.5,0.5)
+              (-0.5,0.5) -- (0.5,-0.5);},
+  taxiz/.pic={\draw[figink, fill=white, line width=0.9pt]
+              (-0.5,-0.5) rectangle (0.5,0.5);},
+  trimedit/.style={-{Stealth[length=3.6pt]}, figtrim, line width=1.1pt},
   liftdash/.style={figaccent, dashed, line width=1.1pt},
+  boundary/.style={figink!65, line width=1pt, dash pattern=on 4pt off 2pt},
+  arterial/.style={figroad, line width=1.5pt, rounded corners=3pt},
+  minorroad/.style={figminor, line width=0.5pt},
   panelframe/.style={figgray, line width=0.6pt},
   citygrid/.style={figfaint, line width=0.4pt}]
 
-  % ================= Panel 1: the service gap =================
+  % =========================================================================
+  % Panel 1: the service gap  (full city)
+  % =========================================================================
   \begin{scope}
+    % district tint (disadvantaged, east of the boundary), then roads, grid
+    \fill[black!7] (4,8) -- (4,6) -- (5,6) -- (5,4) -- (6,4) -- (6,2)
+      -- (7,2) -- (7,0) -- (10,0) -- (10,8) -- cycle;
+    \draw[arterial] (0,6.3) -- (2,6.1) -- (4.5,6.4) -- (7,5.8) -- (10,6.0);
+    \draw[arterial] (2.8,0) -- (3.1,2.5) -- (2.7,5) -- (3.0,8);
+    \draw[arterial] (0,2.2) -- (3,2.6) -- (6,1.8) -- (10,2.4);
+    \draw[arterial] (7.6,8) -- (7.2,5.5) -- (7.8,3) -- (7.5,0);
+    \draw[minorroad] (0,4.1) -- (4.5,4.0)  (5.5,4.9) -- (10,5.1)
+      (1.2,8) -- (1.4,4.2)  (8.9,8) -- (9.1,4.5)  (5.6,0) -- (5.8,3.2);
     \draw[citygrid, step=1] (0,0) grid (10,8);
+    \draw[boundary] (4,8) -- (4,6) -- (5,6) -- (5,4) -- (6,4) -- (6,2)
+      -- (7,2) -- (7,0);
     \draw[panelframe] (0,0) rectangle (10,8);
     \node[anchor=south west, font=\footnotesize, text=figink] at (0,8.2)
       {1\,$\cdot$\,the service gap};
-    % over-served cluster (upper left): dense taxi presence, few pickups
-    \foreach \x/\y in {1.4/5.6, 2.2/6.4, 2.9/5.2, 1.8/4.6, 3.3/6.1,
-                       2.6/4.2, 1.2/6.6, 3.6/5.0, 2.0/5.5, 3.0/6.7}
+    % advantaged district: dense presence (cell-snapped), few pickups
+    \foreach \x/\y in {1.5/6.5, 2.5/6.5, 3.5/6.5, 1.5/5.5, 3.5/5.5,
+                       1.5/4.5, 2.5/4.5, 3.5/4.5, 2.5/7.5, 0.5/5.5}
       \pic at (\x,\y) {taxi};
-    \foreach \x/\y in {1.9/5.9, 2.7/5.7, 2.4/4.9, 3.2/5.6}
+    \foreach \x/\y in {2.5/5.5, 0.5/6.5, 0.5/4.5, 3.5/7.5}
       \pic[color=figgray] at (\x,\y) {pick};
-    % under-served region (lower right): dense pickups, one taxi
-    \foreach \x/\y in {7.4/2.1, 8.2/1.6, 7.9/2.8, 8.6/2.3, 7.1/1.4,
-                       8.9/1.1, 7.6/3.1, 8.4/3.3}
+    % disadvantaged district: dense unmet pickups, one taxi
+    \foreach \x/\y in {8.5/1.5, 7.5/1.5, 8.5/2.5, 9.5/1.5, 7.5/0.5,
+                       8.5/3.5, 9.5/2.5, 9.5/3.5}
       \pic[color=figgray] at (\x,\y) {pick};
-    \pic at (7.8,1.9) {taxi};
-    \node[font=\tiny, text=figink] at (2.3,7.3) {over-served};
-    \node[font=\tiny, text=figink] at (8.0,4.1) {under-served};
-    % legend (lower left corner)
+    \pic at (7.5,2.5) {taxi};
+    % district + service labels
+    \node[font=\tiny, text=figink, align=center] at (2.1,3.4)
+      {advantaged district\\(over-served)};
+    \node[font=\tiny, text=figink, align=center] at (8.3,4.9)
+      {disadvantaged district\\(under-served)};
+    % legend (lower left, advantaged side is clear there)
     \pic at (0.5,1.05) {taxi};
-    \node[anchor=west, font=\tiny, text=figink] at (0.72,1.05) {taxi presence};
-    \pic[color=figgray] at (0.5,0.45) {pick};
-    \node[anchor=west, font=\tiny, text=figink] at (0.72,0.45) {pickup};
+    \node[anchor=west, font=\tiny, text=figink] at (0.85,1.05) {taxi presence};
+    \pic[color=figgray] at (0.5,0.4) {pick};
+    \node[anchor=west, font=\tiny, text=figink] at (0.85,0.4) {pickup};
   \end{scope}
 
-  % ================= Panel 2: trim =================
+  % =========================================================================
+  % Panel 2: trim  (same city; two pickups relocated inside the district)
+  % =========================================================================
   \begin{scope}[shift={(11.5,0)}]
+    \fill[black!7] (4,8) -- (4,6) -- (5,6) -- (5,4) -- (6,4) -- (6,2)
+      -- (7,2) -- (7,0) -- (10,0) -- (10,8) -- cycle;
+    \draw[arterial] (0,6.3) -- (2,6.1) -- (4.5,6.4) -- (7,5.8) -- (10,6.0);
+    \draw[arterial] (2.8,0) -- (3.1,2.5) -- (2.7,5) -- (3.0,8);
+    \draw[arterial] (0,2.2) -- (3,2.6) -- (6,1.8) -- (10,2.4);
+    \draw[arterial] (7.6,8) -- (7.2,5.5) -- (7.8,3) -- (7.5,0);
+    \draw[minorroad] (0,4.1) -- (4.5,4.0)  (5.5,4.9) -- (10,5.1)
+      (1.2,8) -- (1.4,4.2)  (8.9,8) -- (9.1,4.5)  (5.6,0) -- (5.8,3.2);
     \draw[citygrid, step=1] (0,0) grid (10,8);
+    \draw[boundary] (4,8) -- (4,6) -- (5,6) -- (5,4) -- (6,4) -- (6,2)
+      -- (7,2) -- (7,0);
     \draw[panelframe] (0,0) rectangle (10,8);
     \node[anchor=south west, font=\footnotesize, text=figink] at (0,8.2)
       {2\,$\cdot$\,trim: relocate excess pickups};
-    % same city: full taxi cluster, the two unedited pickups, untouched under-served
-    \foreach \x/\y in {1.4/5.6, 2.2/6.4, 2.9/5.2, 1.8/4.6, 3.3/6.1,
-                       2.6/4.2, 1.2/6.6, 3.6/5.0, 2.0/5.5, 3.0/6.7}
+    % same taxis; the two unedited pickups stay put
+    \foreach \x/\y in {1.5/6.5, 2.5/6.5, 3.5/6.5, 1.5/5.5, 3.5/5.5,
+                       1.5/4.5, 2.5/4.5, 3.5/4.5, 2.5/7.5, 0.5/5.5}
       \pic at (\x,\y) {taxi};
-    \foreach \x/\y in {2.4/4.9, 3.2/5.6}
+    \foreach \x/\y in {0.5/6.5, 3.5/7.5}
       \pic[color=figgray] at (\x,\y) {pick};
-    \foreach \x/\y in {7.4/2.1, 8.2/1.6, 7.9/2.8, 8.6/2.3, 7.1/1.4,
-                       8.9/1.1, 7.6/3.1, 8.4/3.3}
+    % untouched disadvantaged district — identical to Panel 1
+    \foreach \x/\y in {8.5/1.5, 7.5/1.5, 8.5/2.5, 9.5/1.5, 7.5/0.5,
+                       8.5/3.5, 9.5/2.5, 9.5/3.5}
       \pic[color=figgray] at (\x,\y) {pick};
-    \pic at (7.8,1.9) {taxi};
-    % two trim moves: ghosted original, short arrow (<= 2 cells), relocated pickup
-    \pic[color=figfaint] at (1.9,5.9) {pick};
-    \draw[trimarrow] (1.9,5.9) -- (3.4,6.5);
-    \pic[color=figgray] at (3.4,6.5) {pick};
-    \pic[color=figfaint] at (2.7,5.7) {pick};
-    \draw[trimarrow] (2.7,5.7) -- (4.1,4.9);
-    \pic[color=figgray] at (4.1,4.9) {pick};
+    \pic at (7.5,2.5) {taxi};
+    % two trim edits: ghosted origin -> vermillion arrow -> relocated pickup,
+    % both staying inside the advantaged district (west of the boundary)
+    \pic[color=figfaint] at (2.5,5.5) {pick};
+    \draw[trimedit] (2.5,5.5) -- (4.5,4.5);
+    \pic[color=figgray] at (4.5,4.5) {pick};
+    \pic[color=figfaint] at (0.5,4.5) {pick};
+    \draw[trimedit] (0.5,4.5) -- (1.5,3.5);
+    \pic[color=figgray] at (1.5,3.5) {pick};
     \node[font=\tiny, text=figgray, align=center] at (8.0,6.9)
       {levels down:\\under-served untouched};
+    % zoom cue: Panel 3 shows this window in detail
+    \draw[figink, line width=0.6pt, dash pattern=on 2pt off 1.6pt]
+      (5,0) rectangle (10,4);
+    \node[anchor=south east, font=\tiny, text=figink] at (10,4.1) {panel 3};
+    % legend (lower left)
+    \pic[color=figfaint] at (0.5,1.05) {pick};
+    \node[anchor=west, font=\tiny, text=figink] at (0.85,1.05)
+      {original position};
+    \draw[trimedit] (0.25,0.4) -- (0.8,0.4);
+    \node[anchor=west, font=\tiny, text=figink] at (0.85,0.4)
+      {trim edit (pickup relocated)};
   \end{scope}
 
-  % ================= Panel 3: lift =================
+  % =========================================================================
+  % Panel 3: lift  (2x detail of the under-served district: city [5,10]x[0,4];
+  % panel coords = 2*(city - (5,0)), so one city cell = a 2x2 block here)
+  % =========================================================================
   \begin{scope}[shift={(23,0)}]
-    \draw[citygrid, step=1] (0,0) grid (10,8);
+    % district tint east of the boundary (continues Panels 1-2)
+    \fill[black!7] (2,8) -- (2,4) -- (4,4) -- (4,0) -- (10,0) -- (10,8)
+      -- cycle;
+    % streets at 2x (portions of the same arterials)
+    \draw[arterial, line width=2.6pt] (0,4.0) -- (4,4.6) -- (8,3.4) -- (10,4.4);
+    \draw[arterial, line width=2.6pt] (5.4,8) -- (4.8,5) -- (5.6,2) -- (5.2,0);
+    \draw[minorroad, line width=0.7pt] (1.2,0) -- (1.6,8);
+    % QUANTIZED value-of-presence field (accent cells, opacity = value)
+    \fill[figaccent, fill opacity=0.26] (6,2) rectangle (8,4);   % peak
+    \fill[figaccent, fill opacity=0.15] (4,2) rectangle (6,4);
+    \fill[figaccent, fill opacity=0.15] (8,2) rectangle (10,4);
+    \fill[figaccent, fill opacity=0.15] (6,4) rectangle (8,6);
+    \fill[figaccent, fill opacity=0.15] (6,0) rectangle (8,2);
+    \fill[figaccent, fill opacity=0.07] (4,0) rectangle (6,2);
+    \fill[figaccent, fill opacity=0.07] (8,0) rectangle (10,2);
+    \fill[figaccent, fill opacity=0.07] (8,4) rectangle (10,6);
+    \draw[citygrid, step=2] (0,0) grid (10,8);
+    \draw[boundary] (2,8) -- (2,4) -- (4,4) -- (4,0);
     \draw[panelframe] (0,0) rectangle (10,8);
     \node[anchor=south west, font=\footnotesize, text=figink] at (0,8.2)
       {3\,$\cdot$\,lift: reroute seeking tails};
-    % value-of-presence glow over the under-served region (accent, 12% opacity)
-    \fill[figaccent, fill opacity=0.12] (6.6,0.6) rectangle (9.5,3.8);
-    \node[font=\tiny, text=figaccent, align=center] at (1.9,1.9)
-      {value of added\\presence (supply\\gradient)};
-    \draw[-{Stealth[length=2.8pt]}, figaccent, draw opacity=0.7,
-          line width=0.6pt] (3.4,1.9) -- (6.4,1.9);
-    % under-served marks (subset, as in the draft) + its one taxi
-    \foreach \x/\y in {7.4/2.1, 8.2/1.6, 7.9/2.8, 8.6/2.3, 7.1/1.4}
-      \pic[color=figgray] at (\x,\y) {pick};
-    \pic at (7.8,1.9) {taxi};
-    % original approach (solid ink) then the tapered reroute (dashed accent)
-    \draw[figink, line width=1pt]
-      (4.6,6.9) -- (5.4,6.2) -- (6.1,5.4) -- (6.7,4.5);
-    \draw[liftdash] (6.7,4.5) -- (7.2,3.6) -- (7.7,2.9);
-    \draw[liftdash, -{Stealth[length=3.6pt]}] (7.7,2.9) -- (8.1,2.2);
-    \pic[color=figaccent] at (8.1,2.2) {pick};
-    \node[font=\tiny, text=figink, align=center] at (3.3,7.0)
-      {seeking tail\\(tapered reroute)};
+    \node[anchor=south west, font=\tiny, text=figgray] at (0.25,0.25)
+      {under-served district (detail)};
+    % recorded marks in the window (cell-snapped at 2x)
+    \foreach \x/\y in {7/3, 5/3, 7/5, 9/3, 5/1, 7/7, 9/5, 9/7}
+      \pic[color=figgray] at (\x,\y) {pickz};
+    \pic at (5,5) {taxiz};
+    % one trajectory, two futures. Shared approach (solid ink) to the anchor;
+    % the original tail (solid gray) reaches its recorded pickup; the lift
+    % reroute (dashed accent) bends into the highest-value cell.
+    \draw[figink, line width=1.2pt] (0.6,7.6) -- (1.4,6.6) -- (2.2,5.8)
+      -- (3,5);
+    \draw[figgray, line width=1pt] (3,5) -- (3.8,3.6) -- (4.5,2.2) -- (5,1);
+    \draw[liftdash] (3,5) -- (4.4,4.3) -- (5.8,3.6);
+    \draw[liftdash, -{Stealth[length=4pt]}] (5.8,3.6) -- (7,3);
+    \pic[color=figaccent] at (7,3) {pickz};
+    % legend (upper right)
+    \draw[figgray, line width=1pt] (6.1,7.5) -- (7.0,7.5);
+    \node[anchor=west, font=\tiny, text=figink] at (7.15,7.5)
+      {original tail};
+    \draw[liftdash, -{Stealth[length=3.2pt]}] (6.1,6.9) -- (7.0,6.9);
+    \node[anchor=west, font=\tiny, text=figink] at (7.15,6.9)
+      {rerouted tail (lift)};
+    \fill[figaccent, fill opacity=0.22] (6.1,6.1) rectangle (6.55,6.5);
+    \node[anchor=west, font=\tiny, text=figink] at (7.15,6.3)
+      {value of added presence};
   \end{scope}
 \end{tikzpicture}
