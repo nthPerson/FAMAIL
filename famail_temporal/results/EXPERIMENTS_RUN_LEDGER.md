@@ -91,6 +91,16 @@ dirs, logs in `famail_temporal/results/alpha_sweep/<tag>.log`). Oversampling-arm
 > "L1v2 companion" figure was SF-only; SZ L1v2 is far larger and does NOT fit beside WBC.
 > (Row `Q3` started 2026-07-12T17:37:12Z → KILLED.)
 
+> **Q1-GPU-CRASH (2026-07-13 04:49 UTC):** first-ever GPU execution of the perturbation arms died
+> 30 s in: `RuntimeError: cudnn RNN backward can only be called in training mode` — the frozen
+> eval-mode Siamese discriminator's LSTMs hit cuDNN's no-backward-in-inference restriction when the
+> attack differentiates through them (never seen before because the arms had only run on CPU, where
+> cuDNN is not involved). Fixed in `stifgsm_baseline.py` by recording the differentiated forward
+> under `torch.backends.cudnn.flags(enabled=False)` (native kernels, same math; no-grad scoring
+> keeps the fused kernels), with a CUDA-gated LSTM regression test written first and watched fail
+> with the exact production error. (Row `Q1-arm-ifgsm` 2026-07-13T04:49:29Z → FAILED; relaunched
+> after the fix.)
+
 ## Campaign rows (live; appended by `run_ledger.py` — keep this table last in the file)
 
 **Invariant:** `run_ledger.py start` appends rows at end-of-file and `finish` patches the *last*
@@ -124,3 +134,4 @@ prose, blockquotes, or blank-line-separated notes below or inside it; event narr
 | Q4 | DONE | 2026-07-12T09:48:34Z | 2026-07-12T10:20:18Z | 0:31:44 | 926de59 | frozen-gate:PASS | PRIMARY / sf12 | famail_temporal/results/level1_table_v2/supply_lift_sf12_5seed | FAMAIL_CITY=sf12 python -m famail_temporal.baselines.run_level1_table_v2 --edit-dir famail_temporal/results/2026-07-11T11-31-55_supply_lift_a10_sf12_filtered --seeds 0,1,2,3,4 --mle-epochs 20 --adv-epochs 3 --gan-loss wgan-gp --n-critic 5 --device auto --out-dir famail_temporal/results/level1_table_v2/supply_lift_sf12_5seed |
 | Q3 | KILLED (GPU oversubscription — see Events) | 2026-07-12T17:37:12Z | - | - | 529709e | frozen-gate:PASS | PRIMARY / shenzhen | famail_temporal/results/level1_table_v2/supply_lift_shz_5seed | python -m famail_temporal.baselines.run_level1_table_v2 --edit-dir famail_temporal/results/2026-07-10T02-06-37_alpha_sweep_s10_c80_f10_filtered --seeds 0,1,2,3,4 --mle-epochs 20 --adv-epochs 3 --gan-loss wgan-gp --n-critic 5 --device auto --out-dir famail_temporal/results/level1_table_v2/supply_lift_shz_5seed |
 | Q3 | DONE | 2026-07-13T00:46:58Z | 2026-07-13T04:45:58Z | 3:59:00 | 19712eb | frozen-gate:PASS | PRIMARY / shenzhen | famail_temporal/results/level1_table_v2/supply_lift_shz_5seed | python -m famail_temporal.baselines.run_level1_table_v2 --edit-dir famail_temporal/results/2026-07-10T02-06-37_alpha_sweep_s10_c80_f10_filtered --seeds 0,1,2,3,4 --mle-epochs 20 --adv-epochs 3 --gan-loss wgan-gp --n-critic 5 --device auto --out-dir famail_temporal/results/level1_table_v2/supply_lift_shz_5seed |
+| Q1-arm-ifgsm | FAILED (cuDNN eval-mode crash — see Events) | 2026-07-13T04:49:29Z | - | - | c54cd42 | frozen-gate:PASS | PRIMARY / shenzhen / ifgsm random-start | famail_temporal/results/experiments_campaign/ledger/Q1-arm-ifgsm | python -m famail_temporal.baselines.run_stifgsm_baseline --edit-dir famail_temporal/results/2026-07-10T02-06-37_alpha_sweep_s10_c80_f10_filtered --mode ifgsm --seed 0 --device auto --score-fidelity |

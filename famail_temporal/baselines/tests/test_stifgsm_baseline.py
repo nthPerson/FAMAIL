@@ -3,6 +3,8 @@ import json
 import math
 import pickle
 
+import pytest
+
 import numpy as np
 import torch
 
@@ -230,3 +232,33 @@ def test_package_arm_roundtrip(tmp_path):
     assert isinstance(meta["arm"]["mean_iterations"], float)
     assert meta["arm"]["mean_iterations"] >= 0
     assert 0.0 <= meta["arm"]["adjacency_violation_rate"] <= 1.0
+
+
+class LstmDisc(torch.nn.Module):
+    """LSTM-backed stand-in matching the real scorer's failure surface.
+
+    The production Siamese discriminator encodes traces with LSTMs and is
+    frozen in eval mode; cuDNN's fused RNN kernels refuse backward passes in
+    inference mode, so a gradient attack through it must run the
+    differentiated forward with cuDNN disabled. The xy-free StubDisc/AsymDisc
+    above can never exercise that path.
+    """
+    def __init__(self):
+        super().__init__()
+        self.lstm = torch.nn.LSTM(2, 8, batch_first=True)
+        self.head = torch.nn.Linear(8, 1)
+
+    def forward(self, x1, x2, mask1=None, mask2=None, profile_1=None, profile_2=None):
+        h, _ = self.lstm(x2[:, 0, :, :2])
+        return torch.sigmoid(self.head(h[:, -1, :]).squeeze(-1))
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="needs CUDA + cuDNN")
+def test_gradient_attack_through_eval_mode_lstm_on_cuda():
+    disc = LstmDisc().cuda().eval()
+    outs = attack_trajectories([_traj(1), _traj(2, n_states=3)], disc, _profiles(),
+                               "ifgsm", epsilon=2.0, step=0.1, max_iterations=2,
+                               patience=3, convergence_tol=0.0, seed=0,
+                               device="cuda")
+    assert len(outs) == 2
+    assert all(math.isfinite(o.final_p) for o in outs)

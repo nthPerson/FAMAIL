@@ -143,12 +143,17 @@ def attack_trajectories(
             iters = torch.zeros(bsz, dtype=torch.long, device=dev)
             stall = torch.zeros(bsz, dtype=torch.long, device=dev)
             for _ in range(max_iterations):
-                x_adv = x_orig.clone()
-                x_adv[..., :2] = x_orig[..., :2] + delta * mask_f
-                p = disc(x_orig, x_adv, mask1=mask, mask2=mask,
-                         profile_1=prof, profile_2=prof).reshape(-1)
-                loss = p.sum()                      # descend P(same driver)
-                grad = torch.autograd.grad(loss, delta)[0]
+                # cuDNN's fused RNN kernels cannot run backward while the frozen
+                # discriminator's LSTMs sit in eval mode, so the differentiated
+                # forward must be recorded with cuDNN off (native kernels, same
+                # math). The no-grad scoring paths keep the fast fused kernels.
+                with torch.backends.cudnn.flags(enabled=False):
+                    x_adv = x_orig.clone()
+                    x_adv[..., :2] = x_orig[..., :2] + delta * mask_f
+                    p = disc(x_orig, x_adv, mask1=mask, mask2=mask,
+                             profile_1=prof, profile_2=prof).reshape(-1)
+                    loss = p.sum()                      # descend P(same driver)
+                    grad = torch.autograd.grad(loss, delta)[0]
                 with torch.no_grad():
                     live = stall < patience
                     improved = p < (best_p - convergence_tol)
