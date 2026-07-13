@@ -67,9 +67,9 @@ Neither edit survives training on its own. The edited slice is a tenth of
 the corpus, and a vanilla behavior-cloning objective averages it away ---
 a genuine null we verify rather than assume. Upweighting the edited
 demonstrations recovers the fairness with a monotone dose-response, and
-two controls pin the recovery to the edit itself: upweighting an
-equal-sized random subset, and upweighting the corpus's already-fairest
-trajectories, are both null. Because a fairness method scored on its own
+two controls pin the recovery to the edit itself: neither upweighting an
+equal-sized random subset nor upweighting the corpus's already-fairest
+trajectories reproduces it. Because a fairness method scored on its own
 objective proves little, evaluation rides on established measures the
 objective never optimizes --- demographic parity, disparate impact
 ($+0.0162$ on the primary city's migrant axis), and the Theil index ---
