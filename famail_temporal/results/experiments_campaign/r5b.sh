@@ -22,6 +22,7 @@ if $CMD; then
   python -m famail_temporal.analysis.run_ledger finish --queue-id R5b-trimonly-rollout --artifact-dir "$OUT_DIR"
   echo "[r5b $(date +%H:%M:%S)] R5b DONE: $OUT_DIR/summary.json"
 else
-  echo "[r5b $(date +%H:%M:%S)] R5b FAILED rc=$?"
+  rc=$?  # capture BEFORE the $(date) substitution resets $? (masked the 07-13 SIGTERM as rc=0)
+  echo "[r5b $(date +%H:%M:%S)] R5b FAILED rc=$rc"
   exit 1
 fi
