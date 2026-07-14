@@ -1,7 +1,7 @@
 \section{Experiments}\label{sec:experiments}
 % Remaining subsections land per plan Tasks 5-10 (5.2-5.7 in plan numbering).
 % Disclosure ledger for this section: rollout-allocation drain NOT reversed at alpha*
-% (-0.0033 w30; attenuation ratio withheld pending an alpha* trim-only rollout); leveling-down; skip-on-infeasible provenance; tier-1 vs tier-2 supply
+% (-0.0033 vs trim-only -0.0049 at w30, ~33% attenuation like-for-like at alpha*); leveling-down; skip-on-infeasible provenance; tier-1 vs tier-2 supply
 % accounting; SF mean(Y|D) tension (open PI framing).
 
 \subsection{Experimental Setup}\label{sec:exp-setup}
@@ -281,13 +281,13 @@ pickups they allocate to disadvantaged areas, the prior trim+lift corpus
 showed the share still tilting \emph{away} --- attenuated roughly $40\%$
 versus the demand-only corpus, but not reversed --- and policies did not
 learn to \emph{cruise} disadvantaged areas (seeking-state shares n.s.). This
-suite re-run on the adopted corpus gives the same boundary: $-0.0033$ at
-w30 (0/6 seeds, $p = .031$), still tilting away, with seeking-state shares
-n.s.\ at every weight. We quote no attenuation ratio: the demand-only
-comparator ($-0.0048$) is a prior-era run --- the one rollout baseline not
-yet re-measured at the adopted weights --- and a ratio across eras would not
-be like-for-like.
-% src: famail_temporal/baselines/external_fairness/results/option_a_rollout_a10/summary.json (edited_w30.MigrantRatio.pickups.share_D_delta; states n.s.)
+suite re-run on the adopted corpus --- both sides, so the comparison is
+like-for-like at the adopted weights --- gives the same boundary: the
+demand-only corpus tilts by $-0.0049$ at w30 and trim+lift by $-0.0033$
+(each 0/6 seeds, $p = .031$) --- roughly $33\%$ attenuation, not a
+reversal --- with seeking-state shares n.s.\ at every weight in both
+suites.
+% src: famail_temporal/baselines/external_fairness/results/option_a_rollout_a10/summary.json + option_a_rollout_trimonly_a10/summary.json (edited_w30.MigrantRatio.pickups.share_D_delta; states n.s.)
 We claim the data-level lift-up and the metric propagation; we disclose the
 allocation boundary, which motivates training-side allocation constraints as
 future work rather than further data-side editing alone.
