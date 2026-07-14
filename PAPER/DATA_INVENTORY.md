@@ -249,8 +249,10 @@ inside the weighted-BC sweep (+0.0022, n.s.), not by a separate L2 suite. Do not
 4. ✅ **RESOLVED 2026-07-13** — `paper/lint.sh` now carries the old-α era-guard
    (`0.0222|0.0328|…|87\.4|84\.9`); fires zero times on the fixed manuscript (commit `78a98f6`).
 5. **No α\*-era `level2_table`** — by design (see §4).
-6. **`PAPER/supply-lift/LIFT_ALGORITHM_REFERENCE.md` is untracked in git** despite being load-bearing
-   (`DECISION.md` cites its §9).
+6. ✅ **RESOLVED 2026-07-14** — `PAPER/supply-lift/LIFT_ALGORITHM_REFERENCE.md` is now tracked. It was
+   the most load-bearing untracked file in the repo: **12 `% src:` anchors** in `paper/sections/`
+   (11 in `03_methodology.tex`, 1 in `04_experiments.tex`), plus `paper/README.md` §§10/13 and
+   `DECISION.md` §9.
 
 ---
 
