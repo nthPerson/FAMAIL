@@ -196,6 +196,14 @@ famail_temporal/results/**/pid.txt
 !famail_temporal/results/overnight_2026-06-10/ablation_mle20_dslow/b0_adversarial_fairness.json
 !famail_temporal/results/overnight_2026-06-10/wgan_genheavy/b0_adversarial_fairness.json
 !famail_temporal/results/overnight_2026-06-10/wgan_ncritic5/b0_adversarial_fairness.json
+# NB: chosen_ids.json is deliberately NOT re-included for the three supply-lift/alpha
+# sweeps (424K / 80K / 431K) — all over this block's 64KB cap, so graphify would skip
+# them regardless. sf12_6seed's IS tracked below only because it is 56K, under the cap.
+!famail_temporal/results/weighted_bc_sweep/alpha_sweep_s10_c80_f10_filtered_6seed/dose_response.json
+!famail_temporal/results/weighted_bc_sweep/alpha_sweep_s10_c80_f10_filtered_6seed/environment.json
+!famail_temporal/results/weighted_bc_sweep/alpha_sweep_s10_c80_f10_filtered_6seed/manifest.json
+!famail_temporal/results/weighted_bc_sweep/alpha_sweep_s10_c80_f10_filtered_6seed/paired_stats.json
+!famail_temporal/results/weighted_bc_sweep/alpha_sweep_s10_c80_f10_filtered_6seed/sweep.json
 !famail_temporal/results/weighted_bc_sweep/cleaned_4feat_6seed/dose_response.json
 !famail_temporal/results/weighted_bc_sweep/cleaned_4feat_6seed/manifest.json
 !famail_temporal/results/weighted_bc_sweep/cleaned_4feat_6seed/paired_stats.json
@@ -217,6 +225,18 @@ famail_temporal/results/**/pid.txt
 !famail_temporal/results/weighted_bc_sweep/sf12_6seed/paired_stats.json
 !famail_temporal/results/weighted_bc_sweep/sf12_6seed/sweep.json
 !famail_temporal/results/weighted_bc_sweep/sig_6seed_w10_w20_w30/sweep.json
+!famail_temporal/results/weighted_bc_sweep/supply_lift_a10_sf12_filtered_6seed/dose_response.json
+!famail_temporal/results/weighted_bc_sweep/supply_lift_a10_sf12_filtered_6seed/environment.json
+!famail_temporal/results/weighted_bc_sweep/supply_lift_a10_sf12_filtered_6seed/manifest.json
+!famail_temporal/results/weighted_bc_sweep/supply_lift_a10_sf12_filtered_6seed/paired_stats.json
+!famail_temporal/results/weighted_bc_sweep/supply_lift_a10_sf12_filtered_6seed/sweep.json
+# supply_lift_v1_shz_primary_filtered_6seed predates the PROVENANCE.md/environment.json
+# convention, so it emits no un-ignored file at all — it stayed invisible to `git status`
+# from 2026-07-09 until it was tracked here on 2026-07-14.
+!famail_temporal/results/weighted_bc_sweep/supply_lift_v1_shz_primary_filtered_6seed/dose_response.json
+!famail_temporal/results/weighted_bc_sweep/supply_lift_v1_shz_primary_filtered_6seed/manifest.json
+!famail_temporal/results/weighted_bc_sweep/supply_lift_v1_shz_primary_filtered_6seed/paired_stats.json
+!famail_temporal/results/weighted_bc_sweep/supply_lift_v1_shz_primary_filtered_6seed/sweep.json
 # <<< graphify-tracked curated results <<<
 
 # graphify knowledge-graph output (generated; rebuilt by hook)
