@@ -73,6 +73,13 @@ checkpoints/
 # External-fairness CLI run outputs (data artifacts, per-dataset dirs)
 famail_temporal/baselines/external_fairness/results/
 
+# Data-augmentation baseline table (campaign Q1) — the curated artifact behind the
+# paper's tab:baselines. Re-included past the global *.json ignore, same rationale as
+# the curated-results block below: a negation (not `git add -f`) is what lets graphify
+# see the file, since its corpus walk merges this .gitignore.
+!famail_temporal/baselines/baseline_table/baseline_table.json
+!famail_temporal/baselines/baseline_table/environment.json
+
 # PAPER/ is the curated, committed paper deliverable: force-track its data
 # tables (the global *.json/*.csv ignores above would otherwise drop them).
 !PAPER/**/*.json
