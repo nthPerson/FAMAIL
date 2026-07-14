@@ -134,7 +134,7 @@ under-supply, so demand-adjustment can under-detect latent inequity; ties to lev
 
 ## 5. Ground-truth ledgers (embedded so the build is self-contained)
 
-### 5.1 Verified / corrected citations (from `mission_2_citation_audit.md`)
+### 5.1 Verified / corrected citations (from `PAPER/objective-motivation/sources/mission_2_citation_audit.md`)
 **Must-fix content:**
 - **Zheng et al. 2023** — "Fairness-Enhancing Deep Learning for Ride-Hailing Demand Prediction," *IEEE Open
   J. Intell. Transp. Syst.* 4:551–569, DOI 10.1109/OJITS.2023.3297517. Model SA-Net, Chicago TNC. The
@@ -201,11 +201,11 @@ future work and pre-empts a predictable fairness-reviewer objection.
 - Keep the associational-`F_causal` caveat wherever the metric is characterized.
 - Match the argument set's tone: focused docs, cross-links, provenance; no authoring-tool names.
 
-## 7. Source materials (untracked, in the MAIN working tree — read by absolute path)
-- `/home/robert/FAMAIL/mission_2_context.md` — the brief (objective defs + design decisions).
-- `/home/robert/FAMAIL/supporting_literature_and_why+how_FAMAIL_objective_function.md` — the research
+## 7. Source materials (untracked at repo root when this spec was written; tracked 2026-07-14 under `PAPER/objective-motivation/sources/`)
+- `PAPER/objective-motivation/sources/mission_2_context.md` — the brief (objective defs + design decisions).
+- `PAPER/objective-motivation/sources/supporting_literature_and_why+how_FAMAIL_objective_function.md` — the research
   report; **draft source** for the MOTIVATION.md paragraphs (adapt + correct per audit).
-- `/home/robert/FAMAIL/mission_2_citation_audit.md` — the citation corrections (§5.1 is its digest).
+- `PAPER/objective-motivation/sources/mission_2_citation_audit.md` — the citation corrections (§5.1 is its digest).
 - In-repo: `PAPER/argument/03`,`04`,`05`,`07`; `PAPER/external-metrics/LEVELING_DOWN_MECHANISM.md`;
   `famail_temporal/baselines/STATUS.md`; `famail_temporal/docs/TRAJECTORY_EDITING_METHODOLOGY.md`.
 

@@ -33,6 +33,10 @@ lineage; this bundle links back to `03` for the formulas.
   methodology doc. The `(ΔF_spatial, ΔF_causal)` weight-Pareto sweep is described as a **planned sensitivity**.
 - **`F_causal` is associational**, a partial R² on ~10 district profiles — never presented as a causal estimate;
   a rename to `F_demo` is pending.
+- **Raw inputs live in [`sources/`](sources/)** (tracked 2026-07-14; previously untracked at the repo root): the
+  deep-research brief that was sent out, the literature report that came back, and the citation audit that
+  verified it — the audit is what caught the 2 fabrications, so it is the provenance for `REFERENCES.md`.
+  **The four curated docs above supersede them**; `sources/` is kept for lineage, not for quoting.
 
 ## Related
 

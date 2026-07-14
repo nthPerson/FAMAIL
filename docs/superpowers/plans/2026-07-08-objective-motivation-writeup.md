@@ -22,10 +22,10 @@
 - **Associational-`F_causal` caveat** appears wherever the metric is characterized (it is a partial R² on ~10 district profiles; no identification/counterfactual; rename to `F_demo` pending).
 - **No authoring-tool names** anywhere in `PAPER/` content.
 - **Commit per task** on the branch. Commit messages end with `Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>`.
-- **Source docs** (untracked, in the MAIN working tree — read by absolute path):
-  - `/home/robert/FAMAIL/mission_2_context.md` — the brief.
-  - `/home/robert/FAMAIL/supporting_literature_and_why+how_FAMAIL_objective_function.md` — the research report; **draft source** for the why+how paragraphs (adapt + correct).
-  - `/home/robert/FAMAIL/mission_2_citation_audit.md` — the citation corrections.
+- **Source docs** (untracked at repo root when this plan was written; tracked 2026-07-14 under `PAPER/objective-motivation/sources/`):
+  - `PAPER/objective-motivation/sources/mission_2_context.md` — the brief.
+  - `PAPER/objective-motivation/sources/supporting_literature_and_why+how_FAMAIL_objective_function.md` — the research report; **draft source** for the why+how paragraphs (adapt + correct).
+  - `PAPER/objective-motivation/sources/mission_2_citation_audit.md` — the citation corrections.
 
 ---
 
@@ -35,7 +35,7 @@
 - Create: `PAPER/objective-motivation/REFERENCES.md`
 
 **Interfaces:**
-- Consumes: spec §5.1 (audit-corrected metadata); `mission_2_citation_audit.md`.
+- Consumes: spec §5.1 (audit-corrected metadata); `PAPER/objective-motivation/sources/mission_2_citation_audit.md`.
 - Produces: the canonical reference list. Every downstream doc cites by **surname + year** and those must resolve here. Grouped headings other docs can point to.
 
 - [ ] **Step 1: Web-verify the two new feedback-loop citations**
@@ -96,7 +96,7 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 
 - [ ] **Step 1: Draft `MOTIVATION.md`**
 
-Read the research report (`/home/robert/FAMAIL/supporting_literature_and_why+how_FAMAIL_objective_function.md`) for the drafted why+how paragraphs and adapt them, applying every spec-§5.1 correction. Structure (depth ∝ novelty):
+Read the research report (`PAPER/objective-motivation/sources/supporting_literature_and_why+how_FAMAIL_objective_function.md`) for the drafted why+how paragraphs and adapt them, applying every spec-§5.1 correction. Structure (depth ∝ novelty):
 
 1. **Executive thesis** — one paragraph: edit-don't-generate; demand-adjusted demographic fairness (FWL + conditional statistical parity); Gini spatial term; frozen identity discriminator; iFGSM-as-recourse editor; upweighting so fairness survives cloning.
 2. **F_causal (DEEP)** — *supporting lit* → *why+how paragraph* → *contrast/novelty ("to our knowledge")*. Cite: Corbett-Davies et al. 2017 (conditional statistical parity — **formalized there, building on Kamiran 2013 / Dwork 2012**; use the verbatim quote-b, never "previous arrests"); Frisch & Waugh 1933 / Lovell 1963 (FWL = residualize-then-project); Feldman et al. 2015 (fairness-as-predictability); note exact per-unit attribution drives edit selection. Include the associational + ecological caveats **once**. Add a short honest paragraph: **demand is a *legitimate but endogenous* control** (pointer to `LEVELING_DOWN.md`).

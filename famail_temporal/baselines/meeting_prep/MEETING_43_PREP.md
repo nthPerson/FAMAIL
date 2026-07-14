@@ -56,7 +56,8 @@ expectations these re-runs test; the paper carries only α\*-era numbers.
   provable no-op, kept as an ablation row); FGSM numbers from the corrected engine (`6da3d27`+).
 
 ### T3 — human review of AI-assisted citations: ◐ OPEN (Robert's pass)
-Machine verification is done (2 fabrications caught and removed; audit in `mission_2_citation_audit.md`;
+Machine verification is done (2 fabrications caught and removed; audit in
+`PAPER/objective-motivation/sources/mission_2_citation_audit.md`;
 `paper/refs.bib` header flags the pending human pass). **Robert's own final pass remains open.**
 
 ### T4 — motivate the attribution variant / objective: ✅ DONE — and it produced a finding

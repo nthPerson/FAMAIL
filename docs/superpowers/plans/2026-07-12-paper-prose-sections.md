@@ -304,7 +304,7 @@ Pairs to verify:
 
 Write `paper/reviews/2026-07-12-prose-citation-audit.md`: header (date, scope = §1/§2/§5,
 verifier = Opus subagents, protocol = existence + claim-support), the three tables, and a
-disposition column you fill in Step 4. Model on `mission_2_citation_audit.md` (repo root).
+disposition column you fill in Step 4. Model on `PAPER/objective-motivation/sources/mission_2_citation_audit.md`.
 
 - [ ] **Step 4: Fix every non-SUPPORTED verdict**
 

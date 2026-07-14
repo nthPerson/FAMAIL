@@ -9,8 +9,8 @@ to it, with quoted evidence + URL. Pair extraction was mechanical
 (paragraph + keys + BibTeX entries; scratchpad `citation_pairs_*.md`).
 **Headline: 0 fabrications, 0 not-found. 29 key-instances verified (7 in §1, 22 in §2;
 33 distinct keys incl. §1/§2 overlap). 2 bibliographic field fixes, 3 prose fixes.**
-**Precedent:** `mission_2_citation_audit.md` (repo root), which caught 2 fabrications in
-an earlier literature pass — the reason this stage exists.
+**Precedent:** `PAPER/objective-motivation/sources/mission_2_citation_audit.md`, which caught 2 fabrications
+in an earlier literature pass — the reason this stage exists.
 
 ## Dispositions (all applied 2026-07-12)
 
