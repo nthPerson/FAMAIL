@@ -409,17 +409,17 @@ directional reproduction, not magnitude equality --- absolute
 $F_{\mathrm{causal}}$ scales shift with the feature set by construction.
 
 \begin{table}[t]
-\caption{Feature-set robustness under trim+lift (alternate-set columns land
-with campaign stages Q6--Q8).}
+\caption{Feature-set robustness under trim+lift (downstream rows land with
+campaign stage Q8).}
 \label{tab:featsets}
 \begin{tabular}{lrrr}
 \toprule
  & \{hous,comp,migr\} & \{hous,gdp,comp\} & +logpopdens \\
 \midrule
-before-edit $F_{\mathrm{causal}}$ & 0.7988 & 0.8069 & X.XXXX \\ % TODO(run:Q6 -> 4feat filtered metrics.json)
-editor $\Delta F_{\mathrm{causal}}$ & $+0.0226$ & $+0.0206$ & X.XXXX \\ % TODO(run:Q6 -> 4feat filtered metrics.json)
-DI $\Delta$ (migrant/extremes) & $+0.0162$ & $+0.0147$ & X.XXXX \\ % TODO(run:Q7 -> 4feat external_fairness.json)
-Theil $\Delta$ & $-0.0087$ & $-0.0080$ & X.XXXX \\ % TODO(run:Q7 -> 4feat external_fairness.json)
+before-edit $F_{\mathrm{causal}}$ & 0.7988 & 0.8069 & 0.7253 \\
+editor $\Delta F_{\mathrm{causal}}$ & $+0.0226$ & $+0.0206$ & $+0.0220$ \\
+DI $\Delta$ (migrant/extremes) & $+0.0162$ & $+0.0147$ & $+0.0191$ \\
+Theil $\Delta$ & $-0.0087$ & $-0.0080$ & $-0.0085$ \\
 L1: edited fairest faithful? & see~\ref{tab:l1} & X & X \\ % TODO(run:Q8 -> per-set level1_v2_multiseed.json)
 vanilla-BC null (w1) & see~\S\ref{sec:exp-downstream} & X.XXXX & X.XXXX \\ % TODO(run:R4 PRIMARY + Q8 per-set)
 weighted-BC w30 & see~\S\ref{sec:exp-downstream} & X.XXXX & X.XXXX \\ % TODO(run:R4 PRIMARY + Q8 per-set)

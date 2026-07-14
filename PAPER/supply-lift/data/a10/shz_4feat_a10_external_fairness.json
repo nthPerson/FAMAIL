@@ -1,0 +1,280 @@
+{
+  "meta": {
+    "dataset": "shenzhen-4feat-supplylift",
+    "city": "shenzhen",
+    "edit_dir": "famail_temporal/results/2026-07-13T17-04-22_supply_lift_v1_shz_4feat_filtered",
+    "seed": 0,
+    "B": 1000,
+    "n_active": 34524
+  },
+  "theil": {
+    "before": 0.15497784501056275,
+    "after": 0.14648183202715753,
+    "delta": -0.008496012983405216,
+    "delta_ci": [
+      -0.0096118331667805,
+      -0.007440119429728228
+    ],
+    "n_dropped": 0
+  },
+  "metrics": {
+    "AvgHousingPricePerSqM": {
+      "district_extremes": {
+        "group_sizes": {
+          "n_disadvantaged": 4104,
+          "n_advantaged": 23508,
+          "n_excluded": 6912
+        },
+        "supply_demand_ratio": {
+          "before": {
+            "mean_disadvantaged": 23.048448075649386,
+            "mean_advantaged": 9.208242807639367,
+            "gap": -13.840205268010019
+          },
+          "after": {
+            "mean_disadvantaged": 22.083896293934664,
+            "mean_advantaged": 9.234994120876783,
+            "gap": -12.848902173057882
+          },
+          "delta_gap": 0.9913030949521371,
+          "gap_ci": [
+            0.8163996797726548,
+            1.1670316636803133
+          ]
+        },
+        "demographic_parity": {
+          "before": -13.840205268010019,
+          "after": -12.848902173057882,
+          "delta": 0.9913030949521371,
+          "delta_ci": [
+            0.8163996797726548,
+            1.1670316636803133
+          ]
+        },
+        "disparate_impact": {
+          "before": 2.503023492878345,
+          "after": 2.391327596409773,
+          "delta": -0.11169589646857192,
+          "delta_ci": [
+            -0.13178559695404862,
+            -0.09131728522374184
+          ]
+        }
+      },
+      "median_split": {
+        "group_sizes": {
+          "n_disadvantaged": 24962,
+          "n_advantaged": 9562,
+          "n_excluded": 0
+        },
+        "supply_demand_ratio": {
+          "before": {
+            "mean_disadvantaged": 14.663888669572398,
+            "mean_advantaged": 5.875925594880761,
+            "gap": -8.787963074691636
+          },
+          "after": {
+            "mean_disadvantaged": 14.411235365225105,
+            "mean_advantaged": 5.876996549940216,
+            "gap": -8.534238815284889
+          },
+          "delta_gap": 0.2537242594067468,
+          "gap_ci": [
+            0.2046259353816113,
+            0.3041780647543359
+          ]
+        },
+        "demographic_parity": {
+          "before": -8.787963074691636,
+          "after": -8.534238815284889,
+          "delta": 0.2537242594067468,
+          "delta_ci": [
+            0.2046259353816113,
+            0.3041780647543359
+          ]
+        },
+        "disparate_impact": {
+          "before": 2.4955878750996963,
+          "after": 2.4521429003343047,
+          "delta": -0.04344497476539155,
+          "delta_ci": [
+            -0.05721642066318734,
+            -0.02916454217871644
+          ]
+        }
+      }
+    },
+    "CompPerCapita": {
+      "district_extremes": {
+        "group_sizes": {
+          "n_disadvantaged": 6950,
+          "n_advantaged": 7516,
+          "n_excluded": 20058
+        },
+        "supply_demand_ratio": {
+          "before": {
+            "mean_disadvantaged": 7.073447554576566,
+            "mean_advantaged": 19.04563765847966,
+            "gap": 11.972190103903094
+          },
+          "after": {
+            "mean_disadvantaged": 7.219557788825771,
+            "mean_advantaged": 18.48492480141964,
+            "gap": 11.26536701259387
+          },
+          "delta_gap": -0.7068230913092233,
+          "gap_ci": [
+            -0.8190325608383513,
+            -0.586047578359534
+          ]
+        },
+        "demographic_parity": {
+          "before": 11.972190103903094,
+          "after": 11.26536701259387,
+          "delta": -0.7068230913092233,
+          "delta_ci": [
+            -0.8190325608383513,
+            -0.586047578359534
+          ]
+        },
+        "disparate_impact": {
+          "before": 0.37139463017281893,
+          "after": 0.3905646285491683,
+          "delta": 0.019169998376349362,
+          "delta_ci": [
+            0.015461545678037595,
+            0.0228710368530547
+          ]
+        }
+      },
+      "median_split": {
+        "group_sizes": {
+          "n_disadvantaged": 23317,
+          "n_advantaged": 11207,
+          "n_excluded": 0
+        },
+        "supply_demand_ratio": {
+          "before": {
+            "mean_disadvantaged": 9.273207184184997,
+            "mean_advantaged": 18.381566663199287,
+            "gap": 9.10835947901429
+          },
+          "after": {
+            "mean_disadvantaged": 9.300177629421741,
+            "mean_advantaged": 17.76361706184088,
+            "gap": 8.463439432419138
+          },
+          "delta_gap": -0.6449200465951517,
+          "gap_ci": [
+            -0.7279482922854433,
+            -0.5635537966229521
+          ]
+        },
+        "demographic_parity": {
+          "before": 9.10835947901429,
+          "after": 8.463439432419138,
+          "delta": -0.6449200465951517,
+          "delta_ci": [
+            -0.7279482922854433,
+            -0.5635537966229521
+          ]
+        },
+        "disparate_impact": {
+          "before": 0.5044840493792279,
+          "after": 0.5235520219246352,
+          "delta": 0.019067972545407375,
+          "delta_ci": [
+            0.0163710691510147,
+            0.021598321736339934
+          ]
+        }
+      }
+    },
+    "MigrantRatio": {
+      "district_extremes": {
+        "group_sizes": {
+          "n_disadvantaged": 6950,
+          "n_advantaged": 9389,
+          "n_excluded": 18185
+        },
+        "supply_demand_ratio": {
+          "before": {
+            "mean_disadvantaged": 7.073447554576566,
+            "mean_advantaged": 21.27233296897831,
+            "gap": 14.198885414401746
+          },
+          "after": {
+            "mean_disadvantaged": 7.219557788825771,
+            "mean_advantaged": 20.53237582634791,
+            "gap": 13.312818037522138
+          },
+          "delta_gap": -0.8860673768796072,
+          "gap_ci": [
+            -0.9924160211339499,
+            -0.7712264573515177
+          ]
+        },
+        "demographic_parity": {
+          "before": 14.198885414401746,
+          "after": 13.312818037522138,
+          "delta": -0.8860673768796072,
+          "delta_ci": [
+            -0.9924160211339499,
+            -0.7712264573515177
+          ]
+        },
+        "disparate_impact": {
+          "before": 0.3325186553299939,
+          "after": 0.3516182369680456,
+          "delta": 0.0190995816380517,
+          "delta_ci": [
+            0.015768402199684305,
+            0.022322563596308916
+          ]
+        }
+      },
+      "median_split": {
+        "group_sizes": {
+          "n_disadvantaged": 15962,
+          "n_advantaged": 18562,
+          "n_excluded": 0
+        },
+        "supply_demand_ratio": {
+          "before": {
+            "mean_disadvantaged": 10.313129396495825,
+            "mean_advantaged": 13.878214528674157,
+            "gap": 3.565085132178332
+          },
+          "after": {
+            "mean_disadvantaged": 10.368743079157515,
+            "mean_advantaged": 13.491176660261026,
+            "gap": 3.122433581103511
+          },
+          "delta_gap": -0.442651551074821,
+          "gap_ci": [
+            -0.49806433454605165,
+            -0.3849891457105418
+          ]
+        },
+        "demographic_parity": {
+          "before": 3.565085132178332,
+          "after": 3.122433581103511,
+          "delta": -0.442651551074821,
+          "delta_ci": [
+            -0.49806433454605165,
+            -0.3849891457105418
+          ]
+        },
+        "disparate_impact": {
+          "before": 0.743116441613407,
+          "after": 0.768557357172499,
+          "delta": 0.025440915559092003,
+          "delta_ci": [
+            0.021857985018108806,
+            0.028998290046251596
+          ]
+        }
+      }
+    }
+  }
+}

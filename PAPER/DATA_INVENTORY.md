@@ -64,7 +64,7 @@ So `run.log: corpus=95297 edited=9882` ⇒ α\*. `edited=2455` ⇒ pre-supply-li
 **Shenzhen headline corpus:** `famail_temporal/results/2026-07-10T02-06-37_alpha_sweep_s10_c80_f10_filtered`
 **San Francisco headline corpus:** `famail_temporal/results/2026-07-11T11-31-55_supply_lift_a10_sf12_filtered`
 
-All curated + git-tracked under **`PAPER/supply-lift/data/a10/`** (26 files; last additions 2026-07-13: R5b rollout comparator + HGC column pair).
+All curated + git-tracked under **`PAPER/supply-lift/data/a10/`** (28 files; last additions 2026-07-14: 4FEAT column pair).
 
 | artifact (`PAPER/supply-lift/data/a10/`) | source in `results/` | backs |
 |---|---|---|
@@ -87,6 +87,7 @@ All curated + git-tracked under **`PAPER/supply-lift/data/a10/`** (26 files; las
 | `sf12_trimonly_a10_*` (2 files) | `2026-07-11T13-43-37_trimonly_a10_sf12` | §4.2 SF ablation (+0.0144 — *coincides* with the old SZ headline; not it) |
 | `shz_trimonly_a10_rollout_summary.json` | `external_fairness/results/option_a_rollout_trimonly_a10/` | §4.4 demand-only rollout comparator: −0.0049 @ w30 → **~33% attenuation like-for-like** (added 2026-07-13, run R5b) |
 | `shz_hgc_a10_metrics.json` + `_external_fairness.json` | `2026-07-13T04-41-12_supply_lift_v1_shz_hgc_filtered` + `external_fairness/results/shenzhen-hgc-supplylift/` | §4.6 `tab:featsets` HGC column: 0.8069, +0.0206, DI +0.0147, Theil −0.0080 (added 2026-07-13, stages Q6a/Q7-hgc) |
+| `shz_4feat_a10_metrics.json` + `_external_fairness.json` | `2026-07-13T17-04-22_supply_lift_v1_shz_4feat_filtered` + `external_fairness/results/shenzhen-4feat-supplylift/` | §4.6 `tab:featsets` 4FEAT column: 0.7253, +0.0220, DI +0.0191, Theil −0.0085 (added 2026-07-14, stages Q6b/Q7-4feat) |
 
 **Baselines (α\*-selected edit set, n = 9,882)** — `PAPER/baselines/comparison/baseline_table.{json,md}`,
 also `famail_temporal/baselines/baseline_table/`:
@@ -238,9 +239,9 @@ inside the weighted-BC sweep (+0.0022, n.s.), not by a separate L2 suite. Do not
 ## 7. ⚠️ Known gaps, and what is NOT yet re-run at α\*
 
 1. **The §4.6 feature-set robustness table** is the only open hole in the paper — 8 `TODO(run:)`
-   slots at the 2026-07-13 sweep; the **HGC column landed the same day** (Q6a/Q7-hgc, commit
-   `a668752`), leaving the **4feat** column + the Q8 rows (q6b rerunning post-nvitop-mishap;
-   q8b/q8a queued behind it).
+   slots at the 2026-07-13 sweep; the **HGC column landed 2026-07-13** (`a668752`) and the
+   **4FEAT column 2026-07-14** (Q6b/Q7-4feat), leaving only the **Q8 downstream rows**
+   (q8b running; q8a queued).
 2. ✅ **RESOLVED 2026-07-13** — the α\*-era trim-only rollout now exists (R5b,
    `option_a_rollout_trimonly_a10`, §5); §4.4 quotes the like-for-like ~33% (commit `3881b4b`).
 3. ✅ **RESOLVED 2026-07-13** — both stale §4 numbers fixed (SF compliance → 87.6/85.2; disclosure
