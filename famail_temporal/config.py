@@ -69,8 +69,8 @@ SUPPLY_FLOOR: float = 0.1
 # share), so this set is city-independent (no GDP analog needed for SF).
 DEMOGRAPHIC_FEATURES: List[str] = [
     "AvgHousingPricePerSqM",
-    "GDPperCapita",
     "CompPerCapita",
+    "MigrantRatio",
 ]
 
 # Objective weights
