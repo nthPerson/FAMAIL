@@ -64,7 +64,7 @@ So `run.log: corpus=95297 edited=9882` ⇒ α\*. `edited=2455` ⇒ pre-supply-li
 **Shenzhen headline corpus:** `famail_temporal/results/2026-07-10T02-06-37_alpha_sweep_s10_c80_f10_filtered`
 **San Francisco headline corpus:** `famail_temporal/results/2026-07-11T11-31-55_supply_lift_a10_sf12_filtered`
 
-All curated + git-tracked under **`PAPER/supply-lift/data/a10/`** (34 files; last addition 2026-07-15: HGC L1v2 multiseed).
+All curated + git-tracked under **`PAPER/supply-lift/data/a10/`** (38 files; Q8a complete 2026-07-15 — the a10 curation set is CLOSED for the campaign matrix).
 
 | artifact (`PAPER/supply-lift/data/a10/`) | source in `results/` | backs |
 |---|---|---|
@@ -87,6 +87,8 @@ All curated + git-tracked under **`PAPER/supply-lift/data/a10/`** (34 files; las
 | `sf12_trimonly_a10_*` (2 files) | `2026-07-11T13-43-37_trimonly_a10_sf12` | §4.2 SF ablation (+0.0144 — *coincides* with the old SZ headline; not it) |
 | `shz_trimonly_a10_rollout_summary.json` | `external_fairness/results/option_a_rollout_trimonly_a10/` | §4.4 demand-only rollout comparator: −0.0049 @ w30 → **~33% attenuation like-for-like** (added 2026-07-13, run R5b) |
 | `shz_hgc_a10_metrics.json` + `_external_fairness.json` | `2026-07-13T04-41-12_supply_lift_v1_shz_hgc_filtered` + `external_fairness/results/shenzhen-hgc-supplylift/` | §4.6 `tab:featsets` HGC column: 0.8069, +0.0206, DI +0.0147, Theil −0.0080 (added 2026-07-13, stages Q6a/Q7-hgc) |
+| `shz_hgc_a10_weighted_bc_*` (3 files) | `weighted_bc_sweep/supply_lift_v1_shz_hgc_filtered_6seed/` | §4.6 HGC: vanilla +0.0022 (6/6 — tiny but sign-unanimous), w30 +0.0248 (6/6), most-fair +0.0054 sig, random n.s. (added 2026-07-15, stage Q8a) |
+| `shz_hgc_a10_variance_aggregate.json` | `variance_suite/supply_lift_shz_hgc_5seed/` | §4.6 HGC variance: null (+0.0029±0.0038, mixed signs at n=5) |
 | `shz_hgc_a10_l1v2_multiseed.json` | `level1_table_v2/supply_lift_shz_hgc_5seed/` | §4.6 `tab:featsets` L1 row, HGC cell: edited fairest 0.8275 + faithful; GAN bimodality seed-identical in all 3 sets (added 2026-07-15, stage Q8a-l1v2) |
 | `shz_4feat_a10_weighted_bc_*` (3 files) | `weighted_bc_sweep/supply_lift_v1_shz_4feat_filtered_6seed/` | §4.6 4FEAT: vanilla +0.0011 n.s., w30 +0.0256 (6/6); ⚠️ most-fair w30 sig-positive +0.0072 (~28% of gain) — surfaced 2026-07-14 |
 | `shz_4feat_a10_variance_aggregate.json` | `variance_suite/supply_lift_shz_4feat_5seed/` | §4.6 4FEAT variance: null (+0.0003±0.0028, mixed) — differs from PRIMARY's weak positive |
@@ -242,10 +244,9 @@ inside the weighted-BC sweep (+0.0022, n.s.), not by a separate L2 suite. Do not
 
 ## 7. ⚠️ Known gaps, and what is NOT yet re-run at α\*
 
-1. **The §4.6 feature-set robustness table** is the only open hole in the paper — 8 `TODO(run:)`
-   slots at the 2026-07-13 sweep; the **HGC column landed 2026-07-13** (`a668752`) and the
-   **4FEAT column 2026-07-14** (Q6b/Q7-4feat), leaving only the **Q8 downstream rows**
-   (q8b running; q8a queued).
+1. ✅ **RESOLVED 2026-07-15** — `tab:featsets` is COMPLETE (all three columns, all rows incl. the
+   Robert-requested control rows). **Zero `TODO(run:)` markers remain in §4**; the chain restored
+   PRIMARY config. Only the `TODO(PI-framing)` decision marker is left.
 2. ✅ **RESOLVED 2026-07-13** — the α\*-era trim-only rollout now exists (R5b,
    `option_a_rollout_trimonly_a10`, §5); §4.4 quotes the like-for-like ~33% (commit `3881b4b`).
 3. ✅ **RESOLVED 2026-07-13** — both stale §4 numbers fixed (SF compliance → 87.6/85.2; disclosure

@@ -379,11 +379,14 @@ demog.\ oversampling (targeted) & $+0.0153$ & $+0.0052$ & 10.5\% \\
 The control rows are re-measured deliberately: the random placebo is
 null-to-negative under every feature set, and the select-the-fairest
 control --- null on the primary set --- is significantly \emph{positive}
-under the four-feature set ($+0.0072$ at w30, stable across doses, about a
-quarter of the edited arm's gain there). We report the strongest control we
-found rather than average it away: even where selection captures a minority
-share, the edited arm's gain is at least $3\times$ larger at every dose,
-which is the edit-specificity claim under its hardest test.
+under both alternate sets ($+0.0054$ and $+0.0072$ at w30, a fifth to a
+quarter of the edited arm's gain). We report the strongest controls we
+found rather than average them away: even where selection captures a
+minority share, the edited arm's gain is at least $3\times$ larger at
+every dose, which is the edit-specificity claim under its hardest test.
+Vanilla transfer likewise stays an order of magnitude below the upweighted
+gain under every set, reaching sign-unanimity only under the
+housing--GDP--compensation set ($+0.0022$, a tenth of its w30 gain).
 % src: PAPER/supply-lift/data/a10/shz_4feat_a10_weighted_bc_paired_stats.json (most_fair arms +0.0059/+0.0059/+0.0072 all p=.031; edited/most_fair min ratio 3.05 at w10)
 
 \textbf{Weight sensitivity.} Fig.~\ref{fig:alpha-pareto} reports the weight
@@ -431,11 +434,11 @@ editor $\Delta F_{\mathrm{causal}}$ & $+0.0226$ & $+0.0206$ & $+0.0220$ \\
 DI $\Delta$ (migrant/extremes) & $+0.0162$ & $+0.0147$ & $+0.0191$ \\
 Theil $\Delta$ & $-0.0087$ & $-0.0080$ & $-0.0085$ \\
 L1: edited fairest faithful? & see~\ref{tab:l1} & yes & yes \\ % src: per-set level1_v2_multiseed.json (HGC 0.8275 / 4FEAT 0.7473 fairest, both Fid-A ~0.845; GAN Fid-B bimodality reproduces seed-for-seed in all three sets)
-vanilla-BC null (w1) & see~\S\ref{sec:exp-downstream} & X.XXXX & $+0.0011$ (n.s.) \\ % TODO(run:Q8a -> hgc paired_stats.json)
-weighted-BC w30 & see~\S\ref{sec:exp-downstream} & X.XXXX & $+0.0256$ \\ % TODO(run:Q8a -> hgc paired_stats.json)
-\quad random placebo (w30) & $-0.0023$ (n.s.) & X.XXXX & $-0.0044$ (n.s.) \\ % TODO(run:Q8a -> hgc paired_stats.json)
-\quad most-fair select (w30) & $+0.0009$ (n.s.) & X.XXXX & $+0.0072$ \\ % TODO(run:Q8a -> hgc paired_stats.json)
-variance (b0 vs FAMAIL) & see~\S\ref{sec:exp-downstream} & X & null \\ % TODO(run:Q8a -> hgc variance aggregate.json)
+vanilla-BC transfer (w1) & see~\S\ref{sec:exp-downstream} & $+0.0022$ & $+0.0011$ (n.s.) \\ % src: hgc w1 is sign-unanimous (6/6, p=.031) though a tenth of its w30 gain — row renamed from 'null' for honesty
+weighted-BC w30 & see~\S\ref{sec:exp-downstream} & $+0.0248$ & $+0.0256$ \\
+\quad random placebo (w30) & $-0.0023$ (n.s.) & $-0.0019$ (n.s.) & $-0.0044$ (n.s.) \\
+\quad most-fair select (w30) & $+0.0009$ (n.s.) & $+0.0054$ & $+0.0072$ \\
+variance (b0 vs FAMAIL) & see~\S\ref{sec:exp-downstream} & null & null \\ % src: hgc +0.0029±0.0038 / 4feat +0.0003±0.0028, both mixed-sign at n=5 — null under the pre-registered sign-consistency reading (PRIMARY was all-positive)
 \bottomrule
 \end{tabular}
 \end{table}
