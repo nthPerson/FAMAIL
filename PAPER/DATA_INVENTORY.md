@@ -64,7 +64,7 @@ So `run.log: corpus=95297 edited=9882` ⇒ α\*. `edited=2455` ⇒ pre-supply-li
 **Shenzhen headline corpus:** `famail_temporal/results/2026-07-10T02-06-37_alpha_sweep_s10_c80_f10_filtered`
 **San Francisco headline corpus:** `famail_temporal/results/2026-07-11T11-31-55_supply_lift_a10_sf12_filtered`
 
-All curated + git-tracked under **`PAPER/supply-lift/data/a10/`** (29 files; last addition 2026-07-14: 4FEAT L1v2 multiseed).
+All curated + git-tracked under **`PAPER/supply-lift/data/a10/`** (33 files; last additions 2026-07-14: 4FEAT downstream suite — Q8b complete).
 
 | artifact (`PAPER/supply-lift/data/a10/`) | source in `results/` | backs |
 |---|---|---|
@@ -87,6 +87,8 @@ All curated + git-tracked under **`PAPER/supply-lift/data/a10/`** (29 files; las
 | `sf12_trimonly_a10_*` (2 files) | `2026-07-11T13-43-37_trimonly_a10_sf12` | §4.2 SF ablation (+0.0144 — *coincides* with the old SZ headline; not it) |
 | `shz_trimonly_a10_rollout_summary.json` | `external_fairness/results/option_a_rollout_trimonly_a10/` | §4.4 demand-only rollout comparator: −0.0049 @ w30 → **~33% attenuation like-for-like** (added 2026-07-13, run R5b) |
 | `shz_hgc_a10_metrics.json` + `_external_fairness.json` | `2026-07-13T04-41-12_supply_lift_v1_shz_hgc_filtered` + `external_fairness/results/shenzhen-hgc-supplylift/` | §4.6 `tab:featsets` HGC column: 0.8069, +0.0206, DI +0.0147, Theil −0.0080 (added 2026-07-13, stages Q6a/Q7-hgc) |
+| `shz_4feat_a10_weighted_bc_*` (3 files) | `weighted_bc_sweep/supply_lift_v1_shz_4feat_filtered_6seed/` | §4.6 4FEAT: vanilla +0.0011 n.s., w30 +0.0256 (6/6); ⚠️ most-fair w30 sig-positive +0.0072 (~28% of gain) — surfaced 2026-07-14 |
+| `shz_4feat_a10_variance_aggregate.json` | `variance_suite/supply_lift_shz_4feat_5seed/` | §4.6 4FEAT variance: null (+0.0003±0.0028, mixed) — differs from PRIMARY's weak positive |
 | `shz_4feat_a10_l1v2_multiseed.json` | `level1_table_v2/supply_lift_shz_4feat_5seed/` | §4.6 `tab:featsets` L1 row, 4FEAT cell: edited fairest 0.7473 + faithful; GAN Fid-B bimodality reproduces seed-for-seed (added 2026-07-14, stage Q8b-l1v2) |
 | `shz_4feat_a10_metrics.json` + `_external_fairness.json` | `2026-07-13T17-04-22_supply_lift_v1_shz_4feat_filtered` + `external_fairness/results/shenzhen-4feat-supplylift/` | §4.6 `tab:featsets` 4FEAT column: 0.7253, +0.0220, DI +0.0191, Theil −0.0085 (added 2026-07-14, stages Q6b/Q7-4feat) |
 
