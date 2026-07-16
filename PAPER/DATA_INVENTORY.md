@@ -69,6 +69,7 @@ All curated + git-tracked under **`PAPER/supply-lift/data/a10/`** (38 files; Q8a
 | artifact (`PAPER/supply-lift/data/a10/`) | source in `results/` | backs |
 |---|---|---|
 | `shz_a10_metrics.json` | s10_filtered | §4.2 editor: F_causal 0.7988→**0.8214** (+0.0226), F_spatial +0.0061 |
+| `s10_replication_metrics.json` (in `objective-motivation/weight-sensitivity/`) | `2026-07-15T15-57-14_supply_lift_a10_shz_replication_filtered` | **REPLICATION VERDICT (2026-07-16, ledger S10-REPLICATION): the promoted s10 corpus re-derives EXACTLY under clean main** — every metric/count identical (ΔF_causal +0.022561, 2,337+7,545, 118 reverts); dirty-tree provenance concern retired; no paper cell (verifies the row above + DECISION.md) |
 | `shz_a10_channel_decomposition.json` | s10_filtered | §4.2 channels: supply tier-1 +0.0176, demand +0.0352 n.s. |
 | `shz_a10_supply_recount.json` | s10_filtered | §4.2 tier-2 recount +0.0411; MAE 0.0 |
 | `shz_a10_external_fairness.json` | `external_fairness/results/shenzhen-primary-supplylift-s10/` | §4.3 DI +0.0162, DP −0.890, Theil −0.0087; also `tab:featsets` PRIMARY Δmean(Y\|disadv) +0.0529 + DP gap rows (added 2026-07-15) |

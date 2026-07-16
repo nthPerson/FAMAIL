@@ -11,8 +11,9 @@ adopted (0.1, 0.8, 0.1) weakly dominates the prior (0.2, 0.7, 0.1) headline on e
 except noise-scale ΔF_spatial, and strengthens the lift-up claim (tier-1 +0.0176 vs +0.0091; tier-2
 +0.0411 vs +0.0242). Amended criterion, stated for the paper: maximize ΔF_causal subject to
 ΔF_spatial ≥ 0 AND the supply-channel lift-up significant under both accounting tiers. The s10
-replication run remains scheduled before camera-ready (pre-commitment to report both runs); SF at
-(0.1, 0.8, 0.1) will be reported whatever it shows.
+replication ran 2026-07-16 and reproduced the promoted corpus EXACTLY (see the Replication
+verdict at the end of this memo — the pre-commitment to report both runs is satisfied trivially;
+there are no two results to report); SF at (0.1, 0.8, 0.1) will be reported whatever it shows.
 · **Artifacts:** [`EXTENDED_FRONTIER.md`](EXTENDED_FRONTIER.md) (the decision table),
 [`alpha_sweep_summary.md`](alpha_sweep_summary.md) (ring-1 table),
 [`alpha_pareto.png`](alpha_pareto.png) (scatter), [`alpha_sweep_summary.json`](alpha_sweep_summary.json).
@@ -90,3 +91,24 @@ honest-disclosure cost of A is one plainly-worded paragraph; the cost of B is me
 and re-verification risk.
 
 *This memo is the Q0 gate artifact. The campaign driver stays un-launched until Robert answers.*
+
+## Replication verdict (2026-07-16) — hedge closed
+
+The pre-committed end-to-end replication of the promoted s10 corpus ran under clean `main`
+(commit `d03abb5`; ledger row **S10-REPLICATION**, 8h21m) and reproduced the promoted corpus
+**exactly** — every recorded metric and count is identical, not merely within the noise band:
+ΔF_causal **+0.022561** (0.798795 → 0.821356), ΔF_spatial +0.006112, edit set **2,337 trim +
+7,545 lift** (118 infeasible-trim reverts, 2 taper-infeasible lifts), supply added/removed
+1772.016745 / 1773.266734, ΔGini_DSR −0.012014. Raw artifact:
+`famail_temporal/results/2026-07-15T15-57-14_supply_lift_a10_shz_replication_filtered/`;
+curated copy: [`s10_replication_metrics.json`](s10_replication_metrics.json).
+
+Consequences:
+1. **The promoted corpus's dirty-tree provenance concern is retired.** The paper's Shenzhen
+   headline numbers re-derive verbatim from clean `main`; the pre-commitment's "report both"
+   branch never triggers because the two runs are indistinguishable on every recorded quantity.
+2. **Tie-nondeterminism does not manifest between identical-config runs** on this
+   machine/data/library stack — the pipeline is end-to-end deterministic under fixed config.
+   The noise-band framing in Findings §1 (differences ≤0.0010 plausibly run noise) remains the
+   right posture for comparing *different* sweep points, but replicate variance of the adopted
+   point itself is, as measured, zero.
