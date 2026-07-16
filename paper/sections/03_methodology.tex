@@ -88,8 +88,11 @@ By the Frisch--Waugh--Lovell theorem \cite{frischwaugh1933,lovell1963}, the
 residualize-then-project construction recovers exactly the demographic
 coefficients of the full multiple regression, so $r^{2}_{\mathrm{demo}}$ is
 interpretable as the share of demand-adjusted service inequity attributable to
-demographics; measuring fairness by how well a protected attribute predicts an
-outcome follows the fairness-as-predictability logic of \cite{feldman2015}.
+demographics; measuring fairness through the statistical dependence between
+protected attributes and outcomes follows the predictability logic of
+\cite{feldman2015}, with the direction reversed: there, disparate impact is
+certified by predicting the protected attribute from the data; here, the
+demographics predict the adjusted service residual.
 Boundary cases orient the scale: $R \in \operatorname{span}(X)$ gives
 $F_{\mathrm{causal}} = 0$ (fully unfair), and $R \perp X$ gives $1$ (fully
 fair).

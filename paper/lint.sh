@@ -35,4 +35,18 @@ if [ -f main.log ]; then
 else
   echo "LINT WARN — main.log not found; run latexmk first so the Overfull gate can check geometry."
 fi
+
+# Citation-checklist coverage guard (2026-07-16): every cited key must have a block in
+# CITATION_PRIORITY_CHECKLIST.md — the maintenance rule says any session changing \cite
+# usage or refs.bib updates the checklist in the same session. Fails on cited-but-unlisted.
+if [ -f CITATION_PRIORITY_CHECKLIST.md ]; then
+  missing=$(comm -23 \
+    <(grep -rho 'cite{[^}]*}' --include='*.tex' . | sed 's/.*cite{//;s/}//' | tr ',' '\n' | sed 's/ //g' | sort -u) \
+    <(grep -o '\*\*[a-z0-9]*\*\*' CITATION_PRIORITY_CHECKLIST.md | sed 's/\*//g' | sort -u))
+  if [ -n "$missing" ]; then
+    echo "LINT FAIL — cited keys missing from CITATION_PRIORITY_CHECKLIST.md (update it in this session):"
+    echo "$missing"
+    fail=1
+  fi
+fi
 exit $fail
