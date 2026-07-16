@@ -19,4 +19,20 @@ check '0\.0144|0\.0128|0\.0139'                    'trim-only headline number ou
 check '0\.0222|0\.0328|0\.0310|0\.8132|0\.0205|0\.0278|0\.0311|87\.4|84\.9' 'old-alpha (0.2,0.7,0.1) supply-lift number outside a labeled prior-era context'
 check '[Cc]laude|[Aa]nthropic|[Cc]owork|[Cc]opilot|ChatGPT' 'tool/product name'
 check '(beats|outperforms) (Shenzhen|the first city)' 'SF must reproduce, not beat'
+
+# Render-geometry gate (2026-07-16, from reviews/2026-07-15-render-qa.md): main.log is
+# ISO-8859-encoded, so grep NEEDS -a (plain grep treats it as binary and silently matches
+# nothing — that is how 55 Overfull boxes passed the gates). Threshold 8pt for now; sub-8pt
+# boxes are largely absorbed by microtype expansion on Overleaf and get swept in the 8-page
+# compression pass — tighten to 5pt after that. Requires a fresh `latexmk` (main.log present).
+if [ -f main.log ]; then
+  overfull=$(grep -a 'Overfull \\hbox' main.log | grep -oE '\(([0-9.]+)pt too wide' | grep -oE '[0-9.]+' | awk '$1 > 8' || true)
+  if [ -n "$overfull" ]; then
+    echo "LINT FAIL — Overfull hbox(es) > 8pt in main.log (render and inspect; see reviews/2026-07-15-render-qa.md):"
+    grep -a 'Overfull \\hbox' main.log | awk '{ if (match($0, /\(([0-9.]+)pt/, m) && m[1]+0 > 8) print "  " $0 }'
+    fail=1
+  fi
+else
+  echo "LINT WARN — main.log not found; run latexmk first so the Overfull gate can check geometry."
+fi
 exit $fail

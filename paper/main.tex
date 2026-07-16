@@ -45,9 +45,9 @@ Imitation-Learned Mobility Models}
 % PAPER/baselines/demographic-oversampling/FINDINGS.md
 Demand models learned by imitation from urban mobility data inherit the
 demographic service inequity encoded in their demonstrations. We present
-FAMAIL, a fairness-oriented data-augmentation method that \emph{edits}, rather
-than regenerates, a small attribution-targeted slice of real taxi
-trajectories, then upweights the edited demonstrations so the fairness
+FAMAIL, a fairness-oriented method for data augmentation that \emph{edits},
+rather than regenerates, a small slice of real taxi trajectories chosen by
+attribution, then upweights the edited demonstrations so the fairness
 survives training. The editor combines two bounded, gradient-guided mechanisms
 under one differentiable objective: \emph{trim} relocates recorded pickups
 within over-served areas so their measured over-service falls, and

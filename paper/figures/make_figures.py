@@ -52,7 +52,11 @@ def frontier_figure() -> None:
     adopted = d["adopted"]
     a = [p["alpha_sp"] for p in pts]
 
-    fig, (axA, axB) = plt.subplots(2, 1, figsize=(3.35, 4.35))
+    # 3.75in tall (~270pt): the earlier 4.35in figure + caption left the left
+    # column of its page unable to fill (render-QA R7); both panels have slack.
+    fig, (axA, axB) = plt.subplots(2, 1, figsize=(3.35, 3.75))
+    LABEL_BBOX = dict(boxstyle="round,pad=0.12", facecolor="white",
+                      edgecolor="none", alpha=0.85)
 
     # ---- Panel A: the optimized-metric plane -------------------------------
     for p in pts:
@@ -63,14 +67,21 @@ def frontier_figure() -> None:
                     facecolor=ACCENT if is_adopted else "none",
                     edgecolor=ACCENT if is_adopted else INK,
                     linewidth=0.8, zorder=3)
-        dy = 0.00035 if p["alpha_sp"] not in (0.0,) else -0.00075
-        axA.annotate(f"({p['alpha_sp']:g}, {p['alpha_ca']:g})",
-                     (p["d_f_spatial"], p["d_f_causal"]),
-                     textcoords="offset points", xytext=(4, 3 if dy > 0 else -7),
-                     fontsize=6.2, color=INK)
-    axA.annotate("adopted", (pts[1]["d_f_spatial"], pts[1]["d_f_causal"]),
-                 textcoords="offset points", xytext=(4, -9), fontsize=6.2,
-                 color=ACCENT, fontstyle="italic")
+    # Per-point label placement (render-QA R8: the cluster near x~0.006 needs
+    # explicit, non-colliding offsets; the adopted point gets ONE merged label).
+    offs = {0.0: (-4, -8), 0.1: (-4, 6), 0.2: (4, -8), 0.35: (4, 3),
+            0.55: (4, 3), 0.8: (4, 3)}
+    for p in pts:
+        is_adopted = p["alpha_sp"] == adopted
+        label = (f"({p['alpha_sp']:g}, {p['alpha_ca']:g})" if not is_adopted
+                 else f"({p['alpha_sp']:g}, {p['alpha_ca']:g}) — adopted")
+        axA.annotate(label, (p["d_f_spatial"], p["d_f_causal"]),
+                     textcoords="offset points",
+                     xytext=offs.get(p["alpha_sp"], (4, 3)),
+                     ha="right" if (is_adopted or p["alpha_sp"] == 0.0) else "left",
+                     fontsize=6.2, color=ACCENT if is_adopted else INK,
+                     fontstyle="italic" if is_adopted else "normal",
+                     bbox=LABEL_BBOX, zorder=4)
     axA.set_xlabel(r"$\Delta F_\mathrm{spatial}$")
     axA.set_ylabel(r"$\Delta F_\mathrm{causal}$")
     axA.set_title("A · optimized metrics: flat in the causal axis", loc="left")
@@ -98,13 +109,15 @@ def frontier_figure() -> None:
     # direct labels at explicit clear positions (the series converge near zero
     # at alpha_sp = 0.8, so end-labeling fails; left side is well separated)
     axB.annotate(r"total $\Delta\,\mathrm{mean}(Y\,|\,\mathrm{disadv.})$",
-                 (0.035, 0.0745), fontsize=6.2, color=GRAY, ha="left")
-    axB.annotate("supply, tier-2 (distinct-taxi)", (0.13, 0.0455),
-                 fontsize=6.2, color=INK, ha="left")
-    axB.annotate("supply, tier-1", (0.03, 0.0125), fontsize=6.2, color=INK,
-                 ha="left")
+                 (0.035, 0.0745), fontsize=6.2, color=GRAY, ha="left",
+                 bbox=LABEL_BBOX, zorder=4)
+    axB.annotate("supply, tier-2 (distinct-taxi)", (0.15, 0.043),
+                 fontsize=6.2, color=INK, ha="left", bbox=LABEL_BBOX, zorder=4)
+    axB.annotate("supply, tier-1", (0.03, 0.004), fontsize=6.2, color=INK,
+                 ha="left", bbox=LABEL_BBOX, zorder=4)
     axB.axhline(0, color=GRAY, linewidth=0.6)
-    axB.axvline(adopted, color=ACCENT, linewidth=0.7, alpha=0.6)
+    axB.axvline(adopted, color=ACCENT, linewidth=0.8, alpha=0.9,
+                linestyle=(0, (2, 2)))
     axB.annotate("adopted", (adopted, -0.006), fontsize=6.2,
                  color=ACCENT, fontstyle="italic",
                  textcoords="offset points", xytext=(3, 0))

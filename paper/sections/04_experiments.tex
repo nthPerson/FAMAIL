@@ -86,6 +86,8 @@ disadvantaged group's service \emph{rises} ($7.073 \to 7.126$).
 \caption{Shenzhen external fairness, before $\to$ after editing (migrant axis,
 district extremes; paired bootstrap, $B{=}1{,}000$).}
 \label{tab:external-sz}
+\small
+\setlength{\tabcolsep}{4pt}
 \begin{tabular}{lrrr}
 \toprule
 metric & before & after & $\Delta$ [95\% CI] \\
@@ -121,6 +123,8 @@ matching, so tier-2 is the honest semantics, not an approximation.
 \caption{Channel decomposition of $\Delta\,\mathrm{mean}(Y \mid \mathrm{disadv.})$,
 Shenzhen migrant axis ($B{=}2{,}000$).}
 \label{tab:channels}
+\small
+\setlength{\tabcolsep}{4pt}
 \begin{tabular}{lrrc}
 \toprule
 channel & $\Delta$ & 95\% CI & sig.? \\
@@ -229,12 +233,12 @@ gan-generated & 0.8089 & 0.848 & 0.171 \\
 \end{table}
 % src: famail_temporal/results/level1_table_v2/supply_lift_shz_5seed/level1_v2_multiseed.json
 
-The claim holds: the edited corpus is the fairest source and
-identity-faithful (Fidelity-A 0.844 $\approx$ raw 0.848; gate passed,
-matched 0.848 vs.\ mismatched 0.193), and its Fidelity-B is the bounded-edit
-divergence quantified in \S\ref{sec:exp-data-level}. One instability we
+The claim holds: the edited corpus is the fairest source and faithful to
+driver identity (Fidelity-A 0.844 $\approx$ raw 0.848; gate passed,
+matched 0.848 vs.\ mismatched 0.193), and its Fidelity-B is the divergence
+of the bounded edits, quantified in \S\ref{sec:exp-data-level}. One instability we
 surface rather than smooth: the Shenzhen GAN's Fidelity-B mean of 0.171
-hides a seed-bimodal split ($\pm 0.129$; three of five seeds at
+hides a bimodal split across seeds ($\pm 0.129$; three of five seeds at
 0.197--0.295, two at 0.03--0.04), and its worst seeds fail broadband ---
 length-component divergence 0.247 where the edited corpus sits at 0.060.
 The collapse mode Shenzhen generators have shown before returns in some
@@ -251,7 +255,7 @@ recipe of \S\ref{sec:downstream}.
 \textbf{Upweighting recovers it, edit-specifically.} With the edited
 demonstrations upweighted, the paired gain is monotone in the weight and
 sign-unanimous: $+0.0217$ (w10), $+0.0267$ (w20), $+0.0302$ (w30), each 6/6
-at the $p = .031$ floor, $t$-interval at w30 $[+0.0264, +0.0340]$. Neither
+at the $p = .031$ floor, $t$-interval $[+0.0264, +0.0340]$ at w30. Neither
 control reproduces it: the random-subset placebo is null-to-negative
 ($-0.0014$ w10, $-0.0023$ w30, both n.s.), and most-fair selection reaches
 $+0.0033$ at w10 --- significant, but under a sixth of the edited arm's
@@ -260,8 +264,8 @@ w30) while the edited arms keep growing. $F_{\mathrm{spatial}}$ propagates
 on Shenzhen: already $+0.0008$ ($p = .031$) at uniform weight, rising to
 $+0.0038$/$+0.0040$/$+0.0052$ across w10/w20/w30 (each $p = .031$), while
 both controls significantly \emph{degrade} it at w30 ($-0.0012$ random,
-$-0.0027$ most-fair). Fidelity-A is unchanged at every weight
-($|\Delta| \le +0.0007$, all n.s.); Fidelity-B rises dose-monotonically
+$-0.0027$ most-fair). Fidelity-A is unchanged at every weight (all n.s.,
+$|\Delta|$ at most $+0.0007$); Fidelity-B rises dose-monotonically
 ($0.020 \to 0.027$ absolute vs.\ raw $0.013$) --- the expected signature of
 deliberately shifting population statistics toward the edited slice,
 disclosed rather than netted out.
@@ -319,9 +323,9 @@ reported ones.
 % src: famail_temporal/results/2026-07-13T06-26-19/…06-27-50 arm metrics (nors); deployed checkpoint combination_mode="concatenation" (fidelity/model.py); gradient-at-zero verified live 2026-07-13
 Results: Table~\ref{tab:baselines}.
 
-The arms behave as fidelity baselines, with one result stated against the
+The arms behave as fidelity baselines. One result lands against the
 pre-registered expectation: random jitter \emph{does} raise
-$F_{\mathrm{causal}}$ ($+0.0135$) --- indiscriminately diffusing the selected
+$F_{\mathrm{causal}}$, by $+0.0135$ --- indiscriminately diffusing the selected
 trajectories diffuses their over-service too --- but it does so by breaking
 the trajectories: 98.8\% of its perturbed trajectories violate king-move
 adjacency and its distributional divergence reaches 0.447, against the
@@ -335,14 +339,14 @@ adjacency and distributional axes carry the comparison.
 
 \textbf{Demographic oversampling.} The naive lifting-up baseline: duplicate
 real trajectories originating in demographically disadvantaged regions (all
-three equity axes, phantom driver IDs, rigid $\pm 1$-cell jitter), rebuilding
-demand \emph{and} supply additively, at doses matched to FAMAIL's budget. At
+three equity axes, phantom driver IDs, rigid $\pm 1$-cell jitter), additively
+rebuilding both demand and supply at doses matched to FAMAIL's budget. At
 the matched dose $d = 10{,}000$, targeted oversampling improves
 $F_{\mathrm{causal}}$ by $+0.0153$ (dose-monotone:
-$+0.0059 \to +0.0097 \to +0.0153$) --- but it fabricates 10.5\% of the corpus
+$+0.0059$, $+0.0097$, $+0.0153$) --- but it fabricates 10.5\% of the corpus
 to get there, where FAMAIL redistributes observed behavior at zero inflation
-and reaches $+0.0226$. The untargeted placebo (same fabrication, no targeting)
-\emph{degrades} fairness ($-0.0172$), so the gain is targeting-specific; and
+and reaches $+0.0226$. The untargeted placebo (same fabrication without targeting)
+\emph{degrades} fairness, $-0.0172$, so the gain is targeting-specific; and
 the placebo's DP gap explodes ($+2.8$) because fabricated supply lands
 predominantly in already-advantaged cells --- a measured demonstration that
 ratio metrics can be gamed by fabrication, the demand-endogeneity concern of
@@ -356,6 +360,8 @@ by construction.
 \begin{table}[t]
 \caption{Cross-arm comparison at matched budgets (Shenzhen).}
 \label{tab:baselines}
+\small
+\setlength{\tabcolsep}{4pt}
 \begin{tabular}{lrrr}
 \toprule
 arm & $\Delta F_{\mathrm{causal}}$ & $\Delta F_{\mathrm{spatial}}$ & inflation \\
@@ -424,8 +430,8 @@ $F_{\mathrm{causal}}$ scales shift with the feature set by construction.
 \caption{Feature-set robustness under trim+lift (Shenzhen; $\Delta$ rows are
 after $-$ before edit).}
 \label{tab:featsets}
-\small
-\setlength{\tabcolsep}{4pt}
+\footnotesize
+\setlength{\tabcolsep}{3pt}
 \begin{tabular}{lrrr}
 \toprule
  & \{hous,comp,migr\} & \{hous,gdp,comp\} & +logpopdens \\
@@ -476,12 +482,12 @@ dependence we state rather than hide (the SF sample is 12 drivers).
 % src: PAPER/supply-lift/data/a10/sf12_a10_metrics.json + sf12_a10_external_fairness.json
 
 \textbf{The supply channel replicates; the ratio does not.} The supply
-channel is again positive and significant ($+0.0209$,
-CI $[+0.0122, +0.0300]$) --- tier-1 accounting only, a \emph{lower bound} on
-Shenzhen's evidence (the distinct-taxi tier-2 recount is not plumbed for the
-SF pipeline). But as on the prior corpus, lift also reroutes \emph{pickups}
+channel is again positive and significant: $+0.0209$,
+CI $[+0.0122,$ $+0.0300]$. This is tier-1 accounting only, a \emph{lower bound}
+on Shenzhen's evidence (the distinct-taxi tier-2 recount is not plumbed for
+the SF pipeline). But as on the prior corpus, lift also reroutes \emph{pickups}
 into under-served cells, raising recorded demand there: the demand channel is
-significantly negative ($-0.0533$, CI $[-0.0798, -0.0298]$) and the total
+significantly negative ($-0.0533$, CI $[-0.0798,$ $-0.0298]$) and the total
 $\mathrm{mean}(Y \mid \mathrm{disadv.})$ moves net-negative ($-0.0324$, CI
 excludes 0). Two readings coexist and we present both. Under the ratio
 reading, the SF lifting-up claim does not hold and should be withheld. Under

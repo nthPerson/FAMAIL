@@ -115,16 +115,17 @@ unit --- the \emph{demand-service ratio} $\mathrm{DSR}_i = D_i / S_i$
 $\mathrm{ASR}_i = A_i / S_i$ (dropoffs per unit of taxi presence), with
 $A_i$ the unit's recorded dropoffs and $D_i$, $S_i$ as in
 \S\ref{sec:problem} --- and score the inequality of each with the Gini
-index, an inequality measure widely used in transportation-equity
-research \cite{horchergraham2021,karner2024}. The Gini enters in its
-pairwise mean-absolute-difference form, differentiable almost everywhere
+index, an inequality measure widely used in transportation equity
+research \cite{horchergraham2021,karner2024}. The Gini enters as a
+pairwise mean absolute difference, differentiable almost everywhere
 and hence usable inside the gradient objective:
 \begin{equation}\label{eq:fspatial}
-\mathrm{Gini}(x) \;=\; \frac{\sum_{i}\sum_{j}\,\lvert x_i - x_j\rvert}
-{2N^{2}\,\bar{x}},
-\qquad
-F_{\mathrm{spatial}} \;=\; 1 - \tfrac{1}{2}\bigl(\mathrm{Gini}(\mathrm{DSR})
+\begin{split}
+\mathrm{Gini}(x) &\;=\; \frac{\sum_{i}\sum_{j}\,\lvert x_i - x_j\rvert}
+{2N^{2}\,\bar{x}},\\
+F_{\mathrm{spatial}} &\;=\; 1 - \tfrac{1}{2}\bigl(\mathrm{Gini}(\mathrm{DSR})
 + \mathrm{Gini}(\mathrm{ASR})\bigr).
+\end{split}
 \end{equation}
 As with $F_{\mathrm{causal}}$, the quadratic pairwise sum is never
 materialized: a sorted prefix-sum identity evaluates it in $O(N \log N)$
@@ -326,6 +327,9 @@ threshold on the supply channel alone (\S\ref{sec:experiments}).
 
 \subsection{The Trim+Lift Editor}\label{sec:editor}
 
+Figure~\ref{fig:overview} illustrates the two editing modes on a stylized
+city grid.
+
 \textbf{Shared machinery.} Both editing modes repurpose bounded adversarial
 perturbation \cite{goodfellow2015fgsm,kurakin2017ifgsm}, in its
 spatio-temporal instantiation \cite{hu2023stifgsm}, \emph{constructively} ---
@@ -422,7 +426,7 @@ disparate-impact repair \cite{feldman2015}, transplanted to imitation
 learning. Whether the recovery is specific to the \emph{edit}, rather than an
 artifact of oversampling or of selecting fair data, is tested against two
 controls --- upweighting a size-matched random subset, and upweighting the
-already-fairest trajectories --- with outcomes reported in
+corpus's fairest trajectories --- with outcomes reported in
 \S\ref{sec:experiments}. This intervention targets, on the training data, the
 same demand-model bias that in-processing regularization has addressed at the
 model level \cite{zheng2023}; FAMAIL moves the intervention to the
