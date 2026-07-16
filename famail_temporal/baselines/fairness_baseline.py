@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Dict, List, Tuple
 
 import numpy as np
+import torch
 
 
 def normalize_mean_one(w: List[float]) -> List[float]:
@@ -86,3 +87,41 @@ def fairness_reweigh_weight_vector(trajs, bundle) -> List[float]:
     cell_group, sdr = unit_groups_and_sdr(bundle)
     groups_of_trajs = [cell_group.get(tuple(t.pickup_cell), -1) for t in trajs]
     return weights_from_groups(groups_of_trajs, sdr)
+
+
+def dp_gap_penalty(logits, tgt, mask_disadv, mask_adv, pad_id: int):
+    """Differentiable DP-gap analog over predicted next-cell distributions:
+    (mean predicted mass per ADVANTAGED cell) - (per DISADVANTAGED cell),
+    averaged over non-PAD positions. NOT F_causal (metric-firewall: the
+    baseline optimizes an external-family quantity)."""
+    probs = torch.softmax(logits, dim=-1)            # (B, L, V)
+    valid = (tgt != pad_id).to(probs.dtype)          # (B, L)
+    n_valid = valid.sum().clamp_min(1.0)
+    mass_d = (probs[..., mask_disadv].sum(-1) * valid).sum() / (
+        n_valid * int(mask_disadv.sum()))
+    mass_a = (probs[..., mask_adv].sum(-1) * valid).sum() / (
+        n_valid * int(mask_adv.sum()))
+    return mass_a - mass_d
+
+
+def cell_masks_for_vocab(
+    cell_group: Dict[Tuple[int, int], int], vocab_size: int, token_of_cell,
+) -> Tuple[torch.Tensor, torch.Tensor]:
+    """Boolean (disadv, adv) masks over a generator vocabulary of size
+    vocab_size, built by mapping each spatial cell in cell_group through
+    token_of_cell. token_of_cell is caller-supplied (no production mapping
+    is hardcoded here) — see fairness_baseline.py module docstring / the
+    caller for the concrete production callable to pass."""
+    mask_disadv = torch.zeros(vocab_size, dtype=torch.bool)
+    mask_adv = torch.zeros(vocab_size, dtype=torch.bool)
+    for cell, g in cell_group.items():
+        if g not in (0, 1):
+            continue
+        tok = token_of_cell(cell)
+        if tok is None or not (0 <= tok < vocab_size):
+            continue
+        if g == 1:
+            mask_disadv[tok] = True
+        else:
+            mask_adv[tok] = True
+    return mask_disadv, mask_adv

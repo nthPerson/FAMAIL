@@ -78,3 +78,44 @@ def test_fairness_reweigh_weight_vector_real_bundle():
     i_d = next(i for i, g in enumerate(gs) if g == 1)
     i_a = next(i for i, g in enumerate(gs) if g == 0)
     assert w[i_d] > w[i_a]                      # disadvantaged-origin upweighted
+
+
+import torch
+from famail_temporal.baselines.fairness_baseline import dp_gap_penalty
+
+
+def test_dp_gap_zero_for_uniform_logits():
+    B, L, V = 2, 3, 10
+    logits = torch.zeros(B, L, V)                    # uniform after softmax
+    tgt = torch.ones(B, L, dtype=torch.long)         # no PAD
+    m_d = torch.zeros(V, dtype=torch.bool); m_d[:3] = True   # 3 disadv cells
+    m_a = torch.zeros(V, dtype=torch.bool); m_a[3:6] = True  # 3 adv cells
+    g = dp_gap_penalty(logits, tgt, m_d, m_a, pad_id=0)
+    assert torch.isclose(g, torch.tensor(0.0), atol=1e-6)
+
+
+def test_dp_gap_positive_when_adv_favored_and_differentiable():
+    B, L, V = 1, 2, 6
+    logits = torch.full((B, L, V), -10.0, requires_grad=True)
+    with torch.no_grad():
+        logits[..., 3:6] = 10.0                      # all mass on adv cells
+    tgt = torch.ones(B, L, dtype=torch.long)
+    m_d = torch.zeros(V, dtype=torch.bool); m_d[:3] = True
+    m_a = torch.zeros(V, dtype=torch.bool); m_a[3:6] = True
+    g = dp_gap_penalty(logits, tgt, m_d, m_a, pad_id=0)
+    assert g.item() > 0.2
+    g.backward()
+    assert logits.grad is not None and torch.isfinite(logits.grad).all()
+
+
+def test_cell_masks_for_vocab_disjoint_and_correct():
+    cell_group = {(0, 0): 1, (1, 1): 0}
+    token_of_cell = lambda c: {(0, 0): 4, (1, 1): 7}[c]
+    from famail_temporal.baselines.fairness_baseline import cell_masks_for_vocab
+    m_d, m_a = cell_masks_for_vocab(cell_group, vocab_size=10, token_of_cell=token_of_cell)
+    assert m_d.dtype == torch.bool and m_a.dtype == torch.bool
+    assert m_d.shape == (10,) and m_a.shape == (10,)
+    assert m_d.sum().item() == 1 and m_a.sum().item() == 1
+    assert m_d[4].item() is True
+    assert m_a[7].item() is True
+    assert not (m_d & m_a).any()
