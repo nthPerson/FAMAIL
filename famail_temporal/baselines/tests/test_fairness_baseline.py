@@ -23,6 +23,11 @@ def test_weights_from_groups_inverse_sdr():
     assert w[0] == w[3]                        # same group, same weight
 
 
+def test_normalize_mean_one_empty():
+    with pytest.raises(ValueError):
+        normalize_mean_one([])
+
+
 def test_unit_groups_real_bundle():
     pytest.importorskip("torch")
     from famail_temporal.data.loader import DataBundle
@@ -51,3 +56,25 @@ def test_unit_groups_real_bundle():
     # meaningful. Flagged in the implementer's report for the plan owner.
     assert n_d == 462
     assert sdr[1] < sdr[0]        # disadvantaged group is under-served
+
+
+def test_fairness_reweigh_weight_vector_real_bundle():
+    pytest.importorskip("torch")
+    from famail_temporal.data.loader import DataBundle
+    try:
+        bundle = DataBundle.load()
+    except Exception:
+        pytest.skip("bundle data not available")
+    from famail_temporal.baselines.fairness_baseline import (
+        fairness_reweigh_weight_vector, unit_groups_and_sdr,
+    )
+    trajs = bundle.trajectories[:2000]
+    w = np.asarray(fairness_reweigh_weight_vector(trajs, bundle))
+    assert len(w) == len(trajs)                 # index-aligned
+    assert np.isclose(w.mean(), 1.0)            # normalized to mean 1
+    assert (w > 0).all() and np.isfinite(w).all()
+    cell_group, sdr = unit_groups_and_sdr(bundle)
+    gs = [cell_group.get(tuple(t.pickup_cell), -1) for t in trajs]
+    i_d = next(i for i, g in enumerate(gs) if g == 1)
+    i_a = next(i for i, g in enumerate(gs) if g == 0)
+    assert w[i_d] > w[i_a]                      # disadvantaged-origin upweighted

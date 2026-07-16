@@ -10,7 +10,7 @@ import numpy as np
 def normalize_mean_one(w: List[float]) -> List[float]:
     arr = np.asarray(w, dtype=np.float64)
     m = float(arr.mean())
-    if m <= 0:
+    if arr.size == 0 or not np.isfinite(m) or m <= 0:
         raise ValueError("weight mean must be positive")
     return list(arr / m)
 
