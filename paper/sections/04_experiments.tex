@@ -354,8 +354,7 @@ by construction.
 % src: PAPER/baselines/demographic-oversampling/FINDINGS.md §2-5
 
 \begin{table}[t]
-\caption{Cross-arm comparison at matched budgets (Shenzhen). Perturbation-arm
-rows land with campaign stage Q1.}
+\caption{Cross-arm comparison at matched budgets (Shenzhen).}
 \label{tab:baselines}
 \begin{tabular}{lrrr}
 \toprule
@@ -422,18 +421,22 @@ directional reproduction, not magnitude equality --- absolute
 $F_{\mathrm{causal}}$ scales shift with the feature set by construction.
 
 \begin{table}[t]
-\caption{Feature-set robustness under trim+lift (downstream rows land with
-campaign stage Q8).}
+\caption{Feature-set robustness under trim+lift (Shenzhen; $\Delta$ rows are
+after $-$ before edit).}
 \label{tab:featsets}
+\small
+\setlength{\tabcolsep}{4pt}
 \begin{tabular}{lrrr}
 \toprule
  & \{hous,comp,migr\} & \{hous,gdp,comp\} & +logpopdens \\
 \midrule
 before-edit $F_{\mathrm{causal}}$ & 0.7988 & 0.8069 & 0.7253 \\
 editor $\Delta F_{\mathrm{causal}}$ & $+0.0226$ & $+0.0206$ & $+0.0220$ \\
+$\Delta\,\mathrm{mean}(Y \mid \mathrm{disadv.})$ & $+0.0529$ & $+0.0594$ & $+0.1461$ \\ % src: {shenzhen-primary-supplylift-s10,shenzhen-hgc-supplylift,shenzhen-4feat-supplylift}/external_fairness.json: metrics.MigrantRatio.district_extremes.supply_demand_ratio.{after,before}.mean_disadvantaged, delta at full precision (4FEAT 7.219558-7.073448=+0.1461). TOTAL quantity (both channels), decomposed in tab:channels — label deliberately NOT "lift-up": per §4.2 the lift-up CLAIM rides the supply channel; delta-only per DI/Theil convention. PRIMARY sig (CI [+0.0086,+0.0989]); HGC/4FEAT point-deltas, no bootstrap run.
 DI $\Delta$ (migrant/extremes) & $+0.0162$ & $+0.0147$ & $+0.0191$ \\
+DP gap $\Delta$ & $-0.890$ & $-0.787$ & $-0.886$ \\ % src: same external_fairness.json: metrics.MigrantRatio.district_extremes.demographic_parity.delta (identical to supply_demand_ratio.delta_gap -- DP IS the gap, do not also add a gap row; all three delta CIs exclude 0)
 Theil $\Delta$ & $-0.0087$ & $-0.0080$ & $-0.0085$ \\
-L1: edited fairest faithful? & see~\ref{tab:l1} & yes & yes \\ % src: per-set level1_v2_multiseed.json (HGC 0.8275 / 4FEAT 0.7473 fairest, both Fid-A ~0.845; GAN Fid-B bimodality reproduces seed-for-seed in all three sets)
+L1: edited fairest faithful? & see Tab.~\ref{tab:l1} & yes & yes \\ % src: per-set level1_v2_multiseed.json (HGC 0.8275 / 4FEAT 0.7473 fairest, both Fid-A ~0.845; GAN Fid-B bimodality reproduces seed-for-seed in all three sets)
 vanilla-BC transfer (w1) & see~\S\ref{sec:exp-downstream} & $+0.0022$ & $+0.0011$ (n.s.) \\ % src: hgc w1 is sign-unanimous (6/6, p=.031) though a tenth of its w30 gain — row renamed from 'null' for honesty
 weighted-BC w30 & see~\S\ref{sec:exp-downstream} & $+0.0248$ & $+0.0256$ \\
 \quad random placebo (w30) & $-0.0023$ (n.s.) & $-0.0019$ (n.s.) & $-0.0044$ (n.s.) \\

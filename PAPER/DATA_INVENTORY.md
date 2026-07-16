@@ -71,7 +71,7 @@ All curated + git-tracked under **`PAPER/supply-lift/data/a10/`** (38 files; Q8a
 | `shz_a10_metrics.json` | s10_filtered | §4.2 editor: F_causal 0.7988→**0.8214** (+0.0226), F_spatial +0.0061 |
 | `shz_a10_channel_decomposition.json` | s10_filtered | §4.2 channels: supply tier-1 +0.0176, demand +0.0352 n.s. |
 | `shz_a10_supply_recount.json` | s10_filtered | §4.2 tier-2 recount +0.0411; MAE 0.0 |
-| `shz_a10_external_fairness.json` | `external_fairness/results/shenzhen-primary-supplylift-s10/` | §4.3 DI +0.0162, DP −0.890, Theil −0.0087 |
+| `shz_a10_external_fairness.json` | `external_fairness/results/shenzhen-primary-supplylift-s10/` | §4.3 DI +0.0162, DP −0.890, Theil −0.0087; also `tab:featsets` PRIMARY Δmean(Y\|disadv) +0.0529 + DP gap rows (added 2026-07-15) |
 | `shz_a10_l1v2_multiseed.json` | `level1_table_v2/supply_lift_shz_5seed/` | §4.4 `tab:l1` (edited 0.8214 fairest; Fid-A 0.844) |
 | `shz_a10_weighted_bc_paired_stats.json` + `_dose_response` + `_manifest` | `weighted_bc_sweep/alpha_sweep_s10_c80_f10_filtered_6seed/` | §4.4 dose-response **+0.0217/+0.0267/+0.0302** (6/6) |
 | `shz_a10_variance_aggregate.json` | `variance_suite/supply_lift_shz_5seed/` | §4.4 variance +0.0031±0.0022 (n=5) |
@@ -86,14 +86,14 @@ All curated + git-tracked under **`PAPER/supply-lift/data/a10/`** (38 files; Q8a
 | `sf12_a10_variance_aggregate.json` | `variance_suite/supply_lift_sf12_5seed/` | §4.7 SF variance null (−0.0025) |
 | `sf12_trimonly_a10_*` (2 files) | `2026-07-11T13-43-37_trimonly_a10_sf12` | §4.2 SF ablation (+0.0144 — *coincides* with the old SZ headline; not it) |
 | `shz_trimonly_a10_rollout_summary.json` | `external_fairness/results/option_a_rollout_trimonly_a10/` | §4.4 demand-only rollout comparator: −0.0049 @ w30 → **~33% attenuation like-for-like** (added 2026-07-13, run R5b) |
-| `shz_hgc_a10_metrics.json` + `_external_fairness.json` | `2026-07-13T04-41-12_supply_lift_v1_shz_hgc_filtered` + `external_fairness/results/shenzhen-hgc-supplylift/` | §4.6 `tab:featsets` HGC column: 0.8069, +0.0206, DI +0.0147, Theil −0.0080 (added 2026-07-13, stages Q6a/Q7-hgc) |
+| `shz_hgc_a10_metrics.json` + `_external_fairness.json` | `2026-07-13T04-41-12_supply_lift_v1_shz_hgc_filtered` + `external_fairness/results/shenzhen-hgc-supplylift/` | §4.6 `tab:featsets` HGC column: 0.8069, +0.0206, DI +0.0147, Theil −0.0080, Δmean(Y\|disadv) +0.0594 + DP −0.787 (rows added 2026-07-15) (added 2026-07-13, stages Q6a/Q7-hgc) |
 | `shz_hgc_a10_weighted_bc_*` (3 files) | `weighted_bc_sweep/supply_lift_v1_shz_hgc_filtered_6seed/` | §4.6 HGC: vanilla +0.0022 (6/6 — tiny but sign-unanimous), w30 +0.0248 (6/6), most-fair +0.0054 sig, random n.s. (added 2026-07-15, stage Q8a) |
 | `shz_hgc_a10_variance_aggregate.json` | `variance_suite/supply_lift_shz_hgc_5seed/` | §4.6 HGC variance: null (+0.0029±0.0038, mixed signs at n=5) |
 | `shz_hgc_a10_l1v2_multiseed.json` | `level1_table_v2/supply_lift_shz_hgc_5seed/` | §4.6 `tab:featsets` L1 row, HGC cell: edited fairest 0.8275 + faithful; GAN bimodality seed-identical in all 3 sets (added 2026-07-15, stage Q8a-l1v2) |
 | `shz_4feat_a10_weighted_bc_*` (3 files) | `weighted_bc_sweep/supply_lift_v1_shz_4feat_filtered_6seed/` | §4.6 4FEAT: vanilla +0.0011 n.s., w30 +0.0256 (6/6); ⚠️ most-fair w30 sig-positive +0.0072 (~28% of gain) — surfaced 2026-07-14 |
 | `shz_4feat_a10_variance_aggregate.json` | `variance_suite/supply_lift_shz_4feat_5seed/` | §4.6 4FEAT variance: null (+0.0003±0.0028, mixed) — differs from PRIMARY's weak positive |
 | `shz_4feat_a10_l1v2_multiseed.json` | `level1_table_v2/supply_lift_shz_4feat_5seed/` | §4.6 `tab:featsets` L1 row, 4FEAT cell: edited fairest 0.7473 + faithful; GAN Fid-B bimodality reproduces seed-for-seed (added 2026-07-14, stage Q8b-l1v2) |
-| `shz_4feat_a10_metrics.json` + `_external_fairness.json` | `2026-07-13T17-04-22_supply_lift_v1_shz_4feat_filtered` + `external_fairness/results/shenzhen-4feat-supplylift/` | §4.6 `tab:featsets` 4FEAT column: 0.7253, +0.0220, DI +0.0191, Theil −0.0085 (added 2026-07-14, stages Q6b/Q7-4feat) |
+| `shz_4feat_a10_metrics.json` + `_external_fairness.json` | `2026-07-13T17-04-22_supply_lift_v1_shz_4feat_filtered` + `external_fairness/results/shenzhen-4feat-supplylift/` | §4.6 `tab:featsets` 4FEAT column: 0.7253, +0.0220, DI +0.0191, Theil −0.0085, Δmean(Y\|disadv) +0.1461 + DP −0.886 (rows added 2026-07-15) (added 2026-07-14, stages Q6b/Q7-4feat) |
 
 **Baselines (α\*-selected edit set, n = 9,882)** — `PAPER/baselines/comparison/baseline_table.{json,md}`,
 also `famail_temporal/baselines/baseline_table/`:
