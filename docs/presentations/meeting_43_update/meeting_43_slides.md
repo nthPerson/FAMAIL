@@ -229,18 +229,24 @@ surprises are in the paper before a reviewer can find them.
   supply channel positive-significant (+0.0209\*) but total mean(Y|D) net-negative (−0.0324\*)
   because lift also routes *pickups* into under-served cells. Both readings are drafted
   side-by-side; **Dr. Zhang picks which leads** (ratio reading vs external-metrics reading —
-  emphasis, not omission).
+  emphasis, not omission). **→ Full decision doc with pick-A/B block: `SF_FRAMING_UPDATE.md`
+  (this directory) — build the SF-decision slide from it.**
 - **P0 — submission-critical:**
   1. Abstract to Dr. Zhang (**by Jul 17**) → KDD abstract **Jul 19**.
-  2. **Reduce to 8 pages** main content (current build ~10 pp in review mode) — biggest writing task.
+  2. **Reduce to 8 pages** main content — biggest writing task. New facts (2026-07-16): local
+     build measures 11 pp but over-counts ~0.5–0.75 pp (font fallbacks) → **compile on Overleaf
+     before cutting**; KDD allows an **unlimited appendix** (reviewers not required to read it;
+     first 8 pages must be self-contained) → zero-loss cut plan exists
+     (`paper/reviews/2026-07-15-cut-recon.md`, Plan A + appendix relocation).
   3. Final adversarial audit (number/convention + fidelity reviewers) *after* the length pass.
 - **P1 — quality + pledge:**
   4. `REPRODUCIBILITY.md` capstone: every claim → curated artifact → ledger row → exact command
      (inputs complete: 38-file curated bundle + run ledger + data inventory).
   5. **Artifact pledge readiness:** repo presentable + anonymized for double-blind; goal is to
      pledge artifacts-on-publication in the submission.
-  6. Figure 1 final (today's feedback); fold in the s10 replication (running; report both if it
-     differs).
+  6. Figure 1 final (today's feedback). ~~s10 replication~~ **LANDED 2026-07-16: reproduces the
+     headline corpus EXACTLY** (every metric/count identical) — headline provenance is now
+     clean-main-verified; nothing to report-both.
 - **P2:** citation human-pass (Robert), read-aloud pass, Overleaf port, Dr. Cash acknowledgment
   (camera-ready), retire the ungrounded "54%" (already lint-banned).
 

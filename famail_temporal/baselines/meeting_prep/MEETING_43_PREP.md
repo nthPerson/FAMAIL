@@ -160,9 +160,9 @@ lands its remaining suites.
 8. **Campaign status: 🏁 COMPLETE (2026-07-15).** ~30 ledger-wrapped runs at α\*: data-level + external
    metrics + channels (both cities), trim-only ablations (both cities), both rollouts (like-for-like
    attenuation), four-source L1 tables ×3 feature sets, weighted-BC sweeps ×4 (SZ/SF/HGC/4FEAT),
-   variance suites ×4, perturbation arms, per-set externals, Pareto. Only the **s10 replication** is
-   still running (end-to-end reproduction of the headline corpus under clean main; report both if
-   differing). New since last update: **control rows added to the robustness table** (Robert request —
+   variance suites ×4, perturbation arms, per-set externals, Pareto. The **s10 replication LANDED 2026-07-16: it reproduces
+   the promoted headline corpus EXACTLY** (every metric and edit count identical; ΔF_causal
+   +0.022561) — the headline is now clean-main-verified and there is nothing to report-both. New since last update: **control rows added to the robustness table** (Robert request —
    most-fair select is sig-positive on both alternate sets at ~⅕–¼ of the edited gain; edited ≥3× at
    every dose; random placebo null everywhere) and the **GAN Fid-B seed-bimodality reproduces
    seed-for-seed across all three feature sets** (seed-deterministic — three independent reproductions
