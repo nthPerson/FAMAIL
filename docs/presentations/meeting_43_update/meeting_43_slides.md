@@ -24,7 +24,7 @@
 - Fairness-Aware Mobility-data Augmentation via Imitation Learning — KDD '27 submission.
 - **Status: manuscript is prose-complete AND experiment-complete.** Every §4 result cell is
   filled from a fresh, ledger-verified run at the adopted configuration; **zero open run
-  markers**; one open decision (SF framing — slide 10, needs this meeting).
+  markers**; one open decision (SF framing — slide 11, needs this meeting).
 - Deadlines: abstract **Jul 19** (draft to Dr. Zhang by ~Jul 17), full paper **Jul 26**.
 
 **The point:** the campaign finished — today is about pressure-testing the argument, not
@@ -60,7 +60,7 @@ property that matters).
 - Reproducibility discipline held throughout: nothing ran without a ledger row (command, commit,
   frozen-editor gate, env capture, checksums); an **era audit** caught two stale numbers in §4 and
   the lint now guards old-era values mechanically.
-- Three surprises, all disclosed in the paper rather than smoothed (details on slides 8–9):
+- Three surprises, all disclosed in the paper rather than smoothed (details on slides 8–10):
   the δ=0 "no-op" claim retired; random jitter raises F_causal by breaking trajectories; the
   select-the-fairest control is significant on the alternate feature sets.
 - Writing: intro, related work, methodology, experiments, conclusion, abstract — all drafted,
@@ -99,7 +99,7 @@ freely; the spec has three alternative designs if this direction is wrong.
 5. Contributions: the trim+lift editor · the leveling-down diagnosis · the transfer recipe with
    edit-specificity controls · two-city validation on never-optimized measures.
 
-**The point:** one sentence per layer; every layer has a table on the next four slides. Ask: is
+**The point:** one sentence per layer; every layer has a table on slides 6–10. Ask: is
 any link in this chain under-defended?
 
 ---
