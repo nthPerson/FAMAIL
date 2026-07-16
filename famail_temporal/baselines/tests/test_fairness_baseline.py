@@ -143,9 +143,27 @@ def _tiny_training(penalty_fn=None, penalty_lambda=0.0):
 
 
 def test_penalty_default_off_is_identical():
-    # Explicit defaults must equal the implicit path (and both must run).
-    explicit = _tiny_training(penalty_fn=None, penalty_lambda=0.0)
-    assert _tiny_training() == explicit
+    # Two implicit-default runs agree (determinism sanity)...
+    base = _tiny_training()
+    assert base == _tiny_training()
+    # ...and an EXPLICIT penalty_fn=None, penalty_lambda=0.0 call to train_mle
+    # itself (not via the helper, whose guard would swallow the kwargs) is
+    # bit-identical to the implicit-defaults path.
+    import torch
+    from famail_temporal.utils.seeding import set_all_seeds
+    from famail_temporal.baselines.gan.generator import TrajectoryLSTM
+    from famail_temporal.baselines.gan.train_mle import train_mle
+    set_all_seeds(0)
+    model = TrajectoryLSTM(n_drivers=2)
+    seqs = [[1, 2, 3], [2, 3, 4, 5], [3, 4]]
+    ctxs = [(1, 0), (2, 1), (3, 0)]
+    explicit = train_mle(
+        model, seqs, ctxs, epochs=2, lr=1e-3, batch_size=2,
+        device=torch.device("cpu"), driver_idxs=[0, 1, 0],
+        penalty_fn=None, penalty_lambda=0.0,
+    )
+    assert explicit["epoch_losses"] == base
+    assert "penalty_values" not in explicit   # key absent when penalty_fn is None
 
 
 def test_penalty_changes_loss_when_active():
