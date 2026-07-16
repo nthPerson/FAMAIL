@@ -1,6 +1,6 @@
 # Meeting 43 prep — progress since Meeting 42
 
-**Prepared:** 2026-07-10 · **Updated:** 2026-07-11 (post weight-re-anchor; re-run campaign in flight).
+**Prepared:** 2026-07-10 · **Updated:** 2026-07-15 (**re-run campaign COMPLETE** — §4 of the paper has zero open run-markers; s10 replication in flight as the final hedge).
 **Baseline for "progress since":** Meeting 42, held 2026-07-09 (Robert + Dr. Zhang). Grounding: the
 Meeting-42 record was extracted from Notion — both the AI summary
 ([`MEETING_42_SUMMARY_EXTRACT.md`](MEETING_42_SUMMARY_EXTRACT.md), unverified) and the **full transcript**
@@ -37,23 +37,28 @@ source paper (the cGAIL/"Seagale" preprocessing convention) was dropped. No fabr
 ## 2. Progress since Meeting 42, by action item
 
 ### T1 — BC-propagation eval: ✅ LANDED, now RE-RUNNING at the adopted weights
-The supply-lift eval landed 2026-07-09 (weighted-BC recovery +0.0310 @ w30, 6/6 seeds; F_spatial
-propagated; rollout drain attenuated ~40%, not reversed — all on the (0.2,0.7,0.1) corpus, now the
-prior era). Under the re-anchor (§3) the **entire downstream suite re-runs on the α\* corpora**; the
-SZ weighted-BC sweep is running overnight 2026-07-11 (campaign stage r4), rollout re-run queued behind
-it. The *qualitative* claims (recovery, F_spatial propagation, drain-attenuated disclosure) are the
-expectations these re-runs test; the paper carries only α\*-era numbers.
+✅ **All downstream re-runs at α\* are DONE and slotted (2026-07-15).** The qualitative claims all
+reproduced, sharper: vanilla-BC transfer null on SZ (+0.0022 n.s.), recovery dose-monotone
+**+0.0217/+0.0267/+0.0302** (w10/20/30, 6/6 seeds each); **F_spatial propagates on SZ**
+(+0.0038/+0.0040/+0.0052, all sig; controls *degrade* it) — the SF/SZ city contrast is now measured
+on both sides; rollout drain re-measured **like-for-like at α\***: −0.0033 (trim+lift) vs −0.0049
+(trim-only), **~33% attenuation, not reversed** (the cross-era "~40%" was caught by an era audit and
+replaced; both α\* rollouts exist). Recovery also reproduces on SF (+0.0332) and on both alternate
+feature sets (+0.0248 HGC / +0.0256 4FEAT, 6/6 each).
 
 ### T2 — data-augmentation baselines: ✅ BUILT (4 arms); oversampling DONE; perturbation arms RUNNING
 - **Demographic Oversampling (done, committed):** targeted mean ΔF_causal **+0.0153** (dose-monotone) vs
   placebo **−0.0172** vs FAMAIL **+0.0226** at zero inflation (comparator updated to the α\* headline) —
   targeting is necessary AND insufficient; the placebo's DP gap explodes (+2.8) via fabricated supply
   landing in advantaged cells. Full record: `PAPER/baselines/demographic-oversampling/FINDINGS.md`.
-- **3-arm perturbation suite (iFGSM / FGSM / random-jitter):** running NOW on CPU (2026-07-11, campaign
-  stage q1 under the memory-guarded companion launcher) against the α\* headline corpus; the 6-row
-  cross-arm table lands in `PAPER/baselines/comparison/` when the arms finish. Paper-facing caveats
-  locked: arms are **"iFGSM/FGSM with random restart", not vanilla ST-iFGSM** (vanilla at δ=0 is a
-  provable no-op, kept as an ablation row); FGSM numbers from the corrected engine (`6da3d27`+).
+- **3-arm perturbation suite: ✅ DONE on GPU (2026-07-13)**, table in `PAPER/baselines/comparison/`:
+  iFGSM **−0.0057**, FGSM **+0.0017**, random jitter **+0.0135** ΔF_causal. Two findings to brief:
+  (1) **the "δ=0 provable no-op" claim was RETIRED** — the deployed discriminator compares embeddings
+  by *concatenation* (not difference), which is not stationary at identical pairs; measured, the δ=0
+  ablation arms attack at full strength. §4.5's naming note now tells the measured story. (2) **Random
+  jitter raises F_causal (+0.0135, against the pre-registered expectation) but breaks the data**:
+  98.8% king-move violations, distributional divergence 0.447 vs the edited corpus's 0.187 — stated
+  against expectation in §4.5; the realism axes carry the editing-quality comparison.
 
 ### T3 — human review of AI-assisted citations: ◐ OPEN (Robert's pass)
 Machine verification is done (2 fabrications caught and removed; audit in
@@ -152,10 +157,16 @@ lands its remaining suites.
 6. **Writing status + Overleaf hand-off plan** — methodology + abstract + experiments drafted and
    audited; which sections Robert ports first; abstract-to-Zhang timing vs the Jul 19 deadline.
 7. **Record hygiene:** the two wrongly-checked Notion boxes; **Dr. Cash's acknowledgment** placement.
-8. **Campaign/GPU queue status:** overnight = SZ weighted-BC (r4); then rollout re-run, SF weighted-BC,
-   L1v2 four-source tables (fresh generators), variance suites, alternate-feature-set matrix (q6–q8),
-   s10 replication. Concurrency: one memory-guarded CPU companion at a time (measured footprints;
-   host-RAM guard at 10 GB kill floor).
+8. **Campaign status: 🏁 COMPLETE (2026-07-15).** ~30 ledger-wrapped runs at α\*: data-level + external
+   metrics + channels (both cities), trim-only ablations (both cities), both rollouts (like-for-like
+   attenuation), four-source L1 tables ×3 feature sets, weighted-BC sweeps ×4 (SZ/SF/HGC/4FEAT),
+   variance suites ×4, perturbation arms, per-set externals, Pareto. Only the **s10 replication** is
+   still running (end-to-end reproduction of the headline corpus under clean main; report both if
+   differing). New since last update: **control rows added to the robustness table** (Robert request —
+   most-fair select is sig-positive on both alternate sets at ~⅕–¼ of the edited gain; edited ≥3× at
+   every dose; random placebo null everywhere) and the **GAN Fid-B seed-bimodality reproduces
+   seed-for-seed across all three feature sets** (seed-deterministic — three independent reproductions
+   back the §4.4 disclosure).
 
 ---
 
@@ -171,6 +182,12 @@ lands its remaining suites.
 | SF channel (the tension, PI flag) | supply **+0.0209\***, demand −0.0533\*, total **−0.0324\*** | `data/a10/sf12_a10_channel_decomposition.json` |
 | Extended frontier finding | lift-up monotone-declines with α_sp; sig both tiers only α_sp ≤ 0.2; ΔF_causal flat | `weight-sensitivity/EXTENDED_FRONTIER.md` |
 | Oversampling targeted / placebo d10k | **+0.0153** dose-monotone / **−0.0172**, ΔDP +2.8; inflation 10.5% | `PAPER/baselines/demographic-oversampling/` |
+| Downstream (SZ): vanilla / dose / controls | +0.0022 n.s. / **+0.0217→+0.0267→+0.0302** (6/6) / random null, most-fair +0.0033\* fading | `data/a10/shz_a10_weighted_bc_*` |
+| **F_spatial propagation** | SZ: +0.0038/+0.0040/+0.0052 all sig (controls degrade it); SF: −0.0040 n.s. — city contrast measured both sides | same + sf12 twin |
+| Allocation boundary (like-for-like at α\*) | trim+lift **−0.0033** vs trim-only **−0.0049** @ w30 → **~33% attenuated, not reversed**; seeking-states n.s. | `data/a10/shz_*_rollout_summary.json` |
+| Four-source L1 (SZ) | edited fairest **0.8214** + faithful (Fid-A 0.844≈raw); GAN Fid-B **seed-bimodal 0.171±0.129** (3/5 seeds collapse; pattern seed-identical in all 3 feature sets) | `data/a10/*l1v2_multiseed.json` |
+| Perturbation arms | iFGSM −0.0057 / FGSM +0.0017 / random **+0.0135** but 98.8% adjacency violations, divergence 0.447 vs edited 0.187 | `PAPER/baselines/comparison/` |
+| Feature-set robustness (PRIMARY/HGC/4FEAT) | editor Δ +0.0226/+0.0206/+0.0220; DI +0.0162/+0.0147/+0.0191; Theil −0.0087/−0.0080/−0.0085; w30 +0.0302/+0.0248/+0.0256; most-fair control n.s./+0.0054\*/+0.0072\* (edited ≥3×) | `tab:featsets` + `data/a10/` |
 | SUPERSEDED (0.2,0.7,0.1)-era numbers | +0.0222 SZ / +0.0328 SF / WBC +0.0310 — do NOT quote as current | prior-era `PAPER/supply-lift/` root |
-| PENDING re-runs | SZ WBC (overnight), rollout, SF WBC, L1v2 ×2, variance ×2, per-set matrix, 6-row baseline table | `EXPERIMENTS_RUN_LEDGER.md` + `driver.sh --status` |
+| Still running | **s10 replication only** (headline-corpus reproduction hedge; ETA 2026-07-16 AM; report both if differing) | `EXPERIMENTS_RUN_LEDGER.md` |
 | Attribution coverage (trim+lift) | ~2,400 → ~9,900 edited trajectories (2,337+7,545 post-filter, ~10% of corpus) | s10 corpus `metrics.json` |
