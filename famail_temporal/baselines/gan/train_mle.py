@@ -57,6 +57,8 @@ def train_mle(
     driver_idxs: List[int] | None = None,
     max_batch_tokens: int | None = None,
     sample_weights: List[float] | None = None,
+    penalty_fn=None,
+    penalty_lambda: float = 0.0,
 ) -> Dict[str, List[float]]:
     """Train `model` by next-token cross-entropy.
 
@@ -75,6 +77,15 @@ def train_mle(
     max_batch_tokens`` (a single over-budget trajectory forms its own batch);
     ``batch_size`` remains an upper cap on count. When ``None`` (default), the
     original fixed-``batch_size`` slicing is used unchanged.
+
+    ``penalty_fn`` (default ``None``) is an optional ``(logits, tgt) ->
+    scalar tensor`` callable applied AFTER the CE loss above (both the
+    weighted and unweighted branches) as ``loss = loss + penalty_lambda *
+    penalty_fn(logits, tgt)``, only when both ``penalty_fn is not None`` and
+    ``penalty_lambda != 0.0``. With the defaults (``penalty_fn=None,
+    penalty_lambda=0.0``) this is a strict no-op: identical losses, RNG
+    consumption, and return-dict keys as before. When active, the returned
+    dict gains a ``"penalty_values"`` key: the per-batch penalty floats.
     """
     model.to(device).train()
     opt = torch.optim.Adam(model.parameters(), lr=lr)
@@ -88,6 +99,7 @@ def train_mle(
     lengths = [len(s) for s in sequences]
     epoch_losses: List[float] = []
     all_batch_losses: List[float] = []
+    penalty_values: List[float] = []
 
     for epoch in range(epochs):
         perm = torch.randperm(n)
@@ -143,6 +155,10 @@ def train_mle(
                     num = (per_tok.sum(dim=1) * w).sum()
                     den = (valid.sum(dim=1) * w).sum().clamp_min(1.0)
                     loss = num / den
+                if penalty_fn is not None and penalty_lambda != 0.0:
+                    pen = penalty_fn(logits, tgt)
+                    loss = loss + penalty_lambda * pen
+                    penalty_values.append(float(pen.item()))
                 opt.zero_grad()
                 loss.backward()
                 opt.step()
@@ -150,4 +166,9 @@ def train_mle(
                 all_batch_losses.append(float(loss.item()))
                 bar.update(1, loss=f"{sum(batch_losses) / len(batch_losses):.3f}")
         epoch_losses.append(sum(batch_losses) / len(batch_losses))
-    return {"epoch_losses": epoch_losses, "batch_losses": all_batch_losses}
+    result: Dict[str, List[float]] = {
+        "epoch_losses": epoch_losses, "batch_losses": all_batch_losses,
+    }
+    if penalty_fn is not None:
+        result["penalty_values"] = penalty_values
+    return result

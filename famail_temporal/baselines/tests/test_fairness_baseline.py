@@ -119,3 +119,43 @@ def test_cell_masks_for_vocab_disjoint_and_correct():
     assert m_d[4].item() is True
     assert m_a[7].item() is True
     assert not (m_d & m_a).any()
+
+
+def _gc():
+    from famail_temporal.baselines.gan import config as gc
+    return gc
+
+
+def _tiny_training(penalty_fn=None, penalty_lambda=0.0):
+    import torch
+    from famail_temporal.utils.seeding import set_all_seeds
+    from famail_temporal.baselines.gan.generator import TrajectoryLSTM
+    from famail_temporal.baselines.gan.train_mle import train_mle
+    set_all_seeds(0)
+    model = TrajectoryLSTM(n_drivers=2)
+    seqs = [[1, 2, 3], [2, 3, 4, 5], [3, 4]]
+    ctxs = [(1, 0), (2, 1), (3, 0)]
+    kwargs = dict(epochs=2, lr=1e-3, batch_size=2,
+                  device=torch.device("cpu"), driver_idxs=[0, 1, 0])
+    if penalty_fn is not None:
+        kwargs.update(penalty_fn=penalty_fn, penalty_lambda=penalty_lambda)
+    return train_mle(model, seqs, ctxs, **kwargs)["epoch_losses"]
+
+
+def test_penalty_default_off_is_identical():
+    # Explicit defaults must equal the implicit path (and both must run).
+    explicit = _tiny_training(penalty_fn=None, penalty_lambda=0.0)
+    assert _tiny_training() == explicit
+
+
+def test_penalty_changes_loss_when_active():
+    import torch
+    from famail_temporal.baselines.fairness_baseline import dp_gap_penalty
+    gc = _gc()
+    V = gc.VOCAB_SIZE
+    m_d = torch.zeros(V, dtype=torch.bool); m_d[1] = True
+    m_a = torch.zeros(V, dtype=torch.bool); m_a[2] = True
+    fn = lambda lg, tg: dp_gap_penalty(lg, tg, m_d, m_a, pad_id=gc.PAD)
+    base = _tiny_training()
+    pen = _tiny_training(penalty_fn=fn, penalty_lambda=100.0)
+    assert base != pen
