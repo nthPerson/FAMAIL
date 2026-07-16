@@ -170,6 +170,33 @@ lands its remaining suites.
 
 ---
 
+## 4b. The four data-augmentation baselines — definitions (expect this question)
+
+All four arms operate at **matched budget** on the **same trajectory set the headline edit
+selected** (n = 9,882 at α\*), none optimizes a fairness objective, and all are scored on the same
+rails as FAMAIL (corpus-level F_causal/F_spatial, identity + distributional fidelity, king-move
+adjacency). Together they answer: *does the gain come from FAMAIL's objective, or from bounded
+perturbation / resampling per se?*
+
+| baseline | what it does | what it motivates / tests | key details |
+|---|---|---|---|
+| **1. iFGSM (rand. restart)** | Iterative signed-gradient attack on the **frozen Siamese identity discriminator**, ε = 2 ball (the ST-iFGSM lineage — the KDD template paper's method, repurposed) | The strongest "gradient-guided bounded perturbation without our objective" — is FAMAIL just clever perturbation? Framed per Meeting 41 as a **fidelity/editing-quality** baseline, not a fairness competitor | PGD-style random init within the ε-ball; ~31 attack iterations mean; ΔF_causal **−0.0057** |
+| **2. FGSM (rand. restart)** | Single-step variant of arm 1 | Isolates the effect of iteration count; textbook single-step reference | ΔF_causal **+0.0017**; 91.4% adjacency violations |
+| **3. Random jitter** | Seeded uniform perturbation in the same ε-ball, same trajectories | The placebo for arms 1–2: does *any* bounded perturbation move fairness? | **Raises F_causal (+0.0135)** — against the pre-registered expectation — but is realism-catastrophic: **98.8% adjacency violations**, distributional divergence 0.447 vs edited 0.187; identity fidelity passes ALL arms at ε=2, so the adjacency + distributional axes carry the comparison |
+| **4. Demographic oversampling** (targeted + untargeted placebo) | The **naive lifting-up** baseline: duplicate real trajectories originating in disadvantaged regions (phantom driver IDs, rigid ±1-cell jitter), rebuilding demand *and* supply additively, dose-matched to FAMAIL's budget | Can *fabrication* substitute for *redistribution*? Directly instantiates the demand-endogeneity concern of §3.4 | Targeted d10k: **+0.0153** (dose-monotone) at **10.5% corpus inflation** vs FAMAIL +0.0226 at zero; placebo: **−0.0172**, DP gap +2.8 (fabricated supply lands in advantaged cells) → targeting is *necessary and insufficient*. Disclosures: only 8,241 distinct disadvantaged-origin trajectories exist, so 1,759 draws are re-duplications; fidelity not scored (duplicates of real data pass any realism check by construction) |
+
+**Anticipated follow-ups:** (a) *"Why call them random-restart?"* — the δ=0-initialized textbook
+attack was pre-registered as a stationarity ablation, but the deployed discriminator's
+concatenation head is **not** stationary at identical pairs (measured 2026-07-13); the arms are
+honestly named for the PGD-style init that actually ran, and §4.5 tells the measured story.
+(b) *"Why does random jitter improve F_causal?"* — indiscriminately diffusing the selected
+trajectories diffuses their over-service too; the number is real and stated against expectation —
+the point is no arm buys fairness without paying in realism or fabrication. (c) *"Why no
+fairness-method baseline?"* — the arms are **editing-quality** baselines by design (Meeting-41
+framing); fairness competitors would optimize the objective we're firewalling.
+
+---
+
 ## 5. Numbers cheat-sheet (α\*-era, committed; provenance in the linked bundles)
 
 | Result | Value | Where |

@@ -1,8 +1,8 @@
 # Meeting 43 — Slide Plan (paper overview + road to KDD)
 
-> **This doc is the slide spine** (hand-off to PPTX generation). 10 slides: *what happened this
-> week (2) → the paper's argument, results-first, for critique (7, incl. Figure 1) → the
-> prioritized path to submission (1).* Each slide gives a **title**, the **on-slide content**
+> **This doc is the slide spine** (hand-off to PPTX generation). 11 slides: *what happened this
+> week (2) → the paper's argument, results-first, for critique (8, incl. Figure 1 and the
+> baseline definitions) → the prioritized path to submission (1).* Each slide gives a **title**, the **on-slide content**
 > (terse bullets + the one load-bearing table), and a **"the point"** speaker note (not on the
 > slide). Numbers are α\*-era, committed; deep provenance lives in
 > [`MEETING_43_PREP.md`](../../../famail_temporal/baselines/meeting_prep/MEETING_43_PREP.md) §5
@@ -171,7 +171,33 @@ turn a potential reviewer attack into evidence.
 
 ---
 
-## Slide 9 — Results IV: baselines + editing quality + what we disclose
+## Slide 9 — The four baselines, defined (before their results)
+
+**On the slide**
+- All four arms: **matched budget, the same 9,882 trajectories the headline edit selected**,
+  none optimizes fairness, all scored on FAMAIL's own rails. Question they answer: *objective,
+  or perturbation/resampling per se?*
+
+| baseline | one-line definition | what it tests |
+|---|---|---|
+| iFGSM (rand. restart) | iterative signed-gradient attack on the frozen identity discriminator, ε=2 | gradient-guided bounded perturbation *without* our objective |
+| FGSM (rand. restart) | single-step variant | does iteration matter? |
+| random jitter | seeded uniform noise in the same ε-ball | does *any* bounded perturbation help? |
+| demog. oversampling (+ placebo) | duplicate disadvantaged-origin trajectories (phantom IDs, ±1-cell jitter), demand *and* supply rebuilt, dose-matched | can **fabrication** substitute for **redistribution**? |
+
+- Lineage note: iFGSM/FGSM repurpose the ST-iFGSM attack (the KDD template paper) as an
+  **editing-quality** baseline — per Meeting 41, a fidelity comparison, not a fairness competitor.
+- "Random restart" is honest naming: the textbook δ=0 init was pre-registered as a no-op
+  ablation, measurement showed the deployed concatenation head is *not* stationary there — the
+  paper reports what actually ran.
+
+**The point:** be ready for "why these baselines?" — each arm removes one ingredient of FAMAIL
+(the objective, the iteration, the gradient, the realism constraint) so the comparison isolates
+what the method actually contributes.
+
+---
+
+## Slide 10 — Results IV: baselines + editing quality + what we disclose
 
 **On the slide**
 - Cross-arm comparison at matched budgets (SZ; fairness ↑ / inflation):
@@ -196,7 +222,7 @@ surprises are in the paper before a reviewer can find them.
 
 ---
 
-## Slide 10 — Road to KDD: prioritized, dated, and one decision needed *today*
+## Slide 11 — Road to KDD: prioritized, dated, and one decision needed *today*
 
 **On the slide**
 - **⚠️ DECISION NEEDED THIS MEETING — SF fairness framing** (the paper's only open marker):
