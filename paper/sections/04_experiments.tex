@@ -499,14 +499,22 @@ the SF pipeline). But as on the prior corpus, lift also reroutes \emph{pickups}
 into under-served cells, raising recorded demand there: the demand channel is
 significantly negative ($-0.0533$, CI $[-0.0798,$ $-0.0298]$) and the total
 $\mathrm{mean}(Y \mid \mathrm{disadv.})$ moves net-negative ($-0.0324$, CI
-excludes 0). Two readings coexist and we present both. Under the ratio
-reading, the SF lifting-up claim does not hold and should be withheld. Under
-the external-metrics reading, more rides \emph{served} in under-served areas
-is a demand-side parity gain --- DP, DI, and Theil all improve --- and the
-falling ratio reflects exactly the demand endogeneity of
-\S\ref{sec:leveling}: recorded demand was suppressed, and serving it raises
-the denominator.
-% TODO(PI-framing): Zhang decision — which SF fairness story leads; both readings kept until then.
+excludes 0). We read this as a demand-endogeneity finding, not a failed
+replication: recorded demand in under-served areas was suppressed, and
+serving it raises the ratio's denominator --- the mechanism
+\S\ref{sec:leveling} predicts, observed in the wild. More rides \emph{served}
+in under-served areas is a demand-side parity gain --- DP, DI, and Theil all
+improve on San Francisco --- while the supply channel independently
+replicates. The finer spatial partition plausibly amplifies the effect:
+San Francisco's demographic units are census tracts, far smaller than
+Shenzhen's districts, so the ratio is more sensitive to lift's rerouted
+pickups. Under a stricter ratio-only reading the SF lift-up claim would be
+withheld; we report the numbers behind that reading so it can be applied,
+but the external instruments and the replicated supply channel carry the
+external-validity conclusion.
+% DECIDED 2026-07-16 (Robert): Reading B leads (external-metrics / demand-endogeneity framing).
+% Provisional: pending the D1 SF tier-2 recount — reassess toward the ratio reading if D1
+% disconfirms; PI acknowledgment pending at the next Zhang/Kash touchpoint.
 % src: PAPER/supply-lift/data/a10/sf12_a10_channel_decomposition.json
 
 \textbf{Downstream.} The recovery reproduces on San Francisco. Vanilla BC is

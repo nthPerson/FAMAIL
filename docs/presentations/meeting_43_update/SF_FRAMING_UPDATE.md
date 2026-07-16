@@ -65,11 +65,19 @@ whether the framing was settled there is an open question for Robert. Until answ
 `TODO(PI-framing)` marker stands and both readings stay drafted side-by-side.
 
 - [ ] **Reading A leads** (ratio; SF lift-up withheld; supply channel reported as mechanism)
-- [ ] **Reading B leads** (external metrics; demand-endogeneity finding; ratio disclosed)
-- [ ] **Approve D1** (SF tier-2 recount engineering, ~1–2 days) — strengthens either choice,
-      near-decisive for B
-- Notes: not adjudicated at Meeting 43; escalate to Dr. Zhang async or at the next touchpoint
-  (he begins reviewing the paper the week of Jul 20 — the marker should be resolved before that).
+- [x] **Reading B leads** (external metrics; demand-endogeneity finding; ratio disclosed) —
+      **DECIDED by Robert 2026-07-16 (post-meeting), PROVISIONAL pending D1.** Rationale:
+      (1) SF demographic units are census tracts — far smaller than Shenzhen's districts — so
+      the ratio is naturally more sensitive to lift's rerouted pickups (granularity intuition,
+      now stated hedged in §4.7); (2) the external-metrics evidence (DP under both groupings,
+      DI, Theil, WBC recovery) is strong enough with careful framing of the rerouting finding;
+      (3) D1 backstops the choice. **Fallback: if D1's tier-2 recount does not support the
+      reading, reassess toward Reading A.**
+- [x] **Approve D1** (SF tier-2 recount engineering, ~1–2 days) — approved by implication
+      2026-07-16 ("the planned D1 run"); schedule after the fairness-baseline suites.
+- Notes: §4.7 rewritten with Reading B leading (demand-endogeneity finding, ratio reading
+  disclosed); `TODO(PI-framing)` retired with a provenance comment. PI acknowledgment still
+  owed at the next Zhang/Kash touchpoint (Zhang reviews week of Jul 20).
 
 **Consequence of the choice:** one paragraph of §4.7 gets re-ordered + the abstract's SF clause
 scoped to match; the `TODO(PI-framing)` marker is retired. Everything else in the section stays.
