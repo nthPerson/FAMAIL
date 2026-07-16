@@ -15,7 +15,7 @@
 - **Default-off invariant:** every modification must be a no-op when the new flags are unset — enforced by Task 5's regression gate.
 - **Ledger discipline:** every GPU run wrapped in `python -m famail_temporal.analysis.run_ledger start|finish` with queue ids `FB-REWEIGH`, `FB-PENALTY-PILOT`, `FB-PENALTY`.
 - **GPU scheduling:** suites queue only after the C1 dose-extension finishes (check `nvidia-smi` + `famail_temporal/results/experiments_campaign/b_chain.log` shows `B-CHAIN COMPLETE`).
-- Grouping convention everywhere: migrant axis, district extremes (`region_extremes`, `disadvantaged_high=True`) — the SAME grouping as every external table. Known check value: Shenzhen PRIMARY has **N_D = 6,950 disadvantaged units** (from the 2026-07-16 A1 run log).
+- Grouping convention everywhere: migrant axis, district extremes (`region_extremes`, `disadvantaged_high=True`) — the SAME grouping as every external table. ⚠️ CORRECTED 2026-07-16 (Task 1 finding): the A1 log's **N_D = 6,950 counts active (cell × time-block) UNITS**, not spatial cells (the grid has only 4,320 cells). The weight rule keys on spatial cells; verified spatial counts on Shenzhen PRIMARY: **462 disadvantaged / 406 advantaged / 1,011 excluded cells**, 92.8% trajectory pickup-cell match rate.
 - Tests live in `famail_temporal/baselines/tests/`; suite must stay green: `python -m pytest famail_temporal/baselines/tests/ -q`.
 
 ---
