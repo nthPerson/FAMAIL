@@ -297,8 +297,14 @@ with `penalty_values: List[float] = []` initialized before the epoch loop and `r
 
 **Files:** none created; evidence recorded in the ledger config-note + commit message of Task 4 (amend if needed).
 
-- [ ] **Step 1:** With the Task-1..4 code in place, re-run ONE seed of the unmodified arms: `python -m famail_temporal.baselines.run_weighted_bc_smoke --edit-dir famail_temporal/results/2026-07-10T02-06-37_alpha_sweep_s10_c80_f10_filtered --seeds 0 --weights 30 --mle-epochs 20 --device auto --out-dir /tmp/fb_regression` (~1.5h GPU; schedule after C1).
-- [ ] **Step 2:** Compare seed-0 `raw`, `edited`, `edited_w30` values (f_causal, f_spatial, fidelity_a, fidelity_b, all 4 decimals) against the committed `famail_temporal/results/weighted_bc_sweep/alpha_sweep_s10_c80_f10_filtered_6seed/sweep.json` seed-0 entries. Expected: **identical to every recorded decimal**. Any mismatch = STOP, revert wiring, diagnose (the default-off invariant is broken).
+- [ ] **Step 1 (CORRECTED 2026-07-16):** the gate must replay the **full original 10-arm list** at
+  seed 0 — the shared eval `rng` is consumed per arm, so a reduced arm list shifts later arms' eval
+  sampling and would fail the comparison spuriously:
+  `python -m famail_temporal.baselines.run_weighted_bc_smoke --edit-dir famail_temporal/results/2026-07-10T02-06-37_alpha_sweep_s10_c80_f10_filtered --seeds 0 --weights 10,20,30 --placebo 10,30 --most-fair 10,20,30 --device auto --out-dir famail_temporal/results/weighted_bc_sweep/fb_regression_gate_seed0` (~1.7h GPU; after C1).
+- [ ] **Step 2:** Compare ALL 10 arms × {f_causal, f_spatial, fidelity_a, fidelity_b} seed-0 values
+  (4 decimals) against the committed `alpha_sweep_s10_c80_f10_filtered_6seed/sweep.json` `values[0]`
+  entries. Expected: **identical to every recorded decimal**. Any mismatch = STOP the chain, revert
+  wiring, diagnose (the default-off invariant is broken).
 - [ ] **Step 3:** Record PASS in the FB-REWEIGH ledger row's config-note ("regression gate: seed-0 raw/edited/edited_w30 identical to committed sweep").
 
 ### Task 6: λ pilot (FB-PENALTY-PILOT)
