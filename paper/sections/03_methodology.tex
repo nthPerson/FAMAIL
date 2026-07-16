@@ -167,14 +167,14 @@ Jensen--Shannon check over aggregate mobility statistics \cite{feng2020simulate}
 The weights are selected \emph{empirically}: we sweep the weight simplex
 (fidelity fixed at 0.1) with full editing runs, and score every sweep point
 not only on the optimized metrics but on the design-targeted and external
-rings as well (\S\ref{sec:exp-robustness}). The sweep exposes an asymmetry
+metric classes as well --- classes defined in \S\ref{sec:exp-setup}. The sweep exposes an asymmetry
 the optimized metrics alone would hide: $\Delta F_{\mathrm{causal}}$ is flat
 (within $0.001$) across $\alpha_{\mathrm{sp}} \in [0, 0.55]$, but the
 supply-channel lift-up of the under-served group declines monotonically as
 $\alpha_{\mathrm{sp}}$ grows, and beyond $\alpha_{\mathrm{sp}} = 0.2$ it is
 no longer significant under tier-1 accounting (the tier-2 recount stays
 positive and significant at every sweep point). We therefore select by a
-three-part criterion
+three-class criterion
 --- maximize $\Delta F_{\mathrm{causal}}$ subject to
 $\Delta F_{\mathrm{spatial}} \ge 0$ \emph{and} the supply-channel lift-up
 remaining significant under both accounting tiers --- which the adopted
@@ -259,20 +259,26 @@ budget, trim's selection takes precedence and lift fills the remaining slots
 with positive-score nominees.
 % src: PAPER/supply-lift/LIFT_ALGORITHM_REFERENCE.md §4.2–4.3 (screen; plan assembly)
 
-\subsection{Why Demand-Only Editing Levels Down}\label{sec:leveling}
+\subsection{Why Demand-Only Editing Cannot Help the Under-Served}\label{sec:leveling}
 
 Relocating pickups is a demand-side lever, and on its own it improves the
-fairness metrics in a specific, troubling way: by \emph{leveling down}. On the
+fairness metrics in a specific, troubling way: it redistributes service among
+better-served areas while the under-served group gains nothing. On the
 primary city, every one of the 2{,}455 pickups edited by the demand-only
 editor originated in advantaged cells and not one landed in a disadvantaged
 cell; the under-served group's service was untouched, and the demographic gap
 closed only from the top.
 % src: PAPER/external-metrics/LEVELING_DOWN_MECHANISM.md (2,455/2,455 flow analysis; pre-supply-lift doc) — corroborated at alpha*: PAPER/supply-lift/data/a10/shz_trimonly_a10_external_fairness.json (mean(Y|disadv) 7.0734 -> 7.0734 exactly)
-This is the classic leveling-down objection to equalization \cite{parfit1997},
-recently formalized for machine-learning fairness together with a prescription
-to level \emph{up} instead \cite{mittelstadt2024}; notably, data augmentation
-has been observed to be the one intervention that helps the disadvantaged
-group rather than pulling others down \cite{zietlow2022}.
+The pattern is analogous to the classic leveling-down objection to
+equalization \cite{parfit1997} --- measured equality improves while the
+worst-off gain nothing --- recently formalized for machine-learning fairness
+together with a prescription to level \emph{up} instead \cite{mittelstadt2024};
+notably, data augmentation has been observed to be the one intervention that
+helps the disadvantaged group rather than pulling others down
+\cite{zietlow2022}. The analogy is inexact in one instructive way: trim
+\emph{relocates} pickups under conservation rather than removing service, so
+nothing is destroyed --- yet the under-served group is not helped at all,
+which is precisely the objection's force.
 
 The behavior is the constrained optimum of the demand-only problem, not an
 optimizer artifact, for three compounding structural reasons. First,
@@ -286,7 +292,8 @@ the demand floor $d_0$, where removing demand changes nothing.
 % src: PAPER/external-metrics/LEVELING_DOWN_MECHANISM.md; LIFT_ALGORITHM_REFERENCE.md §1 (32x; 93%)
 Third, the inequity itself is on the supply side --- median taxi presence is
 1.8 in disadvantaged cells against 17.6 in advantaged ones --- and a
-demand-only editor cannot touch supply. A greedy oracle closes the remaining
+demand-only editor cannot touch supply. A greedy oracle (an unconstrained
+search that upper-bounds what any editor could achieve) closes the remaining
 escape route: the only demand-side way to raise the under-served group's
 service ratio is to delete its recorded pickups, which is perverse.
 % src: LIFT_ALGORITHM_REFERENCE.md §1 (median presence 1.8 vs 17.6; oracle perversity)
@@ -320,7 +327,8 @@ threshold on the supply channel alone (\S\ref{sec:experiments}).
   quantized to cells. (1) The service gap: taxi presence concentrates in the
   advantaged district while the disadvantaged district carries unmet
   pickups. (2) \emph{Trim} relocates excess pickups within the advantaged
-  district --- improving fairness metrics by leveling down. (3) \emph{Lift},
+  district --- improving fairness metrics while the disadvantaged district
+  gains nothing. (3) \emph{Lift},
   shown in a detail view of the under-served district: against the original
   tail, the rerouted tail bends the trajectory's final seeking states into
   the cells where the supply gradient says added presence most improves

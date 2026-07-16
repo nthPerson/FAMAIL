@@ -1,5 +1,13 @@
 # Leveling-down and demand endogeneity — framing the constraint as a contribution
 
+> **⚠️ TERMINOLOGY NOTE (Meeting 43, 2026-07-16, Dr. Kash):** the MANUSCRIPT no longer uses
+> "leveling down" as the *description* of trim-only behavior — pickups are relocated under
+> conservation, not removed, so it is "not leveling down in the classic sense." The paper now
+> says the mechanism ("redistributes among better-served areas; the under-served group gains
+> nothing; the gap closes only from the top") and keeps leveling-down strictly as a cited
+> ANALOGY (Parfit/Mittelstadt/Zietlow). This source doc predates that ruling and keeps its
+> original vocabulary; read it as analysis provenance, not as manuscript phrasing.
+
 A structural analysis proved that the current editor improves demographic fairness **only by reducing
 over-service to advantaged areas, never by lifting service to under-served ones** ("leveling-down"). This doc
 supplies the *ethical and fair-ML framing* that turns that property from a liability into a principled,

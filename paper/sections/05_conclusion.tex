@@ -11,8 +11,8 @@ under-served areas with the supply consequences of the reroute
 differentiable and endogenous --- then upweights the edited demonstrations
 so the fairness survives imitation. On two cities the edits improve established fairness
 measures the objective never optimizes and, unlike the demand-only editor
-whose gains were pure leveling-down, the supply channel adds statistically
-significant taxi presence to the under-served group; upweighted behavior
+whose gains never touched the under-served group, the supply channel adds
+statistically significant taxi presence to that group; upweighted behavior
 cloning carries the fairness-metric gains into trained policies, and the control arms
 confirm the edit itself --- not oversampling, not selection --- is what
 carries them.
@@ -33,8 +33,8 @@ magnitudes are not comparable. And the fidelity guardrail certifies that
 edited trajectories still read as their drivers --- identity preservation,
 not fine-grained trajectory-shape realism.
 
-Two directions follow naturally. The two-phase trim-then-lift structure is
-a scientific control, so the immediate extension is the editor
+Two directions follow naturally. The editor's two-phase structure --- trim
+first, then lift --- is a scientific control, so the immediate extension is the editor
 \S\ref{sec:editor} anticipates: a single pass in which supply is
 endogenous for every edit and the gradient decides each edit's character.
 The second direction is transfer: whether other imitation objectives and

@@ -37,11 +37,12 @@ away.
 The subtlety is not measuring unfairness but repairing it honestly.
 FAMAIL's first editing mode, \emph{trim}, moves only demand: it relocates
 recorded pickups within over-served areas, and on the primary city it
-improves measured fairness --- by \emph{leveling down}. Every
-one of the 2{,}455 pickups it edits originates in an advantaged cell, and
-the under-served group's service never moves; the classic leveling-down
-objection to equalization \cite{parfit1997,mittelstadt2024} applies
-literally.
+improves measured fairness without helping the under-served group at all:
+every one of the 2{,}455 pickups it edits originates in an advantaged cell
+and not one lands in a disadvantaged cell, so the gap closes only from the
+top --- analogous to the classic leveling-down objection to equalization
+\cite{parfit1997,mittelstadt2024}, though here service is relocated rather
+than removed.
 % src: PAPER/external-metrics/LEVELING_DOWN_MECHANISM.md (2,455/2,455 flow analysis; pre-supply-lift doc) — corroborated at alpha*: PAPER/supply-lift/data/a10/shz_trimonly_a10_external_fairness.json (mean(Y|disadv) 7.0734 -> 7.0734 exactly)
 We show this behavior is structural --- the constrained optimum of any
 demand-only editor on this objective (\S\ref{sec:leveling}) --- and that
@@ -89,13 +90,13 @@ consequences of edits made endogenous to it, and driven by two exact
 attribution mechanisms: demand deficit attribution localizes existing
 unfairness, and supply-gradient attribution localizes the value of added
 taxi presence.
-\item \textbf{A structural diagnosis of leveling down.} Demand-only
+\item \textbf{A structural diagnosis of demand-only editing.} Demand-only
 editing closes fairness gaps only from the top; we show why --- selection,
 leverage, and frozen supply --- and show that a differentiable supply
 channel is the non-perverse remedy.
 \item \textbf{A transfer recipe with edit-specificity controls.}
 Upweighted imitation carries the data-level fairness into trained
-policies, and random-upweighting and select-the-fairest controls isolate
+policies, and random-upweighting and most-fair selection controls isolate
 the edit as the cause.
 \item \textbf{Two-city validation on never-optimized measures.} The full
 protocol runs on Shenzhen and San Francisco and is scored on external

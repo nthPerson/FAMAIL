@@ -1,5 +1,11 @@
 # Why the editor levels down — mechanism analysis + lifting-up options
 
+> **⚠️ TERMINOLOGY NOTE (Meeting 43, 2026-07-16, Dr. Kash):** the manuscript no longer
+> describes trim-only as "leveling down" (relocation under conservation ≠ classic leveling
+> down); the term survives in the paper only as a cited analogy. This doc predates the ruling
+> — its analysis (2,455/2,455 flow, 32× leverage, 93% at floor) remains the provenance for
+> the reworded §3.4/§4 prose.
+
 **Status:** analysis DONE (2026-07-07); Option A rollout evaluation DONE (§6.4) — **negative: the
 trained policies do not lift up either; the leveling-down propagates through training with a small
 dose-dependent perverse drain (poor-area pickup share −10% at w30, 0/6 seeds, p=.031). Strengthens

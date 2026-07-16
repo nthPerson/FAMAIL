@@ -200,7 +200,7 @@ def overview_figure() -> None:
                                      linewidth=0.9, color=INK, zorder=4))
         ax.scatter(x0 + dx, y0 + dy, marker="x", s=16, color=GRAY,
                    linewidth=0.9, zorder=3)
-    ax.annotate("levels down:\nunder-served untouched", (8.0, 6.7),
+    ax.annotate("gap closes from the top:\nunder-served untouched", (8.0, 6.7),
                 fontsize=6.2, color=GRAY, ha="center")
 
     # Panel 3 — lift (tail reroute into the value-of-presence glow)
