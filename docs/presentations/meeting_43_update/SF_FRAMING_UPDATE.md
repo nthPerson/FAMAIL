@@ -57,13 +57,19 @@ treat as the claim.
    converting the weakness into a replicated mechanism. If D1 is approved and lands, Reading B
    stops being a "rescue" and becomes the natural statement of the result.
 
-## Decision block (fill in at the meeting)
+## Decision block
+
+**⚠️ OUTCOME (2026-07-16, from the meeting transcript): the SF framing was NEVER RAISED in the
+meeting — no decision was made.** Robert spoke with Dr. Kash privately afterward (unrecorded);
+whether the framing was settled there is an open question for Robert. Until answered, the
+`TODO(PI-framing)` marker stands and both readings stay drafted side-by-side.
 
 - [ ] **Reading A leads** (ratio; SF lift-up withheld; supply channel reported as mechanism)
 - [ ] **Reading B leads** (external metrics; demand-endogeneity finding; ratio disclosed)
 - [ ] **Approve D1** (SF tier-2 recount engineering, ~1–2 days) — strengthens either choice,
       near-decisive for B
-- Notes: ______________________________________________________________
+- Notes: not adjudicated at Meeting 43; escalate to Dr. Zhang async or at the next touchpoint
+  (he begins reviewing the paper the week of Jul 20 — the marker should be resolved before that).
 
 **Consequence of the choice:** one paragraph of §4.7 gets re-ordered + the abstract's SF clause
 scoped to match; the `TODO(PI-framing)` marker is retired. Everything else in the section stays.
