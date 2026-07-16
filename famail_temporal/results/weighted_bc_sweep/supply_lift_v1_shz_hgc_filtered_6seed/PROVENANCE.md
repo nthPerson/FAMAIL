@@ -1,0 +1,9 @@
+
+## Checksums (2026-07-15T22:32:45Z)
+
+84d3bd6fa592fbb806f4dbcb8aef147dd59f03ebd7aff5856ceb1b6b16ba7052  chosen_ids.json
+613ded7a46e871739c52cc6b01c457e5bc5becb10d4aab7583c4728e8effd1f0  dose_response.json
+6927a7d042c129e95469ee212a7b235a21ab06fa3e984efc3534bd8a9a20d68e  environment.json
+9d5819da052ee3baaf18157d21baa3a517ba0f9e8868649c014da94a9ecbd0c1  manifest.json
+12a83041c0e6ebaa4b9ed17d6ddefcbb937c86ce114b3f4449b5de13f930c60b  paired_stats.json
+a95d562d66eb4b2c69dd966edee56bad9c6a33b8a9df4f33695ed801be3fb118  sweep.json

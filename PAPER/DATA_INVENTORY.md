@@ -159,8 +159,8 @@ re-run out of** (campaign stages Q6–Q8).
 | feature set | run dir | before → after |
 |---|---|---|
 | **hcm** {housing, comp, migrant} — PRIMARY | `2026-06-29T12-06-55_..._cleaned_hcm` | 0.7988 → 0.8132 (+0.0144) |
-| **3feat** {housing, GDP, comp} | `2026-06-26T12-32-59_..._cleaned` | 0.8069 → 0.8193 (+0.0124) |
-| **4feat** + logpopdensity | `2026-06-28T11-46-12_..._cleaned_4feat` | 0.7253 → 0.7409 (+0.0156) |
+| **3feat** {housing, GDP, comp} — a.k.a. **hgc** (paper "HGC" column) | `2026-06-26T12-32-59_..._cleaned` | 0.8069 → 0.8193 (+0.0124) |
+| **4feat** = PRIMARY + logpopdensity, i.e. {housing, comp, migrant, **logpopdensity**} (NOT 3feat+logpop; before-edit 0.7253 confirms) | `2026-06-28T11-46-12_..._cleaned_4feat` | 0.7253 → 0.7409 (+0.0156) |
 | SF dual-claim | `2026-07-01T09-59-11_sf12-dual` | 0.8752 → 0.8891 (+0.0139) |
 
 ### pre-cleanup / bring-up — DO NOT CITE

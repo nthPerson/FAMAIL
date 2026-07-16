@@ -163,6 +163,11 @@ famail_temporal/results/**/pid.txt
 !famail_temporal/results/level1_table_v2/supply_lift_shz_4feat_5seed/level1_v2_metrics.json
 !famail_temporal/results/level1_table_v2/supply_lift_shz_4feat_5seed/level1_v2_multiseed.json
 !famail_temporal/results/level1_table_v2/supply_lift_shz_4feat_5seed/manifest.json
+!famail_temporal/results/level1_table_v2/supply_lift_shz_hgc_5seed/driver_index.json
+!famail_temporal/results/level1_table_v2/supply_lift_shz_hgc_5seed/environment.json
+!famail_temporal/results/level1_table_v2/supply_lift_shz_hgc_5seed/level1_v2_metrics.json
+!famail_temporal/results/level1_table_v2/supply_lift_shz_hgc_5seed/level1_v2_multiseed.json
+!famail_temporal/results/level1_table_v2/supply_lift_shz_hgc_5seed/manifest.json
 !famail_temporal/results/level1_table_v2/supply_lift_shz_5seed/driver_index.json
 !famail_temporal/results/level1_table_v2/supply_lift_shz_5seed/environment.json
 !famail_temporal/results/level1_table_v2/supply_lift_shz_5seed/level1_v2_metrics.json
@@ -237,6 +242,16 @@ famail_temporal/results/**/pid.txt
 !famail_temporal/results/weighted_bc_sweep/supply_lift_v1_shz_primary_filtered_6seed/manifest.json
 !famail_temporal/results/weighted_bc_sweep/supply_lift_v1_shz_primary_filtered_6seed/paired_stats.json
 !famail_temporal/results/weighted_bc_sweep/supply_lift_v1_shz_primary_filtered_6seed/sweep.json
+!famail_temporal/results/weighted_bc_sweep/supply_lift_v1_shz_hgc_filtered_6seed/dose_response.json
+!famail_temporal/results/weighted_bc_sweep/supply_lift_v1_shz_hgc_filtered_6seed/environment.json
+!famail_temporal/results/weighted_bc_sweep/supply_lift_v1_shz_hgc_filtered_6seed/manifest.json
+!famail_temporal/results/weighted_bc_sweep/supply_lift_v1_shz_hgc_filtered_6seed/paired_stats.json
+!famail_temporal/results/weighted_bc_sweep/supply_lift_v1_shz_hgc_filtered_6seed/sweep.json
+!famail_temporal/results/weighted_bc_sweep/supply_lift_v1_shz_4feat_filtered_6seed/dose_response.json
+!famail_temporal/results/weighted_bc_sweep/supply_lift_v1_shz_4feat_filtered_6seed/environment.json
+!famail_temporal/results/weighted_bc_sweep/supply_lift_v1_shz_4feat_filtered_6seed/manifest.json
+!famail_temporal/results/weighted_bc_sweep/supply_lift_v1_shz_4feat_filtered_6seed/paired_stats.json
+!famail_temporal/results/weighted_bc_sweep/supply_lift_v1_shz_4feat_filtered_6seed/sweep.json
 # <<< graphify-tracked curated results <<<
 
 # graphify knowledge-graph output (generated; rebuilt by hook)
