@@ -425,6 +425,16 @@ feature-set-specific, so every layer of the argument is re-measured under two
 alternate demographic sets (Table~\ref{tab:featsets}). The claim is
 directional reproduction, not magnitude equality --- absolute
 $F_{\mathrm{causal}}$ scales shift with the feature set by construction.
+The design-targeted lift-up also reproduces: the total
+$\Delta\,\mathrm{mean}(Y \mid \mathrm{disadv.})$ carries a bootstrap
+interval excluding zero on all three sets, and the supply channel is
+individually significant on all three. The channel mix is not constant ---
+on the primary set the demand channel is n.s., while under both alternate
+sets it is significant and carries most of the larger totals --- so the
+added-presence mechanism replicates while the demand-side share varies with
+the feature set, and we report the decomposition rather than the total
+alone.
+% src: {2026-07-13T04-41-12_..._hgc, 2026-07-13T17-04-22_..._4feat}_filtered/channel_decomposition.json (A1 runs 2026-07-16, B=2000): totals +0.0594 [+0.0181,+0.1013] / +0.1461 [+0.0900,+0.2039]; supply +0.0054 [+0.0017,+0.0094] / +0.0608 [+0.0540,+0.0676]; demand +0.0539* / +0.0853* (PRIMARY demand +0.0352 n.s.)
 
 \begin{table}[t]
 \caption{Feature-set robustness under trim+lift (Shenzhen; $\Delta$ rows are
@@ -438,7 +448,7 @@ after $-$ before edit).}
 \midrule
 before-edit $F_{\mathrm{causal}}$ & 0.7988 & 0.8069 & 0.7253 \\
 editor $\Delta F_{\mathrm{causal}}$ & $+0.0226$ & $+0.0206$ & $+0.0220$ \\
-$\Delta\,\mathrm{mean}(Y \mid \mathrm{disadv.})$ & $+0.0529$ & $+0.0594$ & $+0.1461$ \\ % src: {shenzhen-primary-supplylift-s10,shenzhen-hgc-supplylift,shenzhen-4feat-supplylift}/external_fairness.json: metrics.MigrantRatio.district_extremes.supply_demand_ratio.{after,before}.mean_disadvantaged, delta at full precision (4FEAT 7.219558-7.073448=+0.1461). TOTAL quantity (both channels), decomposed in tab:channels — label deliberately NOT "lift-up": per §4.2 the lift-up CLAIM rides the supply channel; delta-only per DI/Theil convention. PRIMARY sig (CI [+0.0086,+0.0989]); HGC/4FEAT point-deltas, no bootstrap run.
+$\Delta\,\mathrm{mean}(Y \mid \mathrm{disadv.})$ & $+0.0529$ & $+0.0594$ & $+0.1461$ \\ % src: {shenzhen-primary-supplylift-s10,shenzhen-hgc-supplylift,shenzhen-4feat-supplylift}/external_fairness.json: metrics.MigrantRatio.district_extremes.supply_demand_ratio.{after,before}.mean_disadvantaged, delta at full precision (4FEAT 7.219558-7.073448=+0.1461). TOTAL quantity (both channels), decomposed in tab:channels — label deliberately NOT "lift-up": per §4.2 the lift-up CLAIM rides the supply channel; delta-only per DI/Theil convention. all three totals CI-sig (PRIMARY [+0.0086,+0.0989]; HGC [+0.0181,+0.1013]; 4FEAT [+0.0900,+0.2039]; B=2000, A1 runs 2026-07-16).
 DI $\Delta$ (migrant/extremes) & $+0.0162$ & $+0.0147$ & $+0.0191$ \\
 DP gap $\Delta$ & $-0.890$ & $-0.787$ & $-0.886$ \\ % src: same external_fairness.json: metrics.MigrantRatio.district_extremes.demographic_parity.delta (identical to supply_demand_ratio.delta_gap -- DP IS the gap, do not also add a gap row; all three delta CIs exclude 0)
 Theil $\Delta$ & $-0.0087$ & $-0.0080$ & $-0.0085$ \\

@@ -1,0 +1,48 @@
+{
+  "edit_dir": "famail_temporal/results/2026-07-13T04-41-12_supply_lift_v1_shz_hgc_filtered",
+  "group_axis": "MigrantRatio",
+  "disadvantaged_high": true,
+  "N_D": 6950,
+  "bootstrap": {
+    "B": 2000,
+    "seed": 0,
+    "ci": 0.95
+  },
+  "tier2_grid": null,
+  "levels": {
+    "mean_Y_D_before": 7.073447554576566,
+    "mean_Y_D_after_tier1": 7.13280014811572
+  },
+  "channels": {
+    "demand": {
+      "point": 0.05394082348129227,
+      "ci_lo": 0.01238913413390475,
+      "ci_hi": 0.09695843819347875,
+      "significant": true
+    },
+    "supply": {
+      "point": 0.005411770057862029,
+      "ci_lo": 0.001668309107360009,
+      "ci_hi": 0.009417521697559467,
+      "significant": true
+    },
+    "total": {
+      "point": 0.0593525935391543,
+      "ci_lo": 0.01808164947557561,
+      "ci_hi": 0.10131472376349224,
+      "significant": true
+    },
+    "supply_first": {
+      "point": 0.006321935268818427,
+      "ci_lo": 0.0026739032012585433,
+      "ci_hi": 0.010097722900412102,
+      "significant": true
+    },
+    "demand_second": {
+      "point": 0.05303065827033586,
+      "ci_lo": 0.011658049962868225,
+      "ci_hi": 0.09607261556018298,
+      "significant": true
+    }
+  }
+}
