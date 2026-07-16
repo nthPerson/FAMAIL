@@ -147,6 +147,14 @@ def main(argv: List[str] | None = None) -> int:
                          "N most-fair trajectories (highest αᵢ) of the RAW corpus, equal-N to "
                          "the edited set. The 'select already-fair data' counterpart to FAMAIL "
                          "editing. Empty (default) = no most-fair arms.")
+    ap.add_argument("--fairness-reweigh", action="store_true",
+                    help="Add the fair_reweigh arm: Kamiran-Calders-style inverse-SDR "
+                         "instance weights on the RAW corpus (fairness-method baseline; "
+                         "spec docs/superpowers/specs/2026-07-16-fairness-baseline-design.md).")
+    ap.add_argument("--fairness-penalty", type=str, default="",
+                    help="Comma-separated lambda values for fair_penalty arms: BC loss + "
+                         "lambda * differentiable DP-gap penalty (in-processing fairness "
+                         "baseline), trained on the RAW corpus. Empty = no penalty arms.")
     ap.add_argument("--mle-epochs", type=int, default=20)
     ap.add_argument("--max-eval-drivers", type=int, default=50)
     ap.add_argument("--pairs-per-driver", type=int, default=20)
@@ -200,12 +208,12 @@ def main(argv: List[str] | None = None) -> int:
     D_raw = traj_training_data(raw_trajs, driver_to_idx)
     D_edited = traj_training_data(edited_corpus, driver_to_idx)
 
-    # Arms: (name, training-data, sample_weights)
-    arms: List = [("raw", D_raw, None), ("edited", D_edited, None)]
+    # Arms: (name, training-data, sample_weights, penalty_lambda)
+    arms: List = [("raw", D_raw, None, 0.0), ("edited", D_edited, None, 0.0)]
     for w in up_weights:
         if w == 1.0:
             continue
-        arms.append((f"edited_w{int(w)}", D_edited, weight_vector(edited_corpus, eids, w)))
+        arms.append((f"edited_w{int(w)}", D_edited, weight_vector(edited_corpus, eids, w), 0.0))
     # Placebo arms: upweight a random, size-matched NON-edited subset of the RAW
     # corpus. Built ONCE here (independent RNG) so it never perturbs the per-seed
     # training determinism the paired design depends on.
@@ -214,7 +222,7 @@ def main(argv: List[str] | None = None) -> int:
             continue
         arms.append((
             f"random_w{int(w)}", D_raw,
-            random_subset_weight_vector(raw_trajs, eids, w, seed=args.placebo_seed),
+            random_subset_weight_vector(raw_trajs, eids, w, seed=args.placebo_seed), 0.0,
         ))
     # Most-fair baseline arms: upweight the N most-fair (highest αᵢ) RAW trajectories,
     # equal-N to the edited set. Built ONCE here (deterministic selection).
@@ -223,11 +231,34 @@ def main(argv: List[str] | None = None) -> int:
             continue
         arms.append((
             f"most_fair_w{int(w)}", D_raw,
-            most_fair_weight_vector(raw_trajs, bundle, w, n=len(eids)),
+            most_fair_weight_vector(raw_trajs, bundle, w, n=len(eids)), 0.0,
         ))
     if most_fair_weights:
         print(f"[wbc] most-fair: upweighting the {len(eids)} most-fair RAW trajectories "
               f"at doses {most_fair_weights}", flush=True)
+    if args.fairness_reweigh:
+        from famail_temporal.baselines.fairness_baseline import (
+            fairness_reweigh_weight_vector)
+        arms.append(("fair_reweigh", D_raw,
+                     fairness_reweigh_weight_vector(raw_trajs, bundle), 0.0))
+        print("[wbc] fair_reweigh: inverse-SDR instance weights on RAW "
+              "(fairness-method baseline)", flush=True)
+    fp_lambdas = [float(x) for x in str(args.fairness_penalty).split(",") if x.strip()]
+    _penalty_fn = None
+    if fp_lambdas:
+        from famail_temporal.baselines.fairness_baseline import (
+            unit_groups_and_sdr, cell_masks_for_vocab, dp_gap_penalty)
+        from famail_temporal.baselines.gan.sequences import flat_cell
+        cell_group, _sdr = unit_groups_and_sdr(bundle)
+        m_d, m_a = cell_masks_for_vocab(
+            cell_group, gc.VOCAB_SIZE, lambda cell: flat_cell(cell[0], cell[1]))
+        assert int(m_d.sum()) > 0 and int(m_a.sum()) > 0, "empty group mask"
+        m_d, m_a = m_d.to(device), m_a.to(device)
+        _penalty_fn = lambda lg, tg: dp_gap_penalty(lg, tg, m_d, m_a, pad_id=gc.PAD)
+        for lam in fp_lambdas:
+            arms.append((f"fair_penalty_l{lam:g}", D_raw, None, lam))
+        print(f"[wbc] fair_penalty: DP-gap penalty arms on RAW at lambdas "
+              f"{fp_lambdas}", flush=True)
     arm_names = [a[0] for a in arms]
     if placebo_weights:
         n_pl = len(eids)
@@ -312,7 +343,7 @@ def main(argv: List[str] | None = None) -> int:
         a: {k: [] for k in _DEGEN_KEYS} for a in arm_names
     }
     for s in seeds:
-        for name, D, sw in arms:
+        for name, D, sw, plam in arms:
             t0 = time.time()
             print(f"[wbc] seed={s} arm={name}: train + evaluate", flush=True)
             # Identical init + batch order across arms; arms differ only in
@@ -323,7 +354,10 @@ def main(argv: List[str] | None = None) -> int:
                 model, D["sequences"], D["contexts"],
                 epochs=args.mle_epochs, lr=gc.MLE_LR, batch_size=gc.MLE_BATCH_SIZE,
                 device=device, driver_idxs=D["driver_idxs"],
-                max_batch_tokens=args.max_batch_tokens, sample_weights=sw,
+                max_batch_tokens=args.max_batch_tokens,
+                sample_weights=sw,
+                penalty_fn=(_penalty_fn if plam else None),
+                penalty_lambda=plam,
             )
             m = _evaluate_policy(
                 model, driver_idxs=D["driver_idxs"], contexts=D["contexts"],
