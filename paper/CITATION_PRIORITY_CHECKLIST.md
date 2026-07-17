@@ -41,6 +41,11 @@ Status legend for what machines already did:
 Crossref/DOI metadata matched (front-end bot-blocked) · **NONE** = no publisher record exists.
 
 **Applied-changes log (controller sessions; checkboxes above/below remain Robert's alone):**
+- 2026-07-17: NEW §4.5 usages of existing keys `kamirancalders2012` (reweighing baseline arm) and
+  `zheng2023` ("in the spirit of" — the in-processing penalty arm). Claim-check note for the manual
+  pass: both are METHOD-LINEAGE attributions for our baseline implementations, not claims about the
+  cited papers' results; verify the lineage reads fairly (our penalty is a DP-gap analog, not
+  Zheng's exact regularizer).
 - 2026-07-16: the audit's §3 metadata diff + §4 full-name normalization APPLIED to `refs.bib`
   (34 entries; fixes: zietlow2022 pages 10410–10421; mittelstadt2024 title "Leveling" + DOI;
   karimi2020recourse title/pages; karimi2021recourse pages/booktitle; temkin2000 publisher +

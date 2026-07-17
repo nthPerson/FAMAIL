@@ -1,0 +1,485 @@
+{
+  "edit_dir": "famail_temporal/results/2026-07-10T02-06-37_alpha_sweep_s10_c80_f10_filtered",
+  "seeds": [
+    0
+  ],
+  "weights": [],
+  "placebo_weights": [],
+  "placebo_seed": 12345,
+  "mle_epochs": 20,
+  "n_edited": 9882,
+  "n_corpus": 95297,
+  "n_eval_drivers": 50,
+  "gate": {
+    "high_matched": 0.8474932399988174,
+    "low_mismatched": 0.1930961845179836,
+    "margin": 0.2,
+    "passed": true,
+    "n_matched": 1000,
+    "n_mismatched": 1000
+  },
+  "trusted": true,
+  "per_arm": {
+    "raw": {
+      "f_causal": {
+        "mean": 0.8011953830718994,
+        "std": 0.0,
+        "values": [
+          0.8012
+        ]
+      },
+      "f_spatial": {
+        "mean": 0.10516999661922455,
+        "std": 0.0,
+        "values": [
+          0.1052
+        ]
+      },
+      "fidelity_a": {
+        "mean": 0.8474537582397461,
+        "std": 0.0,
+        "values": [
+          0.8475
+        ]
+      },
+      "fidelity_b": {
+        "mean": 0.012329616401849602,
+        "std": 0.0,
+        "values": [
+          0.0123
+        ]
+      },
+      "n_empty": [
+        0
+      ],
+      "fidelity_b_per_component": {
+        "length": {
+          "values": [
+            0.0219
+          ]
+        },
+        "mean_displacement": {
+          "values": [
+            0.0059
+          ]
+        },
+        "coverage": {
+          "values": [
+            0.004
+          ]
+        },
+        "radius_of_gyration": {
+          "values": [
+            0.0067
+          ]
+        },
+        "net_displacement": {
+          "values": [
+            0.0067
+          ]
+        },
+        "terminal_cell": {
+          "values": [
+            0.0288
+          ]
+        }
+      },
+      "fidelity_a_separation": {
+        "values": [
+          0.6537
+        ]
+      },
+      "terminal_cell_entropy_bits": {
+        "values": [
+          6.9175
+        ]
+      },
+      "mean_trip_length": {
+        "values": [
+          12.6932
+        ]
+      },
+      "std_trip_length": {
+        "values": [
+          15.0928
+        ]
+      }
+    },
+    "edited": {
+      "f_causal": {
+        "mean": 0.8005506992340088,
+        "std": 0.0,
+        "values": [
+          0.8006
+        ]
+      },
+      "f_spatial": {
+        "mean": 0.10546360909938812,
+        "std": 0.0,
+        "values": [
+          0.1055
+        ]
+      },
+      "fidelity_a": {
+        "mean": 0.8480556956529617,
+        "std": 0.0,
+        "values": [
+          0.8481
+        ]
+      },
+      "fidelity_b": {
+        "mean": 0.013718198591847244,
+        "std": 0.0,
+        "values": [
+          0.0137
+        ]
+      },
+      "n_empty": [
+        1
+      ],
+      "fidelity_b_per_component": {
+        "length": {
+          "values": [
+            0.0206
+          ]
+        },
+        "mean_displacement": {
+          "values": [
+            0.0088
+          ]
+        },
+        "coverage": {
+          "values": [
+            0.0039
+          ]
+        },
+        "radius_of_gyration": {
+          "values": [
+            0.0088
+          ]
+        },
+        "net_displacement": {
+          "values": [
+            0.0082
+          ]
+        },
+        "terminal_cell": {
+          "values": [
+            0.032
+          ]
+        }
+      },
+      "fidelity_a_separation": {
+        "values": [
+          0.6543
+        ]
+      },
+      "terminal_cell_entropy_bits": {
+        "values": [
+          6.9217
+        ]
+      },
+      "mean_trip_length": {
+        "values": [
+          12.464
+        ]
+      },
+      "std_trip_length": {
+        "values": [
+          14.8063
+        ]
+      }
+    },
+    "fair_penalty_l100": {
+      "f_causal": {
+        "mean": 0.8000876903533936,
+        "std": 0.0,
+        "values": [
+          0.8001
+        ]
+      },
+      "f_spatial": {
+        "mean": 0.10564263164997101,
+        "std": 0.0,
+        "values": [
+          0.1056
+        ]
+      },
+      "fidelity_a": {
+        "mean": 0.8479515305757522,
+        "std": 0.0,
+        "values": [
+          0.848
+        ]
+      },
+      "fidelity_b": {
+        "mean": 0.013688032671307119,
+        "std": 0.0,
+        "values": [
+          0.0137
+        ]
+      },
+      "n_empty": [
+        0
+      ],
+      "fidelity_b_per_component": {
+        "length": {
+          "values": [
+            0.0158
+          ]
+        },
+        "mean_displacement": {
+          "values": [
+            0.0104
+          ]
+        },
+        "coverage": {
+          "values": [
+            0.0036
+          ]
+        },
+        "radius_of_gyration": {
+          "values": [
+            0.0105
+          ]
+        },
+        "net_displacement": {
+          "values": [
+            0.0113
+          ]
+        },
+        "terminal_cell": {
+          "values": [
+            0.0305
+          ]
+        }
+      },
+      "fidelity_a_separation": {
+        "values": [
+          0.6536
+        ]
+      },
+      "terminal_cell_entropy_bits": {
+        "values": [
+          6.9512
+        ]
+      },
+      "mean_trip_length": {
+        "values": [
+          10.3434
+        ]
+      },
+      "std_trip_length": {
+        "values": [
+          12.9498
+        ]
+      }
+    },
+    "fair_penalty_l1000": {
+      "f_causal": {
+        "mean": 0.5959387421607971,
+        "std": 0.0,
+        "values": [
+          0.5959
+        ]
+      },
+      "f_spatial": {
+        "mean": 0.08763696253299713,
+        "std": 0.0,
+        "values": [
+          0.0876
+        ]
+      },
+      "fidelity_a": {
+        "mean": 0.8478751535172219,
+        "std": 0.0,
+        "values": [
+          0.8479
+        ]
+      },
+      "fidelity_b": {
+        "mean": 0.5136561701381307,
+        "std": 0.0,
+        "values": [
+          0.5137
+        ]
+      },
+      "n_empty": [
+        1
+      ],
+      "fidelity_b_per_component": {
+        "length": {
+          "values": [
+            0.0615
+          ]
+        },
+        "mean_displacement": {
+          "values": [
+            0.7076
+          ]
+        },
+        "coverage": {
+          "values": [
+            0.2519
+          ]
+        },
+        "radius_of_gyration": {
+          "values": [
+            0.7357
+          ]
+        },
+        "net_displacement": {
+          "values": [
+            0.5637
+          ]
+        },
+        "terminal_cell": {
+          "values": [
+            0.7615
+          ]
+        }
+      },
+      "fidelity_a_separation": {
+        "values": [
+          0.6549
+        ]
+      },
+      "terminal_cell_entropy_bits": {
+        "values": [
+          7.7623
+        ]
+      },
+      "mean_trip_length": {
+        "values": [
+          17.7542
+        ]
+      },
+      "std_trip_length": {
+        "values": [
+          19.9814
+        ]
+      }
+    }
+  },
+  "paired_vs_raw": {
+    "f_causal": {
+      "edited": {
+        "diffs": [
+          -0.0006
+        ],
+        "mean": -0.000644683837890625,
+        "std": 0.0,
+        "n": 1,
+        "wilcoxon_p": 1.0
+      },
+      "fair_penalty_l100": {
+        "diffs": [
+          -0.0011
+        ],
+        "mean": -0.0011076927185058594,
+        "std": 0.0,
+        "n": 1,
+        "wilcoxon_p": 1.0
+      },
+      "fair_penalty_l1000": {
+        "diffs": [
+          -0.2053
+        ],
+        "mean": -0.2052566409111023,
+        "std": 0.0,
+        "n": 1,
+        "wilcoxon_p": 1.0
+      }
+    },
+    "f_spatial": {
+      "edited": {
+        "diffs": [
+          0.0003
+        ],
+        "mean": 0.0002936124801635742,
+        "std": 0.0,
+        "n": 1,
+        "wilcoxon_p": 1.0
+      },
+      "fair_penalty_l100": {
+        "diffs": [
+          0.0005
+        ],
+        "mean": 0.00047263503074645996,
+        "std": 0.0,
+        "n": 1,
+        "wilcoxon_p": 1.0
+      },
+      "fair_penalty_l1000": {
+        "diffs": [
+          -0.0175
+        ],
+        "mean": -0.017533034086227417,
+        "std": 0.0,
+        "n": 1,
+        "wilcoxon_p": 1.0
+      }
+    },
+    "fidelity_a": {
+      "edited": {
+        "diffs": [
+          0.0006
+        ],
+        "mean": 0.0006019374132155697,
+        "std": 0.0,
+        "n": 1,
+        "wilcoxon_p": 1.0
+      },
+      "fair_penalty_l100": {
+        "diffs": [
+          0.0005
+        ],
+        "mean": 0.0004977723360061193,
+        "std": 0.0,
+        "n": 1,
+        "wilcoxon_p": 1.0
+      },
+      "fair_penalty_l1000": {
+        "diffs": [
+          0.0004
+        ],
+        "mean": 0.00042139527747575567,
+        "std": 0.0,
+        "n": 1,
+        "wilcoxon_p": 1.0
+      }
+    },
+    "fidelity_b": {
+      "edited": {
+        "diffs": [
+          0.0014
+        ],
+        "mean": 0.001388582189997642,
+        "std": 0.0,
+        "n": 1,
+        "wilcoxon_p": 1.0
+      },
+      "fair_penalty_l100": {
+        "diffs": [
+          0.0014
+        ],
+        "mean": 0.0013584162694575165,
+        "std": 0.0,
+        "n": 1,
+        "wilcoxon_p": 1.0
+      },
+      "fair_penalty_l1000": {
+        "diffs": [
+          0.5013
+        ],
+        "mean": 0.5013265537362811,
+        "std": 0.0,
+        "n": 1,
+        "wilcoxon_p": 1.0
+      }
+    }
+  },
+  "effective_edited_fraction": {
+    "1": 0.10369686348993147
+  }
+}

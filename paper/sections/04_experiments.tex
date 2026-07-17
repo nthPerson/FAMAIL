@@ -374,6 +374,30 @@ scored for this arm --- duplicates of real trajectories pass any realism check
 by construction.
 % src: PAPER/baselines/demographic-oversampling/FINDINGS.md §2-5
 
+\textbf{Fairness-method baselines (training-side).} The remaining comparison
+is against fairness methods proper, applied where they usually live: at
+training time, on the raw corpus, scored by the full paired protocol.
+Instance reweighing in the Kamiran--Calders style
+\cite{kamirancalders2012} --- inverse group-service weights favoring
+disadvantaged-origin demonstrations --- moves demand-adjusted fairness the
+\emph{wrong} way ($-0.0227$, all six seeds negative, $p = .031$) while
+paying the same distributional cost as w30 upweighting (Fidelity-B
+$+0.0144$), and its rolled-out policies still tilt allocation away from the % lint-allow: coincidental value (fair_reweigh paired Fid-B delta, not the trim-only F_causal headline)
+disadvantaged group ($-0.0010$, 0/6, $p = .031$). An in-processing penalty
+in the spirit of \cite{zheng2023} --- the imitation loss plus $\lambda$
+times a differentiable demographic-parity gap over predicted next-cell
+mass --- is inert at every dose that trains stably (six-seed suite at
+$\lambda \in \{1, 3.16, 10\}$: $|\Delta F_{\mathrm{causal}}| \le 0.0009$,
+all n.s.; a single-seed probe at $\lambda = 100$ agrees; the term
+contributes $\sim\!10^{-5}$ of the loss) and destructive at the dose where
+it finally dominates (a $\lambda = 1000$ probe collapses
+$F_{\mathrm{causal}}$ by $-0.2053$ and Fidelity-B from 0.014 to 0.514).
+Neither training-side intervention reproduces any part of the recovery
+that editing the demonstrations provides.
+% src: famail_temporal/results/weighted_bc_sweep/fairness_baseline_6seed/paired_stats.json (fair_reweigh; edited_w30 +0.0302 replicated internally)
+% src: famail_temporal/results/weighted_bc_sweep/fairness_penalty_6seed/paired_stats.json + fairness_penalty_probe/ (lambda 100/1000 single-seed probes)
+% src: famail_temporal/baselines/external_fairness/results/option_a_rollout_fb/summary.json (rollout: R5 arm-prefix regression gate passed, edited_w30 -0.00329 vs committed -0.0033)
+
 \begin{table}[t]
 \caption{Cross-arm comparison at matched budgets (Shenzhen).}
 \label{tab:baselines}
