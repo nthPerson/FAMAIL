@@ -127,7 +127,10 @@ def main():
     ap.add_argument("--refs-only", action="store_true")
     ap.add_argument("--smoke", action="store_true")
     ap.add_argument("--seeds", type=str, default="0,1,2,3,4,5")
-    ap.add_argument("--arms", type=str, default="raw,edited,edited_w10,edited_w30")
+    ap.add_argument("--arms", type=str, default=None,
+                     help="Comma-separated arm names (default: raw,edited,edited_w10,"
+                          "edited_w30). --smoke normally narrows this to raw,edited_w30, "
+                          "unless --arms is passed explicitly -- then it is respected as-is.")
     ap.add_argument("--epochs", type=int, default=20)
     ap.add_argument("--device", default="auto")
     ap.add_argument("--edit-dir", type=str, default=str(DEFAULT_EDIT_DIR),
@@ -171,12 +174,17 @@ def main():
 
     # ---- policy training + rollout ----
     seeds = [int(s) for s in args.seeds.split(",")]
-    arms = args.arms.split(",")
+    arms_explicit = args.arms is not None
+    arms = (args.arms if arms_explicit
+            else "raw,edited,edited_w10,edited_w30").split(",")
     slice_n = None
     epochs = args.epochs
     if args.smoke:
-        seeds, arms, epochs, slice_n = [0], ["raw", "edited_w30"], 1, 1500
-        say("SMOKE MODE: 1 seed, 2 arms, 1 epoch, 1500-traj slice")
+        seeds, epochs, slice_n = [0], 1, 1500
+        if not arms_explicit:
+            arms = ["raw", "edited_w30"]
+        say(f"SMOKE MODE: 1 seed, {len(arms)} arm(s) ({','.join(arms)}), "
+            f"1 epoch, 1500-traj slice")
 
     device = (torch.device("cuda" if torch.cuda.is_available() else "cpu")
               if args.device == "auto" else torch.device(args.device))
@@ -192,14 +200,43 @@ def main():
     D_raw = traj_training_data(r_slice, d2i)
     D_edited = traj_training_data(e_slice, d2i)
 
+    # ---- fairness-baseline arm fixtures (arm-constant; built ONCE, no RNG) ----
+    # Mirrors run_weighted_bc_smoke.py's --fairness-reweigh/--fairness-penalty wiring.
+    # Index-aligned to r_slice/D_raw (not the unsliced raw_trajs), same convention as
+    # edited_w's weight_vector(e_slice, ...) below -- required for --smoke's 1500-traj slice.
+    _fair_reweigh_w = None
+    if "fair_reweigh" in arms:
+        from famail_temporal.baselines.fairness_baseline import (
+            fairness_reweigh_weight_vector)
+        _fair_reweigh_w = fairness_reweigh_weight_vector(r_slice, bundle)
+        say("fair_reweigh: inverse-SDR instance weights on RAW corpus")
+
+    _penalty_fn = None
+    if any(a.startswith("fair_penalty_l") for a in arms):
+        from famail_temporal.baselines.fairness_baseline import (
+            unit_groups_and_sdr, cell_masks_for_vocab, dp_gap_penalty)
+        from famail_temporal.baselines.gan.sequences import flat_cell
+        cell_group, _sdr = unit_groups_and_sdr(bundle)
+        m_d, m_a = cell_masks_for_vocab(
+            cell_group, gc.VOCAB_SIZE, lambda cell: flat_cell(cell[0], cell[1]))
+        assert int(m_d.sum()) > 0 and int(m_a.sum()) > 0, "empty group mask"
+        m_d, m_a = m_d.to(device), m_a.to(device)
+        _penalty_fn = lambda lg, tg: dp_gap_penalty(lg, tg, m_d, m_a, pad_id=gc.PAD)
+        say("fair_penalty: DP-gap penalty fn built (masks non-empty)")
+
     def arm_spec(name):
         if name == "raw":
-            return D_raw, None
+            return D_raw, None, 0.0
         if name == "edited":
-            return D_edited, None
+            return D_edited, None, 0.0
         if name.startswith("edited_w"):
             w = float(name.split("edited_w")[1])
-            return D_edited, weight_vector(e_slice, edited_ids, w)
+            return D_edited, weight_vector(e_slice, edited_ids, w), 0.0
+        if name == "fair_reweigh":
+            return D_raw, _fair_reweigh_w, 0.0
+        if name.startswith("fair_penalty_l"):
+            lam = float(name.split("fair_penalty_l")[1])
+            return D_raw, None, lam
         raise ValueError(name)
 
     for seed in seeds:
@@ -209,7 +246,7 @@ def main():
             if out_path.exists():
                 say(f"skip {tag} (exists)")
                 continue
-            D, sw = arm_spec(arm)
+            D, sw, plam = arm_spec(arm)
             say(f"train {tag} (epochs={epochs}) ...")
             t0 = time.time()
             set_all_seeds(seed)
@@ -217,7 +254,9 @@ def main():
             train_mle(model, D["sequences"], D["contexts"], epochs=epochs,
                       lr=gc.MLE_LR, batch_size=gc.MLE_BATCH_SIZE, device=device,
                       driver_idxs=D["driver_idxs"], max_batch_tokens=8192,
-                      sample_weights=sw)
+                      sample_weights=sw,
+                      penalty_fn=(_penalty_fn if plam else None),
+                      penalty_lambda=plam)
             t_train = time.time() - t0
             say(f"  trained in {t_train:.0f}s; rolling out {len(D_raw['contexts'])} ...")
             t0 = time.time()
