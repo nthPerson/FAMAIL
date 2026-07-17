@@ -75,7 +75,11 @@ All curated + git-tracked under **`PAPER/supply-lift/data/a10/`** (38 files; Q8a
 | `shz_a10_external_fairness.json` | `external_fairness/results/shenzhen-primary-supplylift-s10/` | §4.3 DI +0.0162, DP −0.890, Theil −0.0087; also `tab:featsets` PRIMARY Δmean(Y\|disadv) +0.0529 + DP gap rows (added 2026-07-15) |
 | `shz_a10_l1v2_multiseed.json` | `level1_table_v2/supply_lift_shz_5seed/` | §4.4 `tab:l1` (edited 0.8214 fairest; Fid-A 0.844) |
 | `shz_a10_weighted_bc_paired_stats.json` + `_dose_response` + `_manifest` | `weighted_bc_sweep/alpha_sweep_s10_c80_f10_filtered_6seed/` | §4.4 dose-response **+0.0217/+0.0267/+0.0302** (6/6) |
-| `shz_a10_variance_aggregate.json` | `variance_suite/supply_lift_shz_5seed/` | §4.4 variance +0.0031±0.0022 (n=5) |
+| `shz_a10_variance_aggregate.json` | `variance_suite/supply_lift_shz_5seed/` | superseded by the n=10 suite below (retained; effect size agrees) |
+| `shz_a10_variance10_aggregate.json` | `variance_suite/supply_lift_shz_10seed/` | §4.4 variance **+0.0030±0.0022, n=10, 9/10 positive, Wilcoxon p=.0039** — first model-level result clearing p<.05 (B2-VAR-SZ, 2026-07-16) |
+| `sf12_a10_variance10_aggregate.json` | `variance_suite/supply_lift_sf12_10seed/` | §4.7 SF variance null at n=10 (−0.0009±0.0035, cleaner than n=5's −0.0025) (B2-VAR-SF, 2026-07-16) |
+| `shz_a10_wbc_dose_ext_{paired_stats,dose_response}.json` | `weighted_bc_sweep/alpha_sweep_s10_dose_ext_6seed/` | §4.4 dose SATURATION: w40 +0.0323 / w50 +0.0339 (6/6 each), increments 50/35/21/16×10⁻⁴ → w30 = knee; controls dead at extended doses (random w50 −0.0036, most-fair +0.0009 n.s.) (C1, 2026-07-16) |
+| `PAPER/baselines/comparison/sf12_{ifgsm,fgsm,random}_metrics.json` | `2026-07-16T16-08-*_baseline_*_sf12/` | §4.5 SF perturbation replication: +0.0122/+0.0176/+0.0049 all < editor +0.0316; adjacency 72.0/87.0/97.5%; Fid-B 0.198/0.282/0.418 vs edited 0.098; random weakest (B1, 2026-07-16) |
 | `shz_a10_pareto_points.csv` | `analysis/pareto_supplylift/` | §4.6 filtering INVERTS the gain (0.7988→0.7935) |
 | `shz_a10_rollout_summary.json` | `external_fairness/results/option_a_rollout_a10/` | §4.4 allocation boundary (−0.0033 @ w30) ⚠️ see §7 |
 | `shz_trimonly_a10_metrics.json` + `_external_fairness.json` | `2026-07-11T12-11-31_trimonly_a10_shz` | §4.2 trim-vs-lift **ablation** (+0.0146; mean(Y\|disadv) flat) |

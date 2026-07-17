@@ -1,0 +1,53 @@
+{
+  "arm": {
+    "mode": "random",
+    "city": "sf12",
+    "epsilon": null,
+    "step": null,
+    "max_iterations": null,
+    "seed": 0,
+    "random_start": true,
+    "n_edited": 1959,
+    "adjacency_violation_rate": 0.9754977029096478,
+    "mean_final_p": 0.9165707228742369,
+    "mean_iterations": 1.0
+  },
+  "fairness": {
+    "f_spatial_before": 0.18462900817394257,
+    "f_spatial_after": 0.20322498679161072,
+    "f_causal_before": 0.8751505613327026,
+    "f_causal_after": 0.880032479763031,
+    "deltas": {
+      "f_spatial": 0.018595978617668152,
+      "f_causal": 0.004881918430328369
+    }
+  },
+  "fidelity": {
+    "fidelity_a": {
+      "mean": 0.9582110983630021,
+      "std": 0.04015520300730736,
+      "n": 240,
+      "separation": 0.9238225792062826,
+      "trusted": true
+    },
+    "gate": {
+      "high_matched": 0.9577568106353282,
+      "low_mismatched": 0.03431432731873379,
+      "margin": 0.2,
+      "passed": true,
+      "n_matched": 240,
+      "n_mismatched": 240
+    },
+    "fidelity_b": {
+      "per_stat": {
+        "length": 0.0,
+        "mean_displacement": 0.912814736091961,
+        "coverage": 0.11425935223206748,
+        "radius_of_gyration": 0.6540558544676085,
+        "net_displacement": 0.22234912450229527
+      },
+      "terminal_cell_js": 0.6021467834632458,
+      "aggregate": 0.4176043084595296
+    }
+  }
+}

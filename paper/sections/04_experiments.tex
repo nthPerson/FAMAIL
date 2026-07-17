@@ -257,16 +257,22 @@ recipe of \S\ref{sec:downstream}.
 \textbf{Upweighting recovers it, edit-specifically.} With the edited
 demonstrations upweighted, the paired gain is monotone in the weight and
 sign-unanimous: $+0.0217$ (w10), $+0.0267$ (w20), $+0.0302$ (w30), each 6/6
-at the $p = .031$ floor, $t$-interval $[+0.0264, +0.0340]$ at w30. Neither
-control reproduces it: the random-subset placebo is null-to-negative
-($-0.0014$ w10, $-0.0023$ w30, both n.s.), and the most-fair selection control reaches
+at the $p = .031$ floor, $t$-interval $[+0.0264, +0.0340]$ at w30. Extending
+the dose shows saturation, not unbounded growth: $+0.0323$ (w40) and
+$+0.0339$ (w50), each 6/6, with the per-step increment shrinking
+monotonically ($+0.0050$, $+0.0035$, $+0.0021$, $+0.0016$) --- w30 sits at
+the knee of the curve, not at a tuned endpoint. Neither
+control reproduces it at any dose: the random-subset placebo is
+null-to-negative ($-0.0014$ w10, $-0.0023$ w30, $-0.0036$ w50, never
+positive), and the most-fair selection control reaches
 $+0.0033$ at w10 --- significant, but under a sixth of the edited arm's
-gain --- then fades to n.s.\ as the dose rises ($+0.0017$ w20, $+0.0009$
-w30) while the edited arms keep growing. $F_{\mathrm{spatial}}$ propagates
-on Shenzhen: already $+0.0008$ ($p = .031$) at uniform weight, rising to
-$+0.0038$/$+0.0040$/$+0.0052$ across w10/w20/w30 (each $p = .031$), while
-both controls significantly \emph{degrade} it at w30 ($-0.0012$ random,
-$-0.0027$ most-fair). Fidelity-A is unchanged at every weight (all n.s.,
+gain --- then fades to n.s.\ at every higher dose ($+0.0017$ w20, $+0.0009$
+w30, $+0.0009$ at both w40 and w50). $F_{\mathrm{spatial}}$ propagates
+on Shenzhen as well: present already at uniform weight ($+0.0008$,
+$p = .031$) and rising through
+$+0.0038$, $+0.0040$, and $+0.0052$ across w10/w20/w30 (each $p = .031$),
+while at w30 both controls significantly \emph{degrade} it ($-0.0012$
+random, $-0.0027$ most-fair). Fidelity-A is unchanged at every weight (all n.s.,
 $|\Delta|$ at most $+0.0007$); Fidelity-B rises dose-monotonically
 ($0.020 \to 0.027$ absolute vs.\ raw $0.013$) --- the expected signature of
 deliberately shifting population statistics toward the edited slice,
@@ -274,12 +280,14 @@ disclosed rather than netted out.
 % src: famail_temporal/results/weighted_bc_sweep/alpha_sweep_s10_c80_f10_filtered_6seed/paired_stats.json + dose_response.json
 
 \textbf{Model-level variance.} A paired baseline-vs-FAMAIL comparison at
-uniform weight gives $\Delta F_{\mathrm{causal}} = +0.0031 \pm 0.0022$
-($n = 5$; below the Wilcoxon significance floor and read as
-effect-versus-noise per \S\ref{sec:exp-setup}) --- consistent with the
-vanilla-transfer null: without the weighting lever, the training procedure
-alone does not reliably transmit the edit.
-% src: famail_temporal/results/variance_suite/supply_lift_shz_5seed/ (paired per-seed diffs; all five positive but n=5)
+uniform weight gives $\Delta F_{\mathrm{causal}} = +0.0030 \pm 0.0022$ at
+$n = 10$ seeds (9/10 positive; Wilcoxon $p = .0039$, $t$-test $p = .0019$)
+--- the effect size is unchanged from the original five-seed suite
+($+0.0031$) and now clears conventional significance outright. The reading
+stands: the training procedure alone transmits a small but real fraction of
+the edit, an order of magnitude below the upweighted gains, so the weighting
+lever remains what carries the transfer.
+% src: famail_temporal/results/variance_suite/supply_lift_shz_10seed/aggregate.json (paired_delta.f_causal; B2-VAR-SZ 2026-07-16; n=5 suite retained at variance_suite/supply_lift_shz_5seed)
 
 \textbf{The allocation boundary.} Metric propagation is not
 the whole story. Rolling out the trained policies and measuring the share of
@@ -336,7 +344,14 @@ edited corpus's disclosed 0.187 (iFGSM: 54.4\%, 0.143; FGSM: 91.4\%,
 survives every arm ($\approx 0.846$, gate passed) --- at $\varepsilon = 2$
 the perturbations are too small to break driver identity, which is exactly
 why identity fidelity alone cannot rank editing quality here and the
-adjacency and distributional axes carry the comparison.
+adjacency and distributional axes carry the comparison. The three
+perturbation arms replicate on San Francisco: every arm lands well below the
+editor ($+0.0122$ iFGSM, $+0.0176$ FGSM, $+0.0049$ random, against the
+editor's $+0.0316$) while violating adjacency wholesale
+(72.0/87.0/97.5\%) and paying $2$--$4\times$ the edited corpus's
+distributional divergence (0.198--0.418 against 0.098); the random-jitter
+fairness surprise does not recur there --- random is the weakest mover.
+% src: famail_temporal/results/2026-07-16T16-08-{05_baseline_ifgsm,16_baseline_fgsm,23_baseline_random}_sf12/metrics.json (B1 runs 2026-07-16; SF Fid-B from level1 sf12 edited row = 0.098)
 % src: famail_temporal/baselines/baseline_table/baseline_table.json (Fid-A/Fid-B(JS)/adjacency-violation columns)
 
 \textbf{Demographic oversampling.} The naive lift-up baseline: duplicate
@@ -530,10 +545,12 @@ $F_{\mathrm{spatial}}$ does \emph{not} propagate on SF ($-0.0040$ at w30,
 n.s.); the primary-city result at the adopted weights is reported in
 \S\ref{sec:exp-downstream}.
 % src: famail_temporal/results/weighted_bc_sweep/supply_lift_a10_sf12_filtered_6seed/paired_stats.json
-The SF model-level variance suite mirrors the primary city:
-$\Delta F_{\mathrm{causal}} = -0.0025 \pm 0.0029$ ($n = 5$, mixed signs,
-null).
-% src: famail_temporal/results/variance_suite/supply_lift_sf12_5seed/ (paired per-seed diffs)
+The SF model-level variance suite stays null at $n = 10$ seeds
+($\Delta F_{\mathrm{causal}} = -0.0009 \pm 0.0035$, mixed signs, closer to
+zero than at $n = 5$) --- unlike the primary city's small significant
+positive effect (\S\ref{sec:exp-downstream}), a city difference we state
+plainly.
+% src: famail_temporal/results/variance_suite/supply_lift_sf12_10seed/aggregate.json (paired_delta.f_causal; B2-VAR-SF 2026-07-16; n=5 suite retained)
 The four-source comparison also reproduces (generators retrained from
 scratch; identity gate passed, matched 0.958 vs.\ mismatched 0.034): the
 edited corpus is the fairest source ($F_{\mathrm{causal}}$ 0.9067 vs.\ GAN
