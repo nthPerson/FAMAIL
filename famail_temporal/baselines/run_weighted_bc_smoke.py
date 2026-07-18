@@ -155,6 +155,12 @@ def main(argv: List[str] | None = None) -> int:
                     help="Comma-separated lambda values for fair_penalty arms: BC loss + "
                          "lambda * differentiable DP-gap penalty (in-processing fairness "
                          "baseline), trained on the RAW corpus. Empty = no penalty arms.")
+    ap.add_argument("--fairness-penalty-abs", type=str, default="",
+                    help="Comma-separated lambda values for fair_penalty_abs arms: BC loss + "
+                         "lambda * ABSOLUTE-value differentiable DP-gap penalty "
+                         "|mass_a - mass_d| (in-processing fairness baseline variant of "
+                         "--fairness-penalty), trained on the RAW corpus. Empty = no "
+                         "penalty-abs arms.")
     ap.add_argument("--mle-epochs", type=int, default=20)
     ap.add_argument("--max-eval-drivers", type=int, default=50)
     ap.add_argument("--pairs-per-driver", type=int, default=20)
@@ -259,6 +265,25 @@ def main(argv: List[str] | None = None) -> int:
             arms.append((f"fair_penalty_l{lam:g}", D_raw, None, lam))
         print(f"[wbc] fair_penalty: DP-gap penalty arms on RAW at lambdas "
               f"{fp_lambdas}", flush=True)
+    # Absolute-value penalty variant (mirrors the signed block above exactly;
+    # distinct mask locals m_d_abs/m_a_abs so the signed closure's variables are
+    # never rebound). Spec: docs/superpowers/specs/2026-07-18-penalty-abs-probe-design.md.
+    fp_abs_lambdas = [float(x) for x in str(args.fairness_penalty_abs).split(",") if x.strip()]
+    _penalty_fn_abs = None
+    if fp_abs_lambdas:
+        from famail_temporal.baselines.fairness_baseline import (
+            unit_groups_and_sdr, cell_masks_for_vocab, dp_gap_penalty_abs)
+        from famail_temporal.baselines.gan.sequences import flat_cell
+        cell_group, _sdr = unit_groups_and_sdr(bundle)
+        m_d_abs, m_a_abs = cell_masks_for_vocab(
+            cell_group, gc.VOCAB_SIZE, lambda cell: flat_cell(cell[0], cell[1]))
+        assert int(m_d_abs.sum()) > 0 and int(m_a_abs.sum()) > 0, "empty group mask"
+        m_d_abs, m_a_abs = m_d_abs.to(device), m_a_abs.to(device)
+        _penalty_fn_abs = lambda lg, tg: dp_gap_penalty_abs(lg, tg, m_d_abs, m_a_abs, pad_id=gc.PAD)
+        for lam in fp_abs_lambdas:
+            arms.append((f"fair_penalty_abs_l{lam:g}", D_raw, None, lam))
+        print(f"[wbc] fair_penalty_abs: |DP-gap| penalty arms on RAW at lambdas "
+              f"{fp_abs_lambdas}", flush=True)
     arm_names = [a[0] for a in arms]
     if placebo_weights:
         n_pl = len(eids)
@@ -356,7 +381,8 @@ def main(argv: List[str] | None = None) -> int:
                 device=device, driver_idxs=D["driver_idxs"],
                 max_batch_tokens=args.max_batch_tokens,
                 sample_weights=sw,
-                penalty_fn=(_penalty_fn if plam else None),
+                penalty_fn=(_penalty_fn_abs if plam and name.startswith("fair_penalty_abs")
+                            else _penalty_fn if plam else None),
                 penalty_lambda=plam,
             )
             m = _evaluate_policy(

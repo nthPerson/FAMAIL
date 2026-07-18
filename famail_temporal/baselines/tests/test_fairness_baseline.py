@@ -108,6 +108,71 @@ def test_dp_gap_positive_when_adv_favored_and_differentiable():
     assert logits.grad is not None and torch.isfinite(logits.grad).all()
 
 
+def test_dp_gap_abs_equals_abs_of_signed_on_fixtures():
+    # The abs variant is |signed| on the module's existing fixtures: the
+    # uniform-logits fixture (gap == 0) and the adv-favored fixture (gap > 0),
+    # where mass_a >= mass_d so the two formulations already agree in value.
+    from famail_temporal.baselines.fairness_baseline import dp_gap_penalty_abs
+    # Fixture A -- uniform logits (same construction as test_dp_gap_zero_*).
+    B, L, V = 2, 3, 10
+    logits = torch.zeros(B, L, V)
+    tgt = torch.ones(B, L, dtype=torch.long)
+    m_d = torch.zeros(V, dtype=torch.bool); m_d[:3] = True
+    m_a = torch.zeros(V, dtype=torch.bool); m_a[3:6] = True
+    s = dp_gap_penalty(logits, tgt, m_d, m_a, pad_id=0)
+    a = dp_gap_penalty_abs(logits, tgt, m_d, m_a, pad_id=0)
+    assert torch.isclose(a, s.abs())
+    # Fixture B -- adv-favored (same construction as test_dp_gap_positive_*).
+    B, L, V = 1, 2, 6
+    logits = torch.full((B, L, V), -10.0)
+    with torch.no_grad():
+        logits[..., 3:6] = 10.0                      # all mass on adv cells
+    tgt = torch.ones(B, L, dtype=torch.long)
+    m_d = torch.zeros(V, dtype=torch.bool); m_d[:3] = True
+    m_a = torch.zeros(V, dtype=torch.bool); m_a[3:6] = True
+    s = dp_gap_penalty(logits, tgt, m_d, m_a, pad_id=0)
+    a = dp_gap_penalty_abs(logits, tgt, m_d, m_a, pad_id=0)
+    assert torch.isclose(a, s.abs())
+    assert a.item() > 0.2                            # signed gap is positive here
+
+
+def test_dp_gap_abs_opposite_gradient_on_negative_gap():
+    # DISCRIMINATING test -- the entire behavioral difference between the two
+    # formulations lives in the mass_d > mass_a region (signed gap < 0). There
+    # |x| = -x, so the absolute penalty's gradient is the NEGATION of the signed
+    # penalty's: they push the logits in OPPOSITE directions. A test that only
+    # exercised the positive-gap region (where the two agree) would prove
+    # nothing, so this fixture puts all mass on the DISADVANTAGED cells.
+    from famail_temporal.baselines.fairness_baseline import dp_gap_penalty_abs
+    B, L, V = 1, 2, 6
+    m_d = torch.zeros(V, dtype=torch.bool); m_d[:3] = True
+    m_a = torch.zeros(V, dtype=torch.bool); m_a[3:6] = True
+    tgt = torch.ones(B, L, dtype=torch.long)
+
+    def _neg_gap_logits():
+        # More mass on DISADVANTAGED cells -> mass_d > mass_a -> signed gap < 0.
+        # Moderate (unsaturated) logits so softmax gradients stay non-trivial;
+        # ~one-hot logits would give a correct-but-vanishing gradient (~1e-9).
+        lg = torch.zeros((B, L, V), requires_grad=True)
+        with torch.no_grad():
+            lg[..., :3] = 2.0
+        return lg
+
+    lg_s = _neg_gap_logits()
+    g_signed = dp_gap_penalty(lg_s, tgt, m_d, m_a, pad_id=0)
+    assert g_signed.item() < -0.2                    # genuinely in the negative-gap region
+    g_signed.backward()
+
+    lg_a = _neg_gap_logits()
+    g_abs = dp_gap_penalty_abs(lg_a, tgt, m_d, m_a, pad_id=0)
+    assert torch.isclose(g_abs, g_signed.detach().abs())   # magnitude preserved
+    g_abs.backward()
+
+    # opposite directions everywhere, and non-trivially so (not 0 == -0)
+    assert lg_s.grad.abs().max() > 1e-4
+    assert torch.allclose(lg_a.grad, -lg_s.grad, atol=1e-6)
+
+
 def test_cell_masks_for_vocab_disjoint_and_correct():
     cell_group = {(0, 0): 1, (1, 1): 0}
     token_of_cell = lambda c: {(0, 0): 4, (1, 1): 7}[c]

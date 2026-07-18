@@ -104,6 +104,19 @@ def dp_gap_penalty(logits, tgt, mask_disadv, mask_adv, pad_id: int):
     return mass_a - mass_d
 
 
+def dp_gap_penalty_abs(logits, tgt, mask_disadv, mask_adv, pad_id: int):
+    """Absolute-value variant of :func:`dp_gap_penalty`: |mass_a - mass_d|.
+
+    A thin composition over the proven signed penalty (which is NOT modified).
+    Where the advantaged group is over-served (mass_a > mass_d) the two are
+    identical in value and gradient; they diverge only if an overshoot crosses
+    the gap through zero, where the signed penalty keeps pushing while this one
+    pushes back toward equality. Same signature as dp_gap_penalty; the metric
+    firewall is unchanged (still an external-family quantity, NOT F_causal).
+    Spec: docs/superpowers/specs/2026-07-18-penalty-abs-probe-design.md."""
+    return torch.abs(dp_gap_penalty(logits, tgt, mask_disadv, mask_adv, pad_id))
+
+
 def cell_masks_for_vocab(
     cell_group: Dict[Tuple[int, int], int], vocab_size: int, token_of_cell,
 ) -> Tuple[torch.Tensor, torch.Tensor]:
