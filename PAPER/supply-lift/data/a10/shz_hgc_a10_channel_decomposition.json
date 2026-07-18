@@ -8,10 +8,11 @@
     "seed": 0,
     "ci": 0.95
   },
-  "tier2_grid": null,
+  "tier2_grid": "famail_temporal/results/2026-07-13T04-41-12_supply_lift_v1_shz_hgc_filtered/S_tier2_after.npz",
   "levels": {
     "mean_Y_D_before": 7.073447554576566,
-    "mean_Y_D_after_tier1": 7.13280014811572
+    "mean_Y_D_after_tier1": 7.13280014811572,
+    "mean_Y_D_after_tier2": 7.1484924740066385
   },
   "channels": {
     "demand": {
@@ -42,6 +43,18 @@
       "point": 0.05303065827033586,
       "ci_lo": 0.011658049962868225,
       "ci_hi": 0.09607261556018298,
+      "significant": true
+    },
+    "supply_tier2": {
+      "point": 0.021104095948779305,
+      "ci_lo": 0.0180510482294976,
+      "ci_hi": 0.02468780467130565,
+      "significant": true
+    },
+    "total_tier2": {
+      "point": 0.07504491943007158,
+      "ci_lo": 0.03240826684688825,
+      "ci_hi": 0.11787162079181987,
       "significant": true
     }
   }

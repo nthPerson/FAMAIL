@@ -477,13 +477,15 @@ $F_{\mathrm{causal}}$ scales shift with the feature set by construction.
 The design-targeted lift-up also reproduces: the total
 $\Delta\,\mathrm{mean}(Y \mid \mathrm{disadv.})$ carries a bootstrap
 interval excluding zero on all three sets, and the supply channel is
-individually significant on all three. The channel mix is not constant ---
+individually significant on all three --- under \emph{both} accounting
+conventions (distinct-taxi tier-2: $+0.0411$, $+0.0211$, $+0.0771$, every
+interval excluding zero). The channel mix is not constant ---
 on the primary set the demand channel is n.s., while under both alternate
 sets it is significant and carries most of the larger totals --- so the
 added-presence mechanism replicates while the demand-side share varies with
 the feature set, and we report the decomposition rather than the total
 alone.
-% src: {2026-07-13T04-41-12_..._hgc, 2026-07-13T17-04-22_..._4feat}_filtered/channel_decomposition.json (A1 runs 2026-07-16, B=2000): totals +0.0594 [+0.0181,+0.1013] / +0.1461 [+0.0900,+0.2039]; supply +0.0054 [+0.0017,+0.0094] / +0.0608 [+0.0540,+0.0676]; demand +0.0539* / +0.0853* (PRIMARY demand +0.0352 n.s.)
+% src: {2026-07-13T04-41-12_..._hgc, 2026-07-13T17-04-22_..._4feat}_filtered/channel_decomposition.json (A1 2026-07-16 + A1' tier-2 rerun 2026-07-17, B=2000): totals +0.0594 [+0.0181,+0.1013] / +0.1461 [+0.0900,+0.2039]; supply t1 +0.0054 / +0.0608; supply TIER-2 +0.0211 [+0.0181,+0.0247] / +0.0771 [+0.0706,+0.0836]; demand +0.0539* / +0.0853* (PRIMARY: t1 +0.0176, t2 +0.0411, demand n.s.)
 
 \begin{table}[t]
 \caption{Feature-set robustness under trim+lift (Shenzhen; $\Delta$ rows are

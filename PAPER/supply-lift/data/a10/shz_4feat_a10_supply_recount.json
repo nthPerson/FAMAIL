@@ -1,0 +1,124 @@
+{
+  "city": "shenzhen",
+  "edit_dir": "famail_temporal/results/2026-07-13T17-04-22_supply_lift_v1_shz_4feat_filtered",
+  "runtime_seconds": 145.3346316840034,
+  "n_days": 5,
+  "substitution_stats": {
+    "n_histories": 9870,
+    "n_matched": 9870,
+    "n_unmatched": 0,
+    "n_len_mismatch": 0,
+    "n_moved_states": 15060,
+    "unmatched_examples": []
+  },
+  "sanity_check_1_reproduction_before_vs_production": {
+    "n_active_cells": 34524,
+    "mae": 0.0,
+    "max_abs_diff": 0.0,
+    "mean_relative_error": 0.0,
+    "corr": 0.9999999999999998
+  },
+  "sanity_check_2_tier1_vs_tier2_delta_supply_gap": {
+    "corr": 0.3186161154414487,
+    "magnitude_tier1_sum_abs": 3703.800164429471,
+    "magnitude_tier2_sum_abs": 1917.1999484300613,
+    "magnitude_ratio_tier2_over_tier1": 0.5176305047022925,
+    "n_active_cells_tier1_nonzero": 18238,
+    "n_sign_agree": 4257,
+    "n_tier2_zero_where_tier1_nonzero": 12627,
+    "n_sign_disagree_both_nonzero": 1354,
+    "frac_sign_agree": 0.23341375150784077,
+    "top10_disagreement_cells": [
+      {
+        "x": 6,
+        "y": 29,
+        "t": 6,
+        "delta_tier1": -5.366666316986084,
+        "delta_tier2": 0.0
+      },
+      {
+        "x": 11,
+        "y": 31,
+        "t": 6,
+        "delta_tier1": 4.716665267944336,
+        "delta_tier2": 0.0
+      },
+      {
+        "x": 11,
+        "y": 30,
+        "t": 6,
+        "delta_tier1": 4.883331775665283,
+        "delta_tier2": 0.20000076293945312
+      },
+      {
+        "x": 6,
+        "y": 30,
+        "t": 6,
+        "delta_tier1": -4.599998950958252,
+        "delta_tier2": 0.0
+      },
+      {
+        "x": 11,
+        "y": 32,
+        "t": 6,
+        "delta_tier1": 4.183332920074463,
+        "delta_tier2": 0.0
+      },
+      {
+        "x": 11,
+        "y": 29,
+        "t": 6,
+        "delta_tier1": 4.566666126251221,
+        "delta_tier2": 0.40000152587890625
+      },
+      {
+        "x": 14,
+        "y": 38,
+        "t": 0,
+        "delta_tier1": -3.9333314895629883,
+        "delta_tier2": 0.0
+      },
+      {
+        "x": 14,
+        "y": 41,
+        "t": 18,
+        "delta_tier1": -3.7666656970977783,
+        "delta_tier2": 0.0
+      },
+      {
+        "x": 18,
+        "y": 40,
+        "t": 18,
+        "delta_tier1": -3.6666650772094727,
+        "delta_tier2": 0.0
+      },
+      {
+        "x": 15,
+        "y": 41,
+        "t": 18,
+        "delta_tier1": -3.133333206176758,
+        "delta_tier2": 0.40000057220458984
+      }
+    ]
+  },
+  "metrics": {
+    "f_causal_before": 0.7987951040267944,
+    "f_causal_tier1_after": 0.8198376297950745,
+    "f_causal_tier2_after": 0.8153960704803467,
+    "delta_f_causal_tier1": 0.02104252576828003,
+    "delta_f_causal_tier2": 0.016600966453552246,
+    "mean_Y_D_before": 7.073447554576566,
+    "mean_Y_D_tier1_after": 7.219557789760626,
+    "mean_Y_D_tier2_after": 7.235780016236476,
+    "delta_mean_Y_D_tier1": 0.14611023518405997,
+    "delta_mean_Y_D_tier2": 0.16233246165991044
+  },
+  "S_tier2_before_summary": {
+    "mean_active": 8.33593463897705,
+    "sum_active": 287789.8125
+  },
+  "S_tier2_after_summary": {
+    "mean_active": 8.38785171508789,
+    "sum_active": 289582.1875
+  }
+}
