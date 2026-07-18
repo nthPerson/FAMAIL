@@ -40,8 +40,8 @@ $p$ floors at $0.03125$, attained exactly when all six seeds share a sign; we
 therefore read effects from the mean $\Delta$, its $t$-interval, and
 dose-response monotonicity, and treat $p = 0.031$ only as a sign-unanimity
 certificate. The flagship w30 comparison is additionally run at $n = 12$
-paired seeds (floor $.00049$), where an exact Wilcoxon $p$ can survive
-multiple-comparison correction. Suites with $n = 5$ seeds cannot reach $p < 0.05$ (floor 0.0625)
+paired seeds in both cities (floor $.00049$), where an exact Wilcoxon $p$
+can survive multiple-comparison correction. Suites with $n = 5$ seeds cannot reach $p < 0.05$ (floor 0.0625)
 and are reported as effect-versus-noise. Data-level before/after deltas on
 grid metrics carry paired unit-level bootstrap intervals ($B = 1{,}000$,
 percentile); units are spatially correlated and demographics are
@@ -592,18 +592,24 @@ stricter one supports it.
 % src: PAPER/supply-lift/data/a10/sf12_a10_channel_decomposition.json (D1-CHAN 2026-07-18, B=2000 seed 0; tier-2 grid = D1-RECOUNT S_tier2_after.npz; gates G-repro MAE 0.0 + replay 1959/1959; twin sf12_a10_supply_recount.json)
 
 \textbf{Downstream.} The recovery reproduces on San Francisco. Vanilla BC is
-null ($+0.0026$, 5/6, $p = .0625$); upweighting recovers the fairness with a
-monotone, sign-unanimous dose-response --- $+0.0242$ (w10), $+0.0309$ (w20),
-$+0.0332$ (w30), each 6/6 at the $p = .031$ floor with $t$-intervals
-excluding zero --- and neither control reproduces it (random placebo
-null-to-negative, $-0.0065$/$-0.0069$; the most-fair selection control mixed, significantly
-\emph{negative} at w10 and n.s.\ above). The extended doses saturate here
-too ($+0.0370$ w40, $+0.0371$ w50, each 6/6 --- flat past w40), while the
-random control stays null-to-negative and the most-fair selection control
-turns significantly \emph{positive} at the extended doses
-($+0.0063$/$+0.0066$, about a sixth of the edited arm's gain) --- the same
-dominated-control pattern as the alternate feature sets
-(\S\ref{sec:exp-robustness}), reported rather than averaged away.
+null ($+0.0017$, $n = 12$, 7/12 positive, n.s.); upweighting recovers the
+fairness with a monotone, sign-unanimous dose-response --- $+0.0242$ (w10)
+and $+0.0309$ (w20), each 6/6 at the $p = .031$ floor --- and at the
+adopted dose the flagship comparison reaches $n = 12$ here as well:
+$+0.0333 \pm 0.0050$ (w30), 12/12 positive, exact Wilcoxon $p = .00049$,
+as on Shenzhen (\S\ref{sec:exp-downstream}). The $n = 12$ controls sharpen
+the contrast rather than soften it: the random placebo turns significantly
+\emph{negative} ($-0.0077$, 2/12, $p = .0024$), and the most-fair selection
+control is significantly positive but dominated ($+0.0059$, 10/12,
+$p = .0020$, about a sixth of the edited arm's gain; at $n = 6$ per dose it
+was significantly negative at w10 and n.s.\ at w20).
+% src: PAPER/supply-lift/data/a10/sf12_a10_wbc_n12_pooled_stats.json (pooled seeds 0-5 + 6-11; SF-WBC-N12 2026-07-18; prior n=6 values: vanilla +0.0026 5/6 p=.0625; w30 +0.0332 6/6; random -0.0069 n.s.)
+The extended doses saturate here too ($+0.0370$ w40, $+0.0371$ w50, each
+6/6 --- flat past w40), while the random control stays null-to-negative and
+the most-fair selection control stays significantly \emph{positive}
+($+0.0063$/$+0.0066$) --- the same dominated-control pattern as the
+alternate feature sets (\S\ref{sec:exp-robustness}), reported rather than
+averaged away.
 % src: famail_temporal/results/weighted_bc_sweep/supply_lift_a10_sf12_dose_ext_6seed/paired_stats.json (SF-WBC-DOSEEXT 2026-07-17; increments w30->w40 +0.0038, w40->w50 +0.0001)
 One city difference stated plainly:
 $F_{\mathrm{spatial}}$ does \emph{not} propagate on SF ($-0.0040$ at w30,
