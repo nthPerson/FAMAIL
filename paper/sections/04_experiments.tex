@@ -39,7 +39,9 @@ shared seed noise. With $n = 6$ paired seeds the two-sided Wilcoxon signed-rank
 $p$ floors at $0.03125$, attained exactly when all six seeds share a sign; we
 therefore read effects from the mean $\Delta$, its $t$-interval, and
 dose-response monotonicity, and treat $p = 0.031$ only as a sign-unanimity
-certificate. Suites with $n = 5$ seeds cannot reach $p < 0.05$ (floor 0.0625)
+certificate. The flagship w30 comparison is additionally run at $n = 12$
+paired seeds (floor $.00049$), where an exact Wilcoxon $p$ can survive
+multiple-comparison correction. Suites with $n = 5$ seeds cannot reach $p < 0.05$ (floor 0.0625)
 and are reported as effect-versus-noise. Data-level before/after deltas on
 grid metrics carry paired unit-level bootstrap intervals ($B = 1{,}000$,
 percentile); units are spatially correlated and demographics are
@@ -252,15 +254,21 @@ seeds here, while the SF GAN stays uniformly healthy (\S\ref{sec:exp-sf}).
 
 \textbf{Vanilla training averages the edit away.} A driver-conditioned BC
 policy trained on the edited corpus at uniform weight is not fairer than one
-trained on raw: paired $\Delta F_{\mathrm{causal}} = +0.0022$ ($n = 6$,
-mixed signs, $p = .16$, n.s.) --- the null that motivates the upweighting
+trained on raw: paired $\Delta F_{\mathrm{causal}} = +0.0016$ ($n = 12$,
+7/12 positive, $p = .11$, n.s.) --- the null that motivates the upweighting
 recipe of \S\ref{sec:downstream}.
-% src: famail_temporal/results/weighted_bc_sweep/alpha_sweep_s10_c80_f10_filtered_6seed/paired_stats.json (edited arm, uniform weight)
+% src: PAPER/supply-lift/data/a10/shz_a10_wbc_n12_pooled_stats.json (edited arm pooled seeds 0-11; was +0.0022 n=6 p=.16 pre-pooling; WBC-N12 2026-07-18)
 
 \textbf{Upweighting recovers it, edit-specifically.} With the edited
 demonstrations upweighted, the paired gain is monotone in the weight and
-sign-unanimous: $+0.0217$ (w10), $+0.0267$ (w20), $+0.0302$ (w30), each 6/6
-at the $p = .031$ floor, $t$-interval $[+0.0264, +0.0340]$ at w30. Extending
+sign-unanimous: $+0.0217$ (w10) and $+0.0267$ (w20), each 6/6 at the
+$p = .031$ floor. At the adopted dose we extend the flagship comparison to
+$n = 12$ paired seeds: $+0.0297 \pm 0.0029$ (w30), 12/12 positive, exact
+Wilcoxon $p = .00049$, $t$-interval $[+0.0278,$ $+0.0315]$ --- while both % lint-allow: coincidental value (n=12 pooled CI lower bound, computed 2026-07-18; not the old-alpha supply-lift number)
+controls stay null at the same $n = 12$ (random $-0.0017$, most-fair
+$+0.0012$, mixed signs, n.s.).
+% src: PAPER/supply-lift/data/a10/shz_a10_wbc_n12_pooled_stats.json (pooled seeds 0-5 + 6-11; 12/12 floor = 2/4096 = .000488; t_p 1.2e-12; WBC-N12 2026-07-18)
+Extending
 the dose shows saturation, not unbounded growth: $+0.0323$ (w40) and
 $+0.0339$ (w50), each 6/6, with the per-step increment shrinking
 monotonically ($+0.0050$, $+0.0035$, $+0.0021$, $+0.0016$) --- w30 sits at

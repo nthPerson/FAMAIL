@@ -24,10 +24,13 @@ Adjusting for recorded demand treats demand as exogenous, but demand is
 suppressed exactly where service has been historically thin, so a
 demand-adjusted metric under-detects the inequity it audits --- the same
 censoring that bounds any demand-side editor. With five or six paired
-seeds, no single test survives multiple-comparison correction; the
-downstream evidence rests on effect direction and magnitude, confidence
-intervals, a monotone dose-response, and null controls rather than on any
-uncorrected p-value. San Francisco reproduces the Shenzhen conclusions
+seeds, no single test survives multiple-comparison correction; the one
+comparison extended to twelve paired seeds --- the flagship w30 recovery
+--- does ($p = .00049$, 12/12 positive), and the remaining downstream
+evidence rests on effect direction and magnitude, confidence intervals, a
+monotone dose-response, and null controls rather than on any uncorrected
+p-value.
+% src: PAPER/supply-lift/data/a10/shz_a10_wbc_n12_pooled_stats.json (WBC-N12 2026-07-18; .00049 x 20 tests = .0098 < .05, survives Holm at any plausible family size) San Francisco reproduces the Shenzhen conclusions
 with no algorithm change, but its baselines are city-specific and its
 magnitudes are not comparable. And the fidelity guardrail certifies that
 edited trajectories still read as their drivers --- identity preservation,
