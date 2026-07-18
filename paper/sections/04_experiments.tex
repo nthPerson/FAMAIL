@@ -1,7 +1,8 @@
 \section{Experiments}\label{sec:experiments}
 % Remaining subsections land per plan Tasks 5-10 (5.2-5.7 in plan numbering).
 % Disclosure ledger for this section: rollout-allocation drain NOT reversed at alpha*
-% (-0.0033 vs trim-only -0.0049 at w30, ~33% attenuation like-for-like at alpha*); top-only
+% (-0.0033 vs trim-only -0.0049 at w30, ~33% attenuation like-for-like at alpha*; SF replicates
+% the boundary at ~10x magnitude: -0.0335 vs -0.0432, ~22% attenuation); top-only
 % redistribution of trim-only (leveling-down analogy); skip-on-infeasible provenance; tier-1 vs
 % tier-2 supply accounting; SF mean(Y|D) tension (Reading B decided 2026-07-16, provisional on D1).
 
@@ -599,6 +600,12 @@ zero than at $n = 5$) --- unlike the primary city's small significant
 positive effect (\S\ref{sec:exp-downstream}), a city difference we state
 plainly.
 % src: famail_temporal/results/variance_suite/supply_lift_sf12_10seed/aggregate.json (paired_delta.f_causal; B2-VAR-SF 2026-07-16; n=5 suite retained)
+The allocation boundary (\S\ref{sec:exp-downstream}) also replicates:
+rolled-out policies still tilt pickup share away from disadvantaged areas
+--- $-0.0432$ at w30 on the demand-only corpus and $-0.0335$ with trim+lift
+(each 0/6 seeds, $p = .031$) --- roughly $22\%$ attenuation, not a reversal,
+at roughly ten times the primary city's magnitudes.
+% src: famail_temporal/baselines/external_fairness/results/option_a_rollout_sf12_tl/summary.json + option_a_rollout_sf12_trimonly/summary.json (edited_w30.MigrantRatio.pickups.share_D_delta; C3-SF-ROLLOUT 2026-07-17; attenuation 1-0.0335/0.0432=22.5%)
 The four-source comparison also reproduces (generators retrained from
 scratch; identity gate passed, matched 0.958 vs.\ mismatched 0.034): the
 edited corpus is the fairest source ($F_{\mathrm{causal}}$ 0.9067 vs.\ GAN
