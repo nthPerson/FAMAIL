@@ -54,3 +54,22 @@ history→raw sequence matching. `--city sf12` currently writes a deferred stub
 ## Estimate
 ~1–2 days SDD engineering (adapter + gates + tests), ~1h compute. Runs after the h-chain
 drains (GPU) though the recount itself is CPU-heavy and may pair safely.
+
+## Addendum (2026-07-17, controller, post-approval discovery — Tasks 2/3)
+
+Execution falsified one implicit assumption in §2 ("same replay identification used on
+SZ"): on SF, **no single DataFrame can serve both gates**. Verified facts:
+- Counting/G-repro path needs the **absolute** epoch-day presence df (Task 2 PASSED at
+  MAE exactly 0.0 against production `active_taxis_3d`; grid derived from the full
+  536-driver fleet, counts restricted to the 12 mapped drivers).
+- Matching/G-match path needs **SF-native segmentation** (`sf_segmentation.segment_driver`,
+  300s-gap + occupancy breaks) in **weekday** day space: the corpus's 1,959 histories
+  re-derive 1959/1959 under that convention and match 0/1959 under the SZ ungapped
+  transition machinery (Task 3 diagnosis, all 12 drivers).
+
+**Adjudication (same principle as §1 mirror-don't-reinterpret, applied per-axis):** the
+sf12 path builds a dedicated match-side segment lookup by importing the SF pipeline's own
+`segment_driver` + `weekday_from_epoch_day` verbatim, carrying raw-row indices so matched
+substitutions rewrite exactly the rows the counting df counts; the counting path is
+unchanged. Both gates remain the arbiters (G-repro must stay 0.0; G-match 100% via the
+machinery's own counters). SZ path untouched (§5 regression pin unaffected).
