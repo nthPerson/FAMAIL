@@ -10,7 +10,8 @@ into that tool's raw-GPS re-segmentation path without changing its logic.
 Every transform below is IMPORTED or REPLICATED VERBATIM from the SF
 source-generation pipeline (never re-derived); ping presence is counted AS
 PINGED (no interpolation, no gap "fixing" -- SF GPS gaps up to ~18.6 cells are
-a known, accepted property of this raw data).
+a known, accepted property of this raw data; see
+`.superpowers/sdd/task-11e-sf-eval-report.md` §1 for empirical grounding).
 
 === Step 1: the consumed SZ schema (discovery) ===================
 
