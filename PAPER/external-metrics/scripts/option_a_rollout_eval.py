@@ -53,8 +53,9 @@ from famail_temporal.baselines.gan.rollout import generate_trajectories
 from famail_temporal.baselines.gan.sequences import unflat_cell
 from famail_temporal.utils.seeding import set_all_seeds
 
-DEFAULT_EDIT_DIR = Path("/home/robert/FAMAIL/famail_temporal/results/"
-                "2026-06-29T12-06-55_k-10000_causal_emphasis_no-dedup_cleaned_hcm")
+# --edit-dir is REQUIRED: the old default silently pointed at the legacy
+# pre-cleanup corpus (2026-06-29 hcm, edited=2455) and caused an era-wrong
+# launch on 2026-07-17 (FB-ROLLOUT, aborted +25s; see run ledger).
 DEFAULT_OUT_DIR = Path("/home/robert/FAMAIL/famail_temporal/baselines/external_fairness/"
                "results/option_a_rollout")
 AXES = ["MigrantRatio", "CompPerCapita", "AvgHousingPricePerSqM"]
@@ -133,7 +134,7 @@ def main():
                           "unless --arms is passed explicitly -- then it is respected as-is.")
     ap.add_argument("--epochs", type=int, default=20)
     ap.add_argument("--device", default="auto")
-    ap.add_argument("--edit-dir", type=str, default=str(DEFAULT_EDIT_DIR),
+    ap.add_argument("--edit-dir", type=str, required=True,
                      help="Dir containing histories.pkl for the edited corpus "
                           "(default: legacy trim-only k-10000 causal-emphasis run).")
     ap.add_argument("--out-dir", type=str, default=str(DEFAULT_OUT_DIR),
