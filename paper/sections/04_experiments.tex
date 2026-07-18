@@ -466,6 +466,12 @@ lift-up property.
   excludes 0). The adopted $(0.1, 0.8, 0.1)$ is the three-class criterion's
   selection.}
   % src: PAPER/objective-motivation/weight-sensitivity/extended_frontier.json via paper/figures/make_figures.py
+  \Description{Two stacked panels. Panel A: scatter of the weight sweep on
+  the optimized-metric plane; the causal-fairness delta is flat across the
+  spatial weight while the spatial delta rises. Panel B: line chart showing
+  the lift-up quantity declining monotonically as the spatial weight grows,
+  significant on both supply tiers only at low spatial weight; the adopted
+  configuration is marked.}
   \label{fig:alpha-pareto}
 \end{figure}
 
@@ -574,7 +580,15 @@ monotone, sign-unanimous dose-response --- $+0.0242$ (w10), $+0.0309$ (w20),
 $+0.0332$ (w30), each 6/6 at the $p = .031$ floor with $t$-intervals
 excluding zero --- and neither control reproduces it (random placebo
 null-to-negative, $-0.0065$/$-0.0069$; the most-fair selection control mixed, significantly
-\emph{negative} at w10 and n.s.\ above). One city difference stated plainly:
+\emph{negative} at w10 and n.s.\ above). The extended doses saturate here
+too ($+0.0370$ w40, $+0.0371$ w50, each 6/6 --- flat past w40), while the
+random control stays null-to-negative and the most-fair selection control
+turns significantly \emph{positive} at the extended doses
+($+0.0063$/$+0.0066$, about a sixth of the edited arm's gain) --- the same
+dominated-control pattern as the alternate feature sets
+(\S\ref{sec:exp-robustness}), reported rather than averaged away.
+% src: famail_temporal/results/weighted_bc_sweep/supply_lift_a10_sf12_dose_ext_6seed/paired_stats.json (SF-WBC-DOSEEXT 2026-07-17; increments w30->w40 +0.0038, w40->w50 +0.0001)
+One city difference stated plainly:
 $F_{\mathrm{spatial}}$ does \emph{not} propagate on SF ($-0.0040$ at w30,
 n.s.); the primary-city result at the adopted weights is reported in
 \S\ref{sec:exp-downstream}.
