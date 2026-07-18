@@ -289,7 +289,13 @@ def load_sf_pings(raw_dir: Path) -> pd.DataFrame:
     out = add_transition_columns(out)
     out = assign_segment_ids(out)
 
-    return out[_COLUMNS]
+    result = out[_COLUMNS]
+    # Expose the (raw_dir-derived) grid bounds so callers that REQUIRE the
+    # production grid (supply_recount.main under --city sf12) can assert they
+    # equal config.GRID_DIMS. Small-slice callers (unit tests) legitimately get
+    # a smaller, internally-consistent grid and simply don't check.
+    result.attrs["grid_bounds"] = (int(grid.x_grid_max), int(grid.y_grid_max))
+    return result
 
 
 # sf_segmentation.segment_driver's default gap threshold (sf_segmentation.py:53,
@@ -358,6 +364,8 @@ def build_sf_seeking_lookup(
         # it. The occupancy-sequence assert below hard-validates that alignment.
         draw = raw[raw["driver_id"] == int(drv)]
         es_rows = es_df.index[es_df["plate_id"] == plate].to_numpy()
+        # Skipping a no-rows mapped driver is safe: its unmatched histories make
+        # n_matched < n_histories, tripping the downstream G-match gate.
         if len(es_rows) == 0 or len(draw) == 0:
             continue
         occ = draw["occupancy"].to_numpy().astype(int)

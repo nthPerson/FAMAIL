@@ -62,6 +62,13 @@ _EXPECTED_JSON = _REF_DIR / "supply_recount.json"
 _HISTORIES = _REF_DIR / "histories.pkl"
 _DELTA_SUPPLY = _REF_DIR / "delta_supply_3d.npz"
 _RAW_DIR = _REPO_ROOT / "raw_data"
+# main() also reads the SZ driver_index_mapping.pkl (config.SOURCE_DATA_DIR) and
+# loads the cached DataBundle (config.CACHE_DIR) inside the subprocess; a machine
+# missing either would FAIL at the subprocess rather than skip, so guard them too.
+# Paths are the shenzhen defaults, hardcoded relative to _REPO_ROOT to match the
+# other guard paths (this test module deliberately never imports config).
+_DRIVER_MAPPING = _REPO_ROOT / "famail_temporal/source_data/driver_index_mapping.pkl"
+_CACHE_DIR = _REPO_ROOT / "famail_temporal/cache"
 
 # Fields that are legitimately run-specific (not part of the pinned numeric
 # content) and therefore excluded from the byte-level comparison:
@@ -75,6 +82,9 @@ _SZ_DATA_ABSENT = not (
     and _DELTA_SUPPLY.is_file()
     and _RAW_DIR.is_dir()
     and any(_RAW_DIR.glob("taxi_record_0*_50drivers.pkl"))
+    and _DRIVER_MAPPING.is_file()
+    and _CACHE_DIR.is_dir()
+    and any(_CACHE_DIR.glob("active_taxis_*.pkl"))
 )
 
 
@@ -106,9 +116,43 @@ def _numeric_diffs(fresh, expected, path: str = "") -> list[str]:
     return diffs
 
 
+def _diff_fixture() -> dict:
+    """Small nested (dict + list) fixture for the _numeric_diffs self-test.
+    A fresh copy each call so a mutation in one test can't leak into another.
+    Top-level keys avoid _EXCLUDE_TOP so nothing is silently skipped."""
+    return {
+        "alpha": {"score": 1.0, "counts": [10, 20, 30]},
+        "beta": 0.5,
+    }
+
+
+def test_numeric_diffs_identity_is_empty():
+    """Two byte-identical structures diff to nothing (no false positives)."""
+    assert _numeric_diffs(_diff_fixture(), _diff_fixture()) == []
+
+
+def test_numeric_diffs_catches_float_and_int_perturbations():
+    """A 1e-9 float change and a +1 int change are both caught, and the
+    reported diffs name the exact nested paths (dict key + list index)."""
+    # 1e-9 float perturbation on a nested dict value.
+    fresh = _diff_fixture()
+    fresh["alpha"]["score"] += 1e-9
+    float_diffs = _numeric_diffs(fresh, _diff_fixture())
+    assert float_diffs, "1e-9 float perturbation not detected"
+    assert any("/alpha/score" in d for d in float_diffs), float_diffs
+
+    # +1 int perturbation inside a nested list.
+    fresh = _diff_fixture()
+    fresh["alpha"]["counts"][1] += 1
+    int_diffs = _numeric_diffs(fresh, _diff_fixture())
+    assert int_diffs, "+1 int perturbation not detected"
+    assert any("/alpha/counts[1]" in d for d in int_diffs), int_diffs
+
+
 @pytest.mark.skipif(_SZ_DATA_ABSENT, reason=(
-    "Shenzhen s10 campaign corpus / raw GPS absent on this machine (checked "
-    f"{_EXPECTED_JSON}, {_HISTORIES}, {_DELTA_SUPPLY}, {_RAW_DIR})"
+    "Shenzhen s10 campaign corpus / raw GPS / driver mapping / DataBundle cache "
+    f"absent on this machine (checked {_EXPECTED_JSON}, {_HISTORIES}, "
+    f"{_DELTA_SUPPLY}, {_RAW_DIR}, {_DRIVER_MAPPING}, {_CACHE_DIR})"
 ))
 def test_sz_recount_regression(tmp_path):
     """Re-run the SZ recount on the committed s10 corpus and pin its output to

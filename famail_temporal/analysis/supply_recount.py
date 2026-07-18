@@ -78,7 +78,6 @@ import pandas as pd
 # never re-derived (see docs/superpowers/specs/2026-07-17-d1-sf-tier2-recount-
 # design.md). The substitution-replay machinery (apply_substitutions et al.)
 # is city-agnostic and untouched.
-_SUPPORTED_CITIES = {"shenzhen", "sf12"}
 
 
 # ---------------------------------------------------------------------------
@@ -195,6 +194,9 @@ def apply_substitutions(
         n_matched += 1
         n_states = len(row_idx)
         # Exclude the terminal state (pickup-transition record) — supply-only.
+        # For SF this also holds: states[-1] sits at the pickup_cell, whose move
+        # is carried by the DEMAND channel (build_edited_pickup_3d) — excluding
+        # it here avoids double-counting the relocation across channels.
         for i in range(n_states - 1):
             os_, ms_ = orig.states[i], mod.states[i]
             if (int(os_.x_grid), int(os_.y_grid)) != (int(ms_.x_grid), int(ms_.y_grid)):
@@ -392,28 +394,6 @@ def _delta_compare(delta1: np.ndarray, delta2: np.ndarray, mask: np.ndarray) -> 
     }
 
 
-def _write_deferred_report(edit_dir: Path, city: str) -> None:
-    edit_dir = Path(edit_dir)
-    msg = (
-        f"# Tier-2 supply recount — DEFERRED for city='{city}'\n\n"
-        f"The SF ping-path (`second_dataset/data/source_generation/sf_build.py`) "
-        f"uses its own segmentation (`sf_segmentation.py`), its own grid "
-        f"quantization (`sf_config.grid_from_points`), and its own active-taxis "
-        f"counter (`sf_grid_counts.count_active_taxis_5x5`) — none of which are "
-        f"drop-in-compatible with the Shenzhen `data/source_generation` views "
-        f"this tool reuses. Per the task brief, this is new plumbing (not an "
-        f"analogous file read), so it is deliberately NOT implemented here.\n\n"
-        f"Shenzhen (`--city shenzhen`, the default) is the deliverable and is "
-        f"fully implemented in this tool.\n"
-    )
-    (edit_dir / "supply_recount_report.md").write_text(msg)
-    (edit_dir / "supply_recount.json").write_text(json.dumps(
-        {"city": city, "status": "deferred", "reason": "sf ping-path needs new plumbing"},
-        indent=2,
-    ))
-    print(msg)
-
-
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--edit-dir", type=Path, required=True,
@@ -433,10 +413,6 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     edit_dir = Path(args.edit_dir)
-
-    if args.city not in _SUPPORTED_CITIES:
-        _write_deferred_report(edit_dir, args.city)
-        return 0
 
     t0 = time.monotonic()
 
@@ -480,6 +456,16 @@ def main(argv: list[str] | None = None) -> int:
         es_df = build_event_stream(args.raw_dir).df
     else:
         raw_sf_df = load_sf_pings(args.raw_dir)
+        # Defensive: the recount clip bounds are config.GRID_DIMS, but es_df was
+        # quantized by load_sf_pings via grid_from_points on raw_dir. For the
+        # production grid these must agree; a smaller-fleet raw_dir yields a
+        # smaller grid that would silently mismatch the clip bounds -- fail loud.
+        grid_bounds = raw_sf_df.attrs.get("grid_bounds")
+        assert grid_bounds == tuple(config.GRID_DIMS), (
+            f"SF adapter-derived grid bounds {grid_bounds} != config.GRID_DIMS "
+            f"{tuple(config.GRID_DIMS)}; raw_dir {args.raw_dir} is not the full "
+            f"production fleet the sf12 grid was derived from."
+        )
         # Mirrors sf_build.build()'s driver_ids filter (sf_build.py:40-41),
         # applied AFTER grid quantization (which used the full fleet above)
         # -- restrict to the plates THIS city variant's own
@@ -487,6 +473,13 @@ def main(argv: list[str] | None = None) -> int:
         # subsample exactly.
         target_plates = set(idx_to_plate.values())
         es_df = raw_sf_df[raw_sf_df["plate_id"].isin(target_plates)].reset_index(drop=True)
+        # Make the driver restriction explicit: every plate named in the sf12
+        # driver_index_mapping.pkl must appear in the full-fleet raw pings (else
+        # raw_dir is not the fleet this corpus was derived from).
+        assert es_df["plate_id"].nunique() == len(target_plates), (
+            f"sf12 driver restriction: {es_df['plate_id'].nunique()} distinct "
+            f"plates in raw != {len(target_plates)} in driver_index_mapping.pkl"
+        )
 
     n_days = bundle.n_days  # match production's aggregation divisor exactly
 
