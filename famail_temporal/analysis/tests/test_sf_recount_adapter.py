@@ -222,16 +222,30 @@ def test_load_sf_pings_multi_driver_coverage(tmp_path):
     # Verify rows are sorted by (plate_id, time) within driver.
     # Since plate_id encodes the driver order and load_sf_raw sorts (driver_id, time),
     # the adapter's sort should preserve this: cab_0000 rows in time order, then cab_0001.
-    df_copy = df.copy()
-    df_copy["order_idx"] = range(len(df_copy))
-    for plate_id in sorted(df_copy["plate_id"].unique()):
-        group = df_copy[df_copy["plate_id"] == plate_id]
-        # Check that this driver's rows form a contiguous block.
-        order_indices = group["order_idx"].values
-        assert len(order_indices) > 0
-        # Row indices should be monotonically increasing (contiguous in sort order).
-        assert np.all(np.diff(order_indices) > 0), \
-            f"Driver {plate_id} rows are not contiguous in sorted order"
+
+    # 1. Group contiguity: each plate_id's rows form one contiguous block (no interleaving).
+    plate_ids = sorted(df["plate_id"].unique())
+    for plate_id in plate_ids:
+        mask = df["plate_id"] == plate_id
+        idx = np.flatnonzero(mask.to_numpy())
+        assert idx.max() - idx.min() + 1 == len(idx), \
+            f"Driver {plate_id} rows are interleaved (not contiguous)"
+
+    # 2. Block order: blocks appear in ascending plate_id order.
+    for i in range(len(plate_ids) - 1):
+        plate_i = plate_ids[i]
+        plate_i_plus_1 = plate_ids[i + 1]
+        idx_i = np.flatnonzero((df["plate_id"] == plate_i).to_numpy())
+        idx_i_plus_1 = np.flatnonzero((df["plate_id"] == plate_i_plus_1).to_numpy())
+        assert idx_i.min() < idx_i_plus_1.min(), \
+            f"Block order violated: {plate_i} block min {idx_i.min()} >= {plate_i_plus_1} block min {idx_i_plus_1.min()}"
+
+    # 3. Within-group time order: within each plate's block, rows are sorted by time.
+    for plate_id in plate_ids:
+        mask = df["plate_id"] == plate_id
+        key = (df.loc[mask, "day_index"] * 24 + df.loc[mask, "hour"]).to_numpy()
+        assert np.all(np.diff(key) >= 0), \
+            f"Driver {plate_id} rows not sorted by time (day_index*24+hour)"
 
     # Verify per-driver row counts roughly match inputs (within reason,
     # accounting for filtering by load_sf_raw).
