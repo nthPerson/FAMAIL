@@ -70,11 +70,15 @@ from typing import Dict, List, Tuple
 import numpy as np
 import pandas as pd
 
-# Only the SF ping-source needs new plumbing (its own segmentation, grid
-# quantization and active-taxis counter, see
-# second_dataset/data/source_generation/sf_build.py) which the task brief
-# explicitly says to defer rather than improvise. Shenzhen is the deliverable.
-_SUPPORTED_CITIES = {"shenzhen"}
+# "sf12" is wired via the SF ping adapter (analysis/sf_recount_adapter.py,
+# D1 Task 1) + its own mirrored counting path (recount_tier2_sf /
+# _build_active_taxis_counts_sf below, D1 Task 2, 2026-07-17) -- SF's grid
+# transform, occupancy/seeking semantics, and supply-grid construction are
+# IMPORTED or replicated verbatim from the SF source-generation pipeline,
+# never re-derived (see docs/superpowers/specs/2026-07-17-d1-sf-tier2-recount-
+# design.md). The substitution-replay machinery (apply_substitutions et al.)
+# is city-agnostic and untouched.
+_SUPPORTED_CITIES = {"shenzhen", "sf12"}
 
 
 # ---------------------------------------------------------------------------
@@ -219,6 +223,99 @@ def recount_tier2(df: pd.DataFrame, n_days: int, active_taxis_view, aggregate_ac
     return grid, raw_counts
 
 
+def _build_active_taxis_counts_sf(
+    df: pd.DataFrame, x_grid_max: int, y_grid_max: int, k: int,
+) -> Dict[Tuple[int, int, int, int], int]:
+    """SF-mirrored distinct-taxi 5x5-neighborhood counter.
+
+    Structurally the SAME expand/dedup/groupby algorithm as
+    ``data.source_generation.views.active_taxis.build_active_taxis_counts``
+    (active_taxis.py:14-59) -- shifting each present (plate, x, y, hour, day)
+    row by every ``(dx, dy)`` in ``[-k, k] x [-k, k]``, clipping to city
+    bounds, then deduping per (plate, target-cell, hour, day) is algebraically
+    equivalent to the "spread a source cell's driver-set across its
+    ``(2k+1)x(2k+1)`` target window" rule SF's OWN counter implements
+    (``second_dataset/.../sf_grid_counts.count_active_taxis_5x5``,
+    sf_grid_counts.py:36-75) -- but this function mirrors count_active_taxis_5x5's
+    TWO documented divergences from the SZ counter (Task 1 adapter docstring
+    "Known divergence" section + Task 2 controller adjudication, 2026-07-17):
+
+      - NO occupancy filter: SF's counter counts a taxi present in a
+        cell-hour regardless of ``passenger_indicator`` (fare status)
+        (sf_grid_counts.py:47-64 has no analog of active_taxis.py:20's
+        ``df["passenger_indicator"] == 0`` filter) -- so, unlike
+        ``build_active_taxis_counts``, this function does NOT filter ``df``
+        by occupancy before computing presence.
+      - City-aware clip bounds: ``x_grid_max``/``y_grid_max`` are passed in
+        (SF's grid is 32x30, ``famail_temporal/config.py:35``) instead of
+        SZ's hardcoded ``data.source_generation.config.X_GRID_MAX``/
+        ``Y_GRID_MAX`` (48, 90) that ``build_active_taxis_counts`` imports
+        directly.
+
+    Unlike ``count_active_taxis_5x5``, which re-derives x_grid/y_grid from
+    raw lat/lon internally on every call (sf_grid_counts.py:54-57), this
+    function operates on the ALREADY-quantized (x_grid, y_grid, hour,
+    day_index) columns ``sf_recount_adapter.load_sf_pings`` produces --
+    required so a post-substitution recount (``apply_substitutions`` mutates
+    x_grid/y_grid in place on exactly this schema, supply_recount.py:181-182)
+    reflects the edited cells; re-deriving from lat/lon would silently ignore
+    every substitution.
+    """
+    if len(df) == 0:
+        return {}
+
+    present = df[["plate_id", "x_grid", "y_grid", "hour", "day_index"]].drop_duplicates(
+        subset=["plate_id", "x_grid", "y_grid", "hour", "day_index"]
+    )
+
+    pieces: List[pd.DataFrame] = []
+    for dx in range(-k, k + 1):
+        for dy in range(-k, k + 1):
+            exp = present.copy()
+            exp["x_grid"] = exp["x_grid"] + dx
+            exp["y_grid"] = exp["y_grid"] + dy
+            pieces.append(exp)
+    expanded = pd.concat(pieces, ignore_index=True)
+
+    expanded = expanded[
+        (expanded["x_grid"] >= 1) & (expanded["x_grid"] <= x_grid_max)
+        & (expanded["y_grid"] >= 1) & (expanded["y_grid"] <= y_grid_max)
+    ]
+
+    expanded = expanded.drop_duplicates(
+        subset=["plate_id", "x_grid", "y_grid", "hour", "day_index"]
+    )
+
+    counts = (
+        expanded
+        .groupby(["x_grid", "y_grid", "hour", "day_index"], sort=False)
+        .size()
+        .reset_index(name="count")
+    )
+
+    return {
+        (int(r.x_grid), int(r.y_grid), int(r.hour), int(r.day_index)): int(r.count)
+        for r in counts.itertuples(index=False)
+    }
+
+
+def recount_tier2_sf(
+    df: pd.DataFrame, n_days: int, x_grid_max: int, y_grid_max: int, k: int,
+    aggregate_active_taxis,
+):
+    """SF counterpart of ``recount_tier2``: mirrors
+    ``second_dataset/.../sf_grid_counts.count_active_taxis_5x5``'s counting
+    RULE (no occupancy filter, SF clip bounds -- see
+    ``_build_active_taxis_counts_sf``'s docstring) via
+    ``aggregate_active_taxis`` (city-agnostic; keys off ``famail_temporal.
+    config.GRID_DIMS``, already resolved to (32, 30) under
+    ``FAMAIL_CITY=sf12``), instead of SZ's
+    ``active_taxis_view.build_active_taxis_counts``."""
+    raw_counts = _build_active_taxis_counts_sf(df, x_grid_max, y_grid_max, k)
+    grid = aggregate_active_taxis(raw_counts, n_days)
+    return grid, raw_counts
+
+
 def _grid_compare(a: np.ndarray, b: np.ndarray, mask: np.ndarray) -> dict:
     """Reproduction-error summary of `a` (recount) vs `b` (reference), over
     active-mask cells."""
@@ -304,9 +401,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--edit-dir", type=Path, required=True,
                          help="Persisted editing run dir (has histories.pkl, delta_supply_3d.npz).")
     parser.add_argument("--city", default="shenzhen", choices=["shenzhen", "sf12"],
-                         help="'sf12' is deliberately deferred (see module docstring).")
-    parser.add_argument("--raw-dir", type=Path, default=Path("raw_data"),
-                         help="Directory with the 3 taxi_record_0*_50drivers.pkl raw GPS files.")
+                         help="'sf12' recounts SF Cabspotting via its own mirrored counting "
+                              "path (no occupancy filter, SF clip bounds; see recount_tier2_sf).")
+    parser.add_argument("--raw-dir", type=Path, default=None,
+                         help="Raw GPS source dir. SZ (default 'raw_data'): the 3 "
+                              "taxi_record_0*_50drivers.pkl files. SF (default the full "
+                              "cabspottingdata fleet dir, from which the production grid was "
+                              "derived -- see sf_recount_adapter.py's 'Production grid "
+                              "derivation' docstring note): Cabspotting new_*.txt traces.")
     parser.add_argument("--persist-grids", action="store_true",
                          help="Also save S_tier2_before.npz / S_tier2_after.npz "
                               "alongside the json (for the direct tier-2 supply-channel CI).")
@@ -333,27 +435,68 @@ def main(argv: list[str] | None = None) -> int:
     from famail_temporal.baselines import external_fairness_io as efio
     from famail_temporal.evaluation.grid import build_fairness_grid
 
+    if args.raw_dir is None:
+        # SZ default unchanged ('raw_data'); SF default is the FULL
+        # cabspotting fleet dir -- sf_build.build() (sf_build.py:37-39)
+        # derives the production grid from grid_from_points on the
+        # UNFILTERED fleet before any driver_ids subsampling, so
+        # reproducing that grid (G-repro) requires the same full-fleet
+        # input (sf_recount_adapter.py "Production grid derivation" note).
+        args.raw_dir = (
+            Path("raw_data") if args.city == "shenzhen"
+            else config.PACKAGE_ROOT / "source_data" / "second_dataset" / "cabspottingdata"
+        )
+
+    if args.city != "shenzhen":
+        from famail_temporal.analysis.sf_recount_adapter import load_sf_pings
+        from famail_temporal.second_dataset.data.source_generation import sf_grid_counts
+
     print("[supply_recount] loading DataBundle...", flush=True)
     bundle = DataBundle.load()
     mask = bundle.mask_3d
 
+    idx_to_plate = _load_driver_mapping(config)
+
     print(f"[supply_recount] loading raw GPS from {args.raw_dir}...", flush=True)
-    es = build_event_stream(args.raw_dir)
+    if args.city == "shenzhen":
+        es_df = build_event_stream(args.raw_dir).df
+    else:
+        raw_sf_df = load_sf_pings(args.raw_dir)
+        # Mirrors sf_build.build()'s driver_ids filter (sf_build.py:40-41),
+        # applied AFTER grid quantization (which used the full fleet above)
+        # -- restrict to the plates THIS city variant's own
+        # driver_index_mapping.pkl names, so counts match the production
+        # subsample exactly.
+        target_plates = set(idx_to_plate.values())
+        es_df = raw_sf_df[raw_sf_df["plate_id"].isin(target_plates)].reset_index(drop=True)
+
     n_days = bundle.n_days  # match production's aggregation divisor exactly
 
     print("[supply_recount] recounting tier-2 BEFORE (reproduction check)...", flush=True)
-    S_tier2_before, _ = recount_tier2(es.df, n_days, active_taxis_view, aggregate_active_taxis)
+    if args.city == "shenzhen":
+        S_tier2_before, _ = recount_tier2(es_df, n_days, active_taxis_view, aggregate_active_taxis)
+    else:
+        x_grid_max, y_grid_max = config.GRID_DIMS
+        S_tier2_before, _ = recount_tier2_sf(
+            es_df, n_days, x_grid_max, y_grid_max, sf_grid_counts.NEIGHBORHOOD_K,
+            aggregate_active_taxis,
+        )
     reproduction = _grid_compare(S_tier2_before, bundle.active_taxis_3d, mask)
 
     print(f"[supply_recount] loading histories from {edit_dir}...", flush=True)
     histories = _load_histories(edit_dir)
-    idx_to_plate = _load_driver_mapping(config)
 
     print(f"[supply_recount] substituting {len(histories)} edited trajectories...", flush=True)
-    df_after, sub_stats = apply_substitutions(es.df, histories, idx_to_plate)
+    df_after, sub_stats = apply_substitutions(es_df, histories, idx_to_plate)
 
     print("[supply_recount] recounting tier-2 AFTER...", flush=True)
-    S_tier2_after, _ = recount_tier2(df_after, n_days, active_taxis_view, aggregate_active_taxis)
+    if args.city == "shenzhen":
+        S_tier2_after, _ = recount_tier2(df_after, n_days, active_taxis_view, aggregate_active_taxis)
+    else:
+        S_tier2_after, _ = recount_tier2_sf(
+            df_after, n_days, x_grid_max, y_grid_max, sf_grid_counts.NEIGHBORHOOD_K,
+            aggregate_active_taxis,
+        )
 
     if args.persist_grids:
         # Save the two tier-2 supply grids so the channel decomposition can
