@@ -82,6 +82,30 @@ whether the framing was settled there is an open question for Robert. Until answ
 **Consequence of the choice:** one paragraph of §4.7 gets re-ordered + the abstract's SF clause
 scoped to match; the `TODO(PI-framing)` marker is retired. Everything else in the section stays.
 
+---
+
+## D1 OUTCOME (2026-07-18) — Reading B CONFIRMED; provisional status retired
+
+The D1 SF tier-2 recount ran gates-first (G-repro MAE exactly 0.0 vs the production
+`active_taxis_3d`, all 4,230 active cells; substitution replay 1959/1959 matched) and the
+pre-committed decision rule fired on its **upgrade** branch:
+
+- **supply_tier2 = +0.1027, CI [+0.0872, +0.1203] — significant** (the rule's condition;
+  largest distinct-taxi supply effect of any corpus: SZ feature sets are +0.0411 / +0.0211 / +0.0771).
+- Beyond the rule: **total_tier2 = +0.0493, CI [+0.0185, +0.0790] — significantly POSITIVE**,
+  where the tier-1 total was significantly negative (−0.0324). The SF mean(Y|D) tension was a
+  tier-1 (fractional-presence) accounting artifact; counted as distinct taxis, the supply
+  improvement outweighs the demand-side denominator increase.
+
+§4.7 upgraded accordingly (lower-bound disclosure replaced by the two-tier statement; the
+"ratio does not replicate" heading replaced — the ratio tension *dissolves* under tier-2).
+The Reading-A fallback is moot. PI acknowledgment of the framing (now with D1 evidence in
+hand) still owed at the next Zhang/Kash touchpoint.
+
+*D1 sources: `PAPER/supply-lift/data/a10/sf12_a10_{supply_recount,channel_decomposition}.json`
+(ledger D1-RECOUNT / D1-CHAN, 2026-07-18); spec + addendum
+`docs/superpowers/specs/2026-07-17-d1-sf-tier2-recount-design.md`.*
+
 *Sources: `PAPER/supply-lift/data/a10/sf12_a10_{metrics,channel_decomposition,external_fairness}.json`;
 decision context `MEETING_43_PREP.md` §4 item 2; reviewer analysis
 `paper/reviews/2026-07-15-reviewer-sim.md` objection 3.*

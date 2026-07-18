@@ -4,7 +4,9 @@
 % (-0.0033 vs trim-only -0.0049 at w30, ~33% attenuation like-for-like at alpha*; SF replicates
 % the boundary at ~10x magnitude: -0.0335 vs -0.0432, ~22% attenuation); top-only
 % redistribution of trim-only (leveling-down analogy); skip-on-infeasible provenance; tier-1 vs
-% tier-2 supply accounting; SF mean(Y|D) tension (Reading B decided 2026-07-16, provisional on D1).
+% tier-2 supply accounting; SF mean(Y|D) tension RESOLVED by D1 tier-2 recount 2026-07-18
+% (supply_tier2 +0.1027 sig, total_tier2 +0.0493 SIG-POSITIVE — tier-1 net-negative was an
+% accounting artifact; Reading B confirmed, no longer provisional).
 
 \subsection{Experimental Setup}\label{sec:exp-setup}
 
@@ -549,31 +551,37 @@ CI $[+0.0004, +0.0103]$) and n.s.\ under median split --- a grouping
 dependence we state rather than hide (the SF sample is 12 drivers).
 % src: PAPER/supply-lift/data/a10/sf12_a10_metrics.json + sf12_a10_external_fairness.json
 
-\textbf{The supply channel replicates; the ratio does not.} The supply
-channel is again positive and significant: $+0.0209$,
-CI $[+0.0122,$ $+0.0300]$. This is tier-1 accounting only, a \emph{lower bound}
-on Shenzhen's evidence (the distinct-taxi tier-2 recount is not plumbed for
-the SF pipeline). But as on the prior corpus, lift also reroutes \emph{pickups}
-into under-served cells, raising recorded demand there: the demand channel is
-significantly negative ($-0.0533$, CI $[-0.0798,$ $-0.0298]$) and the total
-$\mathrm{mean}(Y \mid \mathrm{disadv.})$ moves net-negative ($-0.0324$, CI
-excludes 0). We read this as a demand-endogeneity finding, not a failed
-replication: recorded demand in under-served areas was suppressed, and
-serving it raises the ratio's denominator --- the mechanism
-\S\ref{sec:leveling} predicts, observed in the wild. More rides \emph{served}
-in under-served areas is a demand-side parity gain --- DP, DI, and Theil all
-improve on San Francisco --- while the supply channel independently
-replicates. The finer spatial partition plausibly amplifies the effect:
-San Francisco's demographic units are census tracts, far smaller than
-Shenzhen's districts, so the ratio is more sensitive to lift's rerouted
-pickups. Under a stricter ratio-only reading the SF lift-up claim would be
-withheld; we report the numbers behind that reading so it can be applied,
-but the external instruments and the replicated supply channel carry the
-external-validity conclusion.
+\textbf{The supply channel replicates; the tier-1 ratio tension dissolves
+under distinct-taxi accounting.} The supply channel is again positive and
+significant under \emph{both} conventions: $+0.0209$ tier-1
+(CI $[+0.0122,$ $+0.0300]$) and $+0.1027$ tier-2
+(CI $[+0.0872,$ $+0.1203]$) --- the largest distinct-taxi supply effect of
+any corpus in this paper (Shenzhen's three feature sets: $+0.0411$,
+$+0.0211$, $+0.0771$; \S\ref{sec:exp-robustness}). But as on the prior
+corpus, lift also reroutes \emph{pickups} into under-served cells, raising
+recorded demand there: the demand channel is significantly negative
+($-0.0533$, CI $[-0.0798,$ $-0.0298]$), and under tier-1 accounting the
+total $\mathrm{mean}(Y \mid \mathrm{disadv.})$ moves net-negative
+($-0.0324$, CI excludes 0). We read the tier-1 net-negative as a
+demand-endogeneity finding, not a failed replication: recorded demand in
+under-served areas was suppressed, and serving it raises the ratio's
+denominator --- the mechanism \S\ref{sec:leveling} predicts, observed in
+the wild. The tier-2 recount then closes the question: counting supply as
+distinct taxis rather than fractional presence, the \emph{total} turns
+significantly \emph{positive} ($+0.0493$, CI $[+0.0185,$ $+0.0790]$) ---
+the real supply improvement outweighs the demand-side denominator increase.
+More rides \emph{served} in under-served areas is a demand-side parity gain
+--- DP, DI, and Theil all improve on San Francisco --- while the supply
+channel independently replicates. The finer spatial partition plausibly
+amplifies the effect: San Francisco's demographic units are census tracts,
+far smaller than Shenzhen's districts, so the ratio is more sensitive to
+lift's rerouted pickups. A ratio-only reading confined to tier-1 accounting
+would withhold the SF lift-up claim; we report both accountings, and the
+stricter one supports it.
 % DECIDED 2026-07-16 (Robert): Reading B leads (external-metrics / demand-endogeneity framing).
-% Provisional: pending the D1 SF tier-2 recount — reassess toward the ratio reading if D1
-% disconfirms; PI acknowledgment pending at the next Zhang/Kash touchpoint.
-% src: PAPER/supply-lift/data/a10/sf12_a10_channel_decomposition.json
+% D1 RESOLVED 2026-07-18: tier-2 recount CONFIRMS Reading B — supply_tier2 +0.1027 CI-sig,
+% total_tier2 flips SIG-POSITIVE +0.0493. Provisional status retired; PI ack still owed.
+% src: PAPER/supply-lift/data/a10/sf12_a10_channel_decomposition.json (D1-CHAN 2026-07-18, B=2000 seed 0; tier-2 grid = D1-RECOUNT S_tier2_after.npz; gates G-repro MAE 0.0 + replay 1959/1959; twin sf12_a10_supply_recount.json)
 
 \textbf{Downstream.} The recovery reproduces on San Francisco. Vanilla BC is
 null ($+0.0026$, 5/6, $p = .0625$); upweighting recovers the fairness with a

@@ -1,0 +1,124 @@
+{
+  "city": "sf12",
+  "edit_dir": "famail_temporal/results/2026-07-11T11-31-55_supply_lift_a10_sf12_filtered",
+  "runtime_seconds": 23.140402933000587,
+  "n_days": 25,
+  "substitution_stats": {
+    "n_histories": 1959,
+    "n_matched": 1959,
+    "n_unmatched": 0,
+    "n_len_mismatch": 0,
+    "n_moved_states": 3332,
+    "unmatched_examples": []
+  },
+  "sanity_check_1_reproduction_before_vs_production": {
+    "n_active_cells": 4230,
+    "mae": 0.0,
+    "max_abs_diff": 0.0,
+    "mean_relative_error": 0.0,
+    "corr": 1.0
+  },
+  "sanity_check_2_tier1_vs_tier2_delta_supply_gap": {
+    "corr": 0.6129860613990422,
+    "magnitude_tier1_sum_abs": 166.47332051349804,
+    "magnitude_tier2_sum_abs": 189.56000789999962,
+    "magnitude_ratio_tier2_over_tier1": 1.1386810049519596,
+    "n_active_cells_tier1_nonzero": 2398,
+    "n_sign_agree": 1196,
+    "n_tier2_zero_where_tier1_nonzero": 1055,
+    "n_sign_disagree_both_nonzero": 147,
+    "frac_sign_agree": 0.4987489574645538,
+    "top10_disagreement_cells": [
+      {
+        "x": 18,
+        "y": 9,
+        "t": 3,
+        "delta_tier1": 0.4933331310749054,
+        "delta_tier2": 1.3600001335144043
+      },
+      {
+        "x": 18,
+        "y": 11,
+        "t": 3,
+        "delta_tier1": 0.3766665458679199,
+        "delta_tier2": 1.2400000095367432
+      },
+      {
+        "x": 18,
+        "y": 8,
+        "t": 3,
+        "delta_tier1": 0.48333314061164856,
+        "delta_tier2": 1.3200000524520874
+      },
+      {
+        "x": 18,
+        "y": 10,
+        "t": 3,
+        "delta_tier1": 0.4866664707660675,
+        "delta_tier2": 1.3199999928474426
+      },
+      {
+        "x": 18,
+        "y": 7,
+        "t": 3,
+        "delta_tier1": 0.4199998676776886,
+        "delta_tier2": 1.2400000095367432
+      },
+      {
+        "x": 23,
+        "y": 10,
+        "t": 3,
+        "delta_tier1": -0.7033328413963318,
+        "delta_tier2": 0.0
+      },
+      {
+        "x": 23,
+        "y": 11,
+        "t": 3,
+        "delta_tier1": -0.6533329486846924,
+        "delta_tier2": 0.0
+      },
+      {
+        "x": 18,
+        "y": 11,
+        "t": 2,
+        "delta_tier1": 0.20333331823349,
+        "delta_tier2": 0.8400000333786011
+      },
+      {
+        "x": 23,
+        "y": 9,
+        "t": 3,
+        "delta_tier1": -0.603333055973053,
+        "delta_tier2": 0.0
+      },
+      {
+        "x": 17,
+        "y": 10,
+        "t": 2,
+        "delta_tier1": 0.13333332538604736,
+        "delta_tier2": 0.7200000286102295
+      }
+    ]
+  },
+  "metrics": {
+    "f_causal_before": 0.8751505613327026,
+    "f_causal_tier1_after": 0.9067099690437317,
+    "f_causal_tier2_after": 0.9038268327713013,
+    "delta_f_causal_tier1": 0.03155940771102905,
+    "delta_f_causal_tier2": 0.028676271438598633,
+    "mean_Y_D_before": 5.194496554945928,
+    "mean_Y_D_tier1_after": 5.162091770405951,
+    "mean_Y_D_tier2_after": 5.24383654824348,
+    "delta_mean_Y_D_tier1": -0.03240478453997753,
+    "delta_mean_Y_D_tier2": 0.049339993297551565
+  },
+  "S_tier2_before_summary": {
+    "mean_active": 3.1301465034484863,
+    "sum_active": 13240.51953125
+  },
+  "S_tier2_after_summary": {
+    "mean_active": 3.1734468936920166,
+    "sum_active": 13423.6806640625
+  }
+}

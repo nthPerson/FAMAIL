@@ -90,7 +90,8 @@ All curated + git-tracked under **`PAPER/supply-lift/data/a10/`** (38 files; Q8a
 | `shz_a10_rollout_summary.json` | `external_fairness/results/option_a_rollout_a10/` | §4.4 allocation boundary (−0.0033 @ w30) ⚠️ see §7 |
 | `shz_trimonly_a10_metrics.json` + `_external_fairness.json` | `2026-07-11T12-11-31_trimonly_a10_shz` | §4.2 trim-vs-lift **ablation** (+0.0146; mean(Y\|disadv) flat) |
 | `sf12_a10_metrics.json` | sf12 a10_filtered | §4.7 SF +0.0316; **compliance 87.65 / 85.20** ⚠️ see §7 |
-| `sf12_a10_channel_decomposition.json` | sf12 a10_filtered | §4.7 SF supply +0.0209, demand −0.0533 |
+| `sf12_a10_channel_decomposition.json` | sf12 a10_filtered | §4.7 SF supply t1 +0.0209, demand −0.0533, total t1 −0.0324; **TIER-2 supply +0.1027 [+0.0872,+0.1203] sig + total_tier2 +0.0493 [+0.0185,+0.0790] SIG-POSITIVE — tier-1 tension resolved** (refreshed w/ tier-2 grid, D1-CHAN 2026-07-18) |
+| `sf12_a10_supply_recount.json` | sf12 a10_filtered | §4.7 D1 recount: G-repro MAE 0.0 (4,230 cells, corr 1.0), replay 1959/1959, S_tier2 sum 13240.5→13423.7 (D1-RECOUNT 2026-07-18; SF-native match path per spec addendum 3c740c7) |
 | `sf12_a10_external_fairness.json` | `external_fairness/results/sf12-supplylift-a10/` | §4.7 SF Theil −0.0079, DI +0.0058 |
 | `sf12_a10_l1v2_multiseed.json` | `level1_table_v2/supply_lift_sf12_5seed/` | §4.7 SF L1 (0.9067 fairest; GAN healthy 0.039) |
 | `sf12_a10_weighted_bc_*` (3 files) | `weighted_bc_sweep/supply_lift_a10_sf12_filtered_6seed/` | §4.7 SF WBC +0.0242/+0.0309/+0.0332 |
