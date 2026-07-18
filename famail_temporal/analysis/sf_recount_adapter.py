@@ -166,7 +166,9 @@ a deliberate choice, not an oversight:
 """
 from __future__ import annotations
 
+from collections import defaultdict
 from pathlib import Path
+from typing import Dict, List, Tuple
 
 import numpy as np
 import pandas as pd
@@ -179,6 +181,12 @@ from famail_temporal.second_dataset.data.source_generation.sf_config import (
 )
 from famail_temporal.second_dataset.data.source_generation.sf_raw_loader import (
     load_sf_raw,
+)
+from famail_temporal.second_dataset.data.source_generation.sf_multistream import (
+    weekday_from_epoch_day,
+)
+from famail_temporal.second_dataset.data.source_generation.sf_segmentation import (
+    segment_driver,
 )
 
 _COLUMNS = [
@@ -282,3 +290,128 @@ def load_sf_pings(raw_dir: Path) -> pd.DataFrame:
     out = assign_segment_ids(out)
 
     return out[_COLUMNS]
+
+
+# sf_segmentation.segment_driver's default gap threshold (sf_segmentation.py:53,
+# ``gap_sec: int = 300``): a seeking run breaks on a > gap_sec time gap OR an
+# occupancy change. Mirrored (not re-derived) below so the match-side row-range
+# bookkeeping reproduces segment_driver's own segment boundaries.
+_SF_GAP_SEC = 300
+
+
+def build_sf_seeking_lookup(
+    es_df: pd.DataFrame, raw_dir: Path, idx_to_plate: Dict[int, str],
+) -> Dict[str, Dict[Tuple[Tuple[int, int, int, int], ...], List[np.ndarray]]]:
+    """Build the sf12 *match-side* seeking-segment lookup, keyed EXACTLY like
+    ``supply_recount._build_seg_lookup``'s output
+    (``plate -> {state_value_tuple: [row_index_array, ...]}``) so
+    ``apply_substitutions`` can consume it verbatim -- but derived from SF's OWN
+    production segmentation instead of the SZ transition machinery
+    ``load_sf_pings`` bakes into ``es_df``.
+
+    Why this exists (D1 Task 3 diagnosis + spec addendum 2026-07-17): the sf12
+    editor's ``histories.pkl`` trajectories were produced by
+    ``sf_segmentation.segment_driver`` (300s-gap + occupancy breaks) in
+    **weekday** day space (``sf_multistream.weekday_from_epoch_day``). The
+    counting/G-repro df (``es_df`` from ``load_sf_pings``) instead uses the SZ
+    ungapped transition machinery in **absolute** epoch-day space -- correct for
+    distinct-taxi counting (Task 2 G-repro MAE 0.0) but a total mismatch for
+    history->raw matching (0/1959). This builder re-segments the SAME raw pings
+    the SF pipeline uses, in the histories' own convention, while carrying the
+    ORIGINAL ``es_df`` row indices of each state -- so a matched substitution
+    rewrites x/y on exactly the rows the SF counter counts, and ``es_df``'s
+    absolute ``day_index`` is left untouched (the count/match split).
+
+    ``es_df`` is the ALREADY driver-filtered, ``reset_index``-ed counting df
+    (``load_sf_pings(raw_dir)`` restricted to ``idx_to_plate``'s plates, as
+    ``supply_recount.main`` builds it); ``raw_dir`` is the same full-fleet
+    Cabspotting dir. Row indices in the returned lists are ``es_df`` index labels.
+
+    State-tuple convention matches the key ``apply_substitutions`` builds from a
+    history's states (supply_recount.py:163-166): ``(x_grid, y_grid, time_bucket,
+    weekday)`` with ``es_df``'s already-1-indexed ``x_grid``/``y_grid`` (the +1
+    there mirrors the 0-indexed history states) and ``day_index`` remapped
+    absolute->weekday.
+    """
+    raw = load_sf_raw(str(raw_dir))
+    lookup: Dict[str, Dict[Tuple, List[np.ndarray]]] = {
+        plate: defaultdict(list) for plate in idx_to_plate.values()
+    }
+    if len(raw) == 0 or len(es_df) == 0:
+        return lookup
+
+    # Production grid (full-fleet 0.5/99.5-pct bbox, sf_config.grid_from_points)
+    # -- used ONLY to drive the segment_driver oracle cross-check below; the
+    # state cells themselves are reused verbatim from es_df (which load_sf_pings
+    # already quantized with this same grid, Task 1 cross-validated), never
+    # re-derived here.
+    grid = grid_from_points(
+        raw["lat"].to_numpy(np.float64), raw["lon"].to_numpy(np.float64),
+    )
+
+    for drv, plate in idx_to_plate.items():
+        m = lookup[plate]
+        # es_df's per-plate rows and load_sf_raw's per-driver rows are the SAME
+        # pings in the SAME (time_utc-ascending) order: both trace to load_sf_raw
+        # (sf_raw_loader.py:55 sorts (driver_id, time_utc)); load_sf_pings' stable
+        # (plate_id, time_utc) re-sort (sf_recount_adapter.py:270-274) preserves
+        # it. The occupancy-sequence assert below hard-validates that alignment.
+        draw = raw[raw["driver_id"] == int(drv)]
+        es_rows = es_df.index[es_df["plate_id"] == plate].to_numpy()
+        if len(es_rows) == 0 or len(draw) == 0:
+            continue
+        occ = draw["occupancy"].to_numpy().astype(int)
+        es_pi = es_df.loc[es_rows, "passenger_indicator"].to_numpy().astype(int)
+        assert len(es_rows) == len(draw) and np.array_equal(occ, es_pi), (
+            f"SF match-lookup alignment failed for {plate}: es_df rows and raw "
+            f"pings are not the same positional sequence "
+            f"(len es_rows={len(es_rows)}, len draw={len(draw)})"
+        )
+
+        t = draw["time_utc"].to_numpy().astype(np.int64)
+        # sf_segmentation.py:75-79 -- segment boundaries, verbatim mirror; the
+        # ONLY addition is that we keep the row *ranges* (starts/ends), which
+        # segment_driver discards.
+        dt = np.diff(t, prepend=t[0])
+        seg_break = (dt > _SF_GAP_SEC) | (np.diff(occ, prepend=occ[0]) != 0)
+        seg_break[0] = True
+        starts = np.flatnonzero(seg_break)
+        ends = np.append(starts[1:], len(t))
+
+        # Reuse es_df's already-quantized cells (identical grid + GridSpec /
+        # 5-min-bucket formulas segment_driver uses, sf_segmentation.py:67-72)
+        # rather than re-quantizing from lat/lon.
+        xg = es_df.loc[es_rows, "x_grid"].to_numpy()
+        yg = es_df.loc[es_rows, "y_grid"].to_numpy()
+        tb = es_df.loc[es_rows, "time_bucket"].to_numpy()
+        dabs = es_df.loc[es_rows, "day_index"].to_numpy()  # absolute epoch-day
+        # sf_multistream.py:26-35 -- absolute epoch-day -> ISO weekday (1..7), the
+        # day space the sf12 editor's histories carry. Imported verbatim.
+        wd = np.array([weekday_from_epoch_day(int(d)) for d in dabs])
+
+        # segment_driver ORACLE (imported + called): the seeking state sequences
+        # we build from the mirrored ranges must equal segment_driver's own
+        # res.seeking EXACTLY -- proving the row-range mirror is faithful (a
+        # seeking segment is a >=2-state run whose first ping is free/occ==0,
+        # sf_segmentation.py:91,95-97; same order, starts ascending).
+        oracle = iter(segment_driver(draw, grid).seeking)
+        for s, e in zip(starts, ends):
+            if e - s < 2 or occ[s] != 0:      # sf_segmentation.py:91, 95
+                continue
+            abs_states = [[int(xg[i]), int(yg[i]), int(tb[i]), int(dabs[i])]
+                          for i in range(s, e)]
+            assert abs_states == next(oracle), (
+                f"SF seeking-segment mirror diverged from segment_driver for "
+                f"{plate} (rows {s}:{e})"
+            )
+            key = tuple(
+                (int(xg[i]), int(yg[i]), int(tb[i]), int(wd[i]))
+                for i in range(s, e)
+            )
+            m[key].append(es_rows[s:e])
+        assert next(oracle, None) is None, (
+            f"SF seeking-segment mirror produced fewer segments than "
+            f"segment_driver for {plate}"
+        )
+
+    return lookup

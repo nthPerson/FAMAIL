@@ -125,6 +125,7 @@ def _build_seg_lookup(
 
 def apply_substitutions(
     df: pd.DataFrame, histories: list, idx_to_plate: Dict[int, str],
+    seg_lookup: Dict[str, Dict[Tuple, List[np.ndarray]]] | None = None,
 ) -> Tuple[pd.DataFrame, dict]:
     """Return (df2, stats). df2 is `df` with the x_grid/y_grid of the exact
     raw rows underlying each edited trajectory's MOVED, non-terminal
@@ -139,10 +140,27 @@ def apply_substitutions(
     (another state, possibly from a different segment) still supports it —
     exactly the "states that didn't change cell / drivers' other pings
     unchanged" requirement.
+
+    ``seg_lookup`` (optional) is a prebuilt ``plate -> {state_value_tuple:
+    [row_index_array, ...]}`` lookup whose row indices point into ``df``. When
+    omitted (the Shenzhen default), it is derived from ``df`` via the SZ
+    transition machinery (``_segment_rows_by_driver`` / ``_build_seg_lookup``).
+    sf12 injects a lookup built by ``sf_recount_adapter.build_sf_seeking_lookup``
+    (SF-native 300s-gap segmentation + weekday day space) instead, because the
+    SZ derivation does not reproduce the SF editor's trajectories (D1 Task 3
+    diagnosis; spec addendum 2026-07-17). The matching loop below is identical
+    either way -- only the source of ``seg_lookup`` differs. Only x_grid/y_grid
+    are ever written, so ``df``'s day_index/hour/etc. are invariant.
     """
     df2 = df.copy()
-    seg_rows = _segment_rows_by_driver(df2)
-    seg_lookup = _build_seg_lookup(seg_rows)
+    if seg_lookup is None:
+        seg_rows = _segment_rows_by_driver(df2)
+        seg_lookup = _build_seg_lookup(seg_rows)
+    else:
+        # Defensive per-bucket copy: the loop below consumes buckets via
+        # pop(0); don't mutate the caller's prebuilt lookup.
+        seg_lookup = {p: {k: list(v) for k, v in mm.items()}
+                      for p, mm in seg_lookup.items()}
 
     n_histories = len(histories)
     n_matched = 0
@@ -487,7 +505,19 @@ def main(argv: list[str] | None = None) -> int:
     histories = _load_histories(edit_dir)
 
     print(f"[supply_recount] substituting {len(histories)} edited trajectories...", flush=True)
-    df_after, sub_stats = apply_substitutions(es_df, histories, idx_to_plate)
+    if args.city == "shenzhen":
+        df_after, sub_stats = apply_substitutions(es_df, histories, idx_to_plate)
+    else:
+        # sf12 histories were segmented by SF's own 300s-gap segmenter in
+        # weekday day space; the SZ transition machinery baked into es_df does
+        # not reproduce them (D1 Task 3; spec addendum). Inject an SF-native
+        # match lookup whose row indices point into es_df, so substitutions land
+        # on exactly the rows the SF counter counts (es_df day_index untouched).
+        from famail_temporal.analysis.sf_recount_adapter import build_sf_seeking_lookup
+        sf_seg_lookup = build_sf_seeking_lookup(es_df, args.raw_dir, idx_to_plate)
+        df_after, sub_stats = apply_substitutions(
+            es_df, histories, idx_to_plate, seg_lookup=sf_seg_lookup,
+        )
 
     print("[supply_recount] recounting tier-2 AFTER...", flush=True)
     if args.city == "shenzhen":
