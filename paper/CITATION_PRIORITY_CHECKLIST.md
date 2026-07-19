@@ -41,6 +41,11 @@ Status legend for what machines already did:
 Crossref/DOI metadata matched (front-end bot-blocked) · **NONE** = no publisher record exists.
 
 **Applied-changes log (controller sessions; checkboxes above/below remain Robert's alone):**
+- 2026-07-18: TWO NEW refs.bib entries + P0 rows per Dr. Zhang's abstract feedback (intro
+  data-generation category cites): `xu2018fairgan`, `vanbreugel2021decaf` — both UNVERIFIED
+  (controller-knowledge metadata, no pages/DOI on purpose); MUST clear Robert's manual pass
+  before submission. Also NEW intro usage of existing `kamirancalders2012` (rebalancing
+  category) and reworded in-processing sentence retains `zheng2023`. Count now 43 entries.
 - 2026-07-17: NEW §4.5 usages of existing keys `kamirancalders2012` (reweighing baseline arm) and
   `zheng2023` ("in the spirit of" — the in-processing penalty arm). Claim-check note for the manual
   pass: both are METHOD-LINEAGE attributions for our baseline implementations, not claims about the
@@ -59,6 +64,17 @@ Crossref/DOI metadata matched (front-end bot-blocked) · **NONE** = no publisher
 ---
 
 ## P0 — Decisions & unresolved items (do these first; each needs human judgment)
+
+- [ ] **xu2018fairgan** — Xu, Yuan, Zhang & Wu, *FairGAN: Fairness-aware Generative
+  Adversarial Networks*, IEEE Big Data 2018 — NEW 2026-07-18 (Zhang-feedback citation for the
+  intro's data-generation category, `01:~58`). **Machine status: UNVERIFIED — added from
+  controller knowledge under deadline; entry deliberately carries no page numbers.** Check:
+  confirm venue/year/authors on IEEE Xplore and add pages/DOI.
+- [ ] **vanbreugel2021decaf** — van Breugel, Kyono, Berrevoets & van der Schaar, *DECAF:
+  Generating Fair Synthetic Data Using Causally-Aware Generative Networks*, NeurIPS 2021 —
+  NEW 2026-07-18 (same intro category, `01:~58`). **Machine status: UNVERIFIED — added from
+  controller knowledge under deadline.** Check: confirm on proceedings.neurips.cc (volume 34)
+  and add pages/URL.
 
 - [ ] **goodfellow2015fgsm** — Goodfellow, Shlens & Szegedy, *Explaining and Harnessing
   Adversarial Examples* — used at `02:55`, `03:334` (FGSM origin / bounded adversarial perturbation).
