@@ -46,6 +46,11 @@ Crossref/DOI metadata matched (front-end bot-blocked) · **NONE** = no publisher
   (controller-knowledge metadata, no pages/DOI on purpose); MUST clear Robert's manual pass
   before submission. Also NEW intro usage of existing `kamirancalders2012` (rebalancing
   category) and reworded in-processing sentence retains `zheng2023`. Count now 43 entries.
+- 2026-07-18 (later): NEW intro usage of existing `ren2020stsiamese` (Robert) — cites
+  ST-SiameseNet at its first named mention (frozen driver-identity discriminator). Claim-check
+  for the manual pass: architecture-name attribution only, no result claimed. Intro also now
+  carries tab:external-sz's DI/DP-gap/Theil deltas verbatim (verified against the table +
+  external_fairness.json this session).
 - 2026-07-17: NEW §4.5 usages of existing keys `kamirancalders2012` (reweighing baseline arm) and
   `zheng2023` ("in the spirit of" — the in-processing penalty arm). Claim-check note for the manual
   pass: both are METHOD-LINEAGE attributions for our baseline implementations, not claims about the

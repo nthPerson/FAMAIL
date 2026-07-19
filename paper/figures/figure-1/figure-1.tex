@@ -1,7 +1,8 @@
 % Teaser figure (fig:teaser) — CHOSEN DESIGN (Robert, 2026-07-16): "the city,
 % the data, two futures" (three strips, top-to-bottom: problem -> asset ->
-% stakes) + the loop-back arrow on the bad future. \input by
-% sections/01_introduction.tex inside a figure environment; iterate HERE.
+% stakes). Loop-back arrow REMOVED 2026-07-18 (Robert; two-hop compression
+% invited a data-incest misreading — the loop lives in the labels/caption).
+% \input by sections/01_introduction.tex inside a figure environment; iterate HERE.
 % Standalone harness: figure-1-test.tex (compile with latexmk -outdir=<scratch>).
 % Rejected alternates + design history: design-archive/.
 % Column-width.
@@ -51,7 +52,8 @@
                 (-0.068,-0.046) circle[radius=0.027]
                 (0.068,-0.046) circle[radius=0.027];
                 \draw[figaccent, line width=0.8pt]
-                (0.15,0.15) -- (0.25,0.15) (0.20,0.10) -- (0.20,0.20);},
+                (0.10,0.10) -- (0.20,0.10) (0.15,0.05) -- (0.15,0.15);},
+                % (0.15,0.15) -- (0.25,0.15) (0.20,0.10) -- (0.20,0.20);},
   % edited pickup: accent passenger + the same plus tag
   picknew/.pic={\draw[figaccent, line width=0.7pt] (0,0.075) circle[radius=0.042];
                 \draw[figaccent, line width=0.7pt] (0,0.033) -- (0,-0.046);
@@ -59,7 +61,8 @@
                 \draw[figaccent, line width=0.7pt] (0,-0.046) -- (-0.055,-0.117)
                                                   (0,-0.046) -- (0.055,-0.117);
                 \draw[figaccent, line width=0.8pt]
-                (0.15,0.15) -- (0.25,0.15) (0.20,0.10) -- (0.20,0.20);},
+                (0.08,0.12) -- (0.18,0.12) (0.13,0.07) -- (0.13,0.17);},
+                % (0.15,0.15) -- (0.25,0.15) (0.20,0.10) -- (0.20,0.20);},
   boundary/.style={figink!65, line width=0.9pt, dash pattern=on 3pt off 1.6pt},
   panelframe/.style={figgray, line width=0.6pt},
   citygrid/.style={figfaint, line width=0.35pt},

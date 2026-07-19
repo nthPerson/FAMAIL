@@ -17,13 +17,17 @@ what changed, point by point:
 
 3. **Introduction structure.** Reordered to your six-step sequence; the visualization now
    sits at step 4, illustrating the research gap after the categories of existing approaches
-   are presented.
+   are presented. The introduction's results summary now also states the headline external
+   metrics with their intervals (disparate impact +0.0162, demographic-parity gap −0.890,
+   Theil −0.0087, each interval excluding zero) rather than a single example value.
 
-4. **Citations for the intervention categories.** The paragraph you flagged now cites every
-   category: in-processing (Zheng et al. 2023), fairness-aware synthetic data generation
-   (FairGAN, Xu et al. 2018; DECAF, van Breugel et al. 2021), and reweighing/resampling
-   (Kamiran & Calders 2012). The two generation citations are newly added and I am
-   completing authoritative-source verification of their metadata before submission.
+4. **Citations.** The paragraph you flagged now cites every category: in-processing
+   (Zheng et al. 2023), fairness-aware synthetic data generation (FairGAN, Xu et al. 2018;
+   DECAF, van Breugel et al. 2021), and reweighing/resampling (Kamiran & Calders 2012). The
+   two generation citations are newly added and I am completing authoritative-source
+   verification of their metadata before submission. The ST-SiameseNet discriminator is now
+   also cited at its first named mention in the introduction (Ren et al. 2020), since the
+   abstract refers to the architecture by name.
 
 5. **Terminology.** "Generative repair" and similar nonstandard phrasings are gone; the
    categories now use the terms you suggested (synthetic data generation, data rebalancing,
