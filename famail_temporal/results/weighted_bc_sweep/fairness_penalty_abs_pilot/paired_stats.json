@@ -1,0 +1,322 @@
+{
+  "f_causal": {
+    "edited": {
+      "diffs": [
+        -0.0006
+      ],
+      "mean": -0.000644683837890625,
+      "std": 0.0,
+      "n": 1,
+      "wilcoxon_p": 1.0,
+      "t_ci": [
+        NaN,
+        NaN
+      ]
+    },
+    "fair_penalty_abs_l1": {
+      "diffs": [
+        0.0021
+      ],
+      "mean": 0.002148747444152832,
+      "std": 0.0,
+      "n": 1,
+      "wilcoxon_p": 1.0,
+      "t_ci": [
+        NaN,
+        NaN
+      ]
+    },
+    "fair_penalty_abs_l3.16": {
+      "diffs": [
+        0.0006
+      ],
+      "mean": 0.0005526542663574219,
+      "std": 0.0,
+      "n": 1,
+      "wilcoxon_p": 1.0,
+      "t_ci": [
+        NaN,
+        NaN
+      ]
+    },
+    "fair_penalty_abs_l10": {
+      "diffs": [
+        0.0016
+      ],
+      "mean": 0.0016019940376281738,
+      "std": 0.0,
+      "n": 1,
+      "wilcoxon_p": 1.0,
+      "t_ci": [
+        NaN,
+        NaN
+      ]
+    },
+    "fair_penalty_abs_l100": {
+      "diffs": [
+        -0.0025
+      ],
+      "mean": -0.002511739730834961,
+      "std": 0.0,
+      "n": 1,
+      "wilcoxon_p": 1.0,
+      "t_ci": [
+        NaN,
+        NaN
+      ]
+    },
+    "fair_penalty_abs_l1000": {
+      "diffs": [
+        -0.1216
+      ],
+      "mean": -0.12161058187484741,
+      "std": 0.0,
+      "n": 1,
+      "wilcoxon_p": 1.0,
+      "t_ci": [
+        NaN,
+        NaN
+      ]
+    }
+  },
+  "f_spatial": {
+    "edited": {
+      "diffs": [
+        0.0003
+      ],
+      "mean": 0.0002936124801635742,
+      "std": 0.0,
+      "n": 1,
+      "wilcoxon_p": 1.0,
+      "t_ci": [
+        NaN,
+        NaN
+      ]
+    },
+    "fair_penalty_abs_l1": {
+      "diffs": [
+        0.0003
+      ],
+      "mean": 0.0002921372652053833,
+      "std": 0.0,
+      "n": 1,
+      "wilcoxon_p": 1.0,
+      "t_ci": [
+        NaN,
+        NaN
+      ]
+    },
+    "fair_penalty_abs_l3.16": {
+      "diffs": [
+        -0.0004
+      ],
+      "mean": -0.00042489171028137207,
+      "std": 0.0,
+      "n": 1,
+      "wilcoxon_p": 1.0,
+      "t_ci": [
+        NaN,
+        NaN
+      ]
+    },
+    "fair_penalty_abs_l10": {
+      "diffs": [
+        0.0001
+      ],
+      "mean": 0.0001285746693611145,
+      "std": 0.0,
+      "n": 1,
+      "wilcoxon_p": 1.0,
+      "t_ci": [
+        NaN,
+        NaN
+      ]
+    },
+    "fair_penalty_abs_l100": {
+      "diffs": [
+        0.0007
+      ],
+      "mean": 0.0007269531488418579,
+      "std": 0.0,
+      "n": 1,
+      "wilcoxon_p": 1.0,
+      "t_ci": [
+        NaN,
+        NaN
+      ]
+    },
+    "fair_penalty_abs_l1000": {
+      "diffs": [
+        -0.0044
+      ],
+      "mean": -0.004390284419059753,
+      "std": 0.0,
+      "n": 1,
+      "wilcoxon_p": 1.0,
+      "t_ci": [
+        NaN,
+        NaN
+      ]
+    }
+  },
+  "fidelity_a": {
+    "edited": {
+      "diffs": [
+        0.0006
+      ],
+      "mean": 0.0006019374132155697,
+      "std": 0.0,
+      "n": 1,
+      "wilcoxon_p": 1.0,
+      "t_ci": [
+        NaN,
+        NaN
+      ]
+    },
+    "fair_penalty_abs_l1": {
+      "diffs": [
+        0.0004
+      ],
+      "mean": 0.00044447892904275754,
+      "std": 0.0,
+      "n": 1,
+      "wilcoxon_p": 1.0,
+      "t_ci": [
+        NaN,
+        NaN
+      ]
+    },
+    "fair_penalty_abs_l3.16": {
+      "diffs": [
+        0.0008
+      ],
+      "mean": 0.0007683479189872777,
+      "std": 0.0,
+      "n": 1,
+      "wilcoxon_p": 1.0,
+      "t_ci": [
+        NaN,
+        NaN
+      ]
+    },
+    "fair_penalty_abs_l10": {
+      "diffs": [
+        -0.0007
+      ],
+      "mean": -0.000696819603443144,
+      "std": 0.0,
+      "n": 1,
+      "wilcoxon_p": 1.0,
+      "t_ci": [
+        NaN,
+        NaN
+      ]
+    },
+    "fair_penalty_abs_l100": {
+      "diffs": [
+        0.0008
+      ],
+      "mean": 0.0008351427912711706,
+      "std": 0.0,
+      "n": 1,
+      "wilcoxon_p": 1.0,
+      "t_ci": [
+        NaN,
+        NaN
+      ]
+    },
+    "fair_penalty_abs_l1000": {
+      "diffs": [
+        -0.0007
+      ],
+      "mean": -0.0007230399755148165,
+      "std": 0.0,
+      "n": 1,
+      "wilcoxon_p": 1.0,
+      "t_ci": [
+        NaN,
+        NaN
+      ]
+    }
+  },
+  "fidelity_b": {
+    "edited": {
+      "diffs": [
+        0.0014
+      ],
+      "mean": 0.001388582189997642,
+      "std": 0.0,
+      "n": 1,
+      "wilcoxon_p": 1.0,
+      "t_ci": [
+        NaN,
+        NaN
+      ]
+    },
+    "fair_penalty_abs_l1": {
+      "diffs": [
+        0.0009
+      ],
+      "mean": 0.0009105803480486258,
+      "std": 0.0,
+      "n": 1,
+      "wilcoxon_p": 1.0,
+      "t_ci": [
+        NaN,
+        NaN
+      ]
+    },
+    "fair_penalty_abs_l3.16": {
+      "diffs": [
+        0.0016
+      ],
+      "mean": 0.0016036107405674044,
+      "std": 0.0,
+      "n": 1,
+      "wilcoxon_p": 1.0,
+      "t_ci": [
+        NaN,
+        NaN
+      ]
+    },
+    "fair_penalty_abs_l10": {
+      "diffs": [
+        0.0014
+      ],
+      "mean": 0.0014118690619620046,
+      "std": 0.0,
+      "n": 1,
+      "wilcoxon_p": 1.0,
+      "t_ci": [
+        NaN,
+        NaN
+      ]
+    },
+    "fair_penalty_abs_l100": {
+      "diffs": [
+        -0.0004
+      ],
+      "mean": -0.00040307677268103595,
+      "std": 0.0,
+      "n": 1,
+      "wilcoxon_p": 1.0,
+      "t_ci": [
+        NaN,
+        NaN
+      ]
+    },
+    "fair_penalty_abs_l1000": {
+      "diffs": [
+        0.3556
+      ],
+      "mean": 0.355587844874983,
+      "std": 0.0,
+      "n": 1,
+      "wilcoxon_p": 1.0,
+      "t_ci": [
+        NaN,
+        NaN
+      ]
+    }
+  }
+}

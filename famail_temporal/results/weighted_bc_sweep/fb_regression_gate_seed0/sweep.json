@@ -1,0 +1,1221 @@
+{
+  "edit_dir": "famail_temporal/results/2026-07-10T02-06-37_alpha_sweep_s10_c80_f10_filtered",
+  "seeds": [
+    0
+  ],
+  "weights": [
+    10.0,
+    20.0,
+    30.0
+  ],
+  "placebo_weights": [
+    10.0,
+    30.0
+  ],
+  "placebo_seed": 12345,
+  "mle_epochs": 20,
+  "n_edited": 9882,
+  "n_corpus": 95297,
+  "n_eval_drivers": 50,
+  "gate": {
+    "high_matched": 0.8474932399988174,
+    "low_mismatched": 0.1930961845179836,
+    "margin": 0.2,
+    "passed": true,
+    "n_matched": 1000,
+    "n_mismatched": 1000
+  },
+  "trusted": true,
+  "per_arm": {
+    "raw": {
+      "f_causal": {
+        "mean": 0.8011953830718994,
+        "std": 0.0,
+        "values": [
+          0.8012
+        ]
+      },
+      "f_spatial": {
+        "mean": 0.10516999661922455,
+        "std": 0.0,
+        "values": [
+          0.1052
+        ]
+      },
+      "fidelity_a": {
+        "mean": 0.8474537582397461,
+        "std": 0.0,
+        "values": [
+          0.8475
+        ]
+      },
+      "fidelity_b": {
+        "mean": 0.012329616401849602,
+        "std": 0.0,
+        "values": [
+          0.0123
+        ]
+      },
+      "n_empty": [
+        0
+      ],
+      "fidelity_b_per_component": {
+        "length": {
+          "values": [
+            0.0219
+          ]
+        },
+        "mean_displacement": {
+          "values": [
+            0.0059
+          ]
+        },
+        "coverage": {
+          "values": [
+            0.004
+          ]
+        },
+        "radius_of_gyration": {
+          "values": [
+            0.0067
+          ]
+        },
+        "net_displacement": {
+          "values": [
+            0.0067
+          ]
+        },
+        "terminal_cell": {
+          "values": [
+            0.0288
+          ]
+        }
+      },
+      "fidelity_a_separation": {
+        "values": [
+          0.6537
+        ]
+      },
+      "terminal_cell_entropy_bits": {
+        "values": [
+          6.9175
+        ]
+      },
+      "mean_trip_length": {
+        "values": [
+          12.6932
+        ]
+      },
+      "std_trip_length": {
+        "values": [
+          15.0928
+        ]
+      }
+    },
+    "edited": {
+      "f_causal": {
+        "mean": 0.8005506992340088,
+        "std": 0.0,
+        "values": [
+          0.8006
+        ]
+      },
+      "f_spatial": {
+        "mean": 0.10546360909938812,
+        "std": 0.0,
+        "values": [
+          0.1055
+        ]
+      },
+      "fidelity_a": {
+        "mean": 0.8480556956529617,
+        "std": 0.0,
+        "values": [
+          0.8481
+        ]
+      },
+      "fidelity_b": {
+        "mean": 0.013718198591847244,
+        "std": 0.0,
+        "values": [
+          0.0137
+        ]
+      },
+      "n_empty": [
+        1
+      ],
+      "fidelity_b_per_component": {
+        "length": {
+          "values": [
+            0.0206
+          ]
+        },
+        "mean_displacement": {
+          "values": [
+            0.0088
+          ]
+        },
+        "coverage": {
+          "values": [
+            0.0039
+          ]
+        },
+        "radius_of_gyration": {
+          "values": [
+            0.0088
+          ]
+        },
+        "net_displacement": {
+          "values": [
+            0.0082
+          ]
+        },
+        "terminal_cell": {
+          "values": [
+            0.032
+          ]
+        }
+      },
+      "fidelity_a_separation": {
+        "values": [
+          0.6543
+        ]
+      },
+      "terminal_cell_entropy_bits": {
+        "values": [
+          6.9217
+        ]
+      },
+      "mean_trip_length": {
+        "values": [
+          12.464
+        ]
+      },
+      "std_trip_length": {
+        "values": [
+          14.8063
+        ]
+      }
+    },
+    "edited_w10": {
+      "f_causal": {
+        "mean": 0.8249015808105469,
+        "std": 0.0,
+        "values": [
+          0.8249
+        ]
+      },
+      "f_spatial": {
+        "mean": 0.10910461097955704,
+        "std": 0.0,
+        "values": [
+          0.1091
+        ]
+      },
+      "fidelity_a": {
+        "mean": 0.8481885965044673,
+        "std": 0.0,
+        "values": [
+          0.8482
+        ]
+      },
+      "fidelity_b": {
+        "mean": 0.021690100869632394,
+        "std": 0.0,
+        "values": [
+          0.0217
+        ]
+      },
+      "n_empty": [
+        2
+      ],
+      "fidelity_b_per_component": {
+        "length": {
+          "values": [
+            0.0348
+          ]
+        },
+        "mean_displacement": {
+          "values": [
+            0.0096
+          ]
+        },
+        "coverage": {
+          "values": [
+            0.0164
+          ]
+        },
+        "radius_of_gyration": {
+          "values": [
+            0.0149
+          ]
+        },
+        "net_displacement": {
+          "values": [
+            0.0086
+          ]
+        },
+        "terminal_cell": {
+          "values": [
+            0.0457
+          ]
+        }
+      },
+      "fidelity_a_separation": {
+        "values": [
+          0.6537
+        ]
+      },
+      "terminal_cell_entropy_bits": {
+        "values": [
+          7.0372
+        ]
+      },
+      "mean_trip_length": {
+        "values": [
+          14.3754
+        ]
+      },
+      "std_trip_length": {
+        "values": [
+          16.2634
+        ]
+      }
+    },
+    "edited_w20": {
+      "f_causal": {
+        "mean": 0.8285630345344543,
+        "std": 0.0,
+        "values": [
+          0.8286
+        ]
+      },
+      "f_spatial": {
+        "mean": 0.10803923010826111,
+        "std": 0.0,
+        "values": [
+          0.108
+        ]
+      },
+      "fidelity_a": {
+        "mean": 0.8490679059028625,
+        "std": 0.0,
+        "values": [
+          0.8491
+        ]
+      },
+      "fidelity_b": {
+        "mean": 0.024359302294034185,
+        "std": 0.0,
+        "values": [
+          0.0244
+        ]
+      },
+      "n_empty": [
+        2
+      ],
+      "fidelity_b_per_component": {
+        "length": {
+          "values": [
+            0.0348
+          ]
+        },
+        "mean_displacement": {
+          "values": [
+            0.0156
+          ]
+        },
+        "coverage": {
+          "values": [
+            0.0134
+          ]
+        },
+        "radius_of_gyration": {
+          "values": [
+            0.0185
+          ]
+        },
+        "net_displacement": {
+          "values": [
+            0.0123
+          ]
+        },
+        "terminal_cell": {
+          "values": [
+            0.0516
+          ]
+        }
+      },
+      "fidelity_a_separation": {
+        "values": [
+          0.6555
+        ]
+      },
+      "terminal_cell_entropy_bits": {
+        "values": [
+          7.0542
+        ]
+      },
+      "mean_trip_length": {
+        "values": [
+          14.3596
+        ]
+      },
+      "std_trip_length": {
+        "values": [
+          16.4556
+        ]
+      }
+    },
+    "edited_w30": {
+      "f_causal": {
+        "mean": 0.8307349681854248,
+        "std": 0.0,
+        "values": [
+          0.8307
+        ]
+      },
+      "f_spatial": {
+        "mean": 0.10888064652681351,
+        "std": 0.0,
+        "values": [
+          0.1089
+        ]
+      },
+      "fidelity_a": {
+        "mean": 0.8472663291820416,
+        "std": 0.0,
+        "values": [
+          0.8473
+        ]
+      },
+      "fidelity_b": {
+        "mean": 0.027247932525891763,
+        "std": 0.0,
+        "values": [
+          0.0272
+        ]
+      },
+      "n_empty": [
+        5
+      ],
+      "fidelity_b_per_component": {
+        "length": {
+          "values": [
+            0.0372
+          ]
+        },
+        "mean_displacement": {
+          "values": [
+            0.0135
+          ]
+        },
+        "coverage": {
+          "values": [
+            0.0201
+          ]
+        },
+        "radius_of_gyration": {
+          "values": [
+            0.025
+          ]
+        },
+        "net_displacement": {
+          "values": [
+            0.0119
+          ]
+        },
+        "terminal_cell": {
+          "values": [
+            0.0558
+          ]
+        }
+      },
+      "fidelity_a_separation": {
+        "values": [
+          0.6543
+        ]
+      },
+      "terminal_cell_entropy_bits": {
+        "values": [
+          7.1308
+        ]
+      },
+      "mean_trip_length": {
+        "values": [
+          14.7278
+        ]
+      },
+      "std_trip_length": {
+        "values": [
+          16.6814
+        ]
+      }
+    },
+    "random_w10": {
+      "f_causal": {
+        "mean": 0.8013166189193726,
+        "std": 0.0,
+        "values": [
+          0.8013
+        ]
+      },
+      "f_spatial": {
+        "mean": 0.10490293055772781,
+        "std": 0.0,
+        "values": [
+          0.1049
+        ]
+      },
+      "fidelity_a": {
+        "mean": 0.8477614953517913,
+        "std": 0.0,
+        "values": [
+          0.8478
+        ]
+      },
+      "fidelity_b": {
+        "mean": 0.015267754579051033,
+        "std": 0.0,
+        "values": [
+          0.0153
+        ]
+      },
+      "n_empty": [
+        3
+      ],
+      "fidelity_b_per_component": {
+        "length": {
+          "values": [
+            0.0244
+          ]
+        },
+        "mean_displacement": {
+          "values": [
+            0.0091
+          ]
+        },
+        "coverage": {
+          "values": [
+            0.0038
+          ]
+        },
+        "radius_of_gyration": {
+          "values": [
+            0.0114
+          ]
+        },
+        "net_displacement": {
+          "values": [
+            0.0135
+          ]
+        },
+        "terminal_cell": {
+          "values": [
+            0.0294
+          ]
+        }
+      },
+      "fidelity_a_separation": {
+        "values": [
+          0.6545
+        ]
+      },
+      "terminal_cell_entropy_bits": {
+        "values": [
+          6.9027
+        ]
+      },
+      "mean_trip_length": {
+        "values": [
+          12.5348
+        ]
+      },
+      "std_trip_length": {
+        "values": [
+          15.2118
+        ]
+      }
+    },
+    "random_w30": {
+      "f_causal": {
+        "mean": 0.7984735369682312,
+        "std": 0.0,
+        "values": [
+          0.7985
+        ]
+      },
+      "f_spatial": {
+        "mean": 0.1037929430603981,
+        "std": 0.0,
+        "values": [
+          0.1038
+        ]
+      },
+      "fidelity_a": {
+        "mean": 0.8475112679600716,
+        "std": 0.0,
+        "values": [
+          0.8475
+        ]
+      },
+      "fidelity_b": {
+        "mean": 0.018020029739105384,
+        "std": 0.0,
+        "values": [
+          0.018
+        ]
+      },
+      "n_empty": [
+        4
+      ],
+      "fidelity_b_per_component": {
+        "length": {
+          "values": [
+            0.0288
+          ]
+        },
+        "mean_displacement": {
+          "values": [
+            0.0103
+          ]
+        },
+        "coverage": {
+          "values": [
+            0.0038
+          ]
+        },
+        "radius_of_gyration": {
+          "values": [
+            0.0147
+          ]
+        },
+        "net_displacement": {
+          "values": [
+            0.0153
+          ]
+        },
+        "terminal_cell": {
+          "values": [
+            0.0351
+          ]
+        }
+      },
+      "fidelity_a_separation": {
+        "values": [
+          0.6547
+        ]
+      },
+      "terminal_cell_entropy_bits": {
+        "values": [
+          6.8722
+        ]
+      },
+      "mean_trip_length": {
+        "values": [
+          12.8574
+        ]
+      },
+      "std_trip_length": {
+        "values": [
+          16.5066
+        ]
+      }
+    },
+    "most_fair_w10": {
+      "f_causal": {
+        "mean": 0.8044819235801697,
+        "std": 0.0,
+        "values": [
+          0.8045
+        ]
+      },
+      "f_spatial": {
+        "mean": 0.10428469628095627,
+        "std": 0.0,
+        "values": [
+          0.1043
+        ]
+      },
+      "fidelity_a": {
+        "mean": 0.8478277258872986,
+        "std": 0.0,
+        "values": [
+          0.8478
+        ]
+      },
+      "fidelity_b": {
+        "mean": 0.016331022705599087,
+        "std": 0.0,
+        "values": [
+          0.0163
+        ]
+      },
+      "n_empty": [
+        0
+      ],
+      "fidelity_b_per_component": {
+        "length": {
+          "values": [
+            0.0239
+          ]
+        },
+        "mean_displacement": {
+          "values": [
+            0.0104
+          ]
+        },
+        "coverage": {
+          "values": [
+            0.0056
+          ]
+        },
+        "radius_of_gyration": {
+          "values": [
+            0.0088
+          ]
+        },
+        "net_displacement": {
+          "values": [
+            0.0114
+          ]
+        },
+        "terminal_cell": {
+          "values": [
+            0.0379
+          ]
+        }
+      },
+      "fidelity_a_separation": {
+        "values": [
+          0.6554
+        ]
+      },
+      "terminal_cell_entropy_bits": {
+        "values": [
+          6.8649
+        ]
+      },
+      "mean_trip_length": {
+        "values": [
+          12.4192
+        ]
+      },
+      "std_trip_length": {
+        "values": [
+          15.289
+        ]
+      }
+    },
+    "most_fair_w20": {
+      "f_causal": {
+        "mean": 0.8047547340393066,
+        "std": 0.0,
+        "values": [
+          0.8048
+        ]
+      },
+      "f_spatial": {
+        "mean": 0.10252539813518524,
+        "std": 0.0,
+        "values": [
+          0.1025
+        ]
+      },
+      "fidelity_a": {
+        "mean": 0.8477560356855393,
+        "std": 0.0,
+        "values": [
+          0.8478
+        ]
+      },
+      "fidelity_b": {
+        "mean": 0.0170459793072699,
+        "std": 0.0,
+        "values": [
+          0.017
+        ]
+      },
+      "n_empty": [
+        2
+      ],
+      "fidelity_b_per_component": {
+        "length": {
+          "values": [
+            0.0271
+          ]
+        },
+        "mean_displacement": {
+          "values": [
+            0.0081
+          ]
+        },
+        "coverage": {
+          "values": [
+            0.0063
+          ]
+        },
+        "radius_of_gyration": {
+          "values": [
+            0.0096
+          ]
+        },
+        "net_displacement": {
+          "values": [
+            0.0093
+          ]
+        },
+        "terminal_cell": {
+          "values": [
+            0.0419
+          ]
+        }
+      },
+      "fidelity_a_separation": {
+        "values": [
+          0.6533
+        ]
+      },
+      "terminal_cell_entropy_bits": {
+        "values": [
+          6.8252
+        ]
+      },
+      "mean_trip_length": {
+        "values": [
+          13.387
+        ]
+      },
+      "std_trip_length": {
+        "values": [
+          16.0679
+        ]
+      }
+    },
+    "most_fair_w30": {
+      "f_causal": {
+        "mean": 0.8028422594070435,
+        "std": 0.0,
+        "values": [
+          0.8028
+        ]
+      },
+      "f_spatial": {
+        "mean": 0.10207874327898026,
+        "std": 0.0,
+        "values": [
+          0.1021
+        ]
+      },
+      "fidelity_a": {
+        "mean": 0.8476926718950272,
+        "std": 0.0,
+        "values": [
+          0.8477
+        ]
+      },
+      "fidelity_b": {
+        "mean": 0.01975175657657321,
+        "std": 0.0,
+        "values": [
+          0.0198
+        ]
+      },
+      "n_empty": [
+        1
+      ],
+      "fidelity_b_per_component": {
+        "length": {
+          "values": [
+            0.0324
+          ]
+        },
+        "mean_displacement": {
+          "values": [
+            0.0118
+          ]
+        },
+        "coverage": {
+          "values": [
+            0.0064
+          ]
+        },
+        "radius_of_gyration": {
+          "values": [
+            0.0124
+          ]
+        },
+        "net_displacement": {
+          "values": [
+            0.0117
+          ]
+        },
+        "terminal_cell": {
+          "values": [
+            0.0438
+          ]
+        }
+      },
+      "fidelity_a_separation": {
+        "values": [
+          0.655
+        ]
+      },
+      "terminal_cell_entropy_bits": {
+        "values": [
+          6.7945
+        ]
+      },
+      "mean_trip_length": {
+        "values": [
+          14.1654
+        ]
+      },
+      "std_trip_length": {
+        "values": [
+          16.916
+        ]
+      }
+    }
+  },
+  "paired_vs_raw": {
+    "f_causal": {
+      "edited": {
+        "diffs": [
+          -0.0006
+        ],
+        "mean": -0.000644683837890625,
+        "std": 0.0,
+        "n": 1,
+        "wilcoxon_p": 1.0
+      },
+      "edited_w10": {
+        "diffs": [
+          0.0237
+        ],
+        "mean": 0.02370619773864746,
+        "std": 0.0,
+        "n": 1,
+        "wilcoxon_p": 1.0
+      },
+      "edited_w20": {
+        "diffs": [
+          0.0274
+        ],
+        "mean": 0.02736765146255493,
+        "std": 0.0,
+        "n": 1,
+        "wilcoxon_p": 1.0
+      },
+      "edited_w30": {
+        "diffs": [
+          0.0295
+        ],
+        "mean": 0.02953958511352539,
+        "std": 0.0,
+        "n": 1,
+        "wilcoxon_p": 1.0
+      },
+      "random_w10": {
+        "diffs": [
+          0.0001
+        ],
+        "mean": 0.00012123584747314453,
+        "std": 0.0,
+        "n": 1,
+        "wilcoxon_p": 1.0
+      },
+      "random_w30": {
+        "diffs": [
+          -0.0027
+        ],
+        "mean": -0.002721846103668213,
+        "std": 0.0,
+        "n": 1,
+        "wilcoxon_p": 1.0
+      },
+      "most_fair_w10": {
+        "diffs": [
+          0.0033
+        ],
+        "mean": 0.0032865405082702637,
+        "std": 0.0,
+        "n": 1,
+        "wilcoxon_p": 1.0
+      },
+      "most_fair_w20": {
+        "diffs": [
+          0.0036
+        ],
+        "mean": 0.0035593509674072266,
+        "std": 0.0,
+        "n": 1,
+        "wilcoxon_p": 1.0
+      },
+      "most_fair_w30": {
+        "diffs": [
+          0.0016
+        ],
+        "mean": 0.001646876335144043,
+        "std": 0.0,
+        "n": 1,
+        "wilcoxon_p": 1.0
+      }
+    },
+    "f_spatial": {
+      "edited": {
+        "diffs": [
+          0.0003
+        ],
+        "mean": 0.0002936124801635742,
+        "std": 0.0,
+        "n": 1,
+        "wilcoxon_p": 1.0
+      },
+      "edited_w10": {
+        "diffs": [
+          0.0039
+        ],
+        "mean": 0.003934614360332489,
+        "std": 0.0,
+        "n": 1,
+        "wilcoxon_p": 1.0
+      },
+      "edited_w20": {
+        "diffs": [
+          0.0029
+        ],
+        "mean": 0.00286923348903656,
+        "std": 0.0,
+        "n": 1,
+        "wilcoxon_p": 1.0
+      },
+      "edited_w30": {
+        "diffs": [
+          0.0037
+        ],
+        "mean": 0.0037106499075889587,
+        "std": 0.0,
+        "n": 1,
+        "wilcoxon_p": 1.0
+      },
+      "random_w10": {
+        "diffs": [
+          -0.0003
+        ],
+        "mean": -0.0002670660614967346,
+        "std": 0.0,
+        "n": 1,
+        "wilcoxon_p": 1.0
+      },
+      "random_w30": {
+        "diffs": [
+          -0.0014
+        ],
+        "mean": -0.0013770535588264465,
+        "std": 0.0,
+        "n": 1,
+        "wilcoxon_p": 1.0
+      },
+      "most_fair_w10": {
+        "diffs": [
+          -0.0009
+        ],
+        "mean": -0.00088530033826828,
+        "std": 0.0,
+        "n": 1,
+        "wilcoxon_p": 1.0
+      },
+      "most_fair_w20": {
+        "diffs": [
+          -0.0026
+        ],
+        "mean": -0.0026445984840393066,
+        "std": 0.0,
+        "n": 1,
+        "wilcoxon_p": 1.0
+      },
+      "most_fair_w30": {
+        "diffs": [
+          -0.0031
+        ],
+        "mean": -0.003091253340244293,
+        "std": 0.0,
+        "n": 1,
+        "wilcoxon_p": 1.0
+      }
+    },
+    "fidelity_a": {
+      "edited": {
+        "diffs": [
+          0.0006
+        ],
+        "mean": 0.0006019374132155697,
+        "std": 0.0,
+        "n": 1,
+        "wilcoxon_p": 1.0
+      },
+      "edited_w10": {
+        "diffs": [
+          0.0007
+        ],
+        "mean": 0.0007348382647212048,
+        "std": 0.0,
+        "n": 1,
+        "wilcoxon_p": 1.0
+      },
+      "edited_w20": {
+        "diffs": [
+          0.0016
+        ],
+        "mean": 0.0016141476631164053,
+        "std": 0.0,
+        "n": 1,
+        "wilcoxon_p": 1.0
+      },
+      "edited_w30": {
+        "diffs": [
+          -0.0002
+        ],
+        "mean": -0.00018742905770452456,
+        "std": 0.0,
+        "n": 1,
+        "wilcoxon_p": 1.0
+      },
+      "random_w10": {
+        "diffs": [
+          0.0003
+        ],
+        "mean": 0.00030773711204523657,
+        "std": 0.0,
+        "n": 1,
+        "wilcoxon_p": 1.0
+      },
+      "random_w30": {
+        "diffs": [
+          0.0001
+        ],
+        "mean": 5.7509720325477076e-05,
+        "std": 0.0,
+        "n": 1,
+        "wilcoxon_p": 1.0
+      },
+      "most_fair_w10": {
+        "diffs": [
+          0.0004
+        ],
+        "mean": 0.0003739676475524867,
+        "std": 0.0,
+        "n": 1,
+        "wilcoxon_p": 1.0
+      },
+      "most_fair_w20": {
+        "diffs": [
+          0.0003
+        ],
+        "mean": 0.0003022774457931421,
+        "std": 0.0,
+        "n": 1,
+        "wilcoxon_p": 1.0
+      },
+      "most_fair_w30": {
+        "diffs": [
+          0.0002
+        ],
+        "mean": 0.0002389136552810589,
+        "std": 0.0,
+        "n": 1,
+        "wilcoxon_p": 1.0
+      }
+    },
+    "fidelity_b": {
+      "edited": {
+        "diffs": [
+          0.0014
+        ],
+        "mean": 0.001388582189997642,
+        "std": 0.0,
+        "n": 1,
+        "wilcoxon_p": 1.0
+      },
+      "edited_w10": {
+        "diffs": [
+          0.0094
+        ],
+        "mean": 0.009360484467782792,
+        "std": 0.0,
+        "n": 1,
+        "wilcoxon_p": 1.0
+      },
+      "edited_w20": {
+        "diffs": [
+          0.012
+        ],
+        "mean": 0.012029685892184583,
+        "std": 0.0,
+        "n": 1,
+        "wilcoxon_p": 1.0
+      },
+      "edited_w30": {
+        "diffs": [
+          0.0149
+        ],
+        "mean": 0.014918316124042161,
+        "std": 0.0,
+        "n": 1,
+        "wilcoxon_p": 1.0
+      },
+      "random_w10": {
+        "diffs": [
+          0.0029
+        ],
+        "mean": 0.0029381381772014305,
+        "std": 0.0,
+        "n": 1,
+        "wilcoxon_p": 1.0
+      },
+      "random_w30": {
+        "diffs": [
+          0.0057
+        ],
+        "mean": 0.005690413337255782,
+        "std": 0.0,
+        "n": 1,
+        "wilcoxon_p": 1.0
+      },
+      "most_fair_w10": {
+        "diffs": [
+          0.004
+        ],
+        "mean": 0.004001406303749485,
+        "std": 0.0,
+        "n": 1,
+        "wilcoxon_p": 1.0
+      },
+      "most_fair_w20": {
+        "diffs": [
+          0.0047
+        ],
+        "mean": 0.004716362905420298,
+        "std": 0.0,
+        "n": 1,
+        "wilcoxon_p": 1.0
+      },
+      "most_fair_w30": {
+        "diffs": [
+          0.0074
+        ],
+        "mean": 0.0074221401747236095,
+        "std": 0.0,
+        "n": 1,
+        "wilcoxon_p": 1.0
+      }
+    }
+  },
+  "effective_edited_fraction": {
+    "1": 0.10369686348993147,
+    "10": 0.5363801666350042,
+    "20": 0.69823885817244,
+    "30": 0.7763273322422258
+  }
+}
