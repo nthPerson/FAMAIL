@@ -26,10 +26,20 @@
 \definecolor{figtrim}{HTML}{D55E00}
 \begin{tikzpicture}[x=4.9mm, y=4.9mm, line cap=round, line join=round,
   % cell-scale marks: \pic[color=<c>] at (cell center) {pick};
-  pick/.pic={\draw[line width=0.9pt] (-0.26,-0.26) -- (0.26,0.26)
-             (-0.26,0.26) -- (0.26,-0.26);},
+  % service pickup: passenger stick figure (per Dr. Zhang 2026-07-18; was an x)
+  pick/.pic={\draw[line width=0.8pt] (0,0.165) circle[radius=0.09];
+             \draw[line width=0.8pt] (0,0.075) -- (0,-0.10);
+             \draw[line width=0.8pt] (-0.14,0.005) -- (0.14,0.005);
+             \draw[line width=0.8pt] (0,-0.10) -- (-0.12,-0.26)
+                                     (0,-0.10) -- (0.12,-0.26);},
+  % taxi presence: car glyph, body + cabin + wheels (was an open square)
   taxi/.pic={\draw[figink, fill=white, line width=0.7pt]
-             (-0.26,-0.26) rectangle (0.26,0.26);},
+             (-0.27,-0.115) -- (-0.27,0.02) -- (-0.135,0.02)
+             -- (-0.08,0.15) -- (0.12,0.15) -- (0.175,0.02)
+             -- (0.27,0.02) -- (0.27,-0.115) -- cycle;
+             \draw[figink, fill=white, line width=0.6pt]
+             (-0.15,-0.115) circle[radius=0.06]
+             (0.15,-0.115) circle[radius=0.06];},
   trimedit/.style={-{Stealth[length=5.5pt, width=4.5pt]}, figtrim,
                    line width=1.1pt},
   liftdash/.style={figaccent, dashed, line width=1.1pt},
@@ -77,7 +87,7 @@
     \pic at (0.5,1.05) {taxi};
     \node[anchor=west, font=\tiny, text=figink] at (0.85,1.05) {taxi presence};
     \pic[color=figgray] at (0.5,0.4) {pick};
-    \node[anchor=west, font=\tiny, text=figink] at (0.85,0.4) {pickup};
+    \node[anchor=west, font=\tiny, text=figink] at (0.85,0.4) {service pickup};
   \end{scope}
 
   % =========================================================================

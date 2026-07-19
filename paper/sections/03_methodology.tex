@@ -140,7 +140,7 @@ spatial smoothness regularizer complementing $F_{\mathrm{causal}}$.
 
 \textbf{Realism guardrail ($F_{\mathrm{fidelity}}$).} An edit that improves
 fairness by producing trajectories no real driver would generate is useless
-for training a realistic demand model. Because individual mobility signatures
+for training a realistic imitation model. Because individual mobility signatures
 are highly identifying --- the premise of the trajectory-user-linking
 literature \cite{gao2017tuler,zhou2018tulvae,miao2020deeptul} --- we score
 realism with a frozen driver-identity discriminator of the ST-SiameseNet
@@ -445,7 +445,7 @@ artifact of oversampling or of selecting fair data, is tested against two
 controls --- upweighting a size-matched random subset, and upweighting the
 corpus's fairest trajectories --- with outcomes reported in
 \S\ref{sec:experiments}. This intervention targets, on the training data, the
-same demand-model bias that in-processing regularization has addressed at the
+same demonstration bias that in-processing regularization has addressed at the
 model level \cite{zheng2023}; FAMAIL moves the intervention to the
 demonstrations themselves.
 % src: PAPER/objective-motivation/MOTIVATION.md (downstream pairing); PAPER/argument/04_evaluation.md §1 (controls)
