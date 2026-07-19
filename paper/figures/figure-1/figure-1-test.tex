@@ -1,0 +1,39 @@
+% Standalone test wrapper for the Figure-1 teaser (fig:teaser). Compile OUTSIDE
+% paper/ (never against main.tex):
+%   latexmk -pdf -outdir=<scratch> figure-1-test.tex
+% Uses acmart so fonts, \columnwidth, and caption styling are manuscript-true.
+% The caption here is a working copy; the manuscript caption lives in
+% sections/01_introduction.tex.
+\documentclass[sigconf,review,anonymous]{acmart}
+\settopmatter{printacmref=false}
+\setcopyright{none}
+\microtypesetup{expansion=false} % same local-font shim as main.tex
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta}
+\begin{document}
+\title{Teaser test harness --- not the manuscript}
+\maketitle
+
+\noindent Column width: \the\columnwidth. The figure below is at natural
+size; overfull warnings in the log mean the tikzpicture exceeds
+\verb|\columnwidth|.
+
+\begin{figure}[h]
+  \centering
+  \input{figure-1}
+  \caption{Why FAMAIL edits its training data. (a)~A real fleet's service
+  divides its city: on Shenzhen the advantaged district receives
+  $3.0\times$ the taxi service per unit demand. (b)~The recorded
+  trajectories are real human driving --- worth keeping --- and
+  regenerating them would discard that realism, so FAMAIL edits the
+  corpus's most-biased slice, chosen by attribution, in place and within
+  bounded moves, generating nothing. (c)~The stakes: a policy imitating
+  the raw corpus learns the service gap and, deployed to guide dispatch,
+  sends supply where supply already went --- writing the next biased
+  corpus; trained on the edited demonstrations, upweighted, the fairness
+  survives training and dispatch writes a fairer corpus. The $+$ marks
+  flag what the edit changed, in both districts. Figure~2 shows how the
+  editor works.}
+\end{figure}
+
+\end{document}

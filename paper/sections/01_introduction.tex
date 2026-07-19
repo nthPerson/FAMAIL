@@ -4,8 +4,8 @@
 % editor delta is hard-coded (not slot-marked): run r1 landed 2026-07-11 and section 4
 % already carries the artifact-sourced value; the intro mirrors it.
 
-Demand models for urban mobility are increasingly learned by imitation:
-policies are trained to reproduce the trajectories a real fleet actually
+Urban mobility policies are increasingly learned by imitation: models are
+trained to reproduce the trajectories a real fleet actually
 drove \cite{zhang2022cgail}. But trajectories carry more than behavior.
 They record the fleet's service allocation --- which neighborhoods drivers
 sought passengers in, and which they passed over --- and in real cities
@@ -19,14 +19,52 @@ documented for other data-driven allocation systems
 Interventions typically target one end of the pipeline or the other.
 In-processing methods regularize the model while leaving the
 demonstrations biased \cite{zheng2023}, so the objective and the training
-signal pull against each other at every step. Generative repair replaces
-the data wholesale, but rewriting an entire distribution risks trading
-realism for the fairness score and makes any improvement hard to attribute
-to anything in particular. FAMAIL takes a third position. As \emph{data
+signal pull against each other at every step. Data-generation and
+data-rebalancing methods modify the demonstration distribution instead
+--- by synthesizing fair data \cite{xu2018fairgan,vanbreugel2021decaf} or
+by reweighing and resampling it \cite{kamirancalders2012} --- but
+replacing or extensively altering the original data can reduce realism,
+introduce distribution shift, and make it difficult to identify the
+source of the fairness improvement. Figure~\ref{fig:teaser} illustrates
+the resulting gap: the demonstrations are an asset worth preserving, yet
+a policy that imitates them unchanged learns the service gap they record.
+
+\begin{figure}[t]
+  \centering
+  % Teaser (fig:teaser) — TikZ source: figures/figure-1/figure-1.tex (iterate
+  % THERE; standalone harness figures/figure-1/figure-1-test.tex; design history
+  % figures/figure-1/design-archive/). This figure is the WHY; fig:overview in
+  % section 3 is the HOW.
+  \input{figures/figure-1/figure-1}
+  \caption{Why FAMAIL edits trajectory data. (a)~A real fleet's service
+  demonstrates bias: on Shenzhen the advantaged district receives
+  $3.0\times$ the taxi service per unit demand.
+  % src: PAPER/supply-lift/data/a10/shz_a10_external_fairness.json
+  % (MigrantRatio district_extremes disparate_impact.before 0.33252 ->
+  % advantaged/disadvantaged service ratio 1/0.33252 = 3.0x)
+  (b)~The recorded trajectories are human-generated and therefore valuable
+  --- filtering them would discard useful expertise, so FAMAIL performs bounded edits
+  on an attributed slice of the corpus containing the most-biased demonstrations.
+%   (b)~The recorded trajectories are real human driving --- worth keeping
+%   --- and regenerating them would discard that realism, so FAMAIL edits
+%   the corpus's most-biased slice, chosen by attribution, in place and
+%   within bounded moves, generating nothing.
+  % NOTE (2026-07-16): no quantified bias share here by design — k=10,000
+  % is an edit budget (~10% of the corpus), not a measured extent of bias.
+  (c)~The stakes: a policy imitating the raw corpus learns the service gap
+  and sends supply to over-served areas; trained 
+  on the upweighted edited demonstrations, the fairness survives training 
+  and results in the model learning a fairer policy. The $+$ marks flag what the edit 
+  changed.
+  Figure~\ref{fig:overview} shows how the editor works.}
+  \label{fig:teaser}
+\end{figure}
+
+FAMAIL takes a third position. As \emph{data
 augmentation}, it keeps the real corpus, edits the small slice of it where
 attribution says the unfairness lives, and generates nothing. At most $k$
 trajectories are edited ($k = 10{,}000$ on the primary city, about a tenth
-of the corpus), each perturbed within a two-cell ball under a frozen
+of the corpus), each perturbed within a two-cell radius under a frozen
 driver-identity discriminator, so realism is inherited from the data
 rather than re-learned. The edited demonstrations are then
 \emph{upweighted} during imitation --- instance reweighing
