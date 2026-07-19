@@ -1,4 +1,4 @@
-% FAMAIL — KDD manuscript.
+% FATE (né FAMAIL) — KDD manuscript.
 % Source of truth for writing is THIS repo; Robert ports completed sections to the
 % shared Overleaf for Dr. Zhang's review. Build: latexmk -pdf main.tex
 % Conventions: see README.md in this directory (trim+lift canonical, F_causal label
@@ -44,14 +44,14 @@
 % values. % src: PAPER/supply-lift/data/a10/ (alpha* headline bundle);
 % PAPER/baselines/demographic-oversampling/FINDINGS.md
 Imitation-learned mobility policies are trained to reproduce the
-trajectories a real taxi fleet drove --- and those trajectories record the
-fleet's demographic service inequity along with its expertise, so a
-faithful imitator learns both. Existing interventions act at the two ends
+trajectories sourced from a real taxi fleet --- and those trajectories record the
+fleet's expertise along with its demographic service inequity, so a
+faithful imitator learns both. Existing interventions act at two stages
 of this pipeline: in-processing penalties constrain the learner while the
 demonstrations stay biased, so the objective and the training signal pull
 against each other, while synthetic data generation and extensive data
 modification can reduce realism, introduce distribution shift, and obscure
-the source of any fairness improvement. We present FAMAIL, a
+the source of any fairness improvement. We present FATE, a
 fairness-oriented data augmentation method that instead \emph{edits} a
 small, attribution-chosen slice of the real trajectories and upweights the
 edited demonstrations so the fairness survives training. The editor
@@ -61,23 +61,60 @@ so their measured over-service falls, and \emph{lift} reroutes drivers'
 final seeking minutes into under-served areas, with the effect on local
 supply included in what the objective optimizes. Every edit is confined to
 a two-cell radius, with a frozen ST-SiameseNet driver-identity
-discriminator as a realism guardrail. On two cities (Shenzhen; San
+discriminator as a realism guardrail. On taxi trajectories from two cities (Shenzhen; San
 Francisco), editing improves established fairness measures that the
 objective never optimizes: demographic parity, disparate impact, and the
 Theil index. Where demand-only editing improves such measures purely by
 reducing over-service, the supply channel opened by lift adds
-statistically significant distinct-taxi presence to under-served areas in
-both cities. Upweighted behavior cloning carries the
+statistically significant taxi presence --- counted as distinct vehicles
+--- to under-served areas in both cities. Upweighted behavior cloning carries the
 fairness-metric gains into trained policies, and does so specifically
 through the edited demonstrations: neither a random-upweighting nor a
 most-fair selection control reproduces the transfer. A targeted
-demographic-oversampling baseline on Shenzhen captures only part of the
-data-level gain despite fabricating 10.5\% of the corpus, and its
-untargeted placebo degrades fairness outright. Experiments on both
-cities' real fleets demonstrate the effectiveness of the approach:
-fairness gains that are externally measured, statistically significant,
-and attributable to the edit.
+demographic oversampling baseline on Shenzhen captures only part of the
+data-level gain at the cost of fabricating 10.5\% of the corpus, and its
+untargeted placebo degrades fairness outright. FATE thus improves measured 
+fairness without fabricating data and without obscuring which change produced 
+the improvement.
 \end{abstract}
+% \begin{abstract}
+% % DRAFT (2026-07-11) — pending final results; numbers below are committed headline
+% % values. % src: PAPER/supply-lift/data/a10/ (alpha* headline bundle);
+% % PAPER/baselines/demographic-oversampling/FINDINGS.md
+% Imitation-learned mobility policies are trained to reproduce the
+% trajectories sourced from a real taxi fleet --- and those trajectories record the
+% fleet's expertise along with its demographic service inequity, so a
+% faithful imitator learns both. Existing interventions act at two stages
+% of this pipeline: in-processing penalties constrain the learner while the
+% demonstrations stay biased, so the objective and the training signal pull
+% against each other, while synthetic data generation and extensive data
+% modification can reduce realism, introduce distribution shift, and obscure
+% the source of any fairness improvement. We present FAMAIL, a
+% fairness-oriented data augmentation method that instead \emph{edits} a
+% small, attribution-chosen slice of the real trajectories and upweights the
+% edited demonstrations so the fairness survives training. The editor
+% combines two bounded, gradient-guided mechanisms under one differentiable
+% objective: \emph{trim} relocates recorded pickups within over-served areas
+% so their measured over-service falls, and \emph{lift} reroutes drivers'
+% final seeking minutes into under-served areas, with the effect on local
+% supply included in what the objective optimizes. Every edit is confined to
+% a two-cell radius, with a frozen ST-SiameseNet driver-identity
+% discriminator as a realism guardrail. On taxi trajectories from two cities (Shenzhen; San
+% Francisco), editing improves established fairness measures that the
+% objective never optimizes: demographic parity, disparate impact, and the
+% Theil index. Where demand-only editing improves such measures purely by
+% reducing over-service, the supply channel opened by lift adds
+% statistically significant distinct-taxi presence to under-served areas in
+% both cities. Upweighted behavior cloning carries the
+% fairness-metric gains into trained policies, and does so specifically
+% through the edited demonstrations: neither a random-upweighting nor a
+% most-fair selection control reproduces the transfer. A targeted
+% demographic-oversampling baseline on Shenzhen captures only part of the
+% data-level gain at the cost of fabricating 10.5\% of the corpus, and its
+% untargeted placebo degrades fairness outright. FAMAIL thus improves measured 
+% fairness without fabricating data and without obscuring which change produced 
+% the improvement.
+% \end{abstract}
 
 \keywords{fairness, imitation learning, data augmentation, trajectory editing,
 urban mobility}

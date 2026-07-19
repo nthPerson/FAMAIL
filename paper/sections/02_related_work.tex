@@ -1,18 +1,18 @@
 \section{Related Work}\label{sec:related}
 % Drafted 2026-07-12 per docs/superpowers/specs/2026-07-12-paper-prose-sections-design.md.
-% Five themes, each closing with a one-sentence FAMAIL contrast; positioning prose only —
+% Five themes, each closing with a one-sentence FATE contrast; positioning prose only —
 % mechanism prose lives in §3. All cite keys are pre-existing refs.bib entries.
 
 \textbf{Fairness interventions in machine learning.} Algorithmic fairness
 interventions are conventionally grouped by where they act: pre-processing
 methods repair the training data, in-processing methods constrain the
 learner, and post-processing methods adjust its outputs
-\cite{barocas2023}. FAMAIL belongs to the pre-processing
+\cite{barocas2023}. FATE belongs to the pre-processing
 family, whose canonical instruments --- instance reweighing
 \cite{kamirancalders2012} and disparate-impact repair of feature
 distributions \cite{feldman2015} --- were built for labeled classification
 data. Among the many formal fairness definitions \cite{vermarubin2018},
-the notion FAMAIL targets is conditional statistical parity
+the notion FATE targets is conditional statistical parity
 \cite{corbettdavies2017}: disparities count only after permitted factors
 are adjusted for. As formulated, however, none of these instruments
 operates on sequential demonstrations, and none measures fairness over a
@@ -34,7 +34,7 @@ from 0.361 to 0.084 \cite{zheng2023}. Regularizing the predictor,
 % verified: paper/reviews/2026-07-12-prose-citation-audit.md (zheng2023 Table 2, Conv-LSTM arm)
 however, leaves the demonstrations biased: the correction lives inside one
 model's loss and does not transfer to any other consumer of the data.
-FAMAIL addresses the same bias one stage earlier --- on the demonstrations
+FATE addresses the same bias one stage earlier --- on the demonstrations
 the model trains on, rather than inside its loss --- and is scored on
 equity measures its objective never optimizes.
 
@@ -49,7 +49,7 @@ of the imitated allocation. A parallel line establishes that individual
 mobility is highly identifying: trajectory-user linking recovers who
 generated a trace \cite{gao2017tuler,zhou2018tulvae,miao2020deeptul}, and
 Siamese verification decides whether two seeking traces share a driver
-\cite{ren2020stsiamese}. FAMAIL contributes no new generator or imitation
+\cite{ren2020stsiamese}. FATE contributes no new generator or imitation
 algorithm; it edits the demonstrations such models consume, and it
 repurposes the identity-verification line as a frozen realism guardrail
 --- avoiding the instability of a live adversarial game
@@ -67,7 +67,7 @@ counterfactuals can prescribe beneficial change rather than attack
 \cite{ustun2019recourse,wachter2018counterfactual}. Recourse, however,
 prescribes change for one individual's feature vector to flip one
 decision; it carries no population-level fairness target and no
-obligation to preserve a data distribution's realism. FAMAIL extends that
+obligation to preserve a data distribution's realism. FATE extends that
 constructive reading from the individual to the population: the bounded
 perturbation edits real trajectories to reduce demographic service
 inequity, and the $\varepsilon$-bound is reinterpreted from an
