@@ -74,7 +74,13 @@
   % =========================================================================
   \node[anchor=west, font=\footnotesize, text=figink] at (0.7,0)
     {(a) A real taxi fleet serves a divided city --- with a $3.0\times$ service gap};
-  \draw[citygrid, xstep=0.45, ystep=0.45] (0.9,-2.15) grid (8.1,-0.35);
+  % grid drawn in a local frame anchored at the panel's own lower-left corner:
+  % tikz snaps grid lines to multiples of the step measured from the *origin*,
+  % so an unshifted grid whose corner is not a multiple of 0.45 renders
+  % off-phase (a sliver row/column at one edge). Panels are whole numbers of
+  % cells (16x4 here), so shifting to the corner squares grid to frame.
+  \draw[citygrid, xstep=0.45, ystep=0.45, shift={(0.9,-2.15)}]
+    (0,0) grid (7.2,1.8);
   \fill[black, opacity=0.08] (4.95,-0.35) -- (4.95,-1.25) -- (5.4,-1.25)
     -- (5.4,-2.15) -- (8.1,-2.15) -- (8.1,-0.35) -- cycle;
   \draw[boundary] (4.95,-0.35) -- (4.95,-1.25) -- (5.4,-1.25) -- (5.4,-2.15);
@@ -167,7 +173,8 @@
     {rolls out trajectories};
 
   % left future: the gap learned as competence (and recycled by dispatch)
-  \draw[citygrid, xstep=0.45, ystep=0.45] (0.9,-8.85) grid (4.05,-7.05);
+  \draw[citygrid, xstep=0.45, ystep=0.45, shift={(0.9,-8.85)}]
+    (0,0) grid (3.15,1.8);
   \fill[black, opacity=0.08] (2.475,-7.05) -- (2.475,-7.95) -- (2.925,-7.95)
     -- (2.925,-8.85) -- (4.05,-8.85) -- (4.05,-7.05) -- cycle;
   \draw[boundary] (2.475,-7.05) -- (2.475,-7.95) -- (2.925,-7.95)
@@ -181,7 +188,8 @@
                      3.375/-8.175, 3.825/-8.625}
     \pic[figgray] at (\x,\y) {pick};
   % right future: fairness survives training; presence reaches under-served
-  \draw[citygrid, xstep=0.45, ystep=0.45] (5.0,-8.85) grid (8.15,-7.05);
+  \draw[citygrid, xstep=0.45, ystep=0.45, shift={(5.0,-8.85)}]
+    (0,0) grid (3.15,1.8);
   \fill[black, opacity=0.08] (6.575,-7.05) -- (6.575,-7.95) -- (7.025,-7.95)
     -- (7.025,-8.85) -- (8.15,-8.85) -- (8.15,-7.05) -- cycle;
   \draw[boundary] (6.575,-7.05) -- (6.575,-7.95) -- (7.025,-7.95)
