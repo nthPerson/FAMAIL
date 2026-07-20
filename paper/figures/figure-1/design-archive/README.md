@@ -6,6 +6,7 @@ design lives one level up as `figure-1.tex` (integrated into
 
 | File | What it was |
 |---|---|
+| `teaser-3strip-final.tex` | The 3-strip design ("the city, the data, two futures") in its final live form (tree `fb89973`: FATE-era glyphs, loop-back arrow removed, grid-phase fix). Superseded 2026-07-20: Dr. Zhang asked to reduce Figure 1 to strip (c) only; the live `../figure-1.tex` is now the (c)-only build, and `../figure-1-bc.tex` holds Robert's (b)+(c) counter-proposal. Archived verbatim for the design-comparison meeting with Dr. Zhang (renders: `preview-3strip-final.png`, side-by-side `comparison-2026-07-20.png`, talking points `zhang-meeting-talking-points.md`). |
 | `teaser-c4.tex` | Round 1, Concept 4: results-chart teaser — external-metric dumbbells (DP/DI/Theil + under-served service with the pinned trim-only marker) bridged to the weighted-BC dose-response panel. Rejected: reads as a results figure, not a motivation figure. |
 | `teaser-c3.tex` | Round 1, Concept 3: three stacked chart panels (service-gap bars / dumbbells / dose-response). Rejected for the same reason. |
 | `teaser-v1.tex` | Round 2, Variant 1 as first rendered ("the city, the data, two futures" + loop-back arrow). CHOSEN, then promoted to `../figure-1.tex` with Robert's edits (explicit strip-(c) title, rerouted imitate-as-is arrow, renamed model boxes). Kept here as the pre-edit snapshot. |
