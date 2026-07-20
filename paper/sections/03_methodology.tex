@@ -46,7 +46,7 @@ fairness is not averaged away (\S\ref{sec:downstream}).
 FATE edits trajectories by gradient ascent on a single differentiable
 objective that combines demographic fairness, spatial equity, and realism.
 
-\textbf{Demand-adjusted demographic fairness ($F_{\mathrm{causal}}$, primary).}
+\textbf{Demand-adjusted demographic fairness ($F_{\mathrm{demo}}$, primary).}
 Raw parity across neighborhoods is the wrong target: taxi service legitimately
 tracks demand, and a business district \emph{should} see more pickups than a
 quiet residential block. We therefore measure fairness only in the component of
@@ -61,18 +61,18 @@ demographic matrix, $\tilde{X} = [\mathbf{1}\; X]$ its design matrix,
 $H = \tilde{X}(\tilde{X}^{\top}\tilde{X})^{-1}\tilde{X}^{\top}$ the \emph{hat
 matrix} of that regression --- the projection onto the column space of
 $\tilde{X}$ \cite{hoaglinwelsch1978} --- and $M$ the centering matrix,
-\begin{equation}\label{eq:fcausal}
-F_{\mathrm{causal}}
+\begin{equation}\label{eq:fdemo}
+F_{\mathrm{demo}}
 \;=\; \frac{R^{\top}(I-H)\,R}{R^{\top}M\,R}
 \;=\; 1 - r^{2}_{\mathrm{demo}} .
 \end{equation}
-Despite its appearance, Eq.~\eqref{eq:fcausal} is nothing but the stage-two
+Despite its appearance, Eq.~\eqref{eq:fdemo} is nothing but the stage-two
 regression computed in closed form: the numerator is its residual sum of
 squares, the denominator its total sum of squares. The projection form is
 what makes the measure usable as an \emph{optimization objective} rather
 than a one-shot audit. Demographics are fixed attributes of the cells, so
 $H$ is a constant of the optimization: as editing moves $R$,
-Eq.~\eqref{eq:fcausal} implicitly re-fits the demographic regression exactly
+Eq.~\eqref{eq:fdemo} implicitly re-fits the demographic regression exactly
 at every step, with no coefficients to refresh and nothing trained inside
 the editing loop. As a ratio of quadratic forms in $R$ it is smooth, so
 exact gradients flow from the fairness score through $Y$ to the coordinates
@@ -94,15 +94,15 @@ protected attributes and outcomes follows the predictability logic of
 certified by predicting the protected attribute from the data; here, the
 demographics predict the adjusted service residual.
 Boundary cases orient the scale: $R \in \operatorname{span}(X)$ gives
-$F_{\mathrm{causal}} = 0$ (fully unfair), and $R \perp X$ gives $1$ (fully
+$F_{\mathrm{demo}} = 0$ (fully unfair), and $R \perp X$ gives $1$ (fully
 fair).
 % src: PAPER/objective-motivation/MOTIVATION.md; PAPER/argument/03_fairness_theory.md
 
-Two caveats are load-bearing. First, $F_{\mathrm{causal}}$ is an
-\emph{associational} quantity --- the partial $R^2$ of a cross-sectional
-regression on observational district-level demographics, with no
-identification and no counterfactual; the ``causal'' in the name is
-historical. With about ten district profiles the association is ecological,
+Two caveats are load-bearing. First, $F_{\mathrm{demo}}$ --- \emph{demo}
+for demographic dependence --- is an \emph{associational} quantity: the
+partial $R^2$ of a cross-sectional regression on observational
+district-level demographics, with no identification and no counterfactual.
+With about ten district profiles the association is ecological,
 and we make no individual-level claims. Second, adjusting for demand treats
 recorded demand as exogenous; but demand recorded where service has
 historically been thin is itself suppressed by that under-service. We return
@@ -130,10 +130,10 @@ F_{\mathrm{spatial}} &\;=\; 1 - \tfrac{1}{2}\bigl(\mathrm{Gini}(\mathrm{DSR})
 + \mathrm{Gini}(\mathrm{ASR})\bigr).
 \end{split}
 \end{equation}
-As with $F_{\mathrm{causal}}$, the quadratic pairwise sum is never
+As with $F_{\mathrm{demo}}$, the quadratic pairwise sum is never
 materialized: a sorted prefix-sum identity evaluates it in $O(N \log N)$
 with identical gradients. Being demographic-independent, the term acts as a
-spatial smoothness regularizer complementing $F_{\mathrm{causal}}$.
+spatial smoothness regularizer complementing $F_{\mathrm{demo}}$.
 % src: PAPER/argument/03_fairness_theory.md (F_spatial definition)
 % src: famail_temporal/fairness/spatial.py (DSR/ASR ratios; sorted-identity evaluation, no N² materialization)
 % src: famail_temporal/docs/RESEARCHER_HANDOFF.md §4 (DSR/ASR acronym expansions)
@@ -159,7 +159,7 @@ Jensen--Shannon check over aggregate mobility statistics \cite{feng2020simulate}
 \textbf{Scalarization.} The three terms combine linearly,
 \begin{equation}\label{eq:objective}
 \mathcal{L} \;=\; \alpha_{\mathrm{sp}} F_{\mathrm{spatial}}
-+ \alpha_{\mathrm{ca}} F_{\mathrm{causal}}
++ \alpha_{\mathrm{ca}} F_{\mathrm{demo}}
 + \alpha_{\mathrm{fi}} F_{\mathrm{fidelity}},
 \qquad \alpha = (0.1,\; 0.8,\; 0.1).
 \end{equation}
@@ -168,14 +168,14 @@ The weights are selected \emph{empirically}: we sweep the weight simplex
 (fidelity fixed at 0.1) with full editing runs, and score every sweep point
 not only on the optimized metrics but on the design-targeted and external
 metric classes as well --- classes defined in \S\ref{sec:exp-setup}. The sweep exposes an asymmetry
-the optimized metrics alone would hide: $\Delta F_{\mathrm{causal}}$ is flat
+the optimized metrics alone would hide: $\Delta F_{\mathrm{demo}}$ is flat
 (within $0.001$) across $\alpha_{\mathrm{sp}} \in [0, 0.55]$, but the
 supply-channel lift-up of the under-served group declines monotonically as
 $\alpha_{\mathrm{sp}}$ grows, and beyond $\alpha_{\mathrm{sp}} = 0.2$ it is
 no longer significant under tier-1 accounting (the tier-2 recount stays
 positive and significant at every sweep point). We therefore select by a
 three-class criterion
---- maximize $\Delta F_{\mathrm{causal}}$ subject to
+--- maximize $\Delta F_{\mathrm{demo}}$ subject to
 $\Delta F_{\mathrm{spatial}} \ge 0$ \emph{and} the supply-channel lift-up
 remaining significant under both accounting tiers --- which the adopted
 configuration satisfies as the frontier's best point. Two properties make
@@ -198,7 +198,7 @@ second, the remedy.
 
 \textbf{Demand deficit attribution (drives trim).} Because $M$ and $I-H$ are
 idempotent, the explained share $r^{2}_{\mathrm{demo}}$ of
-Eq.~\eqref{eq:fcausal} admits an exact per-unit decomposition,
+Eq.~\eqref{eq:fdemo} admits an exact per-unit decomposition,
 \begin{equation}\label{eq:unit-attr}
 r^{2}_{\mathrm{demo}}
 \;=\; \sum_i \frac{(MR)_i^{2} - \bigl((I-H)R\bigr)_i^{2}}{R^{\top}MR},
@@ -216,7 +216,7 @@ city's current state. To obtain it, we give the objective an auxiliary
 \emph{supply-perturbation} input $\Delta S \in \mathbb{R}^{N}$ --- one entry
 of hypothetical added taxi presence per active unit --- and have it evaluate
 supply as $S + \Delta S$ in every term of the objective where supply
-appears: the service ratio $Y$ inside $F_{\mathrm{causal}}$ and the rate
+appears: the service ratio $Y$ inside $F_{\mathrm{demo}}$ and the rate
 denominators of $F_{\mathrm{spatial}}$. At $\Delta S = 0$ the objective's
 value is untouched; the input exists so that automatic differentiation with
 respect to it reads out $\partial \mathcal{L} / \partial S_i$ at the city's
@@ -228,11 +228,11 @@ The result is a \emph{value-of-presence} map over the city: large where
 added presence would most repair the fairness terms --- units starved of
 supply relative to their demand and demographic profile --- and small or
 negative where presence is already abundant. The map's
-$F_{\mathrm{causal}}$ component has the closed form
+$F_{\mathrm{demo}}$ component has the closed form
 \begin{equation}\label{eq:supply-grad}
-\frac{\partial F_{\mathrm{causal}}}{\partial S_i}
+\frac{\partial F_{\mathrm{demo}}}{\partial S_i}
 \;=\; \frac{2}{R^{\top}MR}\;
-\frac{\bigl((I-H)R\bigr)_i - F_{\mathrm{causal}}\,(MR)_i}{\max(D_i,\, d_0)},
+\frac{\bigl((I-H)R\bigr)_i - F_{\mathrm{demo}}\,(MR)_i}{\max(D_i,\, d_0)},
 \end{equation}
 against which the automatic gradient is verified.
 % src: PAPER/supply-lift/LIFT_ALGORITHM_REFERENCE.md §4.1 (autograd-verified closed form)

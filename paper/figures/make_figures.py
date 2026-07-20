@@ -1,7 +1,7 @@
 """Generate the manuscript's two committed figures.
 
   1. extended_frontier.pdf  — the weight-sensitivity figure (fig:alpha-pareto):
-     panel A = the (dF_spatial, dF_causal) plane across the six alpha points;
+     panel A = the (dF_spatial, dF_demo (key d_f_causal)) plane across the six alpha points;
      panel B = the lift-up channels vs alpha_spatial (monotone decline), with
      filled markers = 95% CI excludes 0, open = n.s.
      Data: PAPER/objective-motivation/weight-sensitivity/extended_frontier.json
@@ -83,8 +83,8 @@ def frontier_figure() -> None:
                      fontstyle="italic" if is_adopted else "normal",
                      bbox=LABEL_BBOX, zorder=4)
     axA.set_xlabel(r"$\Delta F_\mathrm{spatial}$")
-    axA.set_ylabel(r"$\Delta F_\mathrm{causal}$")
-    axA.set_title("A · optimized metrics: flat in the causal axis", loc="left")
+    axA.set_ylabel(r"$\Delta F_\mathrm{demo}$")
+    axA.set_title("A · optimized metrics: flat in the demographic axis", loc="left")
     axA.grid(True, color=FAINT, linewidth=0.4, alpha=0.6)
     axA.set_axisbelow(True)
     pad = 0.0012

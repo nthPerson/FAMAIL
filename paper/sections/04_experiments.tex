@@ -50,7 +50,7 @@ district-constant, so these intervals are first-order.
 
 \textbf{Metric classes and claim discipline.} We separate three metric classes and label every
 claim accordingly: (i) \emph{optimized} --- $F_{\mathrm{spatial}}$,
-$F_{\mathrm{causal}}$, $F_{\mathrm{fidelity}}$, the quantities the editor's
+$F_{\mathrm{demo}}$, $F_{\mathrm{fidelity}}$, the quantities the editor's
 gradient sees; (ii) \emph{design-targeted but not optimized} --- the
 family of supply/demand ratios, $\mathrm{mean}(Y)$ by group, which the lift
 mechanism was aimed at, so improvement there is confirmatory; and (iii)
@@ -74,7 +74,7 @@ therefore \{DI, DP/gap, Theil\} plus the descriptive levels.
 
 \subsection{Data-Level Fairness (Shenzhen)}\label{sec:exp-data-level}
 
-\textbf{Optimized metrics.} Editing raises $F_{\mathrm{causal}}$ from 0.7988
+\textbf{Optimized metrics.} Editing raises $F_{\mathrm{demo}}$ from 0.7988
 to 0.8214 ($+0.0226$) and $F_{\mathrm{spatial}}$ from 0.1034 to 0.1095
 ($+0.0061$) --- class (i) numbers, reported for completeness rather than as
 evidence.
@@ -184,11 +184,11 @@ channel is what changes that.
  & trim-only & trim+lift \\
 \midrule
 \multicolumn{3}{l}{\emph{Shenzhen (primary)}} \\
-$\Delta F_{\mathrm{causal}}$ & $+0.0146$ & $\mathbf{+0.0226}$ \\ % lint-allow: ablation
+$\Delta F_{\mathrm{demo}}$ & $+0.0146$ & $\mathbf{+0.0226}$ \\ % lint-allow: ablation
 $\Delta F_{\mathrm{spatial}}$ & $-0.0011$ & $\mathbf{+0.0061}$ \\ % lint-allow: ablation
 $\Delta\,\mathrm{mean}(Y \mid \mathrm{disadv.})$ & $+0.000$ (flat) & $\mathbf{+0.053}$ (CI excl.\ 0) \\ % lint-allow: ablation — trim-only level 7.0734->7.0734 exactly
 \multicolumn{3}{l}{\emph{San Francisco (external validity)}} \\
-$\Delta F_{\mathrm{causal}}$ & $+0.0144$ & $\mathbf{+0.0316}$ \\ % lint-allow: ablation
+$\Delta F_{\mathrm{demo}}$ & $+0.0144$ & $\mathbf{+0.0316}$ \\ % lint-allow: ablation
 Migrant DP gap & $-0.052$ (CI excl.\ 0) & $\mathbf{-0.073}$ (CI excl.\ 0) \\ % lint-allow: ablation — both sig at alpha*; contrast is magnitude + the supply channel
 \bottomrule
 \end{tabular}
@@ -229,7 +229,7 @@ seeds; the GAN row's Fidelity-B is seed-bimodal --- see text).}
 \label{tab:l1}
 \begin{tabular}{lrrr}
 \toprule
-source & $F_{\mathrm{causal}}$ & Fid.-A ($\uparrow$) & Fid.-B ($\downarrow$) \\
+source & $F_{\mathrm{demo}}$ & Fid.-A ($\uparrow$) & Fid.-B ($\downarrow$) \\
 \midrule
 raw & 0.7988 & 0.848 & 0.000 \\
 \textbf{edited (trim+lift)} & \textbf{0.8214} & 0.844 & 0.187 \\
@@ -254,7 +254,7 @@ seeds here, while the SF GAN stays uniformly healthy (\S\ref{sec:exp-sf}).
 
 \textbf{Vanilla training averages the edit away.} A driver-conditioned BC
 policy trained on the edited corpus at uniform weight is not fairer than one
-trained on raw: paired $\Delta F_{\mathrm{causal}} = +0.0016$ ($n = 12$,
+trained on raw: paired $\Delta F_{\mathrm{demo}} = +0.0016$ ($n = 12$,
 7/12 positive, $p = .11$, n.s.) --- the null that motivates the upweighting
 recipe of \S\ref{sec:downstream}.
 % src: PAPER/supply-lift/data/a10/shz_a10_wbc_n12_pooled_stats.json (edited arm pooled seeds 0-11; was +0.0022 n=6 p=.16 pre-pooling; WBC-N12 2026-07-18)
@@ -291,7 +291,7 @@ disclosed rather than netted out.
 % src: famail_temporal/results/weighted_bc_sweep/alpha_sweep_s10_c80_f10_filtered_6seed/paired_stats.json + dose_response.json
 
 \textbf{Model-level variance.} A paired baseline-vs-FATE comparison at
-uniform weight gives $\Delta F_{\mathrm{causal}} = +0.0030 \pm 0.0022$ at
+uniform weight gives $\Delta F_{\mathrm{demo}} = +0.0030 \pm 0.0022$ at
 $n = 10$ seeds (9/10 positive; Wilcoxon $p = .0039$, $t$-test $p = .0019$)
 --- the effect size is unchanged from the original five-seed suite
 ($+0.0031$) and now clears conventional significance outright. The reading
@@ -346,7 +346,7 @@ Results: Table~\ref{tab:baselines}.
 
 The arms behave as fidelity baselines. One result lands against the
 pre-registered expectation: random jitter \emph{does} raise
-$F_{\mathrm{causal}}$, by $+0.0135$ --- indiscriminately diffusing the selected
+$F_{\mathrm{demo}}$, by $+0.0135$ --- indiscriminately diffusing the selected
 trajectories diffuses their over-service too --- but it does so by breaking
 the trajectories: 98.8\% of its perturbed trajectories violate king-move
 adjacency and its distributional divergence reaches 0.447, against the
@@ -370,7 +370,7 @@ real trajectories originating in demographically disadvantaged regions (all
 three equity axes, phantom driver IDs, rigid $\pm 1$-cell jitter), additively
 rebuilding both demand and supply at doses matched to FATE's budget. At
 the matched duplication dose $d = 10{,}000$, targeted oversampling improves
-$F_{\mathrm{causal}}$ by $+0.0153$ (dose-monotone:
+$F_{\mathrm{demo}}$ by $+0.0153$ (dose-monotone:
 $+0.0059$, $+0.0097$, $+0.0153$) --- but it fabricates 10.5\% of the corpus
 to get there, where FATE redistributes observed behavior at zero inflation
 and reaches $+0.0226$. The untargeted placebo (same fabrication without targeting)
@@ -393,19 +393,19 @@ Instance reweighing in the Kamiran--Calders style
 disadvantaged-origin demonstrations --- moves demand-adjusted fairness the
 \emph{wrong} way ($-0.0227$, all six seeds negative, $p = .031$) while
 paying the same distributional cost as w30 upweighting (Fidelity-B
-$+0.0144$), and its rolled-out policies still tilt allocation away from the % lint-allow: coincidental value (fair_reweigh paired Fid-B delta, not the trim-only F_causal headline)
+$+0.0144$), and its rolled-out policies still tilt allocation away from the % lint-allow: coincidental value (fair_reweigh paired Fid-B delta, not the trim-only F_demo headline)
 disadvantaged group ($-0.0010$, 0/6, $p = .031$). An in-processing penalty
 in the spirit of \cite{zheng2023} --- the imitation loss plus $\lambda$
 times the demographic-parity gap in predicted next-cell mass, tested in
 both the signed formulation (advantaged minus disadvantaged, the direction
 the data over-serves) and the absolute-value formulation --- is inert at
 every dose that trains stably (six-seed suites:
-$|\Delta F_{\mathrm{causal}}| \le 0.0009$ signed at
+$|\Delta F_{\mathrm{demo}}| \le 0.0009$ signed at
 $\lambda \in \{1,$ $3.16,$ $10\}$, $+0.0008$ absolute at $\lambda = 10$,
 all n.s.; single-seed probes at $\lambda = 100$ agree; the term contributes
 on the order of $10^{-5}$ of the loss) and destructive at the dose where it
 finally dominates: at $\lambda = 1000$ the signed form collapses
-$F_{\mathrm{causal}}$ by $-0.2053$ with Fidelity-B at 0.514, the absolute
+$F_{\mathrm{demo}}$ by $-0.2053$ with Fidelity-B at 0.514, the absolute
 form by $-0.1293$ (6/6 seeds) with Fidelity-B at 0.363, against raw's
 $\approx 0.013$. The shallower absolute collapse is the gap pushing back
 once it crosses zero; neither formulation offers a constructive operating
@@ -429,7 +429,7 @@ that editing the demonstrations provides.
 \setlength{\tabcolsep}{4pt}
 \begin{tabular}{lrrr}
 \toprule
-arm & $\Delta F_{\mathrm{causal}}$ & $\Delta F_{\mathrm{spatial}}$ & inflation \\
+arm & $\Delta F_{\mathrm{demo}}$ & $\Delta F_{\mathrm{spatial}}$ & inflation \\
 \midrule
 raw (reference) & --- & --- & 0\% \\
 \textbf{FATE trim+lift} & $\mathbf{+0.0226}$ & $+0.0061$ & 0\% \\
@@ -461,7 +461,7 @@ housing--GDP--compensation set ($+0.0022$, a tenth of its w30 gain).
 
 \textbf{Weight sensitivity.} Fig.~\ref{fig:alpha-pareto} reports the weight
 sweep: six full editing runs across the simplex, each scored on all three
-metric classes. The optimized $\Delta F_{\mathrm{causal}}$ is flat --- within
+metric classes. The optimized $\Delta F_{\mathrm{demo}}$ is flat --- within
 $0.001$ --- for $\alpha_{\mathrm{sp}} \in [0, 0.55]$, while the class (ii)
 supply-channel lift-up declines monotonically with $\alpha_{\mathrm{sp}}$ ---
 significant on both tiers only for $\alpha_{\mathrm{sp}} \le 0.2$ --- and
@@ -475,7 +475,7 @@ lift-up property.
   \centering
   \includegraphics[width=\linewidth]{figures/extended_frontier.pdf}
   \caption{The weight sweep, scored beyond the optimized metrics. (A) On the
-  optimized plane, $\Delta F_{\mathrm{causal}}$ is flat across
+  optimized plane, $\Delta F_{\mathrm{demo}}$ is flat across
   $\alpha_{\mathrm{sp}} \in [0, 0.55]$. (B) The design-targeted lift-up
   declines monotonically with spatial weight and is significant on both
   supply tiers only for $\alpha_{\mathrm{sp}} \le 0.2$ (filled = 95\% CI
@@ -491,11 +491,11 @@ lift-up property.
   \label{fig:alpha-pareto}
 \end{figure}
 
-\textbf{Demographic-feature-set robustness.} $F_{\mathrm{causal}}$ is
-feature-set-specific, so every layer of the argument is re-measured under two
-alternate demographic sets (Table~\ref{tab:featsets}). The claim is
+\textbf{Feature-set robustness.} $F_{\mathrm{demo}}$ is specific to its
+demographic feature set, so every layer of the argument is re-measured
+under two alternate sets (Table~\ref{tab:featsets}). The claim is
 directional reproduction, not magnitude equality --- absolute
-$F_{\mathrm{causal}}$ scales shift with the feature set by construction.
+$F_{\mathrm{demo}}$ scales shift with the feature set by construction.
 The design-targeted lift-up also reproduces: the total
 $\Delta\,\mathrm{mean}(Y \mid \mathrm{disadv.})$ carries a bootstrap
 interval excluding zero on all three sets, and the supply channel is
@@ -519,8 +519,8 @@ after $-$ before edit).}
 \toprule
  & \{hous,comp,migr\} & \{hous,gdp,comp\} & +logpopdens \\
 \midrule
-before-edit $F_{\mathrm{causal}}$ & 0.7988 & 0.8069 & 0.7253 \\
-editor $\Delta F_{\mathrm{causal}}$ & $+0.0226$ & $+0.0206$ & $+0.0220$ \\
+before-edit $F_{\mathrm{demo}}$ & 0.7988 & 0.8069 & 0.7253 \\
+editor $\Delta F_{\mathrm{demo}}$ & $+0.0226$ & $+0.0206$ & $+0.0220$ \\
 $\Delta\,\mathrm{mean}(Y \mid \mathrm{disadv.})$ & $+0.0529$ & $+0.0594$ & $+0.1461$ \\ % src: {shenzhen-primary-supplylift-s10,shenzhen-hgc-supplylift,shenzhen-4feat-supplylift}/external_fairness.json: metrics.MigrantRatio.district_extremes.supply_demand_ratio.{after,before}.mean_disadvantaged, delta at full precision (4FEAT 7.219558-7.073448=+0.1461). TOTAL quantity (both channels), decomposed in tab:channels — label deliberately NOT "lift-up": per §4.2 the lift-up CLAIM rides the supply channel; delta-only per DI/Theil convention. all three totals CI-sig (PRIMARY [+0.0086,+0.0989]; HGC [+0.0181,+0.1013]; 4FEAT [+0.0900,+0.2039]; B=2000, A1 runs 2026-07-16).
 DI $\Delta$ (migrant/extremes) & $+0.0162$ & $+0.0147$ & $+0.0191$ \\
 DP gap $\Delta$ & $-0.890$ & $-0.787$ & $-0.886$ \\ % src: same external_fairness.json: metrics.MigrantRatio.district_extremes.demographic_parity.delta (identical to supply_demand_ratio.delta_gap -- DP IS the gap, do not also add a gap row; all three delta CIs exclude 0)
@@ -538,9 +538,9 @@ variance (b0 vs FATE) & see~\S\ref{sec:exp-downstream} & null & null \\ % src: h
 
 \textbf{Filtering is not a substitute.} Removing the $K$ least-fair
 trajectories instead of editing them does not reproduce the gain --- it
-inverts it: $F_{\mathrm{causal}}$ falls monotonically with removal
+inverts it: $F_{\mathrm{demo}}$ falls monotonically with removal
 (0.7988 $\to$ 0.7935 at the maximum $K = 2{,}455$), while editing the same
-attribution-selected slice raises it to 0.8214. On the $F_{\mathrm{causal}}$
+attribution-selected slice raises it to 0.8214. On the $F_{\mathrm{demo}}$
 objective, neither selecting (\S\ref{sec:exp-downstream}, most-fair selection control)
 nor removing data substitutes for editing it.
 % src: famail_temporal/results/analysis/pareto_supplylift/pareto_points.csv (Q7-pareto ledger row)
@@ -548,12 +548,12 @@ nor removing data substitutes for editing it.
 \subsection{External Validity: San Francisco}\label{sec:exp-sf}
 
 The entire protocol reruns on San Francisco with no algorithm, metric, or
-fidelity change; because $F_{\mathrm{causal}}$ is city-specific and
+fidelity change; because $F_{\mathrm{demo}}$ is city-specific and
 associational (ACS proxies, not hukou), San Francisco tests whether the
 \emph{conclusions} reproduce, never whether magnitudes match.
 
-\textbf{Data level.} $F_{\mathrm{causal}}$ rises 0.8752 $\to$ 0.9067
-($+0.0316$), $F_{\mathrm{spatial}}$ $+0.0139$, with Fidelity-A stability and % lint-allow: coincidental value (SF a10 F_spatial delta, not the trim-only F_causal headline)
+\textbf{Data level.} $F_{\mathrm{demo}}$ rises 0.8752 $\to$ 0.9067
+($+0.0316$), $F_{\mathrm{spatial}}$ $+0.0139$, with Fidelity-A stability and % lint-allow: coincidental value (SF a10 F_spatial delta, not the trim-only F_demo headline)
 lift's Fidelity-B cost re-measured on this corpus by the downstream suite
 (pending below). Every external instrument improves: Theil $-0.0079$
 (CI $[-0.0094, -0.0065]$), and the migrant axis is significant under
@@ -622,7 +622,7 @@ n.s.); the primary-city result at the adopted weights is reported in
 \S\ref{sec:exp-downstream}.
 % src: famail_temporal/results/weighted_bc_sweep/supply_lift_a10_sf12_filtered_6seed/paired_stats.json
 The SF model-level variance suite stays null at $n = 10$ seeds
-($\Delta F_{\mathrm{causal}} = -0.0009 \pm 0.0035$, mixed signs, closer to
+($\Delta F_{\mathrm{demo}} = -0.0009 \pm 0.0035$, mixed signs, closer to
 zero than at $n = 5$) --- unlike the primary city's small significant
 positive effect (\S\ref{sec:exp-downstream}), a city difference we state
 plainly.
@@ -635,7 +635,7 @@ at roughly ten times the primary city's magnitudes.
 % src: famail_temporal/baselines/external_fairness/results/option_a_rollout_sf12_tl/summary.json + option_a_rollout_sf12_trimonly/summary.json (edited_w30.MigrantRatio.pickups.share_D_delta; C3-SF-ROLLOUT 2026-07-17; attenuation 1-0.0335/0.0432=22.5%)
 The four-source comparison also reproduces (generators retrained from
 scratch; identity gate passed, matched 0.958 vs.\ mismatched 0.034): the
-edited corpus is the fairest source ($F_{\mathrm{causal}}$ 0.9067 vs.\ GAN
+edited corpus is the fairest source ($F_{\mathrm{demo}}$ 0.9067 vs.\ GAN
 0.8795, raw 0.8752, BC 0.8744) while identity-faithful (Fidelity-A 0.9581
 $\approx$ raw 0.9578; Fidelity-B 0.098, the expected bounded-edit
 divergence).
