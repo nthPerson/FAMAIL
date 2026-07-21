@@ -21,19 +21,18 @@ size; overfull warnings in the log mean the tikzpicture exceeds
 \begin{figure}[h]
   \centering
   \input{figure-1}
-  \caption{Why FAMAIL edits its training data. (a)~A real fleet's service
-  divides its city: on Shenzhen the advantaged district receives
-  $3.0\times$ the taxi service per unit demand. (b)~The recorded
-  trajectories are real human driving --- worth keeping --- and
-  regenerating them would discard that realism, so FAMAIL edits the
-  corpus's most-biased slice, chosen by attribution, in place and within
-  bounded moves, generating nothing. (c)~The stakes: a policy imitating
-  the raw corpus learns the service gap and, deployed to guide dispatch,
-  sends supply where supply already went --- writing the next biased
-  corpus; trained on the edited demonstrations, upweighted, the fairness
-  survives training and dispatch writes a fairer corpus. The $+$ marks
-  flag what the edit changed, in both districts. Figure~2 shows how the
-  editor works.}
+  \caption{Why FATE edits trajectory data: two corpora, two futures.
+  A real fleet's service demonstrates bias: on Shenzhen the advantaged
+  district receives $3.0\times$ the taxi service per unit demand.
+  The recorded trajectories are human-generated and therefore valuable
+  --- filtering them would discard useful expertise, so FATE performs
+  bounded edits on an attributed slice of the corpus containing the
+  most-biased demonstrations (the \emph{edited corpus}, right).
+  A policy imitating the raw corpus learns the service gap
+  and sends supply to over-served areas; trained
+  on the upweighted edited demonstrations, the fairness survives training
+  and results in the model learning a fairer policy. The $+$ marks flag
+  what the edit changed. Figure~2 shows how the editor works.}
 \end{figure}
 
 \end{document}

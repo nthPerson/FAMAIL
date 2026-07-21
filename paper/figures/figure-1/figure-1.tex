@@ -1,7 +1,10 @@
-% Teaser figure (fig:teaser) — CHOSEN DESIGN (Robert, 2026-07-16): "the city,
-% the data, two futures" (three strips, top-to-bottom: problem -> asset ->
-% stakes). Loop-back arrow REMOVED 2026-07-18 (Robert; two-hop compression
-% invited a data-incest misreading — the loop lives in the labels/caption).
+% Teaser figure (fig:teaser) — (c)-ONLY DESIGN (Dr. Zhang 2026-07-20: "Only
+% showing c would be sufficient"; executed 2026-07-20). The full 3-strip
+% design ("the city, the data, two futures", Robert 2026-07-16) is archived
+% verbatim at design-archive/teaser-3strip-final.tex; Robert's (b)+(c)
+% counter-proposal lives beside this file as figure-1-bc.tex (adopting it =
+% swap the \input in sections/01_introduction.tex + paste its proposed
+% caption).
 % \input by sections/01_introduction.tex inside a figure environment; iterate HERE.
 % Standalone harness: figure-1-test.tex (compile with latexmk -outdir=<scratch>).
 % Rejected alternates + design history: design-archive/.
@@ -11,10 +14,9 @@
 % + tint = disadvantaged district) but plain schematic grids — no street
 % map, no trim/lift mechanism. This figure is the WHY; fig:overview is the HOW.
 %
-% Only one number appears, committed:
-% % src: PAPER/supply-lift/data/a10/shz_a10_external_fairness.json
-%        metrics.MigrantRatio.district_extremes.disparate_impact.before
-%        = 0.3325 -> advantaged/disadvantaged service ratio 1/0.3325 = 3.0x
+% No number appears in the figure itself: the 3.0x service-gap number moved
+% to the caption (its % src provenance comment lives there, in
+% sections/01_introduction.tex).
 % DECISION (Robert, 2026-07-16): all "~10%" bias-extent language REMOVED —
 % k=10,000 is an edit BUDGET (~10% of the corpus), not a measured extent of
 % the bias; the defensible phrasing is "most-biased slice, chosen by
@@ -73,144 +75,107 @@
               inner sep=1.2pt, rounded corners=1pt}]
 
   % =========================================================================
-  % Strip (a): the divided city
+  % Headline (no strip letter — this is the whole figure now)
   % =========================================================================
   \node[anchor=west, font=\footnotesize, text=figink] at (0.7,0)
-    {(a) A real taxi fleet serves a divided city --- with a $3.0\times$ service gap};
-  % grid drawn in a local frame anchored at the panel's own lower-left corner:
-  % tikz snaps grid lines to multiples of the step measured from the *origin*,
-  % so an unshifted grid whose corner is not a multiple of 0.45 renders
-  % off-phase (a sliver row/column at one edge). Panels are whole numbers of
-  % cells (16x4 here), so shifting to the corner squares grid to frame.
-  \draw[citygrid, xstep=0.45, ystep=0.45, shift={(0.9,-2.15)}]
-    (0,0) grid (7.2,1.8);
-  \fill[black, opacity=0.08] (4.95,-0.35) -- (4.95,-1.25) -- (5.4,-1.25)
-    -- (5.4,-2.15) -- (8.1,-2.15) -- (8.1,-0.35) -- cycle;
-  \draw[boundary] (4.95,-0.35) -- (4.95,-1.25) -- (5.4,-1.25) -- (5.4,-2.15);
-  \draw[panelframe] (0.9,-2.15) rectangle (8.1,-0.35);
-  % advantaged: dense presence, few waiting pickups
-  \foreach \x/\y in {1.575/-0.575, 2.475/-0.575, 3.375/-0.575,
-                     1.125/-1.025, 2.025/-1.025, 2.925/-1.025,
-                     3.825/-1.025, 1.575/-1.475, 2.475/-1.475}
-    \pic at (\x,\y) {taxi};
-  \foreach \x/\y in {3.375/-1.475, 4.275/-1.025}
-    \pic[figgray] at (\x,\y) {pick};
-  % disadvantaged: waiting pickups, one taxi
-  \foreach \x/\y in {5.625/-0.575, 6.525/-0.575, 7.425/-0.575,
-                     6.075/-1.025, 6.975/-1.025, 5.625/-1.475,
-                     6.525/-1.475}
-    \pic[figgray] at (\x,\y) {pick};
-  \pic at (7.425,-1.475) {taxi};
-  \node[lbl, font=\tiny, text=figink] at (2.5,-1.9)
-    {advantaged --- over-served};
-  \node[lbl, font=\tiny, text=figink] at (6.55,-1.9)
-    {disadvantaged --- under-served};
-  \pic at (1.02,-2.38) {taxi};
-  \node[anchor=west, font=\tiny, text=figgray] at (1.18,-2.38) {taxi presence};
-  \pic[figgray] at (2.98,-2.38) {pick};
-  \node[anchor=west, font=\tiny, text=figgray] at (3.09,-2.38) {service pickup};
-
-  % recorded: the city's real service becomes a data object. Arrow + box
-  % read as a sentence: [city] -- recorded as --> [driver trajectories]
-  \draw[flow] (4.5,-2.15) -- (4.5,-2.675) -- (5.5,-2.675);
-  \node[anchor=north, font=\tiny, text=figgray] at (4.9,-2.64)
-    {recorded as};
-  \draw[panelframe, rounded corners=2pt] (5.5,-2.95) rectangle (8.1,-2.4);
-  \node[font=\tiny, text=figink] at (6.8,-2.675) {real human driver trajectories};
+    {Two corpora, two futures};
 
   % =========================================================================
-  % Strip (b): the data is worth keeping — edit its most-biased slice
+  % Two corpus chips (arrow sources: the raw corpus and the edited corpus)
   % =========================================================================
-  \node[anchor=west, font=\footnotesize, text=figink] at (0.7,-3.18)
-    {(b) The data encode valuable human expertise, which must be preserved};
-%   \node[anchor=west, font=\footnotesize, text=figink] at (0.7,-3.18)
-%     {(b) The data is human expertise, worth keeping};
-  % corpus: stack of real trajectories (wavy polylines)
-  \draw[panelframe, rounded corners=2pt] (0.9,-5.3) rectangle (3.9,-3.5);
-  \foreach \yy/\sgn in {-3.72/1, -3.95/-1, -4.18/1, -4.41/-1, -4.64/1,
-                        -4.93/-1}
-    \draw[figink!70, line width=0.5pt] (1.05,\yy)
-      .. controls (1.95,\yy+\sgn*0.07) and (2.85,\yy-\sgn*0.07) .. (3.75,\yy);
-  \node[anchor=center, font=\tiny, text=figgray] at (2.4,-5.16)
-    {real human driver trajectories};
-  % door 1 (rejected): regenerate
-  \draw[figgray, dashed, line width=0.6pt] (4.55,-4.12) rectangle (8.35,-3.55);
-  \draw[figgray, line width=0.6pt] (4.55,-4.12) -- (8.35,-3.55);
-  \node[lbl, font=\tiny, text=figgray] at (6.45,-3.84)
-    {regenerate the corpus? --- realism lost};
-  % door 2 (ours): edit in place
-  \draw[figaccent, line width=0.9pt] (4.55,-5.3) rectangle (8.35,-4.45);
-  \node[font=\tiny, text=figink, align=center] at (6.45,-4.87)
-    {\textbf{edit the most-biased slice}\\
-     chosen by attribution --- in place, bounded\\
-     realism retained, $0$ generated trajectories};
-  % corpus -> doors
-  \draw[flow, figgray] (3.9,-3.84) -- (4.55,-3.84);
-  \draw[flowacc] (3.9,-4.87) -- (4.55,-4.87);
+  % raw corpus chip (left source)
+  \draw[panelframe, rounded corners=2pt] (1.15,-1.55) rectangle (3.85,-0.35);
+  \foreach \yy/\sgn in {-0.58/1, -0.80/-1, -1.02/1}
+    \draw[figink!70, line width=0.5pt] (1.30,\yy)
+      .. controls (2.15,\yy+\sgn*0.06) and (3.00,\yy-\sgn*0.06) .. (3.70,\yy);
+  \node[font=\tiny, text=figink, align=center] at (2.5,-1.33)
+    {raw corpus\\ \textcolor{figgray}{real human driver trajectories}};
+  % edited corpus chip (right source): accent frame, one accent line + plus tag
+  \draw[figaccent, line width=0.9pt, rounded corners=2pt]
+    (5.1,-1.55) rectangle (7.8,-0.35);
+  \foreach \yy/\sgn in {-0.58/1, -0.80/-1}
+    \draw[figink!70, line width=0.5pt] (5.25,\yy)
+      .. controls (6.10,\yy+\sgn*0.06) and (6.95,\yy-\sgn*0.06) .. (7.65,\yy);
+  \draw[figaccent, line width=0.7pt] (5.25,-1.02)
+    .. controls (6.05,-0.96) and (6.85,-1.08) .. (7.25,-1.02);
+  \draw[figaccent, line width=0.8pt]
+    (7.40,-1.00) -- (7.50,-1.00) (7.45,-1.05) -- (7.45,-0.95);
+  \node[font=\tiny, text=figink, align=center] at (6.45,-1.33)
+    {edited corpus\\ \textcolor{figgray}{most-biased slice edited in place}};
 
   % =========================================================================
-  % Strip (c): two corpora, two futures for the city
+  % Chips -> model boxes (straight verticals)
   % =========================================================================
-  % title aligned with (a)/(b) at x=0.7 — the as-is arrow now drops at the
-  % corpus's right corner (x=3.9), clear of the title (which ends ~x=3.2)
-  \node[anchor=west, font=\footnotesize, text=figink] at (0.7,-5.95)
-    {(c) Two corpora, two futures};
-  % as-is path (left): corpus lower-right corner -> right side of the model
-  \draw[flow] (3.9,-5.1) -- (4.2,-5.1) -- (4.2,-6.475) -- (3.65,-6.475);
-  \node[anchor=west, font=\tiny, text=figgray] at (4.17,-5.8)
-    {imitate as-is};
-  \draw[panelframe, rounded corners=2pt] (1.35,-6.75) rectangle (3.65,-6.2);
-  \node[font=\tiny, text=figink] at (2.5,-6.475) {standard imitation model};
-  \draw[flow] (2.5,-6.75) -- (2.5,-7.05);
-  \node[anchor=west, font=\tiny, text=figgray] at (2.53,-6.9)
-    {rolls out trajectories};
-  % edited path (right): edit box -> model -> city where fairness survives
-  \draw[flowacc] (6.45,-5.3) -- (6.45,-6.2);
-  \node[anchor=west, font=\tiny, text=figgray] at (6.43,-5.8)
+  \draw[flow] (2.5,-1.55) -- (2.5,-2.05);
+  \node[anchor=west, font=\tiny, text=figgray] at (2.53,-1.80) {imitate as-is};
+  \draw[flowacc] (6.45,-1.55) -- (6.45,-2.05);
+  \node[anchor=west, font=\tiny, text=figgray] at (6.48,-1.80)
     {imitate, upweight edited};
-  \draw[panelframe, rounded corners=2pt] (5.3,-6.75) rectangle (7.6,-6.2);
-  \node[font=\tiny, text=figink] at (6.45,-6.475)
-    {upweighted imitation model};
-  \draw[flowacc] (6.45,-6.75) -- (6.45,-7.05);
-  \node[anchor=west, font=\tiny, text=figgray] at (6.48,-6.9)
-    {rolls out trajectories};
 
+  % =========================================================================
+  % Model boxes
+  % =========================================================================
+  \draw[panelframe, rounded corners=2pt] (1.35,-2.6) rectangle (3.65,-2.05);
+  \node[font=\tiny, text=figink] at (2.5,-2.325) {standard imitation model};
+  \draw[panelframe, rounded corners=2pt] (5.3,-2.6) rectangle (7.6,-2.05);
+  \node[font=\tiny, text=figink] at (6.45,-2.325) {upweighted imitation model};
+
+  % =========================================================================
+  % Model -> future arrows
+  % =========================================================================
+  \draw[flow] (2.5,-2.6) -- (2.5,-2.9);
+  \node[anchor=west, font=\tiny, text=figgray] at (2.53,-2.75) {rolls out trajectories};
+  \draw[flowacc] (6.45,-2.6) -- (6.45,-2.9);
+  \node[anchor=west, font=\tiny, text=figgray] at (6.48,-2.75) {rolls out trajectories};
+
+  % =========================================================================
+  % The two future city grids + outcome labels (copied from archived 3-strip
+  % design, lines 178–215, with +4.15 added to every y-coordinate)
+  % =========================================================================
   % left future: the gap learned as competence (and recycled by dispatch)
-  \draw[citygrid, xstep=0.45, ystep=0.45, shift={(0.9,-8.85)}]
+  \draw[citygrid, xstep=0.45, ystep=0.45, shift={(0.9,-4.7)}]
     (0,0) grid (3.15,1.8);
-  \fill[black, opacity=0.08] (2.475,-7.05) -- (2.475,-7.95) -- (2.925,-7.95)
-    -- (2.925,-8.85) -- (4.05,-8.85) -- (4.05,-7.05) -- cycle;
-  \draw[boundary] (2.475,-7.05) -- (2.475,-7.95) -- (2.925,-7.95)
-    -- (2.925,-8.85);
-  \draw[panelframe] (0.9,-8.85) rectangle (4.05,-7.05);
-  \foreach \x/\y in {1.125/-7.275, 1.575/-7.275, 2.025/-7.275,
-                     1.125/-7.725, 1.575/-7.725, 2.025/-8.175,
-                     1.125/-8.625}
+  \fill[black, opacity=0.08] (2.475,-2.9) -- (2.475,-3.8) -- (2.925,-3.8)
+    -- (2.925,-4.7) -- (4.05,-4.7) -- (4.05,-2.9) -- cycle;
+  \draw[boundary] (2.475,-2.9) -- (2.475,-3.8) -- (2.925,-3.8)
+    -- (2.925,-4.7);
+  \draw[panelframe] (0.9,-4.7) rectangle (4.05,-2.9);
+  \foreach \x/\y in {1.125/-3.125, 1.575/-3.125, 2.025/-3.125,
+                     1.125/-3.575, 1.575/-3.575, 2.025/-4.025,
+                     1.125/-4.475}
     \pic at (\x,\y) {taxi};
-  \foreach \x/\y in {3.375/-7.275, 3.825/-7.275, 2.925/-7.725,
-                     3.375/-8.175, 3.825/-8.625}
+  \foreach \x/\y in {3.375/-3.125, 3.825/-3.125, 2.925/-3.575,
+                     3.375/-4.025, 3.825/-4.475}
     \pic[figgray] at (\x,\y) {pick};
   % right future: fairness survives training; presence reaches under-served
-  \draw[citygrid, xstep=0.45, ystep=0.45, shift={(5.0,-8.85)}]
+  \draw[citygrid, xstep=0.45, ystep=0.45, shift={(5.0,-4.7)}]
     (0,0) grid (3.15,1.8);
-  \fill[black, opacity=0.08] (6.575,-7.05) -- (6.575,-7.95) -- (7.025,-7.95)
-    -- (7.025,-8.85) -- (8.15,-8.85) -- (8.15,-7.05) -- cycle;
-  \draw[boundary] (6.575,-7.05) -- (6.575,-7.95) -- (7.025,-7.95)
-    -- (7.025,-8.85);
-  \draw[panelframe] (5.0,-8.85) rectangle (8.15,-7.05);
-  \foreach \x/\y in {5.225/-7.275, 5.675/-7.275, 6.125/-7.725,
-                     5.225/-8.175}
+  \fill[black, opacity=0.08] (6.575,-2.9) -- (6.575,-3.8) -- (7.025,-3.8)
+    -- (7.025,-4.7) -- (8.15,-4.7) -- (8.15,-2.9) -- cycle;
+  \draw[boundary] (6.575,-2.9) -- (6.575,-3.8) -- (7.025,-3.8)
+    -- (7.025,-4.7);
+  \draw[panelframe] (5.0,-4.7) rectangle (8.15,-2.9);
+  \foreach \x/\y in {5.225/-3.125, 5.675/-3.125, 6.125/-3.575,
+                     5.225/-4.025}
     \pic at (\x,\y) {taxi};
   % trim touched the advantaged district too: its lowest pickup is edit-marked
-  \pic at (5.675,-8.625) {picknew};
-  \foreach \x/\y in {7.475/-7.275, 7.925/-7.725, 7.475/-8.625}
+  \pic at (5.675,-4.475) {picknew};
+  \foreach \x/\y in {7.475/-3.125, 7.925/-3.575, 7.475/-4.475}
     \pic[figgray] at (\x,\y) {pick};
-  \pic at (7.025,-7.275) {taxinew};
-  \pic at (7.925,-8.175) {taxinew};
+  \pic at (7.025,-3.125) {taxinew};
+  \pic at (7.925,-4.025) {taxinew};
   % future labels
-  \node[font=\tiny, text=figink, align=center] at (2.475,-9.22)
+  \node[font=\tiny, text=figink, align=center] at (2.475,-5.07)
     {the fairness gap, learned and re-enacted ---\\bias propagates to rolled out
      corpus};
-  \node[font=\tiny, text=figink, align=center] at (6.575,-9.22)
+  \node[font=\tiny, text=figink, align=center] at (6.575,-5.07)
     {fairness gains survive training ---\\less human bias in rolled out corpus};
+
+  % =========================================================================
+  % Legend footer (re-homed from old strip (a))
+  % =========================================================================
+  \pic at (1.02,-5.5) {taxi};
+  \node[anchor=west, font=\tiny, text=figgray] at (1.18,-5.5) {taxi presence};
+  \pic[figgray] at (2.98,-5.5) {pick};
+  \node[anchor=west, font=\tiny, text=figgray] at (3.09,-5.5) {service pickup};
 \end{tikzpicture}

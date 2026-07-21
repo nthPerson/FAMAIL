@@ -36,27 +36,31 @@ a policy that imitates them unchanged learns the service gap they record.
   % figures/figure-1/design-archive/). This figure is the WHY; fig:overview in
   % section 3 is the HOW.
   \input{figures/figure-1/figure-1}
-  \caption{Why FATE edits trajectory data. (a)~A real fleet's service
-  demonstrates bias: on Shenzhen the advantaged district receives
-  $3.0\times$ the taxi service per unit demand.
+  \caption{Why FATE edits trajectory data: two corpora, two futures.
+  A real fleet's service demonstrates bias: on Shenzhen the advantaged
+  district receives $3.0\times$ the taxi service per unit demand.
   % src: PAPER/supply-lift/data/a10/shz_a10_external_fairness.json
   % (MigrantRatio district_extremes disparate_impact.before 0.33252 ->
   % advantaged/disadvantaged service ratio 1/0.33252 = 3.0x)
-  (b)~The recorded trajectories are human-generated and therefore valuable
-  --- filtering them would discard useful expertise, so FATE performs bounded edits
-  on an attributed slice of the corpus containing the most-biased demonstrations.
-%   (b)~The recorded trajectories are real human driving --- worth keeping
-%   --- and regenerating them would discard that realism, so FATE edits
-%   the corpus's most-biased slice, chosen by attribution, in place and
-%   within bounded moves, generating nothing.
+  The recorded trajectories are human-generated and therefore valuable
+  --- filtering them would discard useful expertise, so FATE performs
+  bounded edits on an attributed slice of the corpus containing the
+  most-biased demonstrations (the \emph{edited corpus}, right).
   % NOTE (2026-07-16): no quantified bias share here by design — k=10,000
   % is an edit budget (~10% of the corpus), not a measured extent of bias.
-  (c)~The stakes: a policy imitating the raw corpus learns the service gap
-  and sends supply to over-served areas; trained 
-  on the upweighted edited demonstrations, the fairness survives training 
-  and results in the model learning a fairer policy. The $+$ marks flag what the edit 
-  changed.
+  A policy imitating the raw corpus learns the service gap
+  and sends supply to over-served areas; trained
+  on the upweighted edited demonstrations, the fairness survives training
+  and results in the model learning a fairer policy. The $+$ marks flag
+  what the edit changed.
   Figure~\ref{fig:overview} shows how the editor works.}
+  \Description{Two side-by-side pipelines. On the left, a raw corpus of
+  real human driver trajectories trains a standard imitation model; its
+  rolled-out city map keeps taxis clustered in the advantaged district
+  while waiting pickups fill the disadvantaged district. On the right, a
+  corpus whose most-biased slice has been edited trains an upweighted
+  imitation model; its rolled-out map moves taxi presence and pickups,
+  marked with plus signs, into the disadvantaged district.}
   \label{fig:teaser}
 \end{figure}
 
