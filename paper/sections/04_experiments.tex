@@ -458,82 +458,30 @@ gain under every set, reaching sign-unanimity only under the
 housing--GDP--compensation set ($+0.0022$, a tenth of its w30 gain).
 % src: PAPER/supply-lift/data/a10/shz_4feat_a10_weighted_bc_paired_stats.json (most_fair arms +0.0059/+0.0059/+0.0072 all p=.031; edited/most_fair min ratio 3.05 at w10)
 
-\textbf{Weight sensitivity.} Fig.~\ref{fig:alpha-pareto} reports the weight
-sweep: six full editing runs across the simplex, each scored on all three
-metric classes. The optimized $\Delta F_{\mathrm{demo}}$ is flat --- within
-$0.001$ --- for $\alpha_{\mathrm{sp}} \in [0, 0.55]$, while the class (ii)
-supply-channel lift-up declines monotonically with $\alpha_{\mathrm{sp}}$ ---
-significant on both tiers only for $\alpha_{\mathrm{sp}} \le 0.2$ --- and
-class (iii) instruments improve significantly at every point. The adopted
-$(0.1, 0.8, 0.1)$ is the three-class criterion's selection; the sweep shows
-the choice is robust on the primary axis and load-bearing only for the
-lift-up property.
+\textbf{Weight sensitivity.} A weight sweep of six full editing runs across
+the simplex, each scored on all three metric classes, shows the optimized
+$\Delta F_{\mathrm{demo}}$ flat --- within $0.001$ --- for
+$\alpha_{\mathrm{sp}} \in [0, 0.55]$, while the class (ii) supply-channel
+lift-up declines monotonically with $\alpha_{\mathrm{sp}}$ and is significant
+on both tiers only for $\alpha_{\mathrm{sp}} \le 0.2$. The adopted
+$(0.1, 0.8, 0.1)$ is the three-class criterion's selection: robust on the
+primary axis, load-bearing only for the lift-up property. The full sweep and
+figure are deferred to Appendix~\ref{app:results}
+(Fig.~\ref{fig:alpha-pareto}).
 % src: PAPER/objective-motivation/weight-sensitivity/EXTENDED_FRONTIER.md (full table + criterion)
 
-\begin{figure}[t]
-  \centering
-  \includegraphics[width=\linewidth]{figures/extended_frontier.pdf}
-  \caption{The weight sweep, scored beyond the optimized metrics. (A) On the
-  optimized plane, $\Delta F_{\mathrm{demo}}$ is flat across
-  $\alpha_{\mathrm{sp}} \in [0, 0.55]$. (B) The design-targeted lift-up
-  declines monotonically with spatial weight and is significant on both
-  supply tiers only for $\alpha_{\mathrm{sp}} \le 0.2$ (filled = 95\% CI
-  excludes 0). The adopted $(0.1, 0.8, 0.1)$ is the three-class criterion's
-  selection.}
-  % src: PAPER/objective-motivation/weight-sensitivity/extended_frontier.json via paper/figures/make_figures.py
-  \Description{Two stacked panels. Panel A: scatter of the weight sweep on
-  the optimized-metric plane; the causal-fairness delta is flat across the
-  spatial weight while the spatial delta rises. Panel B: line chart showing
-  the lift-up quantity declining monotonically as the spatial weight grows,
-  significant on both supply tiers only at low spatial weight; the adopted
-  configuration is marked.}
-  \label{fig:alpha-pareto}
-\end{figure}
-
 \textbf{Feature-set robustness.} $F_{\mathrm{demo}}$ is specific to its
-demographic feature set, so every layer of the argument is re-measured
-under two alternate sets (Table~\ref{tab:featsets}). The claim is
-directional reproduction, not magnitude equality --- absolute
-$F_{\mathrm{demo}}$ scales shift with the feature set by construction.
-The design-targeted lift-up also reproduces: the total
-$\Delta\,\mathrm{mean}(Y \mid \mathrm{disadv.})$ carries a bootstrap
-interval excluding zero on all three sets, and the supply channel is
-individually significant on all three --- under \emph{both} accounting
-conventions (distinct-taxi tier-2: $+0.0411$, $+0.0211$, $+0.0771$, every
-interval excluding zero). The channel mix is not constant ---
-on the primary set the demand channel is n.s., while under both alternate
-sets it is significant and carries most of the larger totals --- so the
-added-presence mechanism replicates while the demand-side share varies with
-the feature set, and we report the decomposition rather than the total
-alone.
+demographic feature set, so every layer of the argument is re-measured under
+two alternate sets (Table~\ref{tab:featsets}, Appendix~\ref{app:results}). The
+claim is directional reproduction, not magnitude equality --- absolute
+$F_{\mathrm{demo}}$ scales shift with the feature set by construction. The
+design-targeted lift-up reproduces: the total
+$\Delta\,\mathrm{mean}(Y \mid \mathrm{disadv.})$ carries a bootstrap interval
+excluding zero on all three sets, and the supply channel is individually
+significant on all three under \emph{both} accounting conventions
+(distinct-taxi tier-2: $+0.0411$, $+0.0211$, $+0.0771$, every interval
+excluding zero).
 % src: {2026-07-13T04-41-12_..._hgc, 2026-07-13T17-04-22_..._4feat}_filtered/channel_decomposition.json (A1 2026-07-16 + A1' tier-2 rerun 2026-07-17, B=2000): totals +0.0594 [+0.0181,+0.1013] / +0.1461 [+0.0900,+0.2039]; supply t1 +0.0054 / +0.0608; supply TIER-2 +0.0211 [+0.0181,+0.0247] / +0.0771 [+0.0706,+0.0836]; demand +0.0539* / +0.0853* (PRIMARY: t1 +0.0176, t2 +0.0411, demand n.s.)
-
-\begin{table}[t]
-\caption{Feature-set robustness under trim+lift (Shenzhen; $\Delta$ rows are
-after $-$ before edit).}
-\label{tab:featsets}
-\footnotesize
-\setlength{\tabcolsep}{3pt}
-\begin{tabular}{lrrr}
-\toprule
- & \{hous,comp,migr\} & \{hous,gdp,comp\} & +logpopdens \\
-\midrule
-before-edit $F_{\mathrm{demo}}$ & 0.7988 & 0.8069 & 0.7253 \\
-editor $\Delta F_{\mathrm{demo}}$ & $+0.0226$ & $+0.0206$ & $+0.0220$ \\
-$\Delta\,\mathrm{mean}(Y \mid \mathrm{disadv.})$ & $+0.0529$ & $+0.0594$ & $+0.1461$ \\ % src: {shenzhen-primary-supplylift-s10,shenzhen-hgc-supplylift,shenzhen-4feat-supplylift}/external_fairness.json: metrics.MigrantRatio.district_extremes.supply_demand_ratio.{after,before}.mean_disadvantaged, delta at full precision (4FEAT 7.219558-7.073448=+0.1461). TOTAL quantity (both channels), decomposed in tab:channels — label deliberately NOT "lift-up": per §4.2 the lift-up CLAIM rides the supply channel; delta-only per DI/Theil convention. all three totals CI-sig (PRIMARY [+0.0086,+0.0989]; HGC [+0.0181,+0.1013]; 4FEAT [+0.0900,+0.2039]; B=2000, A1 runs 2026-07-16).
-DI $\Delta$ (migrant/extremes) & $+0.0162$ & $+0.0147$ & $+0.0191$ \\
-DP gap $\Delta$ & $-0.890$ & $-0.787$ & $-0.886$ \\ % src: same external_fairness.json: metrics.MigrantRatio.district_extremes.demographic_parity.delta (identical to supply_demand_ratio.delta_gap -- DP IS the gap, do not also add a gap row; all three delta CIs exclude 0)
-Theil $\Delta$ & $-0.0087$ & $-0.0080$ & $-0.0085$ \\
-L1: edited fairest faithful? & see Tab.~\ref{tab:l1} & yes & yes \\ % src: per-set level1_v2_multiseed.json (HGC 0.8275 / 4FEAT 0.7473 fairest, both Fid-A ~0.845; GAN Fid-B bimodality reproduces seed-for-seed in all three sets)
-vanilla-BC transfer (w1) & see~\S\ref{sec:exp-downstream} & $+0.0022$ & $+0.0011$ (n.s.) \\ % src: hgc w1 is sign-unanimous (6/6, p=.031) though a tenth of its w30 gain — row renamed from 'null' for honesty
-weighted-BC w30 & see~\S\ref{sec:exp-downstream} & $+0.0248$ & $+0.0256$ \\
-\quad random placebo (w30) & $-0.0023$ (n.s.) & $-0.0019$ (n.s.) & $-0.0044$ (n.s.) \\
-\quad most-fair select (w30) & $+0.0009$ (n.s.) & $+0.0054$ & $+0.0072$ \\
-variance (b0 vs FATE) & see~\S\ref{sec:exp-downstream} & null & null \\ % src: hgc +0.0029±0.0038 / 4feat +0.0003±0.0028, both mixed-sign at n=5 — null under the pre-registered sign-consistency reading (PRIMARY was all-positive)
-\bottomrule
-\end{tabular}
-\end{table}
-% src (PRIMARY column): s10 corpus metrics.json + shenzhen-primary-supplylift-s10 external_fairness.json
 
 \textbf{Filtering is not a substitute.} Removing the $K$ least-fair
 trajectories instead of editing them does not reproduce the gain --- it

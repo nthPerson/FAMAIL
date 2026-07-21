@@ -66,33 +66,16 @@ F_{\mathrm{demo}}
 \;=\; \frac{R^{\top}(I-H)\,R}{R^{\top}M\,R}
 \;=\; 1 - r^{2}_{\mathrm{demo}} .
 \end{equation}
-Despite its appearance, Eq.~\eqref{eq:fdemo} is nothing but the stage-two
-regression computed in closed form: the numerator is its residual sum of
-squares, the denominator its total sum of squares. The projection form is
-what makes the measure usable as an \emph{optimization objective} rather
-than a one-shot audit. Demographics are fixed attributes of the cells, so
-$H$ is a constant of the optimization: as editing moves $R$,
-Eq.~\eqref{eq:fdemo} implicitly re-fits the demographic regression exactly
-at every step, with no coefficients to refresh and nothing trained inside
-the editing loop. As a ratio of quadratic forms in $R$ it is smooth, so
-exact gradients flow from the fairness score through $Y$ to the coordinates
-being edited, and the idempotence of its projections underwrites the exact
-per-unit attribution of \S\ref{sec:attribution}. Nor is the $N \times N$
-projection ever materialized: by the normal equations,
-$R^{\top}(I-H)R = R^{\top}R -
-(\tilde{X}^{\top}R)^{\top}(\tilde{X}^{\top}\tilde{X})^{-1}(\tilde{X}^{\top}R)$,
-so each evaluation costs a few length-$N$ inner products.
-% src: objective_function/causal_fairness/f_causal_term_reformulation/chosen_formulation/OPTION_B_FORMULATION.md §3.3, §5 (constant H; implicit exact re-fit; differentiability)
-% src: famail_temporal/fairness/hat_matrices.py (compact evaluation identity; dense N×N infeasible at production N)
-By the Frisch--Waugh--Lovell theorem \cite{frischwaugh1933,lovell1963}, the
-residualize-then-project construction recovers exactly the demographic
-coefficients of the full multiple regression, so $r^{2}_{\mathrm{demo}}$ is
-interpretable as the share of demand-adjusted service inequity attributable to
-demographics; measuring fairness through the statistical dependence between
-protected attributes and outcomes follows the predictability logic of
-\cite{feldman2015}, with the direction reversed: there, disparate impact is
-certified by predicting the protected attribute from the data; here, the
-demographics predict the adjusted service residual.
+Eq.~\eqref{eq:fdemo} is the stage-two regression in closed form: the
+numerator is its residual sum of squares, the denominator its total; $H$ is
+constant, so each edit step implicitly re-fits the regression exactly. As a
+ratio of quadratic forms in $R$ it is smooth, so exact gradients flow from
+the fairness score through $Y$ to the coordinates being edited, and the
+idempotence of its projections underwrites the exact per-unit attribution of
+\S\ref{sec:attribution}. The quantity $r^{2}_{\mathrm{demo}}$ is interpretable
+as the share of demand-adjusted service inequity attributable to demographics;
+the Frisch--Waugh--Lovell exactness behind that reading and the $O(N)$
+evaluation identity are given in Appendix~\ref{app:derivations}.
 Boundary cases orient the scale: $R \in \operatorname{span}(X)$ gives
 $F_{\mathrm{demo}} = 0$ (fully unfair), and $R \perp X$ gives $1$ (fully
 fair).
@@ -387,10 +370,8 @@ $L_\infty$ clip,
 so no pickup ever moves more than $\varepsilon = 2$ cells from its recorded
 location, regardless of iteration count --- the $\varepsilon$-bound
 reinterpreted as an identity-preservation budget rather than an attack-stealth
-budget. The discrete grid is bridged by temperature-annealed soft cell
-assignment \cite{jang2017gumbel,maddison2017concrete,bengio2013ste} over the
-same $5{\times}5$ window used to aggregate supply, moving from broad early
-exploration to precise late assignment; the best iterate is kept.
+budget. The discrete grid is bridged by a temperature-annealed soft cell
+assignment (Appendix~\ref{app:editor}).
 % src: PAPER/objective-motivation/MOTIVATION.md (editor); PAPER/argument/03_fairness_theory.md
 
 \textbf{Trim.} The demand-side phase: pickups selected by demand deficit
@@ -401,35 +382,28 @@ editor's.
 
 \textbf{Lift.} Trajectories nominated by supply-gradient attribution have
 their whole seeking tail translated: the pickup moves by the full offset
-$\delta$, earlier tail states move by linearly tapered fractions
-$w_j = j/\ell$ ($0.25/0.5/0.75/1.0$ at $\ell = 4$), and the anchor state
-before the tail never moves --- so the trajectory physically cruises through
-the under-served area before picking up rather than teleporting into it. The
-moved states carry their supply with them, differentiably: each seeking state
-contributes $1/12$ of an hourly presence unit to each cell of its
-$5{\times}5$ neighborhood in the supply perturbation $\Delta S$, and the objective
-evaluates supply as $\mathrm{clamp}(S + \Delta S,\, s_0)$ with supply floor
-$s_0 = 0.1$. Supply is thus \emph{endogenous}: the optimizer sees the supply
-consequences of its own moves and is rewarded for providing service where it
-improves fairness, not merely for redistributing demand. The fidelity term
-scores the actual rerouted tail at every iteration, and each completed edit
-updates a shared running state, so later edits optimize against the city as
-earlier edits left it.
-% src: PAPER/supply-lift/LIFT_ALGORITHM_REFERENCE.md §3, §5-6 (taper, presence mass, floors, live fidelity tail)
+$\delta$, earlier tail states move by linearly tapered fractions, and the
+anchor state before the tail never moves --- so the trajectory physically
+cruises through the under-served area before picking up rather than
+teleporting into it. The moved states carry their supply with them,
+differentiably, contributing presence to the supply perturbation $\Delta S$
+over the same $5{\times}5$ neighborhood. Supply is thus \emph{endogenous}: the
+optimizer sees the supply consequences of its own moves and is rewarded for
+providing service where it improves fairness, not merely for redistributing
+demand. The fidelity term scores the actual rerouted tail at every iteration,
+and each completed edit updates a shared running state, so later edits
+optimize against the city as earlier edits left it. The taper weights,
+per-state presence mass, supply floor, and the
+$\mathrm{clamp}(S + \Delta S,\, s_0)$ evaluation are given in
+Appendix~\ref{app:editor}.
 
-\textbf{Physical validity.} The source data is preprocessed --- following the
-pipeline of \cite{zhang2022cgail} --- to satisfy a king-move rule: consecutive
-states move at most one cell per axis, $\max(|dx|,|dy|) \le 1$. Edits should
-not be held to a lower standard than the data they edit; a bounded two-cell
-pickup move would silently violate the very rule the source trajectories are
-filtered on. Discretized edits therefore pass through an exact
-backward-reachability repair that returns the king-compliant assignment
-nearest the tapered targets, or reports that none exists. Infeasible edits
-are not applied: lift skips them in-loop, and the small fraction of trim
-edits with no compliant repair (about 5\%) is reverted to the originals post
-hoc under the same rule --- a rule adopted before its metric effects were
-computed (\S\ref{sec:experiments}).
-% src: LIFT_ALGORITHM_REFERENCE.md §3 (king-move rule), §6 (repair; lift skips in-loop);
+\textbf{Physical validity.} Edits must satisfy the same king-move rule the
+source trajectories are filtered on --- consecutive states move at most one
+cell per axis --- enforced by an exact backward-reachability repair detailed
+in Appendix~\ref{app:editor}. Infeasible edits are not applied: lift skips
+them in-loop, and the small fraction of trim edits with no compliant repair
+(about 5\%) is reverted to the originals post hoc under the same rule --- a
+rule adopted before its metric effects were computed (\S\ref{sec:experiments}).
 % src: PAPER/supply-lift/data/a10/shz_a10_metrics.json (n_reverted_infeasible_trim 118/2,455 ≈ 4.8%);
 % PAPER/supply-lift/FINDINGS.md §8 (rule-first disclosure)
 
