@@ -98,8 +98,12 @@
   % =========================================================================
   % Headline (no strip letter — this is the whole figure now)
   % =========================================================================
-  \node[anchor=west, font=\footnotesize, text=figink] at (0.7,0)
-    {Two corpora, two futures};
+%   \node[anchor=west, font=\footnotesize, text=figink] at (0.7,0)
+%     {Two corpora, two futures};
+%   \node[anchor=west, font=\footnotesize\bfseries, text=figink] at (0.7,0)
+%     {One corpus, two futures};
+  \node[anchor=west, font=\footnotesize\bfseries, text=figink] at (0.7,-0.05)
+    {Bias is learned from data — fairness can be, too};
 
   % =========================================================================
   % Two corpus chips (arrow sources: the raw corpus and the edited corpus)
@@ -139,7 +143,7 @@
   \node[anchor=west, font=\tiny, text=figgray] at (2.53,-1.80) {imitate as-is};
   \draw[flowacc] (6.45,-1.55) -- (6.45,-2.05);
   \node[anchor=west, font=\tiny, text=figgray] at (6.48,-1.80)
-    {imitate, upweight edited};
+    {imitate edited};
 
   % =========================================================================
   % Model boxes
