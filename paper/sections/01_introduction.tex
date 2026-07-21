@@ -65,42 +65,6 @@ a policy that imitates them unchanged learns the service gap they record.
   marked with plus signs, into the disadvantaged district.}
   \label{fig:teaser}
 \end{figure}
-% \begin{figure}[t]
-%   \centering
-%   % Teaser (fig:teaser) — TikZ source: figures/figure-1/figure-1.tex (iterate
-%   % THERE; standalone harness figures/figure-1/figure-1-test.tex; design history
-%   % figures/figure-1/design-archive/). This figure is the WHY; fig:overview in
-%   % section 3 is the HOW.
-% %   \input{figures/figure-1/figure-1-bc}
-%   \input{figures/figure-1/figure-1}
-%   \caption{Why FATE edits trajectory data: one corpus, two futures.
-%   A real fleet's service demonstrates bias: on Shenzhen the advantaged
-%   district receives $3.0\times$ the taxi service per unit demand.
-%   % src: PAPER/supply-lift/data/a10/shz_a10_external_fairness.json
-%   % (MigrantRatio district_extremes disparate_impact.before 0.33252 ->
-%   % advantaged/disadvantaged service ratio 1/0.33252 = 3.0x)
-%   The recorded trajectories are human-generated and therefore valuable
-%   --- filtering them would discard useful expertise, so FATE performs
-%   bounded edits on an attributed slice of the corpus containing the
-%   most-biased demonstrations (the \emph{edited corpus}, right).
-%   % NOTE (2026-07-16): no quantified bias share here by design — k=10,000
-%   % is an edit budget (~10% of the corpus), not a measured extent of bias.
-%   A policy imitating the raw corpus learns the service gap
-%   and sends supply to over-served areas; trained
-%   on the upweighted edited demonstrations, the fairness survives training
-%   and results in the model learning a fairer policy.
-%   Figure~\ref{fig:overview} shows how the fairness-aware trajectory editor works.}
-%   \Description{Two side-by-side pipelines, with an arrow labeled FATE
-%   transforming the left pipeline's raw corpus into the right pipeline's
-%   edited corpus. On the left, a raw corpus of
-%   real human driver trajectories trains a standard imitation model; its
-%   rolled-out city map keeps taxis clustered in the advantaged district
-%   while waiting pickups fill the disadvantaged district. On the right, a
-%   corpus whose most-biased slice has been edited trains an upweighted
-%   imitation model; its rolled-out map moves taxi presence and pickups,
-%   marked with plus signs, into the disadvantaged district.}
-%   \label{fig:teaser}
-% \end{figure}
 
 FATE takes a third position. As \emph{data augmentation}, it keeps the real 
 corpus, edits a small slice containing the most unfair trajectories, and 
@@ -115,7 +79,7 @@ fairness of the small edited slice survives training instead of being averaged
 away.
 
 The subtlety is not measuring unfairness but repairing it honestly.
-FATE's first editing mode, \emph{trim}, moves only demand: it relocates
+FATE's first editing phase, \emph{trim}, moves only demand: it relocates
 recorded pickups within over-served areas, and on the primary city it
 improves measured fairness, but without helping the under-served group at all:
 every one of the 2{,}455 pickups it edits originates in an advantaged cell
@@ -126,7 +90,7 @@ than removed.
 % src: PAPER/external-metrics/LEVELING_DOWN_MECHANISM.md (2,455/2,455 flow analysis; pre-supply-lift doc) — corroborated at alpha*: PAPER/supply-lift/data/a10/shz_trimonly_a10_external_fairness.json (mean(Y|disadv) 7.0734 -> 7.0734 exactly)
 We show this behavior is structural --- the constrained optimum of any
 demand-only editor on this objective (\S\ref{sec:leveling}) --- and that
-diagnosis dictated the second mode. \emph{Lift} reroutes drivers' final
+diagnosis dictated the second phase. \emph{Lift} reroutes drivers' final
 seeking minutes into under-served areas and makes the supply consequences
 of the reroute differentiable and endogenous to the objective: the editor
 is rewarded for providing service where it improves fairness, not merely
@@ -179,7 +143,7 @@ and its untargeted placebo degrades fairness outright
 
 \textbf{Contributions.}
 \begin{itemize}
-\item \textbf{A fairness-aware trajectory editor.} Two bounded editing modes,
+\item \textbf{A fairness-aware trajectory editor.} Two bounded editing phases,
 gradient-guided under one differentiable objective, with the supply
 consequences of edits made endogenous to it, and driven by two exact
 attribution mechanisms: demand deficit attribution localizes existing
