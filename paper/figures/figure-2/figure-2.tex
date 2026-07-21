@@ -15,15 +15,24 @@
 %   - Bigger arrowheads throughout.
 %   Two-hue scheme confirmed by Robert: vermillion = trim, blue = lift/supply.
 %
+% COLOR SYSTEM (2026-07-20, external design review; shared with fig-1):
+%   hues muted — amber #D97706 = trim/excess/source, cobalt #2563EB =
+%   lift/added; charcoal #4B5563 neutrals. Regional tints over the map:
+%   pale amber ~10% = over-served, pale blue ~7% = under-served (color is
+%   reinforcement — boundary dash + glyphs still carry the split in
+%   grayscale). Trim's vacated origins are now pale-amber glyphs ("service
+%   taken from an excess location"); relocated pickups stay gray (trim is
+%   NOT added service — only lift's destination pick is cobalt).
+%
 % Geometry: 1 cell = 1 unit = 4.9mm; panel = 10x8 cells = 49mm x 39.2mm (the
 % \includegraphics sizes below must track any unit change). Panel 3 shows the
 % image's lower-right quadrant at 2x via clip + oversized include anchored at
 % (-10,0). No \resizebox: fonts are true manuscript size.
-\definecolor{figink}{HTML}{1A1A1A}
-\definecolor{figgray}{HTML}{6F6F6F}
-\definecolor{figfaint}{HTML}{C9C9C9}
-\definecolor{figaccent}{HTML}{0F62FE}
-\definecolor{figtrim}{HTML}{D55E00}
+\definecolor{figink}{HTML}{4B5563}
+\definecolor{figgray}{HTML}{6B7280}
+\definecolor{figfaint}{HTML}{D1D5DB}
+\definecolor{figaccent}{HTML}{2563EB}
+\definecolor{figtrim}{HTML}{D97706}
 \begin{tikzpicture}[x=4.9mm, y=4.9mm, line cap=round, line join=round,
   % cell-scale marks: \pic[color=<c>] at (cell center) {pick};
   % service pickup: passenger stick figure (per Dr. Zhang 2026-07-18; was an x)
@@ -56,8 +65,11 @@
   \begin{scope}
     \node[anchor=south west, inner sep=0pt] at (0,0)
       {\includegraphics[width=49mm, height=39.2mm]{figures/figure-2/SZ_street_background_5x4_rotated}};
-    % disadvantaged district: translucent tint east of the boundary
-    \fill[black, opacity=0.08] (4,8) -- (4,5) -- (5,5) -- (5,3) -- (6,3)
+    % regional tints over the map: over-served pale amber, under-served
+    % pale blue (translucent so the streets stay visible)
+    \fill[figtrim, opacity=0.10] (0,0) -- (0,8) -- (4,8) -- (4,5) -- (5,5)
+      -- (5,3) -- (6,3) -- (6,1) -- (7,1) -- (7,0) -- cycle;
+    \fill[figaccent, opacity=0.07] (4,8) -- (4,5) -- (5,5) -- (5,3) -- (6,3)
       -- (6,1) -- (7,1) -- (7,0) -- (10,0) -- (10,8) -- cycle;
     \draw[citygrid, step=1] (0,0) grid (10,8);
     \draw[boundary] (4,8) -- (4,5) -- (5,5) -- (5,3) -- (6,3) -- (6,1)
@@ -96,7 +108,9 @@
   \begin{scope}[shift={(11.5,0)}]
     \node[anchor=south west, inner sep=0pt] at (0,0)
       {\includegraphics[width=49mm, height=39.2mm]{figures/figure-2/SZ_street_background_5x4_rotated}};
-    \fill[black, opacity=0.08] (4,8) -- (4,5) -- (5,5) -- (5,3) -- (6,3)
+    \fill[figtrim, opacity=0.10] (0,0) -- (0,8) -- (4,8) -- (4,5) -- (5,5)
+      -- (5,3) -- (6,3) -- (6,1) -- (7,1) -- (7,0) -- cycle;
+    \fill[figaccent, opacity=0.07] (4,8) -- (4,5) -- (5,5) -- (5,3) -- (6,3)
       -- (6,1) -- (7,1) -- (7,0) -- (10,0) -- (10,8) -- cycle;
     \draw[citygrid, step=1] (0,0) grid (10,8);
     \draw[boundary] (4,8) -- (4,5) -- (5,5) -- (5,3) -- (6,3) -- (6,1)
@@ -115,12 +129,13 @@
                        8.5/3.5, 9.5/2.5, 9.5/3.5}
       \pic[color=figgray] at (\x,\y) {pick};
     \pic at (7.5,2.5) {taxi};
-    % two trim edits: ghosted origin -> vermillion arrow -> relocated pickup,
-    % both staying inside the advantaged district (west of the boundary)
-    \pic[color=figfaint] at (2.5,5.5) {pick};
+    % two trim edits: vacated origin (pale amber = service taken from an
+    % excess location) -> amber arrow -> relocated pickup (gray: trim is
+    % NOT added service), both inside the advantaged district
+    \pic[color=figtrim!50] at (2.5,5.5) {pick};
     \draw[trimedit] (2.5,5.5) -- (4.5,4.5);
     \pic[color=figgray] at (4.5,4.5) {pick};
-    \pic[color=figfaint] at (0.5,4.5) {pick};
+    \pic[color=figtrim!50] at (0.5,4.5) {pick};
     \draw[trimedit] (0.5,4.5) -- (1.5,3.5);
     \pic[color=figgray] at (1.5,3.5) {pick};
     \node[lbl, font=\tiny, text=figgray, align=center] at (8.0,6.9)
@@ -128,9 +143,9 @@
     % legend (lower left)
     \fill[white, opacity=0.78, rounded corners=1pt]
       (0.12,0.08) rectangle (5.0,1.45);
-    \pic[color=figfaint] at (0.5,1.05) {pick};
+    \pic[color=figtrim!50] at (0.5,1.05) {pick};
     \node[anchor=west, font=\tiny, text=figink] at (0.85,1.05)
-      {original position};
+      {original position (vacated)};
     \draw[trimedit] (0.25,0.4) -- (0.8,0.4);
     \node[anchor=west, font=\tiny, text=figink] at (0.85,0.4)
       {trim edit (pickup relocated)};
@@ -148,8 +163,12 @@
         {\includegraphics[width=98mm, height=78.4mm]{figures/figure-2/SZ_street_background_5x4_rotated}};
     \end{scope}
     % under-served district: everything east of the boundary (left sliver is
-    % the advantaged edge, continuing the panels-1-2 corridor at 2x)
-    \fill[black, opacity=0.08] (0,8) -- (0,6) -- (2,6) -- (2,2) -- (4,2)
+    % the advantaged edge, continuing the panels-1-2 corridor at 2x);
+    % base tint kept lighter here so the value-of-presence field stays the
+    % dominant blue signal
+    \fill[figtrim, opacity=0.10] (0,0) -- (0,6) -- (2,6) -- (2,2) -- (4,2)
+      -- (4,0) -- cycle;
+    \fill[figaccent, opacity=0.05] (0,8) -- (0,6) -- (2,6) -- (2,2) -- (4,2)
       -- (4,0) -- (10,0) -- (10,8) -- cycle;
     % QUANTIZED value-of-presence field (accent cells, opacity = value)
     \fill[figaccent, fill opacity=0.26] (7,2) rectangle (8,3);   % peak

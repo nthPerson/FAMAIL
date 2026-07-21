@@ -47,11 +47,19 @@
 % keeps taxis in the advantaged district, and the edited corpus trains an
 % upweighted imitation model whose rolled-out map moves taxi presence and
 % pickups, marked with plus signs, into the disadvantaged district.}
-\definecolor{figink}{HTML}{1A1A1A}
-\definecolor{figgray}{HTML}{6F6F6F}
-\definecolor{figfaint}{HTML}{C9C9C9}
-\definecolor{figaccent}{HTML}{0F62FE}
-\definecolor{figtrim}{HTML}{D55E00}
+% COLOR SYSTEM (2026-07-20): tracks the live figure-1.tex — charcoal =
+% observed/unchanged, muted cobalt = added/edited, pale amber/blue fills =
+% over-/under-served regions (see the color block in figure-1.tex for the
+% full rationale + CVD/grayscale checks). Kept in sync so the meeting
+% comparison differs only in the disputed panels.
+\definecolor{figink}{HTML}{4B5563}
+\definecolor{figgray}{HTML}{6B7280}
+\definecolor{figfaint}{HTML}{D1D5DB}
+\definecolor{figaccent}{HTML}{2563EB}
+\definecolor{figtrim}{HTML}{D97706}
+\definecolor{figtintblue}{HTML}{E8F1FC}
+\definecolor{figtintamber}{HTML}{FFF3D6}
+\definecolor{figchipfill}{HTML}{F4F8FE}
 \begin{tikzpicture}[x=1cm, y=1cm, line cap=round, line join=round,
   % service pickup: passenger stick figure (per Dr. Zhang 2026-07-18; was an x)
   % Sized to match fig:overview's cell-fill ratio (Robert 2026-07-18): ~0.234cm
@@ -119,7 +127,8 @@
   \node[lbl, font=\tiny, text=figgray] at (6.45,-0.66)
     {regenerate the corpus? --- realism lost};
   % door 2 (ours): edit in place
-  \draw[figaccent, line width=0.9pt] (4.55,-2.12) rectangle (8.35,-1.27);
+  \draw[figaccent, line width=0.9pt, fill=figchipfill]
+    (4.55,-2.12) rectangle (8.35,-1.27);
   \node[font=\tiny, text=figink, align=center] at (6.45,-1.69)
     {\textbf{edit the most-biased slice}\\
      chosen by attribution --- in place, bounded\\
@@ -148,7 +157,8 @@
   \draw[flowacc] (6.45,-2.12) -- (6.45,-3.02);
   \node[anchor=west, font=\tiny, text=figgray] at (6.43,-2.62)
     {imitate, upweight edited};
-  \draw[panelframe, rounded corners=2pt] (5.3,-3.57) rectangle (7.6,-3.02);
+  \draw[panelframe, fill=figchipfill, rounded corners=2pt]
+    (5.3,-3.57) rectangle (7.6,-3.02);
   \node[font=\tiny, text=figink] at (6.45,-3.295)
     {upweighted imitation model};
   \draw[flowacc] (6.45,-3.57) -- (6.45,-3.87);
@@ -156,10 +166,12 @@
     {rolls out trajectories};
 
   % left future: the gap learned as competence (and recycled by dispatch)
+  \fill[figtintamber!70] (0.9,-3.87) -- (2.475,-3.87) -- (2.475,-4.77)
+    -- (2.925,-4.77) -- (2.925,-5.67) -- (0.9,-5.67) -- cycle;
+  \fill[figtintblue!80] (2.475,-3.87) -- (2.475,-4.77) -- (2.925,-4.77)
+    -- (2.925,-5.67) -- (4.05,-5.67) -- (4.05,-3.87) -- cycle;
   \draw[citygrid, xstep=0.45, ystep=0.45, shift={(0.9,-5.67)}]
     (0,0) grid (3.15,1.8);
-  \fill[black, opacity=0.08] (2.475,-3.87) -- (2.475,-4.77) -- (2.925,-4.77)
-    -- (2.925,-5.67) -- (4.05,-5.67) -- (4.05,-3.87) -- cycle;
   \draw[boundary] (2.475,-3.87) -- (2.475,-4.77) -- (2.925,-4.77)
     -- (2.925,-5.67);
   \draw[panelframe] (0.9,-5.67) rectangle (4.05,-3.87);
@@ -171,10 +183,12 @@
                      3.375/-4.995, 3.825/-5.445}
     \pic[figgray] at (\x,\y) {pick};
   % right future: fairness survives training; presence reaches under-served
+  \fill[figtintamber!40] (5.0,-3.87) -- (6.575,-3.87) -- (6.575,-4.77)
+    -- (7.025,-4.77) -- (7.025,-5.67) -- (5.0,-5.67) -- cycle;
+  \fill[figtintblue!60] (6.575,-3.87) -- (6.575,-4.77) -- (7.025,-4.77)
+    -- (7.025,-5.67) -- (8.15,-5.67) -- (8.15,-3.87) -- cycle;
   \draw[citygrid, xstep=0.45, ystep=0.45, shift={(5.0,-5.67)}]
     (0,0) grid (3.15,1.8);
-  \fill[black, opacity=0.08] (6.575,-3.87) -- (6.575,-4.77) -- (7.025,-4.77)
-    -- (7.025,-5.67) -- (8.15,-5.67) -- (8.15,-3.87) -- cycle;
   \draw[boundary] (6.575,-3.87) -- (6.575,-4.77) -- (7.025,-4.77)
     -- (7.025,-5.67);
   \draw[panelframe] (5.0,-5.67) rectangle (8.15,-3.87);

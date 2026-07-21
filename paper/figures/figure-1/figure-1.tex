@@ -27,11 +27,28 @@
 % (the edited corpus visibly COMES FROM the raw corpus); legend boxed
 % (dotted = key, not a pipeline stage), centered on the figure width, with
 % a third entry glossing the accent "+" marks.
-\definecolor{figink}{HTML}{1A1A1A}
-\definecolor{figgray}{HTML}{6F6F6F}
-\definecolor{figfaint}{HTML}{C9C9C9}
-\definecolor{figaccent}{HTML}{0F62FE}
-\definecolor{figtrim}{HTML}{D55E00}
+% COLOR SYSTEM (2026-07-20, external design review; shared with fig-2):
+% two chromatic hues + neutrals — charcoal #4B5563 = observed/unchanged;
+% muted cobalt #2563EB = added/edited (the FATE intervention); muted amber
+% #D97706 = excess/trimmed (used in fig-2); pale amber/blue fills mark
+% over-/under-served REGIONS, never objects. Corpus chips draw
+% corpus_background_{raw,edited}.png (GPS-trace renders, label zone left
+% clear by design; the edited image carries its accent slice + "+").
+% Rollout tints: unfair future starker amber/blue, fair future softer
+% (the gap has narrowed). Grayscale+CVD checked: deut/prot separation
+% >200 linear-RGB, charcoal text 7.6:1; glyphs/dashes/plus marks keep
+% carrying semantics without color.
+\definecolor{figink}{HTML}{4B5563}
+\definecolor{figgray}{HTML}{6B7280}
+\definecolor{figfaint}{HTML}{D1D5DB}
+\definecolor{figaccent}{HTML}{2563EB}
+\definecolor{figtrim}{HTML}{D97706}
+\definecolor{figtintblue}{HTML}{E8F1FC}
+\definecolor{figtintamber}{HTML}{FFF3D6}
+\definecolor{figchipfill}{HTML}{F4F8FE}
+% image dir: figures/figure-1/ from main.tex; the harness (which compiles
+% from this directory) pre-defines \figonedir as empty
+\providecommand{\figonedir}{figures/figure-1/}
 \begin{tikzpicture}[x=1cm, y=1cm, line cap=round, line join=round,
   % service pickup: passenger stick figure (per Dr. Zhang 2026-07-18; was an x)
   % Sized to match fig:overview's cell-fill ratio (Robert 2026-07-18): ~0.234cm
@@ -87,23 +104,26 @@
   % =========================================================================
   % Two corpus chips (arrow sources: the raw corpus and the edited corpus)
   % =========================================================================
-  % raw corpus chip (left source)
+  % raw corpus chip (left source): GPS-trace image, gray traces only
+  % (corpus_background_raw.png was drawn for this 2.7x1.2 box; its bottom
+  % third is left clear for the label — keep the label position fixed)
+  \begin{scope}
+    \clip[rounded corners=2pt] (1.15,-1.55) rectangle (3.85,-0.35);
+    \node[inner sep=0pt] at (2.5,-0.95)
+      {\includegraphics[width=2.7cm, height=1.2cm]{\figonedir corpus_background_raw.png}};
+  \end{scope}
   \draw[panelframe, rounded corners=2pt] (1.15,-1.55) rectangle (3.85,-0.35);
-  \foreach \yy/\sgn in {-0.58/1, -0.80/-1, -1.02/1}
-    \draw[figink!70, line width=0.5pt] (1.30,\yy)
-      .. controls (2.15,\yy+\sgn*0.06) and (3.00,\yy-\sgn*0.06) .. (3.70,\yy);
   \node[font=\tiny, text=figink, align=center] at (2.5,-1.33)
     {raw corpus\\ \textcolor{figgray}{real human driver trajectories}};
-  % edited corpus chip (right source): accent frame, one accent line + plus tag
+  % edited corpus chip (right source): same trace rendering with the
+  % FATE-edited slice in accent + its "+" tag baked into the image
+  \begin{scope}
+    \clip[rounded corners=2pt] (5.1,-1.55) rectangle (7.8,-0.35);
+    \node[inner sep=0pt] at (6.45,-0.95)
+      {\includegraphics[width=2.7cm, height=1.2cm]{\figonedir corpus_background_edited.png}};
+  \end{scope}
   \draw[figaccent, line width=0.9pt, rounded corners=2pt]
     (5.1,-1.55) rectangle (7.8,-0.35);
-  \foreach \yy/\sgn in {-0.58/1, -0.80/-1}
-    \draw[figink!70, line width=0.5pt] (5.25,\yy)
-      .. controls (6.10,\yy+\sgn*0.06) and (6.95,\yy-\sgn*0.06) .. (7.65,\yy);
-  \draw[figaccent, line width=0.7pt] (5.25,-1.02)
-    .. controls (6.05,-0.96) and (6.85,-1.08) .. (7.25,-1.02);
-  \draw[figaccent, line width=0.8pt]
-    (7.40,-1.00) -- (7.50,-1.00) (7.45,-1.05) -- (7.45,-0.95);
   \node[font=\tiny, text=figink, align=center] at (6.45,-1.33)
     {edited corpus\\ \textcolor{figgray}{most-biased slice edited in place}};
   % FATE transforms the raw corpus into the edited corpus (provenance arrow:
@@ -126,7 +146,10 @@
   % =========================================================================
   \draw[panelframe, rounded corners=2pt] (1.35,-2.6) rectangle (3.65,-2.05);
   \node[font=\tiny, text=figink] at (2.5,-2.325) {standard imitation model};
-  \draw[panelframe, rounded corners=2pt] (5.3,-2.6) rectangle (7.6,-2.05);
+  % light blue fill groups the intervention pipeline (border stays gray so
+  % the fill, not another saturated outline, does the grouping)
+  \draw[panelframe, fill=figchipfill, rounded corners=2pt]
+    (5.3,-2.6) rectangle (7.6,-2.05);
   \node[font=\tiny, text=figink] at (6.45,-2.325) {upweighted imitation model};
 
   % =========================================================================
@@ -142,10 +165,14 @@
   % design, lines 178–215, with +4.15 added to every y-coordinate)
   % =========================================================================
   % left future: the gap learned as competence (and recycled by dispatch)
+  % regional tints under the grid — over-served amber, under-served blue;
+  % the unfair future gets the starker contrast
+  \fill[figtintamber!70] (0.9,-2.9) -- (2.475,-2.9) -- (2.475,-3.8)
+    -- (2.925,-3.8) -- (2.925,-4.7) -- (0.9,-4.7) -- cycle;
+  \fill[figtintblue!80] (2.475,-2.9) -- (2.475,-3.8) -- (2.925,-3.8)
+    -- (2.925,-4.7) -- (4.05,-4.7) -- (4.05,-2.9) -- cycle;
   \draw[citygrid, xstep=0.45, ystep=0.45, shift={(0.9,-4.7)}]
     (0,0) grid (3.15,1.8);
-  \fill[black, opacity=0.08] (2.475,-2.9) -- (2.475,-3.8) -- (2.925,-3.8)
-    -- (2.925,-4.7) -- (4.05,-4.7) -- (4.05,-2.9) -- cycle;
   \draw[boundary] (2.475,-2.9) -- (2.475,-3.8) -- (2.925,-3.8)
     -- (2.925,-4.7);
   \draw[panelframe] (0.9,-4.7) rectangle (4.05,-2.9);
@@ -157,10 +184,13 @@
                      3.375/-4.025, 3.825/-4.475}
     \pic[figgray] at (\x,\y) {pick};
   % right future: fairness survives training; presence reaches under-served
+  % same tints, softened and more balanced — the gap has narrowed
+  \fill[figtintamber!40] (5.0,-2.9) -- (6.575,-2.9) -- (6.575,-3.8)
+    -- (7.025,-3.8) -- (7.025,-4.7) -- (5.0,-4.7) -- cycle;
+  \fill[figtintblue!60] (6.575,-2.9) -- (6.575,-3.8) -- (7.025,-3.8)
+    -- (7.025,-4.7) -- (8.15,-4.7) -- (8.15,-2.9) -- cycle;
   \draw[citygrid, xstep=0.45, ystep=0.45, shift={(5.0,-4.7)}]
     (0,0) grid (3.15,1.8);
-  \fill[black, opacity=0.08] (6.575,-2.9) -- (6.575,-3.8) -- (7.025,-3.8)
-    -- (7.025,-4.7) -- (8.15,-4.7) -- (8.15,-2.9) -- cycle;
   \draw[boundary] (6.575,-2.9) -- (6.575,-3.8) -- (7.025,-3.8)
     -- (7.025,-4.7);
   \draw[panelframe] (5.0,-4.7) rectangle (8.15,-2.9);
