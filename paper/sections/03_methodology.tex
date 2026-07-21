@@ -137,61 +137,6 @@ flatness and monotone-lift-up evidence behind the criterion, is reported in
 \S\ref{sec:exp-robustness}.
 % src: PAPER/objective-motivation/weight-sensitivity/EXTENDED_FRONTIER.md (flatness, monotone lift-up, criterion)
 
-\subsection{Attribution: Localizing the Deficit and the Remedy}\label{sec:attribution}
-
-The objective is optimized one trajectory at a time, so FATE must decide
-which trajectories are worth a slot in the edit budget. It uses two
-attribution mechanisms, one per editing phase (\S\ref{sec:editor}).
-\emph{Demand deficit attribution} locates where existing unfairness
-concentrates, and drives the demand-side phase; \emph{supply-gradient
-attribution} locates where added taxi presence would most improve fairness,
-and drives the supply-side phase. The first attributes the deficit; the
-second, the remedy.
-
-\textbf{Demand deficit attribution (drives trim).} Because $M$ and $I-H$ are
-idempotent, the explained share $r^{2}_{\mathrm{demo}}$ of
-Eq.~\eqref{eq:fdemo} admits an exact per-unit partition of the fairness
-deficit across active units (Appendix~\ref{app:derivations}), with a signed
-variant that separates over- from under-served units. The trajectories
-whose pickups land in the highest-deficit units are the ones trim edits.
-% src: PAPER/argument/03_fairness_theory.md (per-cell attribution)
-
-\textbf{Supply-gradient attribution (drives lift).} The second mechanism asks,
-of every active unit: \emph{how much fairer would the city's service be with
-marginally more taxi presence here, at this hour?} The quantity that answers
-it is the gradient of the objective with respect to supply, evaluated at the
-city's current state. To obtain it, we add an auxiliary
-\emph{supply-perturbation} input $\Delta S \in \mathbb{R}^{N}$ --- one entry
-of hypothetical added taxi presence per active unit --- evaluate every
-supply-dependent term at $S + \Delta S$, and read
-$\partial \mathcal{L} / \partial S_i$ by automatic differentiation at
-$\Delta S = 0$: the marginal fairness effect of added presence at each of the
-$N \approx 34{,}500$ active units, in one backward pass. (The same $\Delta S$
-pathway later carries the real supply consequences of lift edits,
-\S\ref{sec:editor}.)
-The result is a \emph{value-of-presence} map over the city: large where
-added presence would most repair the fairness terms --- units starved of
-supply relative to their demand and demographic profile --- and small or
-negative where presence is already abundant. The map's
-$F_{\mathrm{demo}}$ component has a closed form, given with its autograd
-verification in Appendix~\ref{app:derivations}.
-% src: PAPER/supply-lift/LIFT_ALGORITHM_REFERENCE.md §4.1 (autograd-verified closed form)
-
-To turn the map into candidates, a linearized-offset screen ranks
-trajectories whose tails could bend into high-value cells: every trajectory
-long enough to carry a movable tail (${\approx}80$k of the corpus's
-${\approx}95$k) is scored by its best bounded tail translation
-(Appendix~\ref{app:editor}), so the screen favors trajectories that already
-nearly serve the right areas, bending real behavior rather than inventing
-it.
-% src: PAPER/supply-lift/data/oracle.json (n_trajectories_len_ge3 80,427 of n_trajectories_total 95,297)
-The screen only \emph{nominates}: every selected
-trajectory is subsequently re-optimized individually under the full objective
-(\S\ref{sec:editor}), which derives the actual move. In assembling the edit
-budget, trim's selection takes precedence and lift fills the remaining slots
-with positive-score nominees.
-% src: PAPER/supply-lift/LIFT_ALGORITHM_REFERENCE.md §4.2–4.3 (screen; plan assembly)
-
 \subsection{Why Demand-Only Editing Cannot Help the Under-Served}\label{sec:leveling}
 
 Relocating pickups is a demand-side lever: on its own it improves the fairness
@@ -212,21 +157,21 @@ removing service, so nothing is destroyed --- yet the under-served group is
 not helped at all, which is precisely the objection's force.
 
 The behavior is the constrained optimum of the demand-only problem, not an
-optimizer artifact, for three compounding structural reasons. First,
-selection: demand deficit attribution (Eq.~\eqref{eq:unit-attr}) concentrates in
-over-served, high-residual cells, so under-served cells are never edit
-candidates. Second, leverage: with supply frozen,
+optimizer artifact, for three structural reasons. (i)~\emph{Selection:} the
+deficit attribution that selects trim's edits (\S\ref{sec:editor}) concentrates
+in over-served, high-residual cells, so under-served cells are never edit
+candidates. (ii)~\emph{Leverage:} with supply frozen,
 $\partial Y_i / \partial D_i = -S_i / D_i^{2}$ makes padding demand into
 high-supply advantaged cells roughly $32\times$ more consequential for $Y$
 than removing it from starved ones --- and 93\% of disadvantaged units sit at
 the demand floor $d_0$, where removing demand changes nothing.
 % src: PAPER/external-metrics/LEVELING_DOWN_MECHANISM.md; LIFT_ALGORITHM_REFERENCE.md §1 (32x; 93%)
-Third, the inequity itself is on the supply side --- median taxi presence is
-1.8 in disadvantaged cells against 17.6 in advantaged ones --- and a
-demand-only editor cannot touch supply. A greedy oracle (an unconstrained
-search that upper-bounds what any editor could achieve) closes the remaining
-escape route: the only demand-side way to raise the under-served group's
-service ratio is to delete its recorded pickups, which is perverse.
+(iii)~\emph{Supply-side inequity:} median taxi presence is 1.8 in disadvantaged
+versus 17.6 in advantaged cells, and a demand-only editor cannot touch supply.
+A greedy oracle (an unconstrained search that upper-bounds what any editor
+could achieve) closes the remaining escape route: the only demand-side way to
+raise the under-served group's service ratio is to delete its recorded
+pickups, which is perverse.
 % src: LIFT_ALGORITHM_REFERENCE.md §1 (median presence 1.8 vs 17.6; oracle perversity)
 
 The deeper cause unifies the editor's limitation with the metric's. Recorded
@@ -306,9 +251,18 @@ behavior into under-served cells. %Before building this mechanism we bounded
 %   \label{fig:overview}
 % \end{figure*}
 
-\subsection{The Trim+Lift Editor}\label{sec:editor}
+\subsection{The Editor: Attribution, Trim, and Lift}\label{sec:editor}
 
-\textbf{Shared machinery.} Both editing phases repurpose bounded adversarial
+\label{sec:attribution}%
+The objective is optimized one trajectory at a time, so FATE must decide which
+trajectories are worth a slot in the edit budget. Two attribution mechanisms
+make that decision, one per editing phase: \emph{demand deficit attribution}
+locates where existing unfairness concentrates and drives the demand-side
+phase, and \emph{supply-gradient attribution} locates where added taxi presence
+would most improve fairness and drives the supply-side phase --- the first
+attributes the deficit, the second the remedy.
+
+Both phases repurpose bounded adversarial
 perturbation \cite{goodfellow2015fgsm,kurakin2017ifgsm}, in its
 spatio-temporal instantiation \cite{hu2023stifgsm}, \emph{constructively} ---
 in the spirit of algorithmic recourse
@@ -331,28 +285,58 @@ budget. The discrete grid is bridged by a temperature-annealed soft cell
 assignment (Appendix~\ref{app:editor}).
 % src: PAPER/objective-motivation/MOTIVATION.md (editor); PAPER/argument/03_fairness_theory.md
 
-\textbf{Trim.} The demand-side phase: pickups selected by demand deficit
-attribution relocate within the $\varepsilon$-ball, padding recorded demand
-into over-served, supply-rich cells so their measured over-service falls
+\textbf{Trim: demand deficit attribution.} Because $M$ and $I-H$ are
+idempotent, the explained share $r^{2}_{\mathrm{demo}}$ of
+Eq.~\eqref{eq:fdemo} admits an exact per-unit partition of the fairness
+deficit across active units (Appendix~\ref{app:derivations}), with a signed
+variant that separates over- from under-served units. Trim edits the
+trajectories whose pickups land in the highest-deficit units: each selected
+pickup relocates within the $\varepsilon$-ball, padding recorded demand into
+over-served, supply-rich cells so their measured over-service falls
 (\S\ref{sec:leveling}). Its optimization path is exactly the demand-only
 editor's.
+% src: PAPER/argument/03_fairness_theory.md (per-cell attribution)
 
-\textbf{Lift.} Trajectories nominated by supply-gradient attribution have
-their whole seeking tail translated: the pickup moves by the full offset
-$\delta$, earlier tail states move by linearly tapered fractions, and the
-anchor state before the tail never moves --- so the trajectory physically
-cruises through the under-served area before picking up rather than
-teleporting into it. The moved states carry their supply with them,
-differentiably, contributing presence to the supply perturbation $\Delta S$
-over the same $5{\times}5$ neighborhood. Supply is thus \emph{endogenous}: the
-optimizer sees the supply consequences of its own moves and is rewarded for
-providing service where it improves fairness, not merely for redistributing
-demand. The fidelity term scores the actual rerouted tail at every iteration,
-and each completed edit updates a shared running state, so later edits
-optimize against the city as earlier edits left it. The taper weights,
-per-state presence mass, supply floor, and the
-$\mathrm{clamp}(S + \Delta S,\, s_0)$ evaluation are given in
+\textbf{Lift: supply-gradient attribution.} The second mechanism asks, of
+every active unit: \emph{how much fairer would the city's service be with
+marginally more taxi presence here, at this hour?} The quantity that answers
+it is the gradient of the objective with respect to supply. To obtain it we
+add an auxiliary \emph{supply-perturbation} input
+$\Delta S \in \mathbb{R}^{N}$ --- one entry of hypothetical added taxi presence
+per active unit --- evaluate every supply-dependent term at $S + \Delta S$, and
+read $\partial \mathcal{L} / \partial S_i$ by automatic differentiation at
+$\Delta S = 0$: the marginal fairness effect of added presence at each of the
+$N \approx 34{,}500$ active units, in one backward pass. The result is a
+\emph{value-of-presence} map over the city: large where added presence would
+most repair the fairness terms --- units starved of supply relative to their
+demand and demographic profile --- and small or negative where presence is
+already abundant. Its $F_{\mathrm{demo}}$ component has a closed form, given
+with its autograd verification in Appendix~\ref{app:derivations}.
+% src: PAPER/supply-lift/LIFT_ALGORITHM_REFERENCE.md §4.1 (autograd-verified closed form)
+
+To turn the map into candidates, a linearized-offset screen ranks trajectories
+whose tails could bend into high-value cells: every trajectory long enough to
+carry a movable tail (${\approx}80$k of the corpus's ${\approx}95$k) is scored
+by its best bounded tail translation (Appendix~\ref{app:editor}), so the screen
+favors trajectories that already nearly serve the right areas, bending real
+behavior rather than inventing it.
+% src: PAPER/supply-lift/data/oracle.json (n_trajectories_len_ge3 80,427 of n_trajectories_total 95,297)
+The screen only \emph{nominates}: each nominated trajectory then has its whole
+seeking tail translated under the full objective. The pickup moves by the full
+offset $\delta$, earlier tail states move by linearly tapered fractions, and
+the anchor state before the tail never moves --- so the trajectory physically
+cruises through the under-served area before picking up rather than teleporting
+into it. The moved states carry their supply with them, differentiably,
+contributing presence to the same $\Delta S$ over the $5{\times}5$
+neighborhood. Supply is thus \emph{endogenous}: the optimizer sees the supply
+consequences of its own moves and is rewarded for providing service where it
+improves fairness, not merely for redistributing demand. The fidelity term
+scores the actual rerouted tail at every iteration, and each completed edit
+updates a shared running state, so later edits optimize against the city as
+earlier edits left it. The taper weights, per-state presence mass, supply
+floor, and the $\mathrm{clamp}(S + \Delta S,\, s_0)$ evaluation are given in
 Appendix~\ref{app:editor}.
+% src: PAPER/supply-lift/LIFT_ALGORITHM_REFERENCE.md §4.2–4.3 (screen; plan assembly)
 
 \textbf{Physical validity.} Edits must satisfy the same king-move rule the
 source trajectories are filtered on --- consecutive states move at most one

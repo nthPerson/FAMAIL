@@ -12,10 +12,10 @@ reweighing \cite{kamirancalders2012} and disparate-impact repair of feature
 distributions \cite{feldman2015} --- were built for labeled classification
 data. Among formal fairness definitions \cite{vermarubin2018}, FATE targets
 conditional statistical parity \cite{corbettdavies2017}: disparities count
-only after permitted factors are adjusted for. As formulated, however, none
-of these instruments operates on sequential demonstrations, and none measures
-fairness over a spatial service distribution --- the setting this paper
-requires. Both instruments reappear here in unfamiliar roles: reweighing
+only after permitted factors are adjusted for. As formulated, none operates on
+sequential demonstrations or measures fairness over a spatial service
+distribution --- the setting this paper requires. Both instruments reappear
+here in unfamiliar roles: reweighing
 applied to demonstrations rather than labeled examples, and the parity
 condition transplanted from a classifier's predictions to a continuous
 spatial service ratio and made a differentiable editing objective.
@@ -39,9 +39,8 @@ Imitation learning is an established route to urban mobility models:
 conditional GAIL variants recover taxi-driver strategies from trajectories
 \cite{zhang2019cgail,zhang2022cgail}, explainable extensions expose the
 recovered policies \cite{pan2020xgail}, and neural simulators generate human
-mobility wholesale \cite{feng2020simulate} --- but this literature optimizes
-realism and none of it audits or repairs the demographic fairness of the
-imitated allocation. A parallel line establishes that individual mobility is
+mobility \cite{feng2020simulate} --- but this literature optimizes realism, and
+none audits or repairs the demographic fairness of the imitated allocation. A parallel line establishes that individual mobility is
 highly identifying: trajectory-user linking recovers who generated a trace
 \cite{gao2017tuler,zhou2018tulvae,miao2020deeptul}, and Siamese verification
 decides whether two seeking traces share a driver \cite{ren2020stsiamese}.
