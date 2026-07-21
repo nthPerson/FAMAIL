@@ -75,8 +75,12 @@
     \draw[boundary] (4,8) -- (4,5) -- (5,5) -- (5,3) -- (6,3) -- (6,1)
       -- (7,1) -- (7,0);
     \draw[panelframe] (0,0) rectangle (10,8);
+    % "locate the deficit" = §3.3's language (Attribution: Localizing the
+    % Deficit...); parallel to panels (2)/(3): verb phrase after the colon
     \node[anchor=south west, font=\footnotesize, text=figink] at (0,8.2)
-      {(1) The service gap};
+      {(1) Attribute: locate the deficit};
+    % \node[anchor=south west, font=\footnotesize, text=figink] at (0,8.2)
+    %   {(1) The service gap};
     % advantaged district: dense presence (cell-snapped), few pickups
     \foreach \x/\y in {1.5/6.5, 2.5/6.5, 3.5/6.5, 1.5/5.5, 3.5/5.5,
                        1.5/4.5, 2.5/4.5, 3.5/4.5, 2.5/7.5, 0.5/5.5}
@@ -95,7 +99,7 @@
       {disadvantaged district\\(under-served)};
     % legend (lower left)
     \fill[white, opacity=0.78, rounded corners=1pt]
-      (0.12,0.08) rectangle (3.15,1.45);
+      (0.12,0.08) rectangle (3.6,1.45);
     \pic at (0.5,1.05) {taxi};
     \node[anchor=west, font=\tiny, text=figink] at (0.85,1.05) {taxi presence};
     \pic[color=figgray] at (0.5,0.4) {pick};
@@ -142,7 +146,7 @@
       {gap closes from the top:\\under-served untouched};
     % legend (lower left)
     \fill[white, opacity=0.78, rounded corners=1pt]
-      (0.12,0.08) rectangle (5.0,1.45);
+      (0.12,0.08) rectangle (6.0,1.45);
     \pic[color=figtrim!50] at (0.5,1.05) {pick};
     \node[anchor=west, font=\tiny, text=figink] at (0.85,1.05)
       {original position (vacated)};
@@ -187,7 +191,9 @@
     \foreach \x/\y in {6.5/2.5, 7.5/1.5, 8.5/2.5, 6.5/1.5, 8.5/3.5,
                        9.5/1.5, 5.5/0.5, 9.5/4.5}
       \pic[color=figgray] at (\x,\y) {pick};
-    \foreach \x/\y in {0.5/4.5, 1.5/2.5, 4.5/6.5, 9.5/5.5, 5.5/5.5}
+    % (9.5,5.5) -> (8.5,4.5) 2026-07-20: cleared out from under the legend
+    % box, which grew a line for the wrapped "value of added presence"
+    \foreach \x/\y in {0.5/4.5, 1.5/2.5, 4.5/6.5, 8.5/4.5, 5.5/5.5}
       \pic at (\x,\y) {taxi};
     % one trajectory, two futures. Solid ink approach (per-state dots) to the
     % anchor; original tail (solid gray) reaches its recorded pickup; the
@@ -206,9 +212,9 @@
     \foreach \x/\y in {4.1/3.4, 5.0/3.0, 6.2/2.7}
       \fill[figaccent] (\x,\y) circle (0.09);
     \pic[color=figaccent] at (7.5,2.5) {pick};
-    % legend (upper right)
+    % legend (upper right; bottom extended for the two-line third entry)
     \fill[white, opacity=0.78, rounded corners=1pt]
-      (5.85,5.85) rectangle (9.95,7.85);
+      (5.85,5.45) rectangle (9.95,7.85);
     \draw[figgray, line width=1pt] (6.1,7.5) -- (7.0,7.5);
     \node[anchor=west, font=\tiny, text=figink] at (7.15,7.5)
       {original tail};
@@ -216,11 +222,11 @@
       (6.1,6.9) -- (7.0,6.9);
     \node[anchor=west, font=\tiny, text=figink] at (7.15,6.9)
       {rerouted tail (lift)};
-    % three-step opacity gradient icon, flush with the line icons above
-    \fill[figaccent, fill opacity=0.07] (6.10,6.12) rectangle (6.38,6.48);
-    \fill[figaccent, fill opacity=0.15] (6.41,6.12) rectangle (6.69,6.48);
-    \fill[figaccent, fill opacity=0.26] (6.72,6.12) rectangle (7.00,6.48);
-    \node[anchor=west, font=\tiny, text=figink] at (7.15,6.3)
-      {value of added presence};
+    % three-step opacity gradient icon, centered on the two-line label
+    \fill[figaccent, fill opacity=0.07] (6.10,5.97) rectangle (6.38,6.33);
+    \fill[figaccent, fill opacity=0.15] (6.41,5.97) rectangle (6.69,6.33);
+    \fill[figaccent, fill opacity=0.26] (6.72,5.97) rectangle (7.00,6.33);
+    \node[anchor=west, font=\tiny, text=figink, align=left] at (7.15,6.15)
+      {value of added\\presence};
   \end{scope}
 \end{tikzpicture}
