@@ -76,6 +76,9 @@ in the repo as design history).
   +0.1027, CI-significant; tier-2 total +0.0493, significantly positive) —
   the tier-1 net-negative was a fractional-presence accounting artifact.
   \S4.7 states this; Dr. Zhang has not yet been walked through it.
-- **Brighter colors** (promised for both figures either way): direction is
-  raising chroma / a second accent while staying grayscale- and CVD-safe —
-  can preview once the Figure-1 geometry question is settled.
+- **Brighter colors — done, on display in these very renders**: two-hue
+  system (muted cobalt = added/edited, muted amber = excess/trimmed,
+  charcoal neutrals, pale regional tints), applied to both figures and both
+  Figure-1 variants; grayscale- and CVD-checked. Panels B/C of the
+  comparison sheet show it; panel A keeps the old palette (archived as-was),
+  so the sheet doubles as a before/after.

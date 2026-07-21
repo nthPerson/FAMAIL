@@ -44,8 +44,15 @@ Cycle 1, OpenReview; "we can always modify the submission"). Full paper due
   stick figure = service pickup, car glyph = taxi presence — plus legend
   updates.
 - **Figure 1 redesigned** — see §2, the decision item for this meeting.
-- Brighter/more engaging colors for both figures are queued next (promised
-  either way; will stay grayscale- and CVD-safe).
+- **Color refresh applied to both figures** (the "more engaging colors"
+  promised in Robert's email): a two-hue system — muted cobalt = added/
+  edited (the FATE intervention), muted amber = excess/trimmed, charcoal
+  neutrals, and pale amber/blue *regional* tints marking over-/under-served
+  areas in both figures' maps. Figure 1's corpus boxes now show real
+  GPS-trace renderings (the edited one with its blue slice and "+").
+  Verified grayscale-safe and CVD-safe (blue–amber is the colorblind-safe
+  axis; simulated deuteranopia/protanopia separation is large; shapes,
+  dashes, and "+" marks still carry all semantics without color).
 
 **Experiments closed since Meeting 43** (all landed in §4; no runs pending)
 - **SF two-tier supply recount (D1):** counting taxis as *distinct vehicles*
@@ -120,5 +127,6 @@ objection).
    Meeting-43 mandate.
 3. **Anonymity / artifact repo** — PII scrub + anonymous repo status check
    before the full-paper submission (Meeting-43 workstream).
-4. **Colors** — direction preview for the brighter palette, once the
-   Figure-1 geometry is settled by this meeting.
+4. **Colors** — the refreshed palette is already applied to both figures
+   (and to both Figure-1 variants, so the A/B/C comparison also previews
+   it); confirm Dr. Zhang is happy with the direction.
