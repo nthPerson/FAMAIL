@@ -12,11 +12,11 @@ reweighing \cite{kamirancalders2012} and disparate-impact repair of feature
 distributions \cite{feldman2015} --- were built for labeled classification
 data. Among formal fairness definitions \cite{vermarubin2018}, FATE targets
 conditional statistical parity \cite{corbettdavies2017}: disparities count
-only after permitted factors are adjusted for. As formulated, none operates on
+only after permitted factors are adjusted for. As formulated, none operate on
 sequential demonstrations or measures fairness over a spatial service
 distribution --- the setting this paper requires. Both instruments reappear
 here in unfamiliar roles: reweighing
-applied to demonstrations rather than labeled examples, and the parity
+applied to edited demonstrations rather than labeled examples, and the parity
 condition transplanted from a classifier's predictions to a continuous
 spatial service ratio and made a differentiable editing objective.
 
@@ -67,14 +67,14 @@ one for preserving driver identity.
 \textbf{Leveling down and feedback loops.} Two critiques frame what a
 fairness gain should mean. The leveling-down objection --- equality achieved
 by making the better-off worse rather than the worse-off better --- originates
-in the ethics of equality \cite{parfit1997} and has been pressed against
+in the ethics of equality \cite{parfit1997} and has been applied to
 machine-learning fairness constraints \cite{mittelstadt2024}, with data
 augmentation observed to be the one intervention class that helps the
 disadvantaged group instead \cite{zietlow2022}. Feedback-loop analyses show
 that allocation systems trained on their own historical output entrench a
 self-reinforcing bias \cite{ensign2018,lumisaac2016} --- in our domain, the
 continued under-service of already-underserved neighborhoods. Both critiques
-are load-bearing here: our own demand-only editor closes gaps only from the
-top --- an analogue of leveling down (\S\ref{sec:leveling}) --- we build the
+are applicable here: our own demand-only editor \emph{trim} only manipulates 
+over-service --- an analogue of leveling down (\S\ref{sec:leveling}) --- we build the
 supply channel expressly to lift up, and state demand endogeneity as the
 bound on what any demand-adjusted metric can see.

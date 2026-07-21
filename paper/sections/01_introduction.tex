@@ -74,8 +74,8 @@ of being averaged away.
 
 FATE's first editing phase, \emph{trim}, moves only demand: it relocates
 recorded pickups within over-served areas, improving measured fairness on the
-primary city without helping the under-served group at all. Every one of the
-2{,}455 pickups it edits originates in an advantaged cell and not one lands in
+primary city without helping the under-served group at all. Every one of the 
+pickups it edits originates in an advantaged cell and not one lands in
 a disadvantaged cell, so the gap closes only by reducing over-service ---
 analogous to the classic leveling-down objection to equalization
 \cite{parfit1997,mittelstadt2024}, though here service is relocated rather
@@ -93,25 +93,14 @@ Shenzhen by $+0.0226$
 and add statistically robust taxi presence to the under-served group
 (\S\ref{sec:exp-data-level}).
 % src: PAPER/supply-lift/data/a10/shz_a10_channel_decomposition.json (channels.supply / supply_tier2)
-On San Francisco the protocol reruns with no algorithm, metric, or
-fidelity change, and the data-level, external-metric, and downstream
+On San Francisco the protocol reruns with no algorithm or metric 
+change, and the data-level, external-metric, and downstream
 conclusions reproduce ($+0.0316$; \S\ref{sec:exp-sf}).
 % src: PAPER/supply-lift/data/a10/sf12_a10_metrics.json (run r1)
 
-% Neither edit survives training on its own. The edited slice is a tenth of
-% the corpus, and a vanilla behavior-cloning objective averages it away ---
-% a genuine null we verify rather than assume. Upweighting the edited
-% demonstrations recovers the fairness with a monotone dose-response, and
-% two controls pin the recovery to the edit itself: neither upweighting an
-% equal-sized random subset nor upweighting the corpus's already-fairest
-% trajectories reproduces it. Because a fairness method scored on its own
-% objective proves little, evaluation rides on established measures the
-% objective never optimizes --- demographic parity, disparate impact
-% ($+0.0162$ on the primary city's migrant axis), and the Theil index ---
-% computed before and after editing.
 Neither edit survives training on its own. The edited slice is a tenth of
 the corpus, and a vanilla behavior-cloning objective averages it away ---
-a genuine null we verify rather than assume (\S\ref{sec:exp-downstream}). Upweighting the edited
+a genuine null we verify (\S\ref{sec:exp-downstream}). Upweighting the edited
 demonstrations recovers the fairness with a monotone dose-response, and
 two controls pin the recovery to the edit itself: neither upweighting an
 equal-sized random subset nor upweighting the corpus's already-fairest
@@ -132,20 +121,34 @@ and its untargeted placebo degrades fairness outright
 
 \textbf{Contributions.}
 \begin{itemize}
-\item \textbf{A fairness-aware trajectory editor.} Two bounded editing phases
-under one differentiable objective that makes the supply consequences of
-edits endogenous, each driven by an exact attribution mechanism
+\item \textbf{A fairness-aware trajectory editor.} Two editing phases under 
+one differentiable objective, each driven by an exact attribution mechanism.
 (\S\ref{sec:attribution}).
-\item \textbf{A structural diagnosis of demand-only editing.} Demand-only
-editing closes fairness gaps only from the top; we show why --- selection,
-leverage, and frozen supply --- and that a differentiable supply channel is
-the non-perverse remedy.
+\item \textbf{A structural diagnosis of demand-only editing.} Demand-only 
+editing improves fairness without touching the under-served; we 
+show why a differentiable supply channel is the remedy.
 \item \textbf{A transfer recipe with edit-specificity controls.}
-Upweighted imitation carries the data-level fairness into trained policies,
-with random-upweighting and most-fair selection controls isolating the edit
-as the cause.
-\item \textbf{Two-city validation on never-optimized measures.} The full
-protocol runs on Shenzhen and San Francisco, scored on external fairness
-measures the objective never optimizes, against a demographic-oversampling
-baseline on the primary city.
+Upweighted imitation carries fairness into trained policies, with controls 
+isolating the edit as the cause.
+\item \textbf{Two-city validation on never-optimized measures.} The full 
+protocol runs on Shenzhen and San Francisco trajectories, scored on external 
+fairness measures the objective never optimizes.
 \end{itemize}
+% \begin{itemize}
+% \item \textbf{A fairness-aware trajectory editor.} Two bounded editing phases
+% under one differentiable objective that makes the supply consequences of
+% edits endogenous, each driven by an exact attribution mechanism
+% (\S\ref{sec:attribution}).
+% \item \textbf{A structural diagnosis of demand-only editing.} Demand-only
+% editing closes fairness gaps only from the top; we show why --- selection,
+% leverage, and frozen supply --- and that a differentiable supply channel is
+% the non-perverse remedy.
+% \item \textbf{A transfer recipe with edit-specificity controls.}
+% Upweighted imitation carries the data-level fairness into trained policies,
+% with random-upweighting and most-fair selection controls isolating the edit
+% as the cause.
+% \item \textbf{Two-city validation on never-optimized measures.} The full
+% protocol runs on Shenzhen and San Francisco, scored on external fairness
+% measures the objective never optimizes, against a demographic-oversampling
+% baseline on the primary city.
+% \end{itemize}
