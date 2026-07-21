@@ -3,87 +3,79 @@
 % Five themes, each closing with a one-sentence FATE contrast; positioning prose only —
 % mechanism prose lives in §3. All cite keys are pre-existing refs.bib entries.
 
-\textbf{Fairness interventions in machine learning.} Algorithmic fairness
-interventions are conventionally grouped by where they act: pre-processing
-methods repair the training data, in-processing methods constrain the
-learner, and post-processing methods adjust its outputs
-\cite{barocas2023}. FATE belongs to the pre-processing
-family, whose canonical instruments --- instance reweighing
-\cite{kamirancalders2012} and disparate-impact repair of feature
+\textbf{Fairness interventions in machine learning.} Fairness interventions
+are conventionally grouped by where they act: pre-processing methods repair
+the training data, in-processing methods constrain the learner, and
+post-processing methods adjust its outputs \cite{barocas2023}. FATE belongs
+to the pre-processing family, whose canonical instruments --- instance
+reweighing \cite{kamirancalders2012} and disparate-impact repair of feature
 distributions \cite{feldman2015} --- were built for labeled classification
-data. Among the many formal fairness definitions \cite{vermarubin2018},
-the notion FATE targets is conditional statistical parity
-\cite{corbettdavies2017}: disparities count only after permitted factors
-are adjusted for. As formulated, however, none of these instruments
-operates on sequential demonstrations, and none measures fairness over a
-spatial service distribution --- the setting this paper requires. Both
-instruments reappear here in unfamiliar roles ---
-reweighing applied to demonstrations rather than labeled examples, and the
-parity condition transplanted from a classifier's predictions to a
-continuous spatial service ratio and made a differentiable editing
-objective.
+data. Among formal fairness definitions \cite{vermarubin2018}, FATE targets
+conditional statistical parity \cite{corbettdavies2017}: disparities count
+only after permitted factors are adjusted for. As formulated, however, none
+of these instruments operates on sequential demonstrations, and none measures
+fairness over a spatial service distribution --- the setting this paper
+requires. Both instruments reappear here in unfamiliar roles: reweighing
+applied to demonstrations rather than labeled examples, and the parity
+condition transplanted from a classifier's predictions to a continuous
+spatial service ratio and made a differentiable editing objective.
 
-\textbf{Fairness in urban transportation.} Transportation equity has its
-own measurement tradition, in which the Gini index over service
-distributions is the most widely used instrument
-\cite{horchergraham2021,karner2024}, alongside entropy- and
-welfare-based indices \cite{theil1967,atkinson1970,demaio2007}. On the
-modeling side, the closest neighbor to this work regularizes a ride-hailing
-demand predictor in-processing, shrinking a racial prediction-error gap
-from 0.361 to 0.084 \cite{zheng2023}. Regularizing the predictor,
+\textbf{Fairness in urban transportation.} Transportation equity has its own
+measurement tradition, in which the Gini index over service distributions is
+the most widely used instrument \cite{horchergraham2021,karner2024},
+alongside entropy- and welfare-based indices
+\cite{theil1967,atkinson1970,demaio2007}. The closest modeling neighbor
+regularizes a ride-hailing demand predictor at training time, shrinking a
+racial prediction-error gap from 0.361 to 0.084 \cite{zheng2023}.
 % verified: paper/reviews/2026-07-12-prose-citation-audit.md (zheng2023 Table 2, Conv-LSTM arm)
-however, leaves the demonstrations biased: the correction lives inside one
-model's loss and does not transfer to any other consumer of the data.
-FATE addresses the same bias one stage earlier --- on the demonstrations
-the model trains on, rather than inside its loss --- and is scored on
-equity measures its objective never optimizes.
+That correction, however, leaves the demonstrations biased: it lives inside
+one model's loss and does not transfer to any other consumer of the data.
+FATE addresses the same bias one stage earlier --- on the demonstrations the
+model trains on, rather than inside its loss --- and is scored on equity
+measures its objective never optimizes.
 
 \textbf{Imitation learning for mobility, and mobility as identity.}
 Imitation learning is an established route to urban mobility models:
 conditional GAIL variants recover taxi-driver strategies from trajectories
 \cite{zhang2019cgail,zhang2022cgail}, explainable extensions expose the
-recovered policies \cite{pan2020xgail}, and neural simulators generate
-human mobility wholesale \cite{feng2020simulate}. That literature
-optimizes realism; none of it audits or repairs the demographic fairness
-of the imitated allocation. A parallel line establishes that individual
-mobility is highly identifying: trajectory-user linking recovers who
-generated a trace \cite{gao2017tuler,zhou2018tulvae,miao2020deeptul}, and
-Siamese verification decides whether two seeking traces share a driver
-\cite{ren2020stsiamese}. FATE contributes no new generator or imitation
-algorithm; it edits the demonstrations such models consume, and it
-repurposes the identity-verification line as a frozen realism guardrail
---- avoiding the instability of a live adversarial game
-\cite{hoermon2016}.
+recovered policies \cite{pan2020xgail}, and neural simulators generate human
+mobility wholesale \cite{feng2020simulate} --- but this literature optimizes
+realism and none of it audits or repairs the demographic fairness of the
+imitated allocation. A parallel line establishes that individual mobility is
+highly identifying: trajectory-user linking recovers who generated a trace
+\cite{gao2017tuler,zhou2018tulvae,miao2020deeptul}, and Siamese verification
+decides whether two seeking traces share a driver \cite{ren2020stsiamese}.
+FATE contributes no new generator or imitation algorithm; it edits the
+demonstrations such models consume, and repurposes the identity-verification
+line as a frozen realism guardrail, avoiding the instability of a live
+adversarial game \cite{hoermon2016}.
 
 \textbf{Adversarial perturbation and recourse.} The editing machinery
 descends from adversarial examples: bounded signed-gradient perturbations
 \cite{goodfellow2015fgsm,kurakin2017ifgsm} instantiated spatio-temporally
 \cite{hu2023stifgsm}, with discrete structure bridged by continuous
 relaxation \cite{jang2017gumbel,maddison2017concrete} and straight-through
-estimation \cite{bengio2013ste}. Algorithmic recourse established that the
-same tooling built for counterfactuals can prescribe beneficial change
-rather than attack \cite{ustun2019recourse,wachter2018counterfactual}, but
-for one individual's feature vector to flip one decision --- with no
-population-level fairness target and no obligation to preserve a data
-distribution's realism. FATE extends that constructive reading from the
-individual to the population: the bounded perturbation edits real
-trajectories to reduce demographic service inequity, and the
-$\varepsilon$-bound is reinterpreted from an attack-stealth budget to a
-budget for preserving driver identity.
+estimation \cite{bengio2013ste}. Algorithmic recourse showed that the same
+counterfactual tooling can prescribe beneficial change rather than attack
+\cite{ustun2019recourse,wachter2018counterfactual}, but only to flip one
+individual's decision --- with no population-level fairness target and no
+obligation to preserve a data distribution's realism. FATE extends that
+constructive reading from the individual to the population: the bounded
+perturbation edits real trajectories to reduce demographic service inequity,
+and the $\varepsilon$-bound is reinterpreted from an attack-stealth budget to
+one for preserving driver identity.
 
 \textbf{Leveling down and feedback loops.} Two critiques frame what a
-fairness gain should mean. The leveling-down objection --- equality
-achieved by making the better-off worse rather than the worse-off better
---- originates in the ethics of equality \cite{parfit1997} and has been
-pressed concretely against machine-learning fairness constraints
-\cite{mittelstadt2024}, with data augmentation observed to be the one
-intervention class that helps the disadvantaged group instead
-\cite{zietlow2022}. Feedback-loop analyses show that allocation systems
-trained on their own historical output entrench a self-reinforcing
-allocation bias \cite{ensign2018,lumisaac2016} --- in our domain, the
-under-service of the neighborhoods that were under-served to begin with. Both critiques are load-bearing in this
-paper: we show our own demand-only editor closes gaps only from the top ---
-an analogue of leveling down
-(\S\ref{sec:leveling}) --- build the supply channel expressly to lift up, and
-state demand endogeneity as the bound on what any demand-adjusted metric
-can see.
+fairness gain should mean. The leveling-down objection --- equality achieved
+by making the better-off worse rather than the worse-off better --- originates
+in the ethics of equality \cite{parfit1997} and has been pressed against
+machine-learning fairness constraints \cite{mittelstadt2024}, with data
+augmentation observed to be the one intervention class that helps the
+disadvantaged group instead \cite{zietlow2022}. Feedback-loop analyses show
+that allocation systems trained on their own historical output entrench a
+self-reinforcing bias \cite{ensign2018,lumisaac2016} --- in our domain, the
+continued under-service of already-underserved neighborhoods. Both critiques
+are load-bearing here: our own demand-only editor closes gaps only from the
+top --- an analogue of leveling down (\S\ref{sec:leveling}) --- we build the
+supply channel expressly to lift up, and state demand endogeneity as the
+bound on what any demand-adjusted metric can see.

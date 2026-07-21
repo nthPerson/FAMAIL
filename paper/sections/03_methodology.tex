@@ -194,24 +194,22 @@ with positive-score nominees.
 
 \subsection{Why Demand-Only Editing Cannot Help the Under-Served}\label{sec:leveling}
 
-Relocating pickups is a demand-side lever, and on its own it improves the
-fairness metrics in a specific, troubling way: it redistributes service among
-better-served areas while the under-served group gains nothing. On the
-primary city, every one of the 2{,}455 pickups edited by the demand-only
-editor originated in advantaged cells and not one landed in a disadvantaged
-cell; the under-served group's service was untouched, and the demographic gap
-closed only from the top.
+Relocating pickups is a demand-side lever: on its own it improves the fairness
+metrics only by redistributing service among better-served areas, while the
+under-served group gains nothing. On the primary city, every one of the
+2{,}455 pickups edited by the demand-only editor originated in advantaged
+cells and not one landed in a disadvantaged cell, so the gap closed only from
+the top.
 % src: PAPER/external-metrics/LEVELING_DOWN_MECHANISM.md (2,455/2,455 flow analysis; pre-supply-lift doc) — corroborated at alpha*: PAPER/supply-lift/data/a10/shz_trimonly_a10_external_fairness.json (mean(Y|disadv) 7.0734 -> 7.0734 exactly)
 The pattern is analogous to the classic leveling-down objection to
 equalization \cite{parfit1997} --- measured equality improves while the
 worst-off gain nothing --- recently formalized for machine-learning fairness
-together with a prescription to level \emph{up} instead \cite{mittelstadt2024};
-notably, data augmentation has been observed to be the one intervention that
-helps the disadvantaged group rather than pulling others down
-\cite{zietlow2022}. The analogy is inexact in one instructive way: trim
-\emph{relocates} pickups under conservation rather than removing service, so
-nothing is destroyed --- yet the under-served group is not helped at all,
-which is precisely the objection's force.
+with a prescription to level \emph{up} instead \cite{mittelstadt2024}; data
+augmentation is the one intervention observed to help the disadvantaged group
+rather than pull others down \cite{zietlow2022}. The analogy is inexact in one
+instructive way: trim \emph{relocates} pickups under conservation rather than
+removing service, so nothing is destroyed --- yet the under-served group is
+not helped at all, which is precisely the objection's force.
 
 The behavior is the constrained optimum of the demand-only problem, not an
 optimizer artifact, for three compounding structural reasons. First,
@@ -232,16 +230,16 @@ service ratio is to delete its recorded pickups, which is perverse.
 % src: LIFT_ALGORITHM_REFERENCE.md §1 (median presence 1.8 vs 17.6; oracle perversity)
 
 The deeper cause unifies the editor's limitation with the metric's. Recorded
-demand is not exogenous: where service has historically been thin, demand is
-suppressed and latent --- the feedback-loop pathology documented for other
-public-allocation systems \cite{ensign2018,lumisaac2016}. The same censored
-demand that hides inequity from a demand-adjusted metric leaves a demand-only
-editor nothing to move in under-served areas.
+demand is not exogenous: where service has been thin, demand is suppressed and
+latent --- the feedback-loop pathology documented for other public-allocation
+systems \cite{ensign2018,lumisaac2016} --- so the same censored demand that
+hides inequity from a demand-adjusted metric leaves a demand-only editor
+nothing to move in under-served areas.
 
 This sets up the editor's second phase. The one non-perverse lever is the
 numerator: $\partial Y_i / \partial S_i = 1 / \max(D_i, d_0) > 0$ everywhere
 --- at the demand floor, $\Delta Y = 2\,\Delta S$ --- so raising under-served
-service requires adding taxi \emph{presence}, that is, rerouting real seeking
+service requires adding taxi \emph{presence}: rerouting real seeking
 behavior into under-served cells. %Before building this mechanism we bounded
 %its headroom with a greedy oracle, which cleared a pre-registered go/no-go
 %threshold on the supply channel alone (\S\ref{sec:experiments}).
@@ -382,8 +380,7 @@ gradient choosing each edit's character --- is a natural extension we leave
 as future work.
 % src: docs/presentations/meeting_42_update/trim_plus_lift_explainer.md §3; LIFT_ALGORITHM_REFERENCE.md §14
 
-\subsection{Downstream Recipe: Upweighted Imitation}\label{sec:downstream}
-
+\textbf{Downstream recipe: upweighted imitation.}\label{sec:downstream}
 Editing alone is necessary but not sufficient. The edited slice is small by
 design --- roughly a tenth of the corpus ---
 % (derived: 10,000 / 95,297 ≈ 10.5%; src: PAPER/baselines/demographic-oversampling/FINDINGS.md corpus count)

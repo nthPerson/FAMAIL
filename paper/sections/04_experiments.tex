@@ -10,25 +10,25 @@
 
 \subsection{Experimental Setup}\label{sec:exp-setup}
 
-\textbf{Datasets.} The primary city is Shenzhen: a 50-driver sample of real taxi
-GPS trajectories on a $48{\times}90$ grid of $0.01^{\circ}$ cells, with
+\textbf{Datasets.} The primary city is Shenzhen: a 50-driver sample of real
+taxi GPS trajectories on a $48{\times}90$ grid of $0.01^{\circ}$ cells, with
 district-level demographics. Raw data contained per-driver ``stuck-GPS'' pickup
-sinks (single plates emitting thousands of phantom pickups); a signature rule
-removed 106{,}677 phantom pickups before any experiment.
+sinks --- single plates emitting thousands of phantom pickups --- and a
+signature rule removed 106{,}677 of them before any experiment.
 % src: PAPER/argument/02_datasets.md (grid, cleanup counts)
 The external-validity city is San Francisco (Cabspotting): a 12-driver,
-fleet-density-matched subsample (\texttt{sf12}, $32{\times}30$ grid) with the
-same demographic feature names filled from ACS tract values. Density matching
-is required --- the full 536-taxi fleet saturates the supply measure and leaves
+fleet-density-matched subsample (\texttt{sf12}, $32{\times}30$ grid), same
+demographic feature names filled from ACS tract values. Density matching is
+required --- the full 536-taxi fleet saturates the supply measure and leaves
 no editable fairness gradient.
 % src: PAPER/argument/02_datasets.md (sf12 selection, density matching)
 
 \textbf{Editor configuration.} All edited corpora use the trim+lift editor of
 \S\ref{sec:editor} with $\alpha = (0.1, 0.8, 0.1)$ --- the configuration the
-three-class criterion picks on the measured frontier
-(\S\ref{sec:exp-robustness}) --- $\varepsilon = 2$, and the
-skip-on-infeasible rule. Shenzhen: $k = 10{,}000$ (2{,}337 trim + 7{,}545
-lift after filtering); San Francisco: $k = 2{,}000$ (1{,}330 trim + 629 lift).
+three-class criterion selects (\S\ref{sec:exp-robustness}) --- $\varepsilon =
+2$, and the skip-on-infeasible rule. Shenzhen: $k = 10{,}000$ (2{,}337 trim +
+7{,}545 lift after filtering); San Francisco: $k = 2{,}000$ (1{,}330 trim +
+629 lift).
 % src: famail_temporal/results/2026-07-10T02-06-37_alpha_sweep_s10_c80_f10_filtered/metrics.json (SZ split)
 % src: famail_temporal/results/2026-07-11T11-31-55_supply_lift_a10_sf12_filtered/metrics.json (SF split)
 % src: PAPER/objective-motivation/weight-sensitivity/DECISION.md + EXTENDED_FRONTIER.md (decision 2026-07-11)
@@ -145,11 +145,10 @@ history match), so it is the stricter semantics, not an approximation.
 distributional cost (whole-tail relocation shifts trajectory-shape statistics
 more than a pickup-only move) are re-measured on the adopted corpus:
 Fidelity-A 0.844 vs.\ raw 0.848; corpus-level Fidelity-B 0.187, concentrated
-in exactly the components a rerouted tail must move --- terminal cell
-(0.635), net displacement (0.147), coverage (0.142) --- while trajectory
-length, which neither editing phase alters, barely registers (0.060) --- a
-by-design trade-off we disclose rather than net out.
-% src: famail_temporal/results/level1_table_v2/supply_lift_shz_5seed/level1_v2_multiseed.json (edited row + fidelity_b_per_component)
+in exactly the components a rerouted tail must move
+(Appendix~\ref{app:results}) --- a by-design trade-off we disclose rather than
+net out.
+% src: famail_temporal/results/level1_table_v2/supply_lift_shz_5seed/level1_v2_multiseed.json (edited row: Fid-A, Fid-B 0.187)
 
 \textbf{Provenance disclosures.} About 5\% of trim edits (118/2{,}455) had no
 king-compliant repair and were reverted post hoc; the rule was adopted before
@@ -219,7 +218,7 @@ before returns in some seeds here, while the SF GAN stays uniformly healthy
 policy trained on the edited corpus at uniform weight is not fairer than one
 trained on raw: paired $\Delta F_{\mathrm{demo}} = +0.0016$ ($n = 12$,
 7/12 positive, $p = .11$, n.s.) --- the null that motivates the upweighting
-recipe of \S\ref{sec:downstream}.
+recipe (\S\ref{sec:downstream}).
 % src: PAPER/supply-lift/data/a10/shz_a10_wbc_n12_pooled_stats.json (edited arm pooled seeds 0-11; was +0.0022 n=6 p=.16 pre-pooling; WBC-N12 2026-07-18)
 
 \textbf{Upweighting recovers it, edit-specifically.} With the edited
@@ -286,23 +285,21 @@ an identical pair (Appendix~\ref{app:editor}). The random-start arms are the
 reported ones. Results: Table~\ref{tab:baselines}.
 
 One result lands against the pre-registered expectation: random jitter
-\emph{does} raise
-$F_{\mathrm{demo}}$, by $+0.0135$ --- indiscriminately diffusing the selected
-trajectories diffuses their over-service too --- but it does so by breaking
-the trajectories: 98.8\% of its perturbed trajectories violate king-move
-adjacency and its distributional divergence reaches 0.447, against the
-edited corpus's disclosed 0.187 (iFGSM: 54.4\%, 0.143; FGSM: 91.4\%,
-0.339; FATE edits are king-compliant by construction). Identity fidelity
-survives every arm ($\approx 0.846$, gate passed) --- at $\varepsilon = 2$
-the perturbations are too small to break driver identity, which is exactly
-why identity fidelity alone cannot rank editing quality here and the
-adjacency and distributional axes carry the comparison. The three
-perturbation arms replicate on San Francisco --- all well below the
-editor's $+0.0316$, all violating adjacency wholesale --- and the
-random-jitter fairness surprise does not recur there; random is the weakest
-mover. The per-arm adjacency and divergence figures are in
-Appendix~\ref{app:results}.
-% src: famail_temporal/baselines/baseline_table/baseline_table.json (Fid-A/Fid-B(JS)/adjacency-violation columns)
+\emph{does} raise $F_{\mathrm{demo}}$, by $+0.0135$ --- indiscriminately
+diffusing the selected trajectories diffuses their over-service too --- but it
+does so by breaking the trajectories: 98.8\% of its perturbed trajectories
+violate king-move adjacency and its distributional divergence reaches 0.447,
+against the edited corpus's disclosed 0.187, while FATE edits are
+king-compliant by construction (per-arm figures in
+Appendix~\ref{app:results}). Identity fidelity survives every arm
+($\approx 0.846$, gate passed) --- at $\varepsilon = 2$ the perturbations are
+too small to break driver identity, which is exactly why identity fidelity
+alone cannot rank editing quality here and the adjacency and distributional
+axes carry the comparison. The three perturbation arms replicate on San
+Francisco --- all well below the editor's $+0.0316$, all violating adjacency
+wholesale --- and the random-jitter fairness surprise does not recur there;
+random is the weakest mover.
+% src: famail_temporal/baselines/baseline_table/baseline_table.json (random Fid-B(JS)/adjacency; Fid-A ~0.846)
 
 \textbf{Demographic oversampling.} The naive lift-up baseline: duplicate
 real trajectories originating in demographically disadvantaged regions (all
@@ -433,20 +430,17 @@ significant on all three under \emph{both} accounting conventions
 excluding zero).
 % src: {2026-07-13T04-41-12_..._hgc, 2026-07-13T17-04-22_..._4feat}_filtered/channel_decomposition.json (A1 2026-07-16 + A1' tier-2 rerun 2026-07-17, B=2000): totals +0.0594 [+0.0181,+0.1013] / +0.1461 [+0.0900,+0.2039]; supply t1 +0.0054 / +0.0608; supply TIER-2 +0.0211 [+0.0181,+0.0247] / +0.0771 [+0.0706,+0.0836]; demand +0.0539* / +0.0853* (PRIMARY: t1 +0.0176, t2 +0.0411, demand n.s.)
 
-\textbf{Filtering is not a substitute.} Removing the $K$ least-fair
-trajectories instead of editing them inverts the gain --- $F_{\mathrm{demo}}$
-falls to 0.7935 at the maximum $K = 2{,}455$, where editing the same
-attribution-selected slice raises it to 0.8214 --- so on the
-$F_{\mathrm{demo}}$ objective, neither removing nor selecting data
-(\S\ref{sec:exp-downstream}) substitutes for editing it.
-% src: famail_temporal/results/analysis/pareto_supplylift/pareto_points.csv (Q7-pareto ledger row)
+\textbf{Filtering is not a substitute.} Deleting the $K$ most-biased
+trajectories instead of editing them underperforms editing (0.7935 vs.\
+0.8214; Appendix~\ref{app:results}).
+% src: famail_temporal/results/analysis/pareto_supplylift/pareto_points.csv (Q7-pareto ledger row: 0.7935 at K=2,455)
 
 \subsection{External Validity: San Francisco}\label{sec:exp-sf}
 
-The entire protocol reruns on San Francisco with no algorithm, metric, or
-fidelity change; because $F_{\mathrm{demo}}$ is city-specific and
-associational (ACS proxies, not hukou), San Francisco tests whether the
-\emph{conclusions} reproduce.
+The protocol reruns on San Francisco unchanged in algorithm, metric, and
+fidelity; because $F_{\mathrm{demo}}$ is city-specific and associational (ACS
+proxies, not hukou), San Francisco tests whether the \emph{conclusions}
+reproduce.
 
 \textbf{Data level.} $F_{\mathrm{demo}}$ rises 0.8752 $\to$ 0.9067
 ($+0.0316$), $F_{\mathrm{spatial}}$ $+0.0139$, with Fidelity-A stability and % lint-allow: coincidental value (SF a10 F_spatial delta, not the trim-only F_demo headline)
@@ -510,9 +504,8 @@ n.s.); the primary-city result at the adopted weights is reported in
 \S\ref{sec:exp-downstream}.
 % src: famail_temporal/results/weighted_bc_sweep/supply_lift_a10_sf12_filtered_6seed/paired_stats.json
 The SF model-level variance suite stays null at $n = 10$ seeds, unlike the
-primary city's small significant positive effect
-(\S\ref{sec:exp-downstream}) --- a city difference we state plainly, with
-the seed detail in Appendix~\ref{app:results}.
+primary city's small significant positive effect (\S\ref{sec:exp-downstream});
+the seed detail is in Appendix~\ref{app:results}.
 The allocation boundary (\S\ref{sec:exp-downstream}) also replicates:
 rolled-out policies still tilt pickup share away from disadvantaged areas
 --- $-0.0432$ at w30 on the demand-only corpus and $-0.0335$ with trim+lift

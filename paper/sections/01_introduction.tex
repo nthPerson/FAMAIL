@@ -35,22 +35,20 @@ they record.
 %   \input{figures/figure-1/figure-1-bc}
   \input{figures/figure-1/figure-1}
   \caption{
-  A real fleet's service demonstrates bias: on Taxi GPS trajectories from Shenzhen, the advantaged
-  district receives $3.0\times$ the taxi service per unit demand.
+  A real fleet's service demonstrates bias: on Shenzhen taxi GPS
+  trajectories, the advantaged district receives $3.0\times$ the taxi
+  service per unit demand.
   % src: PAPER/supply-lift/data/a10/shz_a10_external_fairness.json
   % (MigrantRatio district_extremes disparate_impact.before 0.33252 ->
   % advantaged/disadvantaged service ratio 1/0.33252 = 3.0x)
-  The recorded trajectories are human-generated and therefore valuable
-  --- filtering them would discard useful expertise, so FATE performs
-  bounded edits on an attributed slice of the corpus containing the
-  most-biased demonstrations (the \emph{edited corpus}, right).
+  The recorded trajectories are valuable human expertise, so instead of
+  filtering or regenerating them FATE makes bounded, attribution-chosen
+  edits to the most-biased slice (the \emph{edited corpus}, right).
   % NOTE (2026-07-16): no quantified bias share here by design — k=10,000
   % is an edit budget (~10% of the corpus), not a measured extent of bias.
-  A policy imitating the raw corpus learns the service gap
-  and sends supply to over-served areas; trained
-  on the upweighted edited demonstrations, the fairness survives training
-  and results in the model learning a fairer policy.
-  Figure~\ref{fig:overview} shows how the fairness-aware trajectory editor works.}
+  A policy imitating the raw corpus learns the service gap; trained on the
+  upweighted edited demonstrations, it learns a measurably fairer policy.
+  Figure~\ref{fig:overview} shows the editor.}
   \Description{Two side-by-side pipelines, with an arrow labeled FATE
   transforming the left pipeline's raw corpus into the right pipeline's
   edited corpus. On the left, a raw corpus of
@@ -63,36 +61,34 @@ they record.
   \label{fig:teaser}
 \end{figure}
 
-FATE takes a third position. As \emph{data augmentation}, it keeps the real 
-corpus, edits a small slice containing the most unfair trajectories, and 
-generates nothing.  At most $k$
-trajectories are edited ($k = 10{,}000$ on the primary city, about a tenth
-of the corpus), each perturbed within a two-cell radius under a frozen 
-ST-SiameseNet driver-identity discriminator \cite{ren2020stsiamese}, so realism is inherited from the data
-rather than re-learned. The edited demonstrations are then
-\emph{upweighted} during imitation --- instance reweighing
-\cite{kamirancalders2012} transplanted to demonstrations --- so the
-fairness of the small edited slice survives training instead of being averaged
-away.
+FATE takes a third position. As \emph{data augmentation}, it keeps the real
+corpus, edits a small slice of its most unfair trajectories, and generates
+nothing. At most $k$ trajectories are edited ($k = 10{,}000$ on the primary
+city, about a tenth of the corpus), each perturbed within a two-cell radius
+under a frozen driver-identity discriminator (ST-SiameseNet)
+\cite{ren2020stsiamese}, so realism is inherited from the data rather than
+re-learned. The edited demonstrations are then \emph{upweighted} during
+imitation --- instance reweighing \cite{kamirancalders2012} transplanted to
+demonstrations --- so the edited slice's fairness survives training instead
+of being averaged away.
 
-The subtlety is not measuring unfairness but repairing it honestly.
 FATE's first editing phase, \emph{trim}, moves only demand: it relocates
-recorded pickups within over-served areas, and on the primary city it
-improves measured fairness, but without helping the under-served group at all:
-every one of the 2{,}455 pickups it edits originates in an advantaged cell
-and not one lands in a disadvantaged cell, so the gap closes only by reducing
-over-service --- analogous to the classic leveling-down objection to equalization
+recorded pickups within over-served areas, improving measured fairness on the
+primary city without helping the under-served group at all. Every one of the
+2{,}455 pickups it edits originates in an advantaged cell and not one lands in
+a disadvantaged cell, so the gap closes only by reducing over-service ---
+analogous to the classic leveling-down objection to equalization
 \cite{parfit1997,mittelstadt2024}, though here service is relocated rather
 than removed.
 % src: PAPER/external-metrics/LEVELING_DOWN_MECHANISM.md (2,455/2,455 flow analysis; pre-supply-lift doc) — corroborated at alpha*: PAPER/supply-lift/data/a10/shz_trimonly_a10_external_fairness.json (mean(Y|disadv) 7.0734 -> 7.0734 exactly)
-We show this behavior is structural --- the constrained optimum of any
-demand-only editor on this objective (\S\ref{sec:leveling}) --- and that
-diagnosis dictated the second phase. \emph{Lift} reroutes drivers' final
-seeking minutes into under-served areas and makes the supply consequences
-of the reroute differentiable and endogenous to the objective: the editor
-is rewarded for providing service where it improves fairness, not merely
-for redistributing demand. Together, trim and lift raise demand-adjusted
-demographic fairness on Shenzhen by $+0.0226$
+This behavior is structural --- the constrained optimum of any demand-only
+editor on this objective (\S\ref{sec:leveling}) --- and that diagnosis
+dictated the second phase. \emph{Lift} reroutes drivers' final seeking
+minutes into under-served areas and makes their supply consequences
+differentiable and endogenous to the objective: the editor is rewarded for
+providing service where it improves fairness, not merely for redistributing
+demand. Together, trim and lift raise demand-adjusted demographic fairness on
+Shenzhen by $+0.0226$
 % src: PAPER/supply-lift/data/a10/shz_a10_metrics.json (deltas.f_causal)
 and add statistically robust taxi presence to the under-served group
 (\S\ref{sec:exp-data-level}).
