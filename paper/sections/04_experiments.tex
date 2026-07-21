@@ -160,8 +160,7 @@ that realism-free ceiling, as a realism-bounded editor should
 (Appendix~\ref{app:results}).
 % src: PAPER/supply-lift/FINDINGS.md §8 (skip-on-infeasible)
 
-\subsection{Ablation: Trim-Only versus Trim+Lift}\label{sec:exp-ablation}
-
+\textbf{Ablation: trim-only versus trim+lift.}\label{sec:exp-ablation}
 With trim frozen inside the combined editor (\S\ref{sec:editor}), the
 lift-disabled run reproduces the demand-only editor exactly, so every
 difference in Table~\ref{tab:ablation} isolates lift --- and certifies
@@ -249,14 +248,8 @@ deliberately shifting population statistics toward the edited slice,
 disclosed rather than netted out.
 % src: famail_temporal/results/weighted_bc_sweep/alpha_sweep_s10_c80_f10_filtered_6seed/paired_stats.json + dose_response.json
 
-\textbf{Model-level variance.} A paired baseline-vs-FATE comparison at
-uniform weight gives $\Delta F_{\mathrm{demo}} = +0.0030 \pm 0.0022$ at
-$n = 10$ seeds (9/10 positive; Wilcoxon $p = .0039$). The training procedure
-alone transmits a small but real fraction of the edit, an order of magnitude
-below the upweighted gains, so the weighting lever remains what carries the
-transfer; the $n = 5$-versus-$n = 10$ comparison is in
-Appendix~\ref{app:results}.
-% src: famail_temporal/results/variance_suite/supply_lift_shz_10seed/aggregate.json (paired_delta.f_causal; B2-VAR-SZ 2026-07-16; n=5 suite retained at variance_suite/supply_lift_shz_5seed)
+\textbf{Model-level variance} across paired retrainings is real but an order
+of magnitude below the upweighting effect (Appendix~\ref{app:results}).
 
 \textbf{The allocation boundary.} Metric propagation is not
 the whole story. We roll out the trained policies and measure the share of
@@ -488,12 +481,7 @@ significantly \emph{positive} ($+0.0493$, CI $[+0.0185,$ $+0.0790]$) ---
 the real supply improvement outweighs the demand-side denominator increase.
 More rides \emph{served} in under-served areas is a demand-side parity gain
 --- DP, DI, and Theil all improve on San Francisco --- while the supply
-channel independently replicates. The finer spatial partition plausibly
-amplifies the effect: San Francisco's demographic units are census tracts,
-far smaller than Shenzhen's districts, so the ratio is more sensitive to
-lift's rerouted pickups. A ratio-only reading confined to tier-1 accounting
-would withhold the SF lift-up claim; we report both accountings, and the
-stricter one supports it.
+channel independently replicates.
 % DECIDED 2026-07-16 (Robert): Reading B leads (external-metrics / demand-endogeneity framing).
 % D1 RESOLVED 2026-07-18: tier-2 recount CONFIRMS Reading B — supply_tier2 +0.1027 CI-sig,
 % total_tier2 flips SIG-POSITIVE +0.0493. Provisional status retired; PI ack still owed.

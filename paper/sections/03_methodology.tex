@@ -93,31 +93,14 @@ to this in \S\ref{sec:leveling}, where the same assumption turns out to bound
 what a demand-only editor can achieve.
 % src: PAPER/objective-motivation/MOTIVATION.md (associational caveat; demand endogeneity)
 
-\textbf{Spatial equity ($F_{\mathrm{spatial}}$, secondary).} Independent of
-demographics, service should also be spread evenly relative to the taxi supply
-actually present. We track two supply-normalized service rates per active
-unit --- the \emph{demand-service ratio} $\mathrm{DSR}_i = D_i / S_i$
-(pickups per unit of taxi presence) and the \emph{arrival-service ratio}
-$\mathrm{ASR}_i = A_i / S_i$ (dropoffs per unit of taxi presence), with
-$A_i$ the unit's recorded dropoffs and $D_i$, $S_i$ as in
-\S\ref{sec:problem} --- and score the inequality of each with the Gini
-index, an inequality measure widely used in transportation equity
-research \cite{horchergraham2021,karner2024}. The Gini enters as a
-pairwise mean absolute difference, differentiable almost everywhere
-and hence usable inside the gradient objective:
-\begin{equation}\label{eq:fspatial}
-\begin{split}
-\mathrm{Gini}(x) &\;=\; \frac{\sum_{i}\sum_{j}\,\lvert x_i - x_j\rvert}
-{2N^{2}\,\bar{x}},\\
-F_{\mathrm{spatial}} &\;=\; 1 - \tfrac{1}{2}\bigl(\mathrm{Gini}(\mathrm{DSR})
-+ \mathrm{Gini}(\mathrm{ASR})\bigr).
-\end{split}
-\end{equation}
-Being demographic-independent, the term acts as a
-spatial smoothness regularizer complementing $F_{\mathrm{demo}}$.
-% src: PAPER/argument/03_fairness_theory.md (F_spatial definition)
-% src: famail_temporal/fairness/spatial.py (DSR/ASR ratios; sorted-identity evaluation, no N² materialization)
-% src: famail_temporal/docs/RESEARCHER_HANDOFF.md §4 (DSR/ASR acronym expansions)
+\textbf{Spatial equity ($F_{\mathrm{spatial}}$, secondary).}
+$F_{\mathrm{spatial}}$ is one minus the mean Gini index of two
+supply-normalized service rates: the \emph{demand-service ratio}
+$\mathrm{DSR}_i = D_i / S_i$ (pickups per unit of taxi presence) and the
+\emph{arrival-service ratio} $\mathrm{ASR}_i = A_i / S_i$ (dropoffs per
+unit). The closed form is in Appendix~\ref{app:derivations}. Being
+demographic-independent, the term acts as a spatial smoothness regularizer
+complementing $F_{\mathrm{demo}}$.
 
 \textbf{Realism guardrail ($F_{\mathrm{fidelity}}$).} An edit that improves
 fairness by producing trajectories no real driver would generate is useless

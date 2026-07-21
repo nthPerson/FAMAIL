@@ -45,6 +45,27 @@ the value-of-presence map of \S\ref{sec:attribution} has the closed form
 against which the automatic gradient is verified.
 % src: PAPER/supply-lift/LIFT_ALGORITHM_REFERENCE.md §4.1 (autograd-verified closed form)
 
+\textbf{Spatial-equity closed form.} The $F_{\mathrm{spatial}}$ term of
+\S\ref{sec:objective} scores the inequality of two supply-normalized service
+rates --- the demand-service ratio $\mathrm{DSR}_i = D_i / S_i$ and the
+arrival-service ratio $\mathrm{ASR}_i = A_i / S_i$, with $A_i$ the unit's
+recorded dropoffs and $D_i$, $S_i$ as in \S\ref{sec:problem} --- with the
+Gini index, an inequality measure widely used in transportation equity
+research \cite{horchergraham2021,karner2024}. The Gini enters as a pairwise
+mean absolute difference, differentiable almost everywhere and hence usable
+inside the gradient objective:
+\begin{equation}\label{eq:fspatial}
+\begin{split}
+\mathrm{Gini}(x) &\;=\; \frac{\sum_{i}\sum_{j}\,\lvert x_i - x_j\rvert}
+{2N^{2}\,\bar{x}},\\
+F_{\mathrm{spatial}} &\;=\; 1 - \tfrac{1}{2}\bigl(\mathrm{Gini}(\mathrm{DSR})
++ \mathrm{Gini}(\mathrm{ASR})\bigr).
+\end{split}
+\end{equation}
+% src: PAPER/argument/03_fairness_theory.md (F_spatial definition)
+% src: famail_temporal/fairness/spatial.py (DSR/ASR ratios; sorted-identity evaluation, no N² materialization)
+% src: famail_temporal/docs/RESEARCHER_HANDOFF.md §4 (DSR/ASR acronym expansions)
+
 \section{Editor Implementation Details}\label{app:editor}
 
 This appendix collects the editor implementation details deferred from
@@ -189,10 +210,14 @@ $+0.0016$) --- w30 sits at the knee.
 % src: famail_temporal/results/weighted_bc_sweep/alpha_sweep_s10_c80_f10_filtered_6seed/dose_response.json
 
 \textbf{Model-level variance ($n = 5$ versus $n = 10$).} Supporting
-\S\ref{sec:exp-downstream}. The $n = 10$ effect size
-($+0.0030 \pm 0.0022$, $t$-test $p = .0019$) is unchanged from the original
-five-seed suite ($+0.0031$) and now clears conventional significance
-outright.
+\S\ref{sec:exp-downstream}. A paired baseline-vs-FATE comparison at uniform
+weight gives $\Delta F_{\mathrm{demo}} = +0.0030 \pm 0.0022$ at $n = 10$
+seeds (9/10 positive; Wilcoxon $p = .0039$): the training procedure alone
+transmits a small but real fraction of the edit, an order of magnitude below
+the upweighted gains, so the weighting lever remains what carries the
+transfer. This $n = 10$ effect size is unchanged from the original five-seed
+suite ($+0.0031$) and now clears conventional significance outright
+($t$-test $p = .0019$).
 % src: famail_temporal/results/variance_suite/supply_lift_shz_10seed/aggregate.json (paired_delta.f_causal; B2-VAR-SZ 2026-07-16; n=5 suite retained at variance_suite/supply_lift_shz_5seed)
 
 \textbf{Fairness-penalty $\lambda$ grid.} Detail for the in-processing
