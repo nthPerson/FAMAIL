@@ -1,0 +1,38 @@
+% Standalone test wrapper for the Figure-1 (b)+(c) COUNTER-PROPOSAL variant
+% (figure-1-bc.tex). Compile OUTSIDE paper/ (never against main.tex):
+%   latexmk -pdf -outdir=<scratch> figure-1-bc-test.tex
+% Uses acmart so fonts, \columnwidth, and caption styling are manuscript-true.
+% The caption here is the PROPOSED manuscript caption for this variant (also
+% embedded as comments in figure-1-bc.tex); the live manuscript caption lives
+% in sections/01_introduction.tex.
+\documentclass[sigconf,review,anonymous]{acmart}
+\settopmatter{printacmref=false}
+\setcopyright{none}
+\microtypesetup{expansion=false} % same local-font shim as main.tex
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta}
+\begin{document}
+\title{(b)+(c) counter-proposal harness --- not the manuscript}
+\maketitle
+
+\noindent Column width: \the\columnwidth. The figure below is at natural
+size; overfull warnings in the log mean the tikzpicture exceeds
+\verb|\columnwidth|.
+
+\begin{figure}[h]
+  \centering
+  \input{figure-1-bc}
+  \caption{Why FATE edits trajectory data. (a)~The recorded trajectories
+  are human-generated and therefore valuable --- filtering them would
+  discard useful expertise, so FATE performs bounded edits on an
+  attributed slice of the corpus containing the most-biased
+  demonstrations. (b)~The stakes: a policy imitating the raw corpus
+  learns the service gap the fleet demonstrated --- on Shenzhen the
+  advantaged district receives $3.0\times$ the taxi service per unit
+  demand --- and sends supply to over-served areas; trained on the
+  upweighted edited demonstrations, the fairness survives training and
+  results in the model learning a fairer policy. The $+$ marks flag what
+  the edit changed. Figure~2 shows how the editor works.}
+\end{figure}
+
+\end{document}
