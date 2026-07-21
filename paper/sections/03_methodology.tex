@@ -149,12 +149,9 @@ The weights are selected \emph{empirically}: a sweep of the weight simplex
 (\S\ref{sec:exp-setup}), selects $(0.1, 0.8, 0.1)$ by a three-class
 criterion --- maximize $\Delta F_{\mathrm{demo}}$ subject to
 $\Delta F_{\mathrm{spatial}} \ge 0$ \emph{and} the supply-channel lift-up
-remaining significant under both accounting tiers. Two properties make the
-choice robust rather than delicate: the primary gain is insensitive to the
-weights over a wide range, and the fidelity gradient is dormant under
-bounded edits --- the discriminator constrains, but does not steer, the
-optimization. The full sweep, with the flatness and monotone-lift-up
-evidence behind the criterion, is reported in \S\ref{sec:exp-robustness}.
+remaining significant under both accounting tiers. The full sweep, with the
+flatness and monotone-lift-up evidence behind the criterion, is reported in
+\S\ref{sec:exp-robustness}.
 % src: PAPER/objective-motivation/weight-sensitivity/EXTENDED_FRONTIER.md (flatness, monotone lift-up, criterion)
 
 \subsection{Attribution: Localizing the Deficit and the Remedy}\label{sec:attribution}
@@ -280,15 +277,13 @@ behavior into under-served cells. %Before building this mechanism we bounded
   pickups and taxi presence are quantized to cells. (1) \emph{Attribute}:
   taxi presence concentrates in the advantaged district while the
   disadvantaged district carries unmet pickups; attribution scores each
-  trajectory's contribution to this fairness deficit and selects the ones
-  worth editing (\S\ref{sec:attribution}). (2) \emph{Trim}
-  relocates excess pickups within the advantaged
-  district --- improving fairness metrics while the disadvantaged district
-  gains nothing. (3) \emph{Lift},
-  in a detail view of the under-served district: against the original
-  tail, the rerouted tail bends the trajectory's final seeking states into
-  the cells where the supply gradient says added taxi presence improves
-  fairness most.}
+  trajectory's contribution to the fairness deficit and selects the ones
+  worth editing (\S\ref{sec:attribution}). (2) \emph{Trim} relocates excess
+  pickups within the advantaged district, improving fairness metrics while
+  the disadvantaged district gains nothing. (3) \emph{Lift}, in a detail
+  view of the under-served district: the rerouted tail bends the
+  trajectory's final seeking states into the cells where the supply
+  gradient says added presence improves fairness most.}
   \Description{Three stylized city-grid panels. Panel 1, attribution: taxi
   presence concentrates in an advantaged district while the disadvantaged
   district carries unmet pickups, and attribution scores each trajectory's
@@ -331,9 +326,6 @@ behavior into under-served cells. %Before building this mechanism we bounded
 % \end{figure*}
 
 \subsection{The Trim+Lift Editor}\label{sec:editor}
-
-Figure~\ref{fig:overview} illustrates the two editing phases on a stylized
-city grid.
 
 \textbf{Shared machinery.} Both editing phases repurpose bounded adversarial
 perturbation \cite{goodfellow2015fgsm,kurakin2017ifgsm}, in its

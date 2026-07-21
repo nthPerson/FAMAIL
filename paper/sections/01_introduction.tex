@@ -15,16 +15,16 @@ re-enact it when deployed --- a feedback loop documented in other
 data-driven allocation systems \cite{ensign2018,lumisaac2016}.
 
 Interventions typically target one end of the pipeline or the other.
-In-processing methods regularize the model while leaving the
-demonstrations biased \cite{zheng2023}, so the objective and the training
-signal pull against each other. Data-generation and data-rebalancing
-methods modify the demonstration distribution instead --- synthesizing
-fair data \cite{xu2018fairgan,vanbreugel2021decaf} or reweighing and
-resampling it \cite{kamirancalders2012} --- but altering the original data
-can reduce realism, introduce distribution shift, and obscure the source
-of any fairness improvement. Figure~\ref{fig:teaser} illustrates the gap:
-the demonstrations are an asset worth preserving, yet a policy that
-imitates them unchanged learns the service gap they record.
+In-processing methods regularize the model while leaving the demonstrations
+biased \cite{zheng2023}, so objective and training signal conflict.
+Data-generation and data-rebalancing methods instead alter the
+demonstrations --- synthesizing fair data
+\cite{xu2018fairgan,vanbreugel2021decaf} or reweighing and resampling them
+\cite{kamirancalders2012} --- but this can reduce realism, shift the
+distribution, and obscure the source of any fairness gain.
+Figure~\ref{fig:teaser} illustrates the gap: the demonstrations are worth
+preserving, yet a policy that imitates them unchanged learns the service gap
+they record.
 
 \begin{figure}[t]
   \centering
@@ -136,22 +136,20 @@ and its untargeted placebo degrades fairness outright
 
 \textbf{Contributions.}
 \begin{itemize}
-\item \textbf{A fairness-aware trajectory editor.} Two bounded editing phases,
-gradient-guided under one differentiable objective, with the supply
-consequences of edits made endogenous to it, and driven by two exact
-attribution mechanisms: demand deficit attribution localizes existing
-unfairness, and supply-gradient attribution localizes the value of added
-taxi presence.
+\item \textbf{A fairness-aware trajectory editor.} Two bounded editing phases
+under one differentiable objective that makes the supply consequences of
+edits endogenous, each driven by an exact attribution mechanism
+(\S\ref{sec:attribution}).
 \item \textbf{A structural diagnosis of demand-only editing.} Demand-only
 editing closes fairness gaps only from the top; we show why --- selection,
-leverage, and frozen supply --- and show that a differentiable supply
-channel is the non-perverse remedy.
+leverage, and frozen supply --- and that a differentiable supply channel is
+the non-perverse remedy.
 \item \textbf{A transfer recipe with edit-specificity controls.}
-Upweighted imitation carries the data-level fairness into trained
-policies, and random-upweighting and most-fair selection controls isolate
-the edit as the cause.
+Upweighted imitation carries the data-level fairness into trained policies,
+with random-upweighting and most-fair selection controls isolating the edit
+as the cause.
 \item \textbf{Two-city validation on never-optimized measures.} The full
-protocol runs on Shenzhen and San Francisco and is scored on external
-fairness measures the objective never optimizes, against a
-demographic-oversampling baseline on the primary city.
+protocol runs on Shenzhen and San Francisco, scored on external fairness
+measures the objective never optimizes, against a demographic-oversampling
+baseline on the primary city.
 \end{itemize}

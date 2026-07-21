@@ -48,16 +48,16 @@ percentile); units are spatially correlated and demographics are
 district-constant, so these intervals are first-order.
 % src: PAPER/argument/04_evaluation.md §3; PAPER/external-metrics/FINDINGS.md §1, §5
 
-\textbf{Metric classes and claim discipline.} We separate three metric classes and label every
-claim accordingly: (i) \emph{optimized} --- $F_{\mathrm{spatial}}$,
-$F_{\mathrm{demo}}$, $F_{\mathrm{fidelity}}$, the quantities the editor's
-gradient sees; (ii) \emph{design-targeted but not optimized} --- the
-family of supply/demand ratios, $\mathrm{mean}(Y)$ by group, which the lift
-mechanism was aimed at, so improvement there is confirmatory; and (iii)
+\textbf{Metric classes and claim discipline.} We separate three metric
+classes and label every claim accordingly: (i) \emph{optimized} ---
+$F_{\mathrm{spatial}}$, $F_{\mathrm{demo}}$, $F_{\mathrm{fidelity}}$, the
+quantities the editor's gradient sees; (ii) \emph{design-targeted but not
+optimized} --- the supply/demand ratios and $\mathrm{mean}(Y)$ by group that
+lift was aimed at, so improvement there is confirmatory; and (iii)
 \emph{genuinely external} --- demographic parity, disparate impact, the Theil
-index, per-group service levels, and the distinct-taxi supply recount, none of
-which appear in the objective. ``Improves metrics it never optimizes'' claims
-ride class (iii) only.
+index, per-group service levels, and the distinct-taxi supply recount, absent
+from the objective. ``Improves metrics it never optimizes'' claims ride class
+(iii) only.
 % src: PAPER/supply-lift/LIFT_ALGORITHM_REFERENCE.md §13
 
 \textbf{External fairness instruments.} On the service ratio $Y$ over active
@@ -84,8 +84,8 @@ evidence.
 toward fairness with bootstrap intervals excluding zero
 (Table~\ref{tab:external-sz}, migrant axis, district extremes; the remaining
 axis $\times$ grouping cells behave the same way). The gap closes from both
-ends: the advantaged group's over-service falls ($21.27 \to 20.44$) while the
-disadvantaged group's service \emph{rises} ($7.073 \to 7.126$).
+ends: the advantaged group's over-service falls while the disadvantaged
+group's service \emph{rises}.
 % src: famail_temporal/baselines/external_fairness/results/shenzhen-primary-supplylift-s10/external_fairness.json
 
 \begin{table}[t]
@@ -93,8 +93,8 @@ disadvantaged group's service \emph{rises} ($7.073 \to 7.126$).
 \caption{Shenzhen external fairness (migrant axis, district extremes; paired
 bootstrap). \emph{Top:} established instruments and group service levels,
 before $\to$ after editing ($B{=}1{,}000$). \emph{Bottom:} the
-$\mathrm{mean}(Y \mid \mathrm{disadv.})$ move decomposed into demand and
-supply channels ($B{=}2{,}000$); its total is the $+0.0529$ row above.}
+$\mathrm{mean}(Y \mid \mathrm{disadv.})$ move split into demand and supply
+channels ($B{=}2{,}000$); its total is the $+0.0529$ row above.}
 \label{tab:external-sz}
 \label{tab:channels}
 \small
@@ -136,9 +136,8 @@ relocation) carries large variance and is not significant; the supply channel
 (rerouted tails adding presence) is significant under \emph{both} accounting
 conventions --- tier-1 (the optimizer's fractional-presence convention) and
 tier-2, which re-counts supply from raw GPS as distinct taxis per
-neighborhood-hour with the edited tails substituted. The recount machinery
-reproduces the production supply grid exactly (MAE 0.0) with 100\% history
-matching, so tier-2 is the stricter semantics, not an approximation.
+neighborhood-hour with the edited tails substituted. Tier-2 reproduces the production supply grid exactly (MAE 0.0, 100\%
+history match), so it is the stricter semantics, not an approximation.
 % src: <s10>/channel_decomposition.json + <s10>/supply_recount.json
 % src (recount validity properties): PAPER/supply-lift/FINDINGS.md §4 (G2, machinery unchanged)
 
@@ -163,29 +162,22 @@ that realism-free ceiling, as a realism-bounded editor should
 
 \subsection{Ablation: Trim-Only versus Trim+Lift}\label{sec:exp-ablation}
 
-Because trim's optimization is frozen inside the combined editor
-(\S\ref{sec:editor}), running the editor with the lift phase disabled
-reproduces the demand-only editor exactly, and every difference in
-Table~\ref{tab:ablation} is attributable to the lift mechanism. The ablation
-certifies the design claim of \S\ref{sec:leveling}: a demand-only editor
-improves fairness metrics while leaving the under-served group's absolute
-service untouched --- the gap closes only from the top --- and the supply
-channel is what changes that.
+With trim frozen inside the combined editor (\S\ref{sec:editor}), the
+lift-disabled run reproduces the demand-only editor exactly, so every
+difference in Table~\ref{tab:ablation} isolates lift --- and certifies
+\S\ref{sec:leveling}: demand-only editing closes the gap only from the top;
+the supply channel is what changes that.
 
 Three rows carry the qualitative story, and the structural expectation from
 \S\ref{sec:leveling} re-verifies exactly at the adopted weights: under
 trim-only, every external instrument still improves significantly (DP
 $-0.611$, DI $+0.0098$, Theil $-0.0059$, all CIs excluding zero) --- but the
-disadvantaged group's service level is unchanged to four decimals
-($7.0734 \to 7.0734$) while the advantaged level falls; the improvement is
-pure top-down redistribution: the under-served level does not move. Under
-trim+lift the same level rises with a bootstrap
-interval excluding zero.
+disadvantaged group's service level is unchanged while the advantaged level
+falls, so the improvement is pure top-down redistribution. Under trim+lift
+the same level rises with a bootstrap interval excluding zero, and the
+secondary spatial metric turns from a cost to a gain: the lift mechanism is
+the difference between redistributing service and providing it.
 % src: famail_temporal/baselines/external_fairness/results/shenzhen-trimonly-a10/external_fairness.json
-The secondary spatial metric flips from a small cost to a gain.
-Per Table~\ref{tab:ablation}, the lift mechanism is not an incremental tweak
-to the demand-only editor but the difference between redistributing service
-and providing it.
 % src: PAPER/supply-lift/FINDINGS.md §3 (the key qualitative change paragraph)
 
 \subsection{Downstream Propagation (Shenzhen)}\label{sec:exp-downstream}
@@ -201,6 +193,7 @@ fairest source that remains faithful on both realism axes.
 \caption{Data-quality comparison, four sources (Shenzhen; means over five
 seeds; the GAN row's Fidelity-B is seed-bimodal --- see text).}
 \label{tab:l1}
+\small
 \begin{tabular}{lrrr}
 \toprule
 source & $F_{\mathrm{demo}}$ & Fid.-A ($\uparrow$) & Fid.-B ($\downarrow$) \\
@@ -215,9 +208,9 @@ gan-generated & 0.8089 & 0.848 & 0.171 \\
 % src: famail_temporal/results/level1_table_v2/supply_lift_shz_5seed/level1_v2_multiseed.json
 
 The claim holds: the edited corpus is the fairest source and faithful to
-driver identity (Fidelity-A 0.844 $\approx$ raw 0.848; gate passed,
-matched 0.848 vs.\ mismatched 0.193), and its Fidelity-B is the divergence
-of the bounded edits, quantified in \S\ref{sec:exp-data-level}. One
+driver identity (gate passed, matched 0.848 vs.\ mismatched 0.193), and its
+Fidelity-B is the divergence of the bounded edits, quantified in
+\S\ref{sec:exp-data-level}. One
 instability we surface rather than smooth: the Shenzhen GAN's Fidelity-B is
 bimodal across seeds, and the collapse mode Shenzhen generators have shown
 before returns in some seeds here, while the SF GAN stays uniformly healthy
@@ -244,16 +237,12 @@ the dose saturates, not unbounded growth --- w30 sits at the knee of the
 curve, not at a tuned endpoint (w40/w50 values and the per-step increment
 list in Appendix~\ref{app:results}). Neither
 control reproduces it at any dose: the random-subset placebo is
-null-to-negative ($-0.0014$ w10, $-0.0023$ w30, $-0.0036$ w50, never
-positive), and the most-fair selection control reaches
+null-to-negative throughout, and the most-fair selection control reaches
 $+0.0033$ at w10 --- significant, but under a sixth of the edited arm's
-gain --- then fades to n.s.\ at every higher dose ($+0.0017$ w20, $+0.0009$
-w30, $+0.0009$ at both w40 and w50). $F_{\mathrm{spatial}}$ propagates
-on Shenzhen as well: present already at uniform weight ($+0.0008$,
-$p = .031$) and rising through
-$+0.0038$, $+0.0040$, and $+0.0052$ across w10/w20/w30 (each $p = .031$),
-while at w30 both controls significantly \emph{degrade} it ($-0.0012$
-random, $-0.0027$ most-fair). Fidelity-A is unchanged at every weight (all n.s.,
+gain --- then fades to n.s.\ at every higher dose. $F_{\mathrm{spatial}}$ also propagates
+on Shenzhen --- $+0.0008$ at uniform weight rising to $+0.0052$ at w30
+(each $p = .031$) --- while at w30 both controls significantly
+\emph{degrade} it. Fidelity-A is unchanged at every weight (all n.s.,
 $|\Delta|$ at most $+0.0007$); Fidelity-B rises dose-monotonically
 ($0.020 \to 0.027$ absolute vs.\ raw $0.013$) --- the expected signature of
 deliberately shifting population statistics toward the edited slice,
@@ -270,13 +259,9 @@ Appendix~\ref{app:results}.
 % src: famail_temporal/results/variance_suite/supply_lift_shz_10seed/aggregate.json (paired_delta.f_causal; B2-VAR-SZ 2026-07-16; n=5 suite retained at variance_suite/supply_lift_shz_5seed)
 
 \textbf{The allocation boundary.} Metric propagation is not
-the whole story. Rolling out the trained policies and measuring the share of
-pickups they allocate to disadvantaged areas, the prior trim+lift corpus
-showed the share still tilting \emph{away} --- attenuated roughly $40\%$
-versus the demand-only corpus, but not reversed --- and policies did not
-learn to \emph{cruise} disadvantaged areas (seeking-state shares n.s.). This
-suite re-run on the adopted corpus --- both sides, so the comparison is
-like-for-like at the adopted weights --- gives the same boundary: the
+the whole story. We roll out the trained policies and measure the share of
+pickups they allocate to disadvantaged areas at the adopted weights, both
+sides for a like-for-like comparison: the
 demand-only corpus tilts by $-0.0049$ at w30 and trim+lift by $-0.0033$
 (each 0/6 seeds, $p = .031$) --- roughly $33\%$ attenuation, not a
 reversal --- with seeking-state shares n.s.\ at every weight in both
@@ -307,8 +292,8 @@ deployed head compares embeddings by \emph{concatenation}, not stationary at
 an identical pair (Appendix~\ref{app:editor}). The random-start arms are the
 reported ones. Results: Table~\ref{tab:baselines}.
 
-The arms behave as fidelity baselines. One result lands against the
-pre-registered expectation: random jitter \emph{does} raise
+One result lands against the pre-registered expectation: random jitter
+\emph{does} raise
 $F_{\mathrm{demo}}$, by $+0.0135$ --- indiscriminately diffusing the selected
 trajectories diffuses their over-service too --- but it does so by breaking
 the trajectories: 98.8\% of its perturbed trajectories violate king-move
@@ -319,11 +304,10 @@ survives every arm ($\approx 0.846$, gate passed) --- at $\varepsilon = 2$
 the perturbations are too small to break driver identity, which is exactly
 why identity fidelity alone cannot rank editing quality here and the
 adjacency and distributional axes carry the comparison. The three
-perturbation arms replicate on San Francisco: every arm lands well below the
-editor ($+0.0122$ iFGSM, $+0.0176$ FGSM, $+0.0049$ random, against the
-editor's $+0.0316$) while violating adjacency wholesale, and the
-random-jitter fairness surprise does not recur there --- random is the
-weakest mover. The per-arm adjacency and divergence figures are in
+perturbation arms replicate on San Francisco --- all well below the
+editor's $+0.0316$, all violating adjacency wholesale --- and the
+random-jitter fairness surprise does not recur there; random is the weakest
+mover. The per-arm adjacency and divergence figures are in
 Appendix~\ref{app:results}.
 % src: famail_temporal/baselines/baseline_table/baseline_table.json (Fid-A/Fid-B(JS)/adjacency-violation columns)
 
@@ -373,9 +357,9 @@ that editing the demonstrations provides.
 \begin{table}[t]
 \centering
 \caption{\emph{Top:} cross-arm comparison at matched budgets (Shenzhen).
-\emph{Bottom:} trim-only versus trim+lift ablation at matched budgets
-(Shenzhen and San Francisco); CI = paired-bootstrap 95\% interval, n.s. =
-interval includes zero.}
+\emph{Bottom:} trim-only vs.\ trim+lift ablation, matched budgets
+(Shenzhen and San Francisco); CI = paired-bootstrap 95\% interval,
+n.s.\ = interval includes zero.}
 \label{tab:baselines}
 \label{tab:ablation}
 \small
@@ -469,7 +453,7 @@ $F_{\mathrm{demo}}$ objective, neither removing nor selecting data
 The entire protocol reruns on San Francisco with no algorithm, metric, or
 fidelity change; because $F_{\mathrm{demo}}$ is city-specific and
 associational (ACS proxies, not hukou), San Francisco tests whether the
-\emph{conclusions} reproduce, never whether magnitudes match.
+\emph{conclusions} reproduce.
 
 \textbf{Data level.} $F_{\mathrm{demo}}$ rises 0.8752 $\to$ 0.9067
 ($+0.0316$), $F_{\mathrm{spatial}}$ $+0.0139$, with Fidelity-A stability and % lint-allow: coincidental value (SF a10 F_spatial delta, not the trim-only F_demo headline)
