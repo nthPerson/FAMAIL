@@ -89,9 +89,14 @@ disadvantaged group's service \emph{rises} ($7.073 \to 7.126$).
 % src: famail_temporal/baselines/external_fairness/results/shenzhen-primary-supplylift-s10/external_fairness.json
 
 \begin{table}[t]
-\caption{Shenzhen external fairness, before $\to$ after editing (migrant axis,
-district extremes; paired bootstrap, $B{=}1{,}000$).}
+\centering
+\caption{Shenzhen external fairness (migrant axis, district extremes; paired
+bootstrap). \emph{Top:} established instruments and group service levels,
+before $\to$ after editing ($B{=}1{,}000$). \emph{Bottom:} the
+$\mathrm{mean}(Y \mid \mathrm{disadv.})$ move decomposed into demand and
+supply channels ($B{=}2{,}000$); its total is the $+0.0529$ row above.}
 \label{tab:external-sz}
+\label{tab:channels}
 \small
 \setlength{\tabcolsep}{4pt}
 \begin{tabular}{lrrr}
@@ -105,9 +110,21 @@ $\mathrm{mean}(Y \mid \mathrm{disadv.})$ ($\uparrow$) & 7.0734 & 7.1263 & $+0.05
 $\mathrm{mean}(Y \mid \mathrm{adv.})$ & 21.272 & 20.435 & $-0.837$ \\
 \bottomrule
 \end{tabular}
+
+\vspace{4pt}
+\begin{tabular}{lrrc}
+\toprule
+channel & $\Delta$ & 95\% CI & sig.? \\
+\midrule
+Supply (tier-1) & $+0.0176$ & [$+0.0128, +0.0225$] & \textbf{yes} \\ % lint-allow: coincidental CI bound (s10 tier-1 interval, not the trim-only headline delta)
+Supply (tier-2, distinct-taxi) & $+0.0411$ & [$+0.0346, +0.0479$] & \textbf{yes} \\
+Demand (pickup relocation) & $+0.0352$ & [$-0.0095, +0.0814$] & no \\
+\bottomrule
+\end{tabular}
 \end{table}
 % src: famail_temporal/baselines/external_fairness/results/shenzhen-primary-supplylift-s10/external_fairness.json
 % (before-edit values are alpha-independent; identical cleaned base data)
+% src: famail_temporal/results/2026-07-10T02-06-37_alpha_sweep_s10_c80_f10_filtered/channel_decomposition.json (channel panel; Total = mean(Y|disadv.) +0.0529 row above)
 
 \textbf{The lift-up claim rides the supply channel.} The
 $\mathrm{mean}(Y \mid \mathrm{disadv.})$ rise is a
@@ -124,25 +141,6 @@ reproduces the production supply grid exactly (MAE 0.0) with 100\% history
 matching, so tier-2 is the stricter semantics, not an approximation.
 % src: <s10>/channel_decomposition.json + <s10>/supply_recount.json
 % src (recount validity properties): PAPER/supply-lift/FINDINGS.md §4 (G2, machinery unchanged)
-
-\begin{table}[t]
-\caption{Channel decomposition of $\Delta\,\mathrm{mean}(Y \mid \mathrm{disadv.})$,
-Shenzhen migrant axis ($B{=}2{,}000$).}
-\label{tab:channels}
-\small
-\setlength{\tabcolsep}{4pt}
-\begin{tabular}{lrrc}
-\toprule
-channel & $\Delta$ & 95\% CI & sig.? \\
-\midrule
-Supply (tier-1) & $+0.0176$ & [$+0.0128, +0.0225$] & \textbf{yes} \\ % lint-allow: coincidental CI bound (s10 tier-1 interval, not the trim-only headline delta)
-Supply (tier-2, distinct-taxi) & $+0.0411$ & [$+0.0346, +0.0479$] & \textbf{yes} \\
-Demand (pickup relocation) & $+0.0352$ & [$-0.0095, +0.0814$] & no \\
-Total & $+0.0529$ & [$+0.0086, +0.0989$] & yes \\
-\bottomrule
-\end{tabular}
-\end{table}
-% src: famail_temporal/results/2026-07-10T02-06-37_alpha_sweep_s10_c80_f10_filtered/channel_decomposition.json
 
 \textbf{Realism.} Fidelity-A stability and lift's expected Fidelity-B
 distributional cost (whole-tail relocation shifts trajectory-shape statistics
@@ -174,29 +172,6 @@ certifies the design claim of \S\ref{sec:leveling}: a demand-only editor
 improves fairness metrics while leaving the under-served group's absolute
 service untouched --- the gap closes only from the top --- and the supply
 channel is what changes that.
-
-\begin{table}[t]
-\caption{Trim-only versus trim+lift at matched budgets. CI = paired-bootstrap
-95\% interval; n.s. = interval includes zero.}
-\label{tab:ablation}
-\begin{tabular}{lrr}
-\toprule
- & trim-only & trim+lift \\
-\midrule
-\multicolumn{3}{l}{\emph{Shenzhen (primary)}} \\
-$\Delta F_{\mathrm{demo}}$ & $+0.0146$ & $\mathbf{+0.0226}$ \\ % lint-allow: ablation
-$\Delta F_{\mathrm{spatial}}$ & $-0.0011$ & $\mathbf{+0.0061}$ \\ % lint-allow: ablation
-$\Delta\,\mathrm{mean}(Y \mid \mathrm{disadv.})$ & $+0.000$ (flat) & $\mathbf{+0.053}$ (CI excl.\ 0) \\ % lint-allow: ablation — trim-only level 7.0734->7.0734 exactly
-\multicolumn{3}{l}{\emph{San Francisco (external validity)}} \\
-$\Delta F_{\mathrm{demo}}$ & $+0.0144$ & $\mathbf{+0.0316}$ \\ % lint-allow: ablation
-Migrant DP gap & $-0.052$ (CI excl.\ 0) & $\mathbf{-0.073}$ (CI excl.\ 0) \\ % lint-allow: ablation — both sig at alpha*; contrast is magnitude + the supply channel
-\bottomrule
-\end{tabular}
-\end{table}
-% src (trim+lift SZ col): famail_temporal/results/2026-07-10T02-06-37_alpha_sweep_s10_c80_f10_filtered/
-% metrics.json + channel_decomposition.json (mean(Y|D) total +0.0529 CI [+0.0086,+0.0989])
-% NOTE(re-anchor): both columns at alpha*=(0.1,0.8,0.1); trim-only baselines re-run at alpha* (R2)
-% so the ablation isolates the lift mechanism at the adopted weights, not a weight change.
 
 Three rows carry the qualitative story, and the structural expectation from
 \S\ref{sec:leveling} re-verifies exactly at the adopted weights: under
@@ -423,8 +398,13 @@ that editing the demonstrations provides.
 % src: famail_temporal/baselines/external_fairness/results/option_a_rollout_fb/summary.json (rollout: R5 arm-prefix regression gate passed, edited_w30 -0.00329 vs committed -0.0033)
 
 \begin{table}[t]
-\caption{Cross-arm comparison at matched budgets (Shenzhen).}
+\centering
+\caption{\emph{Top:} cross-arm comparison at matched budgets (Shenzhen).
+\emph{Bottom:} trim-only versus trim+lift ablation at matched budgets
+(Shenzhen and San Francisco); CI = paired-bootstrap 95\% interval, n.s. =
+interval includes zero.}
 \label{tab:baselines}
+\label{tab:ablation}
 \small
 \setlength{\tabcolsep}{4pt}
 \begin{tabular}{lrrr}
@@ -440,9 +420,28 @@ demog.\ oversampling (targeted) & $+0.0153$ & $+0.0052$ & 10.5\% \\
 \quad placebo (untargeted) & $-0.0172$ & $+0.0138$ & 10.5\% \\
 \bottomrule
 \end{tabular}
+
+\vspace{4pt}
+\begin{tabular}{lrr}
+\toprule
+ & trim-only & trim+lift \\
+\midrule
+\multicolumn{3}{l}{\emph{Shenzhen (primary)}} \\
+$\Delta F_{\mathrm{demo}}$ & $+0.0146$ & $\mathbf{+0.0226}$ \\ % lint-allow: ablation
+$\Delta F_{\mathrm{spatial}}$ & $-0.0011$ & $\mathbf{+0.0061}$ \\ % lint-allow: ablation
+$\Delta\,\mathrm{mean}(Y \mid \mathrm{disadv.})$ & $+0.000$ (flat) & $\mathbf{+0.053}$ (CI excl.\ 0) \\ % lint-allow: ablation — trim-only level 7.0734->7.0734 exactly
+\multicolumn{3}{l}{\emph{San Francisco (external validity)}} \\
+$\Delta F_{\mathrm{demo}}$ & $+0.0144$ & $\mathbf{+0.0316}$ \\ % lint-allow: ablation
+Migrant DP gap & $-0.052$ (CI excl.\ 0) & $\mathbf{-0.073}$ (CI excl.\ 0) \\ % lint-allow: ablation — both sig at alpha*; contrast is magnitude + the supply channel
+\bottomrule
+\end{tabular}
 \end{table}
 % src: PAPER/supply-lift/FINDINGS.md §3 (FATE row); famail_temporal/baselines/baseline_table/baseline_table.json (perturbation rows);
 % src: oversampling cells = 3-seed means over *_d10000_s{0,1,2} metrics.json deltas (matches the committed FINDINGS aggregation; the assembler's seed-0-only d10000 row reads +0.0175)
+% src (trim+lift SZ col): famail_temporal/results/2026-07-10T02-06-37_alpha_sweep_s10_c80_f10_filtered/
+% metrics.json + channel_decomposition.json (mean(Y|D) total +0.0529 CI [+0.0086,+0.0989])
+% NOTE(re-anchor): both columns at alpha*=(0.1,0.8,0.1); trim-only baselines re-run at alpha* (R2)
+% so the ablation isolates the lift mechanism at the adopted weights, not a weight change.
 
 \subsection{Robustness and Sensitivity}\label{sec:exp-robustness}
 

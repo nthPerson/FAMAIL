@@ -10,24 +10,21 @@ drove \cite{zhang2022cgail}. But trajectories carry more than behavior.
 They record the fleet's service allocation --- which neighborhoods drivers
 sought passengers in, and which they passed over --- and in real cities
 that allocation tracks demographics: housing prices, incomes, migrant
-population share. Models that imitate such data faithfully learn the
-inequity as competence, and are doomed to re-enact it when deployed, sending
-supply where supply already went --- exhibiting the feedback loop 
-documented in other data-driven allocation systems 
-\cite{ensign2018,lumisaac2016}.
+population share. Models that imitate such data reproduce the inequity and
+re-enact it when deployed --- a feedback loop documented in other
+data-driven allocation systems \cite{ensign2018,lumisaac2016}.
 
 Interventions typically target one end of the pipeline or the other.
 In-processing methods regularize the model while leaving the
 demonstrations biased \cite{zheng2023}, so the objective and the training
-signal pull against each other at every step. Data-generation and
-data-rebalancing methods modify the demonstration distribution instead
---- by synthesizing fair data \cite{xu2018fairgan,vanbreugel2021decaf} or
-by reweighing and resampling it \cite{kamirancalders2012} --- but
-replacing or extensively altering the original data can reduce realism,
-introduce distribution shift, and make it difficult to identify the
-source of the fairness improvement. Figure~\ref{fig:teaser} illustrates
-the resulting gap: the demonstrations are an asset worth preserving, yet
-a policy that imitates them unchanged learns the service gap they record.
+signal pull against each other. Data-generation and data-rebalancing
+methods modify the demonstration distribution instead --- synthesizing
+fair data \cite{xu2018fairgan,vanbreugel2021decaf} or reweighing and
+resampling it \cite{kamirancalders2012} --- but altering the original data
+can reduce realism, introduce distribution shift, and obscure the source
+of any fairness improvement. Figure~\ref{fig:teaser} illustrates the gap:
+the demonstrations are an asset worth preserving, yet a policy that
+imitates them unchanged learns the service gap they record.
 
 \begin{figure}[t]
   \centering
@@ -97,10 +94,8 @@ is rewarded for providing service where it improves fairness, not merely
 for redistributing demand. Together, trim and lift raise demand-adjusted
 demographic fairness on Shenzhen by $+0.0226$
 % src: PAPER/supply-lift/data/a10/shz_a10_metrics.json (deltas.f_causal)
-and add statistically robust taxi presence to the under-served group, raising its mean service
-ratio by $+0.0176$ under the optimizer's fractional-presence accounting
-(tier-1) and by $+0.0411$ when supply is recounted as distinct taxis from
-raw GPS (tier-2).
+and add statistically robust taxi presence to the under-served group
+(\S\ref{sec:exp-data-level}).
 % src: PAPER/supply-lift/data/a10/shz_a10_channel_decomposition.json (channels.supply / supply_tier2)
 On San Francisco the protocol reruns with no algorithm, metric, or
 fidelity change, and the data-level, external-metric, and downstream
@@ -126,11 +121,9 @@ two controls pin the recovery to the edit itself: neither upweighting an
 equal-sized random subset nor upweighting the corpus's already-fairest
 trajectories reproduces it. Because a fairness method scored on its own
 objective proves little, evaluation rides on established measures the
-objective never optimizes, computed before and after editing. All three
-improve on the primary city, every interval excluding zero: on the migrant
-axis, disparate impact $+0.0162$ and the demographic-parity gap $-0.890$
-($14.199 \to 13.309$); between regions, the Theil index $-0.0087$
-(\S\ref{sec:exp-data-level}).
+objective never optimizes --- demographic parity, disparate impact, and the
+Theil index --- computed before and after editing; all three improve on the
+primary city, every interval excluding zero (\S\ref{sec:exp-data-level}).
 % src: see §4 external-metrics table tab:external-sz (DI, DP gap, Theil rows);
 % famail_temporal/baselines/external_fairness/results/shenzhen-primary-supplylift-s10/external_fairness.json
 % (DI + DP gap: metrics.MigrantRatio.district_extremes.{disparate_impact,demographic_parity}.delta;

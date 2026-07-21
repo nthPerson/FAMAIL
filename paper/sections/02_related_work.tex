@@ -57,21 +57,19 @@ repurposes the identity-verification line as a frozen realism guardrail
 
 \textbf{Adversarial perturbation and recourse.} The editing machinery
 descends from adversarial examples: bounded signed-gradient perturbations
-\cite{goodfellow2015fgsm,kurakin2017ifgsm}, instantiated
-spatio-temporally for mobility signatures by ST-iFGSM \cite{hu2023stifgsm},
-with discrete structure bridged by continuous relaxation
-\cite{jang2017gumbel,maddison2017concrete} and straight-through gradient
-estimation \cite{bengio2013ste}. Algorithmic
-recourse established that the same perturbation tooling built for
-counterfactuals can prescribe beneficial change rather than attack
-\cite{ustun2019recourse,wachter2018counterfactual}. Recourse, however,
-prescribes change for one individual's feature vector to flip one
-decision; it carries no population-level fairness target and no
-obligation to preserve a data distribution's realism. FATE extends that
-constructive reading from the individual to the population: the bounded
-perturbation edits real trajectories to reduce demographic service
-inequity, and the $\varepsilon$-bound is reinterpreted from an
-attack-stealth budget to a budget for preserving driver identity.
+\cite{goodfellow2015fgsm,kurakin2017ifgsm} instantiated spatio-temporally
+\cite{hu2023stifgsm}, with discrete structure bridged by continuous
+relaxation \cite{jang2017gumbel,maddison2017concrete} and straight-through
+estimation \cite{bengio2013ste}. Algorithmic recourse established that the
+same tooling built for counterfactuals can prescribe beneficial change
+rather than attack \cite{ustun2019recourse,wachter2018counterfactual}, but
+for one individual's feature vector to flip one decision --- with no
+population-level fairness target and no obligation to preserve a data
+distribution's realism. FATE extends that constructive reading from the
+individual to the population: the bounded perturbation edits real
+trajectories to reduce demographic service inequity, and the
+$\varepsilon$-bound is reinterpreted from an attack-stealth budget to a
+budget for preserving driver identity.
 
 \textbf{Leveling down and feedback loops.} Two critiques frame what a
 fairness gain should mean. The leveling-down objection --- equality

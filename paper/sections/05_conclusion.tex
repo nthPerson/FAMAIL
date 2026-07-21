@@ -2,20 +2,19 @@
 % Drafted 2026-07-12 per docs/superpowers/specs/2026-07-12-paper-prose-sections-design.md.
 % No numeric values by design (restatement mirrors §1 contributions qualitatively).
 
-FATE makes fairness a property of the demonstrations. Rather than
-constraining a model or generating a synthetic corpus, it edits a small
-slice of real trajectories, chosen by attribution, under one bounded,
-realism-guarded objective --- trimming the measured over-service of
-advantaged areas, and lifting drivers' final seeking minutes into
-under-served areas with the supply consequences of the reroute
-differentiable and endogenous --- then upweights the edited demonstrations
-so the fairness survives imitation. On two cities the edits improve established fairness
-measures the objective never optimizes and, unlike the demand-only editor
-whose gains never touched the under-served group, the supply channel adds
-statistically significant taxi presence to that group; upweighted behavior
-cloning carries the fairness-metric gains into trained policies, and the control arms
-confirm the edit itself --- not oversampling, not selection --- is what
-carries them.
+FATE makes fairness a property of the demonstrations rather than of a
+constrained model or a synthetic corpus: it edits a small slice of real
+trajectories, chosen by attribution, under one bounded, realism-guarded
+objective --- trimming advantaged over-service and lifting drivers' final
+seeking minutes into under-served areas with the supply consequences of the
+reroute differentiable and endogenous --- then upweights the edited
+demonstrations so the fairness survives imitation. On two cities
+the edits improve established fairness measures the objective never
+optimizes, and, unlike the demand-only editor whose gains never reached the
+under-served group, the supply channel adds statistically significant taxi
+presence to that group. Upweighted behavior cloning carries those gains into
+trained policies, and the control arms confirm the edit itself --- not
+oversampling, not selection --- is what carries them.
 
 The claims come with stated bounds. The optimized fairness term is
 associational: a partial $R^2$ over roughly ten district-level demographic
@@ -36,12 +35,11 @@ magnitudes are not comparable. And the fidelity guardrail certifies that
 edited trajectories still read as their drivers --- identity preservation,
 not fine-grained trajectory-shape realism.
 
-Two directions follow naturally. The editor's two-phase structure --- trim
-first, then lift --- is a scientific control, so the immediate extension is the editor
-\S\ref{sec:editor} anticipates: a single pass in which supply is
-endogenous for every edit and the gradient decides each edit's character.
-The second direction is transfer: whether other imitation objectives and
-adversarially trained generators inherit the edited corpus's fairness the
-way upweighted behavior cloning does, whether allocation constraints on
-the training side can close the rollout gap that data editing alone only
-attenuates, and whether the recipe holds on further cities.
+Two directions follow naturally. The first is the single-pass editor
+\S\ref{sec:editor} anticipates, in which supply is endogenous for every edit
+and the gradient decides each edit's character. The second is transfer:
+whether other imitation objectives and adversarially trained generators
+inherit the edited corpus's fairness as upweighted behavior cloning does,
+whether training-side allocation constraints can close the rollout gap that
+data editing alone only attenuates, and whether the recipe holds on further
+cities.

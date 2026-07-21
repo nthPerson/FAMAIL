@@ -130,9 +130,7 @@ F_{\mathrm{spatial}} &\;=\; 1 - \tfrac{1}{2}\bigl(\mathrm{Gini}(\mathrm{DSR})
 + \mathrm{Gini}(\mathrm{ASR})\bigr).
 \end{split}
 \end{equation}
-As with $F_{\mathrm{demo}}$, the quadratic pairwise sum is never
-materialized: a sorted prefix-sum identity evaluates it in $O(N \log N)$
-with identical gradients. Being demographic-independent, the term acts as a
+Being demographic-independent, the term acts as a
 spatial smoothness regularizer complementing $F_{\mathrm{demo}}$.
 % src: PAPER/argument/03_fairness_theory.md (F_spatial definition)
 % src: famail_temporal/fairness/spatial.py (DSR/ASR ratios; sorted-identity evaluation, no N² materialization)
@@ -147,13 +145,12 @@ realism with a frozen driver-identity discriminator of the ST-SiameseNet
 family \cite{ren2020stsiamese}: an edited trajectory that still reads as its
 driver has preserved human fidelity. The discriminator is trained once and
 never updated during editing, avoiding the instability of a live adversarial
-game \cite{hoermon2016}. We state its role honestly: under the small, bounded
-edits FATE makes, its gradient with respect to the edit is near zero, so it
-serves as a realism \emph{guardrail} rather than a driver of edits ---
-verified with respect to the edited pickup cell, with identity-axis stability
-under both editing phases confirmed empirically (\S\ref{sec:experiments});
-distributional collapse is monitored separately at evaluation time with a
-Jensen--Shannon check over aggregate mobility statistics \cite{feng2020simulate}.
+game \cite{hoermon2016}. Under FATE's small bounded edits the discriminator's
+gradient is near zero, so it acts as a realism \emph{guardrail}, not a driver
+of edits; identity-axis stability under both phases is confirmed empirically
+(\S\ref{sec:experiments}). Distributional collapse is monitored separately at
+evaluation time with a Jensen--Shannon check over aggregate mobility statistics
+\cite{feng2020simulate}.
 % src: PAPER/objective-motivation/MOTIVATION.md (F_fidelity guardrail framing)
 
 \textbf{Scalarization.} The three terms combine linearly,
@@ -164,25 +161,17 @@ Jensen--Shannon check over aggregate mobility statistics \cite{feng2020simulate}
 \qquad \alpha = (0.1,\; 0.8,\; 0.1).
 \end{equation}
 % src: PAPER/objective-motivation/weight-sensitivity/ (EXTENDED_FRONTIER.md + DECISION.md, 2026-07-11)
-The weights are selected \emph{empirically}: we sweep the weight simplex
-(fidelity fixed at 0.1) with full editing runs, and score every sweep point
-not only on the optimized metrics but on the design-targeted and external
-metric classes as well --- classes defined in \S\ref{sec:exp-setup}. The sweep exposes an asymmetry
-the optimized metrics alone would hide: $\Delta F_{\mathrm{demo}}$ is flat
-(within $0.001$) across $\alpha_{\mathrm{sp}} \in [0, 0.55]$, but the
-supply-channel lift-up of the under-served group declines monotonically as
-$\alpha_{\mathrm{sp}}$ grows, and beyond $\alpha_{\mathrm{sp}} = 0.2$ it is
-no longer significant under tier-1 accounting (the tier-2 recount stays
-positive and significant at every sweep point). We therefore select by a
-three-class criterion
---- maximize $\Delta F_{\mathrm{demo}}$ subject to
+The weights are selected \emph{empirically}: a sweep of the weight simplex
+(fidelity fixed at 0.1), scored across all three metric classes
+(\S\ref{sec:exp-setup}), selects $(0.1, 0.8, 0.1)$ by a three-class
+criterion --- maximize $\Delta F_{\mathrm{demo}}$ subject to
 $\Delta F_{\mathrm{spatial}} \ge 0$ \emph{and} the supply-channel lift-up
-remaining significant under both accounting tiers --- which the adopted
-configuration satisfies as the frontier's best point. Two properties make
-the choice robust rather than delicate: the primary gain is insensitive to
-the weights over a wide range, and the fidelity gradient is dormant under
+remaining significant under both accounting tiers. Two properties make the
+choice robust rather than delicate: the primary gain is insensitive to the
+weights over a wide range, and the fidelity gradient is dormant under
 bounded edits --- the discriminator constrains, but does not steer, the
-optimization.
+optimization. The full sweep, with the flatness and monotone-lift-up
+evidence behind the criterion, is reported in \S\ref{sec:exp-robustness}.
 % src: PAPER/objective-motivation/weight-sensitivity/EXTENDED_FRONTIER.md (flatness, monotone lift-up, criterion)
 
 \subsection{Attribution: Localizing the Deficit and the Remedy}\label{sec:attribution}
@@ -212,18 +201,15 @@ whose pickups land in the highest-deficit units are the ones trim edits.
 of every active unit: \emph{how much fairer would the city's service be with
 marginally more taxi presence here, at this hour?} The quantity that answers
 it is the gradient of the objective with respect to supply, evaluated at the
-city's current state. To obtain it, we give the objective an auxiliary
+city's current state. To obtain it, we add an auxiliary
 \emph{supply-perturbation} input $\Delta S \in \mathbb{R}^{N}$ --- one entry
-of hypothetical added taxi presence per active unit --- and have it evaluate
-supply as $S + \Delta S$ in every term of the objective where supply
-appears: the service ratio $Y$ inside $F_{\mathrm{demo}}$ and the rate
-denominators of $F_{\mathrm{spatial}}$. At $\Delta S = 0$ the objective's
-value is untouched; the input exists so that automatic differentiation with
-respect to it reads out $\partial \mathcal{L} / \partial S_i$ at the city's
-current supply ($\Delta S = 0$) --- the marginal fairness effect of added
-presence at each of the $N \approx 34{,}500$ active units, all obtained
-from a single backward pass. (The same $\Delta S$ pathway later
-carries the real supply consequences of lift edits, \S\ref{sec:editor}.)
+of hypothetical added taxi presence per active unit --- evaluate every
+supply-dependent term at $S + \Delta S$, and read
+$\partial \mathcal{L} / \partial S_i$ by automatic differentiation at
+$\Delta S = 0$: the marginal fairness effect of added presence at each of the
+$N \approx 34{,}500$ active units, in one backward pass. (The same $\Delta S$
+pathway later carries the real supply consequences of lift edits,
+\S\ref{sec:editor}.)
 The result is a \emph{value-of-presence} map over the city: large where
 added presence would most repair the fairness terms --- units starved of
 supply relative to their demand and demographic profile --- and small or
