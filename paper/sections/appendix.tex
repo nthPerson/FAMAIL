@@ -23,6 +23,28 @@ protected attributes and outcomes follows the predictability logic of
 certified by predicting the protected attribute from the data; here, the
 demographics predict the adjusted service residual.
 
+\textbf{Per-unit deficit partition.} Because $M$ and $I-H$ are idempotent,
+the explained share $r^{2}_{\mathrm{demo}}$ of Eq.~\eqref{eq:fdemo} admits
+the exact per-unit decomposition
+\begin{equation}\label{eq:unit-attr}
+r^{2}_{\mathrm{demo}}
+\;=\; \sum_i \frac{(MR)_i^{2} - \bigl((I-H)R\bigr)_i^{2}}{R^{\top}MR},
+\end{equation}
+a mathematically exact partition of the fairness deficit across active
+units; a signed variant separates over- from under-served units. This is
+the demand-deficit attribution that drives trim (\S\ref{sec:attribution}).
+% src: PAPER/argument/03_fairness_theory.md (per-cell attribution)
+
+\textbf{Supply-gradient closed form.} The $F_{\mathrm{demo}}$ component of
+the value-of-presence map of \S\ref{sec:attribution} has the closed form
+\begin{equation}\label{eq:supply-grad}
+\frac{\partial F_{\mathrm{demo}}}{\partial S_i}
+\;=\; \frac{2}{R^{\top}MR}\;
+\frac{\bigl((I-H)R\bigr)_i - F_{\mathrm{demo}}\,(MR)_i}{\max(D_i,\, d_0)},
+\end{equation}
+against which the automatic gradient is verified.
+% src: PAPER/supply-lift/LIFT_ALGORITHM_REFERENCE.md §4.1 (autograd-verified closed form)
+
 \section{Editor Implementation Details}\label{app:editor}
 
 This appendix collects the editor implementation details deferred from
@@ -52,6 +74,27 @@ filtered on. Discretized edits therefore pass through an exact
 backward-reachability repair that returns the king-compliant assignment
 nearest the tapered targets, or reports that none exists.
 % src: LIFT_ALGORITHM_REFERENCE.md §3 (king-move rule), §6 (repair; lift skips in-loop)
+
+\textbf{Linearized-offset screen.} The candidate screen of
+\S\ref{sec:attribution}, in detail. Each trajectory's tail --- its last
+$\ell$ seeking states and pickup --- is rigidly translated by every nonzero
+integer offset $\delta \in [-\varepsilon, \varepsilon]^{2}$, and each
+translation is scored by its linearized gain: the value-of-presence
+collected at the tail's new positions minus that at its old ones, each state
+weighted by the presence mass it carries and the map summed over the same
+$5{\times}5$ window through which presence spreads (\S\ref{sec:problem}). A
+trajectory's score is its best offset.
+
+\textbf{Perturbation-arm stationarity.} Detail for the perturbation
+baselines of \S\ref{sec:exp-baselines}. We pre-registered
+$\delta = 0$-initialized ablation arms expecting a no-op --- a
+difference-mode Siamese head has zero subgradient at an identical pair ---
+but the deployed discriminator compares embeddings by \emph{concatenation},
+which is not stationary there: measured, the $\delta = 0$ arms attack rather
+than stall (the iterative arm lands within $0.0003$ of its random-start
+twin; the single-step arm differs with initialization, as a one-step method
+must). The stationarity assumption held only for the head we did not deploy.
+% src: famail_temporal/results/2026-07-13T06-26-19/…06-27-50 arm metrics (nors); deployed checkpoint combination_mode="concatenation" (fidelity/model.py); gradient-at-zero verified live 2026-07-13
 
 \section{Extended Results}\label{app:results}
 
@@ -121,3 +164,104 @@ variance (b0 vs FATE) & see~\S\ref{sec:exp-downstream} & null & null \\ % src: h
 \end{tabular}
 \end{table}
 % src (PRIMARY column): s10 corpus metrics.json + shenzhen-primary-supplylift-s10 external_fairness.json
+
+\textbf{Oracle ceiling.} Supporting the provenance disclosure of
+\S\ref{sec:exp-data-level}. The pre-build oracle gate bounded the
+supply-channel headroom at $+0.786$ on
+$\mathrm{mean}(Y \mid \mathrm{disadv.})$ --- $2.6\times$ the pre-registered
+go/no-go threshold of $+0.3$ (full accounting $+0.882$); the realized
+$+0.053$ sits far below this unconstrained ceiling.
+% src: PAPER/supply-lift/FINDINGS.md §1.3 + data/oracle.json (G0 ceilings)
+
+\textbf{Shenzhen GAN per-seed spread.} Supporting the four-source
+disclosure of \S\ref{sec:exp-downstream}. The Shenzhen GAN's Fidelity-B mean
+of 0.171 hides a bimodal split across seeds ($\pm 0.129$; three of five
+seeds at 0.197--0.295, two at 0.03--0.04), and its worst seeds fail
+broadband --- length-component divergence 0.247 where the edited corpus sits
+at 0.060.
+% src: famail_temporal/results/level1_table_v2/supply_lift_shz_5seed/level1_v2_multiseed.json (gan fidelity_b values + per-component)
+
+\textbf{Upweighting dose saturation (Shenzhen).} Supporting
+\S\ref{sec:exp-downstream}. Beyond the adopted w30, the edited arm's gain
+extends to $+0.0323$ (w40) and $+0.0339$ (w50), each 6/6, with the per-step
+increment shrinking monotonically ($+0.0050$, $+0.0035$, $+0.0021$,
+$+0.0016$) --- w30 sits at the knee.
+% src: famail_temporal/results/weighted_bc_sweep/alpha_sweep_s10_c80_f10_filtered_6seed/dose_response.json
+
+\textbf{Model-level variance ($n = 5$ versus $n = 10$).} Supporting
+\S\ref{sec:exp-downstream}. The $n = 10$ effect size
+($+0.0030 \pm 0.0022$, $t$-test $p = .0019$) is unchanged from the original
+five-seed suite ($+0.0031$) and now clears conventional significance
+outright.
+% src: famail_temporal/results/variance_suite/supply_lift_shz_10seed/aggregate.json (paired_delta.f_causal; B2-VAR-SZ 2026-07-16; n=5 suite retained at variance_suite/supply_lift_shz_5seed)
+
+\textbf{Fairness-penalty $\lambda$ grid.} Detail for the in-processing
+penalty baseline of \S\ref{sec:exp-baselines}. The penalty was tested in
+both a signed formulation (advantaged minus disadvantaged, the direction the
+data over-serves) and an absolute-value formulation. It is inert at every
+dose that trains stably (six-seed suites:
+$|\Delta F_{\mathrm{demo}}| \le 0.0009$ signed at
+$\lambda \in \{1,$ $3.16,$ $10\}$, $+0.0008$ absolute at $\lambda = 10$, all
+n.s.; single-seed probes at $\lambda = 100$ agree; the term contributes on
+the order of $10^{-5}$ of the loss), and destructive only at the dose where
+it finally dominates: at $\lambda = 1000$ the signed form collapses
+$F_{\mathrm{demo}}$ by $-0.2053$ with Fidelity-B at 0.514, the absolute form
+by $-0.1293$ (6/6 seeds) with Fidelity-B at 0.363, against raw's
+$\approx 0.013$. The absolute formulation's shallower collapse is the gap
+pushing back once it crosses zero; the two formulations track each other at
+every $\lambda$.
+% RESOLVED(formulation) 2026-07-18: FB-PENALTY-ABS pilot+suite — absolute tracks signed at every
+% dose (pilot point-by-point on the signed grid; inert <=100, catastrophic at 1000); the spec's
+% pre-committed rule fired on its "drop the scoping" branch. Prior NOTE(formulation) retired.
+% src (1e-5 derivation): probe-observed gap magnitudes ~1e-6 (task-4 report + fairness_penalty_probe)
+% x lambda<=10 vs CE ~O(1); penalty_values not persisted by the harness — camera-ready chore to persist.
+% src: famail_temporal/results/weighted_bc_sweep/fairness_penalty_6seed/paired_stats.json + fairness_penalty_probe/ (lambda 100/1000 single-seed probes)
+% src: famail_temporal/results/weighted_bc_sweep/fairness_penalty_abs_{pilot,6seed}/ (FB-PENALTY-ABS 2026-07-18: l10 +0.0008 n.s.; l1000 -0.1293 6/6, Fid-B 0.363)
+
+\textbf{San Francisco perturbation-arm detail.} Supporting
+\S\ref{sec:exp-baselines}. On San Francisco the three perturbation arms
+violate king-move adjacency wholesale (72.0/87.0/97.5\%) and pay
+$2$--$4\times$ the edited corpus's distributional divergence (0.198--0.418
+against 0.098).
+% src: famail_temporal/results/2026-07-16T16-08-{05_baseline_ifgsm,16_baseline_fgsm,23_baseline_random}_sf12/metrics.json (B1 runs 2026-07-16; SF Fid-B from level1 sf12 edited row = 0.098)
+
+\textbf{San Francisco downstream detail.} Supporting \S\ref{sec:exp-sf}.
+Extended doses: $+0.0370$ (w40) and $+0.0371$ (w50), each 6/6, flat past
+w40; the random control stays null-to-negative and the most-fair selection
+control stays significantly \emph{positive} ($+0.0063$/$+0.0066$) --- the
+dominated-control pattern of the alternate feature sets
+(\S\ref{sec:exp-robustness}). Model-level variance: the SF suite stays null
+at $n = 10$ seeds ($\Delta F_{\mathrm{demo}} = -0.0009 \pm 0.0035$, mixed
+signs, closer to zero than at $n = 5$), unlike the primary city's small
+significant positive effect. Four sources (generators retrained from
+scratch; identity gate passed, matched 0.958 vs.\ mismatched 0.034): the
+edited corpus is the fairest source ($F_{\mathrm{demo}}$ 0.9067 vs.\ GAN
+0.8795, raw 0.8752, BC 0.8744) while identity-faithful (Fidelity-A 0.9581
+$\approx$ raw 0.9578; Fidelity-B 0.098, the expected bounded-edit
+divergence).
+% src: famail_temporal/results/weighted_bc_sweep/supply_lift_a10_sf12_dose_ext_6seed/paired_stats.json (SF-WBC-DOSEEXT 2026-07-17; increments w30->w40 +0.0038, w40->w50 +0.0001)
+% src: famail_temporal/results/variance_suite/supply_lift_sf12_10seed/aggregate.json (paired_delta.f_causal; B2-VAR-SF 2026-07-16; n=5 suite retained)
+% src: famail_temporal/results/level1_table_v2/supply_lift_sf12_5seed/level1_v2_multiseed.json
+
+\section{Statistical Protocol Details}\label{app:protocol}
+
+This appendix collects the statistical-protocol details deferred from
+\S\ref{sec:exp-setup}.
+
+\textbf{Exact-Wilcoxon floor arithmetic.} With $n = 6$ paired seeds the
+two-sided Wilcoxon signed-rank $p$ floors at $0.03125$, attained exactly
+when all six seeds share a sign, which is why $p = 0.031$ reads only as a
+sign-unanimity certificate. The flagship w30 comparison at $n = 12$ paired
+seeds has floor $.00049$, low enough for an exact Wilcoxon $p$ to survive
+multiple-comparison correction. Suites with $n = 5$ seeds cannot reach
+$p < 0.05$ (floor $0.0625$) and are reported as effect-versus-noise.
+% src: PAPER/argument/04_evaluation.md §3; PAPER/external-metrics/FINDINGS.md §1, §5
+
+\textbf{Instrument definitions.} The service ratio $Y$ is grouped
+per equity axis (housing price, compensation, migrant share) under two
+conventions, district extremes and median split. Demographic parity (DP) is
+the signed gap between the group levels
+$\mathrm{mean}(Y \mid \mathrm{disadv.})$ and
+$\mathrm{mean}(Y \mid \mathrm{adv.})$; disparate impact (DI) is their ratio
+(1 = parity); the Theil index is between-region and grouping independent.
+% src: PAPER/external-metrics/FINDINGS.md §1, §4.3 (DP≡gap disclosure)

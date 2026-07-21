@@ -35,14 +35,14 @@ lift after filtering); San Francisco: $k = 2{,}000$ (1{,}330 trim + 629 lift).
 
 \textbf{Protocol and statistics.} Every model-based comparison uses paired
 seeds (identical seeding before each arm), so per-seed differences cancel
-shared seed noise. With $n = 6$ paired seeds the two-sided Wilcoxon signed-rank
-$p$ floors at $0.03125$, attained exactly when all six seeds share a sign; we
-therefore read effects from the mean $\Delta$, its $t$-interval, and
-dose-response monotonicity, and treat $p = 0.031$ only as a sign-unanimity
-certificate. The flagship w30 comparison is additionally run at $n = 12$
-paired seeds in both cities (floor $.00049$), where an exact Wilcoxon $p$
-can survive multiple-comparison correction. Suites with $n = 5$ seeds cannot reach $p < 0.05$ (floor 0.0625)
-and are reported as effect-versus-noise. Data-level before/after deltas on
+shared seed noise. With $n = 6$ paired seeds we read effects from the mean
+$\Delta$, its $t$-interval, and dose-response monotonicity, and treat
+$p = 0.031$ only as a sign-unanimity certificate. The flagship w30 comparison
+is additionally run at $n = 12$ paired seeds in both cities, where an exact
+Wilcoxon $p$ can survive multiple-comparison correction; suites with
+$n = 5$ seeds are reported as effect-versus-noise. The exact-Wilcoxon floor
+arithmetic behind these readings is in Appendix~\ref{app:protocol}.
+Data-level before/after deltas on
 grid metrics carry paired unit-level bootstrap intervals ($B = 1{,}000$,
 percentile); units are spatially correlated and demographics are
 district-constant, so these intervals are first-order.
@@ -61,15 +61,15 @@ ride class (iii) only.
 % src: PAPER/supply-lift/LIFT_ALGORITHM_REFERENCE.md §13
 
 \textbf{External fairness instruments.} On the service ratio $Y$ over active
-units, grouped per equity axis (housing price, compensation, migrant share; two
-grouping conventions --- district extremes and median split): the two group
-\emph{levels} $\mathrm{mean}(Y \mid \mathrm{disadvantaged})$ and
-$\mathrm{mean}(Y \mid \mathrm{advantaged})$; \emph{demographic parity} (DP), the
-signed gap between them (on a continuous outcome DP \emph{is} the
-supply/demand-ratio gap --- one number, reported once); \emph{disparate impact}
-(DI), their ratio (1 = parity); and the between-region \emph{Theil} index
-(grouping-independent). The strict count of distinct external instruments is
-therefore \{DI, DP/gap, Theil\} plus the descriptive levels.
+units, grouped per equity axis, we report \emph{demographic parity} (DP; on
+a continuous outcome DP \emph{is} the supply/demand-ratio gap --- one
+number, reported once), \emph{disparate impact} (DI), and the between-region
+\emph{Theil} index, alongside the two group \emph{levels}
+$\mathrm{mean}(Y \mid \mathrm{disadv.})$ and
+$\mathrm{mean}(Y \mid \mathrm{adv.})$. The strict count of distinct external
+instruments is therefore \{DI, DP/gap, Theil\} plus the descriptive levels.
+Grouping conventions and instrument definitions are in
+Appendix~\ref{app:protocol}.
 % src: PAPER/external-metrics/FINDINGS.md §1, §4.3 (DP≡gap disclosure)
 
 \subsection{Data-Level Fairness (Shenzhen)}\label{sec:exp-data-level}
@@ -155,12 +155,11 @@ by-design trade-off we disclose rather than net out.
 \textbf{Provenance disclosures.} About 5\% of trim edits (118/2{,}455) had no
 king-compliant repair and were reverted post hoc; the rule was adopted before
 its metric effects were computed, and it moved every metric favorably --- the
-infeasible edits were actively counterproductive. The pre-build oracle gate
-bounded the supply-channel headroom at $+0.786$ on
-$\mathrm{mean}(Y \mid \mathrm{disadv.})$ --- $2.6\times$ the pre-registered
-go/no-go threshold of $+0.3$ (full accounting $+0.882$); the realized $+0.053$
-sits far below the unconstrained ceiling, as a realism-bounded editor should.
-% src: PAPER/supply-lift/FINDINGS.md §8 (skip-on-infeasible); §1.3 + data/oracle.json (G0 ceilings)
+infeasible edits were actively counterproductive. A pre-build oracle gate
+bounded the supply-channel headroom, and the realized lift-up sits far below
+that realism-free ceiling, as a realism-bounded editor should
+(Appendix~\ref{app:results}).
+% src: PAPER/supply-lift/FINDINGS.md §8 (skip-on-infeasible)
 
 \subsection{Ablation: Trim-Only versus Trim+Lift}\label{sec:exp-ablation}
 
@@ -218,14 +217,11 @@ gan-generated & 0.8089 & 0.848 & 0.171 \\
 The claim holds: the edited corpus is the fairest source and faithful to
 driver identity (Fidelity-A 0.844 $\approx$ raw 0.848; gate passed,
 matched 0.848 vs.\ mismatched 0.193), and its Fidelity-B is the divergence
-of the bounded edits, quantified in \S\ref{sec:exp-data-level}. One instability we
-surface rather than smooth: the Shenzhen GAN's Fidelity-B mean of 0.171
-hides a bimodal split across seeds ($\pm 0.129$; three of five seeds at
-0.197--0.295, two at 0.03--0.04), and its worst seeds fail broadband ---
-length-component divergence 0.247 where the edited corpus sits at 0.060.
-The collapse mode Shenzhen generators have shown before returns in some
-seeds here, while the SF GAN stays uniformly healthy (\S\ref{sec:exp-sf}).
-% src: famail_temporal/results/level1_table_v2/supply_lift_shz_5seed/level1_v2_multiseed.json (gan fidelity_b values + per-component)
+of the bounded edits, quantified in \S\ref{sec:exp-data-level}. One
+instability we surface rather than smooth: the Shenzhen GAN's Fidelity-B is
+bimodal across seeds, and the collapse mode Shenzhen generators have shown
+before returns in some seeds here, while the SF GAN stays uniformly healthy
+(\S\ref{sec:exp-sf}); the per-seed spread is in Appendix~\ref{app:results}.
 
 \textbf{Vanilla training averages the edit away.} A driver-conditioned BC
 policy trained on the edited corpus at uniform weight is not fairer than one
@@ -244,10 +240,9 @@ controls stay null at the same $n = 12$ (random $-0.0017$, most-fair
 $+0.0012$, mixed signs, n.s.).
 % src: PAPER/supply-lift/data/a10/shz_a10_wbc_n12_pooled_stats.json (pooled seeds 0-5 + 6-11; 12/12 floor = 2/4096 = .000488; t_p 1.2e-12; WBC-N12 2026-07-18)
 Extending
-the dose shows saturation, not unbounded growth: $+0.0323$ (w40) and
-$+0.0339$ (w50), each 6/6, with the per-step increment shrinking
-monotonically ($+0.0050$, $+0.0035$, $+0.0021$, $+0.0016$) --- w30 sits at
-the knee of the curve, not at a tuned endpoint. Neither
+the dose saturates, not unbounded growth --- w30 sits at the knee of the
+curve, not at a tuned endpoint (w40/w50 values and the per-step increment
+list in Appendix~\ref{app:results}). Neither
 control reproduces it at any dose: the random-subset placebo is
 null-to-negative ($-0.0014$ w10, $-0.0023$ w30, $-0.0036$ w50, never
 positive), and the most-fair selection control reaches
@@ -267,12 +262,11 @@ disclosed rather than netted out.
 
 \textbf{Model-level variance.} A paired baseline-vs-FATE comparison at
 uniform weight gives $\Delta F_{\mathrm{demo}} = +0.0030 \pm 0.0022$ at
-$n = 10$ seeds (9/10 positive; Wilcoxon $p = .0039$, $t$-test $p = .0019$)
---- the effect size is unchanged from the original five-seed suite
-($+0.0031$) and now clears conventional significance outright. The reading
-stands: the training procedure alone transmits a small but real fraction of
-the edit, an order of magnitude below the upweighted gains, so the weighting
-lever remains what carries the transfer.
+$n = 10$ seeds (9/10 positive; Wilcoxon $p = .0039$). The training procedure
+alone transmits a small but real fraction of the edit, an order of magnitude
+below the upweighted gains, so the weighting lever remains what carries the
+transfer; the $n = 5$-versus-$n = 10$ comparison is in
+Appendix~\ref{app:results}.
 % src: famail_temporal/results/variance_suite/supply_lift_shz_10seed/aggregate.json (paired_delta.f_causal; B2-VAR-SZ 2026-07-16; n=5 suite retained at variance_suite/supply_lift_shz_5seed)
 
 \textbf{The allocation boundary.} Metric propagation is not
@@ -305,19 +299,13 @@ perturbation arms.
 \textbf{Perturbation arms.} Three arms attack the same trajectories the
 headline edit selected, at the same $\varepsilon = 2$: iterative and
 single-step signed-gradient attacks on the frozen identity discriminator, and
-a seeded random-jitter placebo. A naming note: the gradient arms are
-\emph{iFGSM/FGSM with random restart} (PGD-style random initialization within
-the $\varepsilon$ ball). We had pre-registered $\delta = 0$-initialized
-ablation arms expecting a no-op --- a difference-mode Siamese head has zero
-subgradient at an identical pair --- but the deployed discriminator compares
-embeddings by \emph{concatenation}, which is not stationary there: measured,
-the $\delta = 0$ arms attack rather than stall (the iterative arm lands
-within $0.0003$ of its random-start twin; the single-step arm differs with
-initialization, as a one-step method must). The stationarity assumption held
-only for the head we did not deploy, and the random-start arms are the
-reported ones.
-% src: famail_temporal/results/2026-07-13T06-26-19/…06-27-50 arm metrics (nors); deployed checkpoint combination_mode="concatenation" (fidelity/model.py); gradient-at-zero verified live 2026-07-13
-Results: Table~\ref{tab:baselines}.
+a seeded random-jitter placebo. The gradient arms are \emph{iFGSM\slash
+FGSM with random restart} (PGD-style random initialization within the
+$\varepsilon$ ball); a pre-registered $\delta = 0$ no-op ablation did not
+stall because the
+deployed head compares embeddings by \emph{concatenation}, not stationary at
+an identical pair (Appendix~\ref{app:editor}). The random-start arms are the
+reported ones. Results: Table~\ref{tab:baselines}.
 
 The arms behave as fidelity baselines. One result lands against the
 pre-registered expectation: random jitter \emph{does} raise
@@ -333,11 +321,10 @@ why identity fidelity alone cannot rank editing quality here and the
 adjacency and distributional axes carry the comparison. The three
 perturbation arms replicate on San Francisco: every arm lands well below the
 editor ($+0.0122$ iFGSM, $+0.0176$ FGSM, $+0.0049$ random, against the
-editor's $+0.0316$) while violating adjacency wholesale
-(72.0/87.0/97.5\%) and paying $2$--$4\times$ the edited corpus's
-distributional divergence (0.198--0.418 against 0.098); the random-jitter
-fairness surprise does not recur there --- random is the weakest mover.
-% src: famail_temporal/results/2026-07-16T16-08-{05_baseline_ifgsm,16_baseline_fgsm,23_baseline_random}_sf12/metrics.json (B1 runs 2026-07-16; SF Fid-B from level1 sf12 edited row = 0.098)
+editor's $+0.0316$) while violating adjacency wholesale, and the
+random-jitter fairness surprise does not recur there --- random is the
+weakest mover. The per-arm adjacency and divergence figures are in
+Appendix~\ref{app:results}.
 % src: famail_temporal/baselines/baseline_table/baseline_table.json (Fid-A/Fid-B(JS)/adjacency-violation columns)
 
 \textbf{Demographic oversampling.} The naive lift-up baseline: duplicate
@@ -371,30 +358,16 @@ paying the same distributional cost as w30 upweighting (Fidelity-B
 $+0.0144$), and its rolled-out policies still tilt allocation away from the % lint-allow: coincidental value (fair_reweigh paired Fid-B delta, not the trim-only F_demo headline)
 disadvantaged group ($-0.0010$, 0/6, $p = .031$). An in-processing penalty
 in the spirit of \cite{zheng2023} --- the imitation loss plus $\lambda$
-times the demographic-parity gap in predicted next-cell mass, tested in
-both the signed formulation (advantaged minus disadvantaged, the direction
-the data over-serves) and the absolute-value formulation --- is inert at
-every dose that trains stably (six-seed suites:
-$|\Delta F_{\mathrm{demo}}| \le 0.0009$ signed at
-$\lambda \in \{1,$ $3.16,$ $10\}$, $+0.0008$ absolute at $\lambda = 10$,
-all n.s.; single-seed probes at $\lambda = 100$ agree; the term contributes
-on the order of $10^{-5}$ of the loss) and destructive at the dose where it
-finally dominates: at $\lambda = 1000$ the signed form collapses
-$F_{\mathrm{demo}}$ by $-0.2053$ with Fidelity-B at 0.514, the absolute
-form by $-0.1293$ (6/6 seeds) with Fidelity-B at 0.363, against raw's
-$\approx 0.013$. The shallower absolute collapse is the gap pushing back
-once it crosses zero; neither formulation offers a constructive operating
-range.
-% RESOLVED(formulation) 2026-07-18: FB-PENALTY-ABS pilot+suite — absolute tracks signed at every
-% dose (pilot point-by-point on the signed grid; inert <=100, catastrophic at 1000); the spec's
-% pre-committed rule fired on its "drop the scoping" branch. Prior NOTE(formulation) retired.
-% src (1e-5 derivation): probe-observed gap magnitudes ~1e-6 (task-4 report + fairness_penalty_probe)
-% x lambda<=10 vs CE ~O(1); penalty_values not persisted by the harness — camera-ready chore to persist.
+times the demographic-parity gap in predicted next-cell mass --- is inert at
+every trainable dose, destructive only where it dominates. The signed
+formulation (advantaged minus disadvantaged, the direction the data
+over-serves) and the absolute-value formulation behave the same at every
+$\lambda$; neither offers a constructive operating range. The full
+$\lambda$ grid, both formulations, the collapse magnitudes, and the
+$10^{-5}$ loss-share derivation are in Appendix~\ref{app:results}.
 Neither training-side intervention reproduces any part of the recovery
 that editing the demonstrations provides.
 % src: famail_temporal/results/weighted_bc_sweep/fairness_baseline_6seed/paired_stats.json (fair_reweigh; edited_w30 +0.0302 replicated internally)
-% src: famail_temporal/results/weighted_bc_sweep/fairness_penalty_6seed/paired_stats.json + fairness_penalty_probe/ (lambda 100/1000 single-seed probes)
-% src: famail_temporal/results/weighted_bc_sweep/fairness_penalty_abs_{pilot,6seed}/ (FB-PENALTY-ABS 2026-07-18: l10 +0.0008 n.s.; l1000 -0.1293 6/6, Fid-B 0.363)
 % src: famail_temporal/baselines/external_fairness/results/option_a_rollout_fb/summary.json (rollout: R5 arm-prefix regression gate passed, edited_w30 -0.00329 vs committed -0.0033)
 
 \begin{table}[t]
@@ -484,12 +457,11 @@ excluding zero).
 % src: {2026-07-13T04-41-12_..._hgc, 2026-07-13T17-04-22_..._4feat}_filtered/channel_decomposition.json (A1 2026-07-16 + A1' tier-2 rerun 2026-07-17, B=2000): totals +0.0594 [+0.0181,+0.1013] / +0.1461 [+0.0900,+0.2039]; supply t1 +0.0054 / +0.0608; supply TIER-2 +0.0211 [+0.0181,+0.0247] / +0.0771 [+0.0706,+0.0836]; demand +0.0539* / +0.0853* (PRIMARY: t1 +0.0176, t2 +0.0411, demand n.s.)
 
 \textbf{Filtering is not a substitute.} Removing the $K$ least-fair
-trajectories instead of editing them does not reproduce the gain --- it
-inverts it: $F_{\mathrm{demo}}$ falls monotonically with removal
-(0.7988 $\to$ 0.7935 at the maximum $K = 2{,}455$), while editing the same
-attribution-selected slice raises it to 0.8214. On the $F_{\mathrm{demo}}$
-objective, neither selecting (\S\ref{sec:exp-downstream}, most-fair selection control)
-nor removing data substitutes for editing it.
+trajectories instead of editing them inverts the gain --- $F_{\mathrm{demo}}$
+falls to 0.7935 at the maximum $K = 2{,}455$, where editing the same
+attribution-selected slice raises it to 0.8214 --- so on the
+$F_{\mathrm{demo}}$ objective, neither removing nor selecting data
+(\S\ref{sec:exp-downstream}) substitutes for editing it.
 % src: famail_temporal/results/analysis/pareto_supplylift/pareto_points.csv (Q7-pareto ledger row)
 
 \subsection{External Validity: San Francisco}\label{sec:exp-sf}
@@ -556,37 +528,28 @@ control is significantly positive but dominated ($+0.0059$, 10/12,
 $p = .0020$, about a sixth of the edited arm's gain; at $n = 6$ per dose it
 was significantly negative at w10 and n.s.\ at w20).
 % src: PAPER/supply-lift/data/a10/sf12_a10_wbc_n12_pooled_stats.json (pooled seeds 0-5 + 6-11; SF-WBC-N12 2026-07-18; prior n=6 values: vanilla +0.0026 5/6 p=.0625; w30 +0.0332 6/6; random -0.0069 n.s.)
-The extended doses saturate here too ($+0.0370$ w40, $+0.0371$ w50, each
-6/6 --- flat past w40), while the random control stays null-to-negative and
-the most-fair selection control stays significantly \emph{positive}
-($+0.0063$/$+0.0066$) --- the same dominated-control pattern as the
-alternate feature sets (\S\ref{sec:exp-robustness}), reported rather than
-averaged away.
-% src: famail_temporal/results/weighted_bc_sweep/supply_lift_a10_sf12_dose_ext_6seed/paired_stats.json (SF-WBC-DOSEEXT 2026-07-17; increments w30->w40 +0.0038, w40->w50 +0.0001)
+The extended doses saturate here too, flat past w40, with the same
+dominated-control pattern as the alternate feature sets
+(\S\ref{sec:exp-robustness}); per-dose values are in
+Appendix~\ref{app:results}.
 One city difference stated plainly:
 $F_{\mathrm{spatial}}$ does \emph{not} propagate on SF ($-0.0040$ at w30,
 n.s.); the primary-city result at the adopted weights is reported in
 \S\ref{sec:exp-downstream}.
 % src: famail_temporal/results/weighted_bc_sweep/supply_lift_a10_sf12_filtered_6seed/paired_stats.json
-The SF model-level variance suite stays null at $n = 10$ seeds
-($\Delta F_{\mathrm{demo}} = -0.0009 \pm 0.0035$, mixed signs, closer to
-zero than at $n = 5$) --- unlike the primary city's small significant
-positive effect (\S\ref{sec:exp-downstream}), a city difference we state
-plainly.
-% src: famail_temporal/results/variance_suite/supply_lift_sf12_10seed/aggregate.json (paired_delta.f_causal; B2-VAR-SF 2026-07-16; n=5 suite retained)
+The SF model-level variance suite stays null at $n = 10$ seeds, unlike the
+primary city's small significant positive effect
+(\S\ref{sec:exp-downstream}) --- a city difference we state plainly, with
+the seed detail in Appendix~\ref{app:results}.
 The allocation boundary (\S\ref{sec:exp-downstream}) also replicates:
 rolled-out policies still tilt pickup share away from disadvantaged areas
 --- $-0.0432$ at w30 on the demand-only corpus and $-0.0335$ with trim+lift
 (each 0/6 seeds, $p = .031$) --- roughly $22\%$ attenuation, not a reversal,
 at roughly ten times the primary city's magnitudes.
 % src: famail_temporal/baselines/external_fairness/results/option_a_rollout_sf12_tl/summary.json + option_a_rollout_sf12_trimonly/summary.json (edited_w30.MigrantRatio.pickups.share_D_delta; C3-SF-ROLLOUT 2026-07-17; attenuation 1-0.0335/0.0432=22.5%)
-The four-source comparison also reproduces (generators retrained from
-scratch; identity gate passed, matched 0.958 vs.\ mismatched 0.034): the
-edited corpus is the fairest source ($F_{\mathrm{demo}}$ 0.9067 vs.\ GAN
-0.8795, raw 0.8752, BC 0.8744) while identity-faithful (Fidelity-A 0.9581
-$\approx$ raw 0.9578; Fidelity-B 0.098, the expected bounded-edit
-divergence).
-% src: famail_temporal/results/level1_table_v2/supply_lift_sf12_5seed/level1_v2_multiseed.json
+The four-source comparison also reproduces: the edited corpus is the fairest
+source while identity-faithful, with the full table in
+Appendix~\ref{app:results}.
 
 \textbf{San Francisco caveats.} ACS foreign-born share proxies the migrant axis (not
 hukou); the 12-driver density-matched subsample is small; 14.9\% of raw

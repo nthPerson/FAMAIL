@@ -170,13 +170,9 @@ second, the remedy.
 
 \textbf{Demand deficit attribution (drives trim).} Because $M$ and $I-H$ are
 idempotent, the explained share $r^{2}_{\mathrm{demo}}$ of
-Eq.~\eqref{eq:fdemo} admits an exact per-unit decomposition,
-\begin{equation}\label{eq:unit-attr}
-r^{2}_{\mathrm{demo}}
-\;=\; \sum_i \frac{(MR)_i^{2} - \bigl((I-H)R\bigr)_i^{2}}{R^{\top}MR},
-\end{equation}
-a mathematically exact partition of the fairness deficit across active units; 
-a signed variant separates over- from under-served units. The trajectories 
+Eq.~\eqref{eq:fdemo} admits an exact per-unit partition of the fairness
+deficit across active units (Appendix~\ref{app:derivations}), with a signed
+variant that separates over- from under-served units. The trajectories
 whose pickups land in the highest-deficit units are the ones trim edits.
 % src: PAPER/argument/03_fairness_theory.md (per-cell attribution)
 
@@ -197,29 +193,17 @@ The result is a \emph{value-of-presence} map over the city: large where
 added presence would most repair the fairness terms --- units starved of
 supply relative to their demand and demographic profile --- and small or
 negative where presence is already abundant. The map's
-$F_{\mathrm{demo}}$ component has the closed form
-\begin{equation}\label{eq:supply-grad}
-\frac{\partial F_{\mathrm{demo}}}{\partial S_i}
-\;=\; \frac{2}{R^{\top}MR}\;
-\frac{\bigl((I-H)R\bigr)_i - F_{\mathrm{demo}}\,(MR)_i}{\max(D_i,\, d_0)},
-\end{equation}
-against which the automatic gradient is verified.
+$F_{\mathrm{demo}}$ component has a closed form, given with its autograd
+verification in Appendix~\ref{app:derivations}.
 % src: PAPER/supply-lift/LIFT_ALGORITHM_REFERENCE.md §4.1 (autograd-verified closed form)
 
-To turn the map into candidates, the screen asks which drivers already pass
-close enough to high-value territory that a bounded detour would take them
-into it. Each trajectory's tail --- its last $\ell$ seeking states and
-pickup --- is rigidly translated by every nonzero integer offset
-$\delta \in [-\varepsilon, \varepsilon]^{2}$, and each
-translation is scored by its linearized gain: the value-of-presence
-collected at the tail's new positions minus that at its old ones, each
-state weighted by the presence mass it carries and the map summed over the
-same $5{\times}5$ window through which presence spreads
-(\S\ref{sec:problem}). A trajectory's score is its best offset, and every
-trajectory long enough to carry a movable tail (${\approx}80$k of the
-corpus's ${\approx}95$k) is ranked by score --- the
-screen thus favors trajectories that already nearly serve the right areas,
-bending real behavior rather than inventing it.
+To turn the map into candidates, a linearized-offset screen ranks
+trajectories whose tails could bend into high-value cells: every trajectory
+long enough to carry a movable tail (${\approx}80$k of the corpus's
+${\approx}95$k) is scored by its best bounded tail translation
+(Appendix~\ref{app:editor}), so the screen favors trajectories that already
+nearly serve the right areas, bending real behavior rather than inventing
+it.
 % src: PAPER/supply-lift/data/oracle.json (n_trajectories_len_ge3 80,427 of n_trajectories_total 95,297)
 The screen only \emph{nominates}: every selected
 trajectory is subsequently re-optimized individually under the full objective
