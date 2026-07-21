@@ -12,12 +12,13 @@ Two corrections to the inventory's framing, applied here:
 
 **2026-07-20 addendum — Figure-1 geometry settled (supersedes any teaser-resize speculation):**
 - The live Figure 1 is now the **(c)-only** build (Dr. Zhang's request, executed 2026-07-20).
-  Measured on acmart harness renders: figure+caption block 15.4 cm (3-strip) → 11.2 cm
-  ((c)-only) = **~4.2 cm ≈ 11–12 single-column lines already banked** relative to the
-  geometry this plan was costed against. The re-run must re-measure pages from the current
-  build rather than reuse this file's totals.
+  Measured on acmart harness renders (after Robert's 2026-07-20 FATE-arrow + boxed-legend
+  revisions): figure+caption block 15.4 cm (3-strip) → 11.4 cm ((c)-only) = **~4.0 cm ≈ 11
+  single-column lines already banked** relative to the geometry this plan was costed
+  against. The re-run must re-measure pages from the current build rather than reuse this
+  file's totals.
 - **Standing liability for the re-run:** Robert's (b)+(c) counter-proposal
-  (`figures/figure-1/figure-1-bc.tex`) measures 11.8 cm — only **~0.6 cm ≈ 1–2 lines** more
+  (`figures/figure-1/figure-1-bc.tex`) measures 12.0 cm — only **~0.6 cm ≈ 1–2 lines** more
   than (c)-only. If Dr. Zhang is swayed at this week's meeting, the swap is a one-line
   `\input` change; the 8.0pp endpoint must therefore keep **≥ 2 lines of slack**.
 

@@ -35,6 +35,7 @@ a policy that imitates them unchanged learns the service gap they record.
   % THERE; standalone harness figures/figure-1/figure-1-test.tex; design history
   % figures/figure-1/design-archive/). This figure is the WHY; fig:overview in
   % section 3 is the HOW.
+%   \input{figures/figure-1/figure-1-bc}
   \input{figures/figure-1/figure-1}
   \caption{Why FATE edits trajectory data: two corpora, two futures.
   A real fleet's service demonstrates bias: on Shenzhen the advantaged
@@ -54,7 +55,9 @@ a policy that imitates them unchanged learns the service gap they record.
   and results in the model learning a fairer policy. The $+$ marks flag
   what the edit changed.
   Figure~\ref{fig:overview} shows how the editor works.}
-  \Description{Two side-by-side pipelines. On the left, a raw corpus of
+  \Description{Two side-by-side pipelines, with an arrow labeled FATE
+  transforming the left pipeline's raw corpus into the right pipeline's
+  edited corpus. On the left, a raw corpus of
   real human driver trajectories trains a standard imitation model; its
   rolled-out city map keeps taxis clustered in the advantaged district
   while waiting pickups fill the disadvantaged district. On the right, a

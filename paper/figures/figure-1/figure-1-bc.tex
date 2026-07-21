@@ -193,9 +193,17 @@
      corpus};
   \node[font=\tiny, text=figink, align=center] at (6.575,-6.04)
     {fairness gains survive training ---\\less human bias in rolled out corpus};
-  % glyph legend (re-homed from the removed strip (a))
-  \pic at (1.02,-6.5) {taxi};
-  \node[anchor=west, font=\tiny, text=figgray] at (1.18,-6.5) {taxi presence};
-  \pic[figgray] at (2.98,-6.5) {pick};
-  \node[anchor=west, font=\tiny, text=figgray] at (3.09,-6.5) {service pickup};
+  % glyph legend (re-homed from the removed strip (a)) — boxed (dotted = a
+  % key, not a pipeline stage), centered on the figure width, third entry
+  % glossing the accent "+" marks (2026-07-20, matching the live (c)-only
+  % figure so the meeting comparison differs only in the disputed panels)
+  \draw[figgray!80, line width=0.4pt, dash pattern=on 0.5pt off 1.3pt,
+        rounded corners=2pt] (1.63,-6.83) rectangle (7.37,-6.37);
+  \pic at (1.93,-6.6) {taxi};
+  \node[anchor=west, font=\tiny, text=figgray] at (2.09,-6.6) {taxi presence};
+  \pic[figgray] at (3.69,-6.6) {pick};
+  \node[anchor=west, font=\tiny, text=figgray] at (3.80,-6.6) {service pickup};
+  \draw[figaccent, line width=0.8pt]
+    (5.41,-6.6) -- (5.51,-6.6) (5.46,-6.65) -- (5.46,-6.55);
+  \node[anchor=west, font=\tiny, text=figgray] at (5.61,-6.6) {changed by the edit};
 \end{tikzpicture}

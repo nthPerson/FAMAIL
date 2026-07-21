@@ -49,10 +49,12 @@ acmart column-width harness at 150 dpi, 2026-07-20; one acmart text line
 | Variant | Figure + caption block | Saved vs 3-strip |
 |---|---|---|
 | A — 3-strip (archived) | 15.4 cm | — |
-| B — (b)+(c) counter-proposal | 11.8 cm | 3.6 cm ≈ 10 lines |
-| C — (c)-only (live) | 11.2 cm | 4.2 cm ≈ 11–12 lines |
+| B — (b)+(c) counter-proposal | 12.0 cm | 3.4 cm ≈ 9 lines |
+| C — (c)-only (live) | 11.4 cm | 4.0 cm ≈ 11 lines |
 
-Difference B vs C: **0.6 cm ≈ 1–2 lines.**
+Difference B vs C: **0.6 cm ≈ 1–2 lines.** (Both variants carry Robert's
+2026-07-20 upgrades: the FATE provenance arrow on C, and on both the boxed,
+centered legend with a third entry glossing the accent $+$ marks.)
 
 ## Anticipated objection
 

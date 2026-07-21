@@ -23,6 +23,10 @@
 % attribution". Do not reintroduce a quantified bias share here or in the
 % caption. Accent "+" marks flag edited cells in the fair future — on BOTH
 % sides of the boundary (trim touches the advantaged district too).
+% (Robert, 2026-07-20): provenance arrow raw->edited chip labeled FATE
+% (the edited corpus visibly COMES FROM the raw corpus); legend boxed
+% (dotted = key, not a pipeline stage), centered on the figure width, with
+% a third entry glossing the accent "+" marks.
 \definecolor{figink}{HTML}{1A1A1A}
 \definecolor{figgray}{HTML}{6F6F6F}
 \definecolor{figfaint}{HTML}{C9C9C9}
@@ -102,6 +106,11 @@
     (7.40,-1.00) -- (7.50,-1.00) (7.45,-1.05) -- (7.45,-0.95);
   \node[font=\tiny, text=figink, align=center] at (6.45,-1.33)
     {edited corpus\\ \textcolor{figgray}{most-biased slice edited in place}};
+  % FATE transforms the raw corpus into the edited corpus (provenance arrow:
+  % chip right-side center -> chip left-side center, label above)
+  \draw[flowacc] (3.85,-0.95) -- (5.1,-0.95);
+  \node[anchor=south, font=\tiny\bfseries, text=figaccent, inner sep=1.5pt]
+    at (4.475,-0.95) {FATE};
 
   % =========================================================================
   % Chips -> model boxes (straight verticals)
@@ -172,10 +181,17 @@
     {fairness gains survive training ---\\less human bias in rolled out corpus};
 
   % =========================================================================
-  % Legend footer (re-homed from old strip (a))
+  % Legend footer — boxed (dotted = a key, not a pipeline stage), centered
+  % on the figure width (bbox ≈ [0.7, 8.3], center ≈ 4.5); third entry
+  % glosses the accent "+" marks (caption keeps the same wording)
   % =========================================================================
-  \pic at (1.02,-5.5) {taxi};
-  \node[anchor=west, font=\tiny, text=figgray] at (1.18,-5.5) {taxi presence};
-  \pic[figgray] at (2.98,-5.5) {pick};
-  \node[anchor=west, font=\tiny, text=figgray] at (3.09,-5.5) {service pickup};
+  \draw[figgray!80, line width=0.4pt, dash pattern=on 0.5pt off 1.3pt,
+        rounded corners=2pt] (1.63,-5.83) rectangle (7.37,-5.37);
+  \pic at (1.93,-5.6) {taxi};
+  \node[anchor=west, font=\tiny, text=figgray] at (2.09,-5.6) {taxi presence};
+  \pic[figgray] at (3.69,-5.6) {pick};
+  \node[anchor=west, font=\tiny, text=figgray] at (3.80,-5.6) {service pickup};
+  \draw[figaccent, line width=0.8pt]
+    (5.41,-5.6) -- (5.51,-5.6) (5.46,-5.65) -- (5.46,-5.55);
+  \node[anchor=west, font=\tiny, text=figgray] at (5.61,-5.6) {changed by the edit};
 \end{tikzpicture}
