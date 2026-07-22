@@ -338,6 +338,13 @@ multiple-comparison correction. Suites with $n = 5$ seeds cannot reach
 $p < 0.05$ (floor $0.0625$) and are reported as effect-versus-noise.
 % src: PAPER/argument/04_evaluation.md §3; PAPER/external-metrics/FINDINGS.md §1, §5
 
+\textbf{Why the bootstrap resamples units.} A driver-level bootstrap is
+unavailable rather than declined: the demand grid is a mean-hourly artifact,
+not a per-driver sum, and supply is environmental, so $Y$ does not decompose
+into driver contributions. Active grid units are the only available
+resampling level.
+% src: PAPER/external-metrics/FINDINGS.md §5
+
 \textbf{Instrument definitions.} The service ratio $Y$ is grouped
 per equity axis (housing price, compensation, migrant share) under two
 conventions, district extremes and median split. Demographic parity (DP) is
