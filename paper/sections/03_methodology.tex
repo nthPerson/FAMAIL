@@ -339,27 +339,29 @@ with its autograd verification in Appendix~\ref{app:derivations}.
 % src: PAPER/supply-lift/LIFT_ALGORITHM_REFERENCE.md §4.1 (autograd-verified closed form)
 
 To turn the map into candidates, a linearized-offset screen ranks trajectories
-whose tails could bend into high-value cells: every trajectory long enough to
-carry a movable tail (${\approx}80$k of the corpus's ${\approx}95$k) is scored
-by its best bounded tail translation (Appendix~\ref{app:editor}), so the screen
-favors trajectories that already nearly serve the right areas, bending real
-behavior rather than inventing it.
-% src: PAPER/supply-lift/data/oracle.json (n_trajectories_len_ge3 80,427 of n_trajectories_total 95,297)
-The screen only \emph{nominates}: each nominated trajectory then has its whole
-seeking tail translated under the full objective. The pickup moves by the full
-offset $\delta$, earlier tail states move by linearly tapered fractions, and
-the anchor state before the tail never moves --- so the trajectory physically
-cruises through the under-served area before picking up rather than teleporting
-into it. The moved states carry their supply with them, differentiably,
-contributing presence to the same $\Delta S$ over the $5{\times}5$
-neighborhood. Supply is thus \emph{endogenous}: the optimizer sees the supply
+whose tails could bend into high-value cells, scoring each by its best bounded
+tail translation (Appendix~\ref{app:editor}). A tail is the pickup itself plus
+up to four seeking states immediately before it; ${\approx}80$k of the
+corpus's ${\approx}95$k trajectories are long enough to carry a movable tail.
+The screen favors trajectories that already nearly serve the right areas,
+bending real behavior rather than inventing it.
+% src: PAPER/supply-lift/data/oracle.json (n_trajectories_len_ge3 80,427 of n_trajectories_total 95,297);
+% LIFT_ALGORITHM_REFERENCE.md §3 (tail = last min(TAIL_LEN=4, len-2) seeking states + the pickup, states[-1])
+The screen only \emph{nominates}: each nominee's tail is then translated under
+the full objective. The pickup moves by the full offset $\delta$, earlier tail
+states move by linearly tapered fractions of it, and the anchor state before
+the tail never moves. The edited trajectory physically cruises through the
+under-served area before picking up rather than teleporting into it. The moved
+states carry their supply with them, differentiably, contributing presence to
+the same $\Delta S$ over the $5{\times}5$ neighborhood. Supply is thus
+\emph{endogenous}: the optimizer sees the supply
 consequences of its own moves and is rewarded for providing service where it
 improves fairness, not merely for redistributing demand. The fidelity term
 scores the actual rerouted tail at every iteration, and each completed edit
 updates a shared running state, so later edits optimize against the city as
-earlier edits left it. The taper weights, per-state presence mass, supply
-floor, and the $\mathrm{clamp}(S + \Delta S,\, s_0)$ evaluation are given in
-Appendix~\ref{app:editor}.
+earlier edits left it. Appendix~\ref{app:editor} gives the taper weights,
+per-state presence mass, supply floor, and the
+$\mathrm{clamp}(S + \Delta S,\, s_0)$ evaluation.
 % src: PAPER/supply-lift/LIFT_ALGORITHM_REFERENCE.md §4.2–4.3 (screen; plan assembly)
 
 \textbf{Physical validity.} Edits must satisfy the same king-move rule the
