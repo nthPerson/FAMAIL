@@ -52,9 +52,9 @@ adversarial game \cite{hoermon2016}.
 \textbf{Adversarial perturbation and recourse.} The editing machinery
 descends from adversarial examples: bounded signed-gradient perturbations
 \cite{goodfellow2015fgsm,kurakin2017ifgsm} instantiated spatio-temporally
-\cite{hu2023stifgsm}, with discrete structure bridged by continuous
-relaxation \cite{jang2017gumbel,maddison2017concrete} and straight-through
-estimation \cite{bengio2013ste}. Algorithmic recourse showed that the same
+\cite{hu2023stifgsm}, with discrete structure bridged by straight-through
+estimation \cite{bengio2013ste} and continuous
+relaxation \cite{jang2017gumbel,maddison2017concrete}. Algorithmic recourse showed that the same
 counterfactual tooling can prescribe beneficial change rather than attack
 \cite{ustun2019recourse,wachter2018counterfactual}, but only to flip one
 individual's decision --- with no population-level fairness target and no
@@ -74,7 +74,9 @@ disadvantaged group instead \cite{zietlow2022}. Feedback-loop analyses show
 that allocation systems trained on their own historical output entrench a
 self-reinforcing bias \cite{ensign2018,lumisaac2016} --- in our domain, the
 continued under-service of already-underserved neighborhoods. Both critiques
-are applicable here: our own demand-only editor \emph{trim} only manipulates 
-over-service --- an analogue of leveling down (\S\ref{sec:leveling}) --- we build the
-supply channel expressly to lift up, and state demand endogeneity as the
-bound on what any demand-adjusted metric can see.
+apply here: our demand-only editor \emph{trim} only manipulates
+over-service, an analogue of leveling down (\S\ref{sec:leveling}); the
+supply channel \emph{lift} exists expressly to level up, rerouting real
+taxi presence into under-served neighborhoods; and because demand recorded
+where service is thin understates true need, demand endogeneity bounds
+what any demand-adjusted metric can see.

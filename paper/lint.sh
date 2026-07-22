@@ -22,14 +22,14 @@ check '(beats|outperforms) (Shenzhen|the first city)' 'SF must reproduce, not be
 
 # Render-geometry gate (2026-07-16, from reviews/2026-07-15-render-qa.md): main.log is
 # ISO-8859-encoded, so grep NEEDS -a (plain grep treats it as binary and silently matches
-# nothing — that is how 55 Overfull boxes passed the gates). Threshold 8pt for now; sub-8pt
+# nothing — that is how 55 Overfull boxes passed the gates). Threshold 5pt (tightened from 8pt after the cut campaign, 2026-07-21); sub-5pt
 # boxes are largely absorbed by microtype expansion on Overleaf and get swept in the 8-page
 # compression pass — tighten to 5pt after that. Requires a fresh `latexmk` (main.log present).
 if [ -f main.log ]; then
-  overfull=$(grep -a 'Overfull \\hbox' main.log | grep -oE '\(([0-9.]+)pt too wide' | grep -oE '[0-9.]+' | awk '$1 > 8' || true)
+  overfull=$(grep -a 'Overfull \\hbox' main.log | grep -oE '\(([0-9.]+)pt too wide' | grep -oE '[0-9.]+' | awk '$1 > 5' || true)
   if [ -n "$overfull" ]; then
-    echo "LINT FAIL — Overfull hbox(es) > 8pt in main.log (render and inspect; see reviews/2026-07-15-render-qa.md):"
-    grep -a 'Overfull \\hbox' main.log | awk '{ if (match($0, /\(([0-9.]+)pt/, m) && m[1]+0 > 8) print "  " $0 }'
+    echo "LINT FAIL — Overfull hbox(es) > 5pt in main.log (tightened from 8pt post-cut, 2026-07-21; render and inspect):"
+    grep -a 'Overfull \\hbox' main.log | awk '{ if (match($0, /\(([0-9.]+)pt/, m) && m[1]+0 > 5) print "  " $0 }'
     fail=1
   fi
 else

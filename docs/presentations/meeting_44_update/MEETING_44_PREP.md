@@ -99,9 +99,11 @@ sources, which claws back most of panel (b)'s removal. The page budget does
 not hinge on the difference: the cut plan reaches 8.0 pages via appendix
 relocations and keeps ≥2 lines of slack for this swap.
 
-**Recommendation (Robert): adopt B.** Mechanics if adopted: one-line
-`\input` swap in `sections/01_introduction.tex` plus pasting the caption
-embedded in `figure-1-bc.tex` — five minutes, any time before the deadline.
+**RESOLVED (Robert, 2026-07-21): C stays.** With the 8-page limit binding
+hard after the cut campaign, Robert has settled on the live (c)-only figure
+("it does the job, and the simplicity is a strength"); the (b)+(c)
+counter-proposal is retired from the meeting agenda. The B variant and the
+comparison material remain in the repo as design history.
 
 Refinements applied to the live figure since the redesign (also on B where
 applicable): an explicit **FATE provenance arrow** from the raw-corpus chip

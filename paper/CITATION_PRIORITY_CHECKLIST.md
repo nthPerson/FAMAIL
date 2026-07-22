@@ -41,6 +41,16 @@ Status legend for what machines already did:
 Crossref/DOI metadata matched (front-end bot-blocked) · **NONE** = no publisher record exists.
 
 **Applied-changes log (controller sessions; checkboxes above/below remain Robert's alone):**
+- 2026-07-21: cite MOVES during the cut campaign + Robert's read-aloud pass (no new refs, no
+  removals from refs.bib): Robert's guardrail cuts removed `hoermon2016` and
+  `feng2020simulate` from §3 (both remain cited in §2 — adversarial-perturbation and
+  world-model themes); `feng2020simulate` re-added at §4.2's Fidelity-B definition (the
+  Jensen--Shannon gloss moved there when §3's monitoring sentence was cut). NOTE: §4 now
+  carries \cite (feng2020simulate, plus kamirancalders2012/zheng2023 from W-earlier) — the
+  "coverage" note above (¶ 'citations live entirely in 01/02/03') is stale on that point;
+  the self-check command remains the authority. W2/W3/W7 also relocated cite-bearing
+  derivation/implementation text into sections/appendix.tex (FWL, Gumbel/STE, cGAIL cites
+  now also appear there); all keys unchanged.
 - 2026-07-18: TWO NEW refs.bib entries + P0 rows per Dr. Zhang's abstract feedback (intro
   data-generation category cites): `xu2018fairgan`, `vanbreugel2021decaf` — both UNVERIFIED
   (controller-knowledge metadata, no pages/DOI on purpose); MUST clear Robert's manual pass

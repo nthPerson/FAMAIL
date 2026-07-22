@@ -16,7 +16,7 @@ the source of any fairness improvement. We present FATE, a
 fairness-oriented data augmentation method that instead \emph{edits} a
 small, attribution-chosen slice of the real trajectories and upweights the
 edited demonstrations so the fairness survives training. The editor
-combines two bounded, gradient-guided mechanisms under one differentiable
+combines two bounded gradient-guided mechanisms under one differentiable
 objective: \emph{trim} relocates recorded pickups within over-served areas
 so their measured over-service falls, and \emph{lift} reroutes drivers'
 final seeking minutes into under-served areas, with the effect on local
@@ -30,7 +30,7 @@ reducing over-service, the supply channel opened by lift adds
 statistically significant taxi presence --- counted as distinct vehicles
 --- to under-served areas in both cities. Upweighted behavior cloning carries the
 fairness-metric gains into trained policies, and does so specifically
-through the edited demonstrations: neither a random-upweighting nor a
+through the edited demonstrations: neither a random-up\-weight\-ing nor a
 most-fair selection control reproduces the transfer. A targeted
 demographic oversampling baseline on Shenzhen captures only part of the
 data-level gain at the cost of fabricating 10.5\% of the corpus, and its

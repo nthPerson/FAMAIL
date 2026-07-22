@@ -130,8 +130,9 @@ not an approximation.
 \textbf{Realism.} Fidelity-A stability and lift's expected Fidelity-B
 distributional cost (whole-tail relocation shifts trajectory-shape statistics
 more than a pickup-only move) are re-measured on the adopted corpus:
-Fidelity-A 0.844 vs.\ raw 0.848; corpus-level Fidelity-B 0.187, concentrated
-in exactly the components a rerouted tail must move
+Fidelity-A 0.844 vs.\ raw 0.848; corpus-level Fidelity-B (a Jensen--Shannon
+divergence over aggregate mobility statistics \cite{feng2020simulate}) at
+0.187, concentrated in exactly the components a rerouted tail must move
 (Appendix~\ref{app:results}) --- a by-design trade-off we disclose rather than
 net out.
 % src: famail_temporal/results/level1_table_v2/supply_lift_shz_5seed/level1_v2_multiseed.json (edited row: Fid-A, Fid-B 0.187)
@@ -149,8 +150,9 @@ that realism-free ceiling, as a realism-bounded editor should
 With trim frozen inside the combined editor (\S\ref{sec:editor}), the
 lift-disabled run reproduces the demand-only editor exactly, so every
 difference between the trim-only and trim+lift columns below isolates lift ---
-and certifies \S\ref{sec:leveling}: demand-only editing closes the gap only
-from the top; the supply channel is what changes that.
+and certifies \S\ref{sec:leveling}: demand-only editing improves the
+metrics without raising under-served service; the supply channel is what
+changes that.
 
 Three metrics carry the qualitative story, and the structural expectation from
 \S\ref{sec:leveling} re-verifies exactly at the adopted weights: under
@@ -304,7 +306,7 @@ paying the same distributional cost as w30 upweighting (Fidelity-B
 $+0.0144$), and its rolled-out policies still tilt allocation away from the % lint-allow: coincidental value (fair_reweigh paired Fid-B delta, not the trim-only F_demo headline)
 disadvantaged group ($-0.0010$, 0/6, $p = .031$). An in-processing penalty
 in the spirit of \cite{zheng2023} --- the imitation loss plus $\lambda$
-times the demographic-parity gap in predicted next-cell mass --- is inert at
+times the demo\-graph\-ic-parity gap in predicted next-cell mass --- is inert at
 every trainable dose, destructive only where it dominates. The signed
 formulation (advantaged minus disadvantaged, the direction the data
 over-serves) and the absolute-value formulation behave the same at every
@@ -352,7 +354,8 @@ every dose, which is the edit-specificity claim under its hardest test.
 Vanilla transfer likewise stays an order of magnitude below the upweighted
 gain under every set, reaching sign-unanimity only under the
 housing--GDP--compensation set ($+0.0022$, a tenth of its w30 gain).
-% src: PAPER/supply-lift/data/a10/shz_4feat_a10_weighted_bc_paired_stats.json (most_fair arms +0.0059/+0.0059/+0.0072 all p=.031; edited/most_fair min ratio 3.05 at w10)
+% src: PAPER/supply-lift/data/a10/shz_hgc_a10_weighted_bc_paired_stats.json (most_fair w30 +0.0054; vanilla +0.0022 — the two hgc-set values quoted above)
+% src: PAPER/supply-lift/data/a10/shz_4feat_a10_weighted_bc_paired_stats.json (4feat most_fair doses +0.0059/+0.0059/+0.0072 incl. the w30 +0.0072 quoted above, all p=.031; edited/most_fair min ratio 3.05 at w10)
 
 \textbf{Weight sensitivity.} A weight sweep of six full editing runs across
 the simplex, each scored on all three metric classes, shows the optimized
@@ -391,12 +394,12 @@ fidelity; because $F_{\mathrm{demo}}$ is city-specific and associational (ACS
 proxies, not hukou), San Francisco tests whether the \emph{conclusions}
 reproduce.
 
-\textbf{Data level.} $F_{\mathrm{demo}}$ rises 0.8752 $\to$ 0.9067
+\textbf{Data level.} $F_{\mathrm{demo}}$ rises $0.8752{\to}0.9067$
 ($+0.0316$), $F_{\mathrm{spatial}}$ $+0.0139$, with Fidelity-A stability and % lint-allow: coincidental value (SF a10 F_spatial delta, not the trim-only F_demo headline)
 lift's Fidelity-B cost re-measured on this corpus by the downstream suite
 (pending below). Every external instrument improves: Theil $-0.0079$
-(CI $[-0.0094, -0.0065]$), and the migrant axis is significant under
-\emph{both} grouping conventions on the DP gap (district extremes $-0.0729$,
+(CI $[-0.0094, -0.0065]$), and the migrant axis is significant on the DP gap under
+\emph{both} grouping conventions (district extremes $-0.0729$,
 CI $[-0.1132, -0.0259]$; median split $-0.0370$, CI $[-0.0733, -0.0002]$),
 with DI significant under district extremes ($+0.0058$,
 CI $[+0.0004, +0.0103]$) and n.s.\ under median split --- a grouping
@@ -430,8 +433,8 @@ channel independently replicates.
 % total_tier2 flips SIG-POSITIVE +0.0493. Provisional status retired; PI ack still owed.
 % src: PAPER/supply-lift/data/a10/sf12_a10_channel_decomposition.json (D1-CHAN 2026-07-18, B=2000 seed 0; tier-2 grid = D1-RECOUNT S_tier2_after.npz; gates G-repro MAE 0.0 + replay 1959/1959; twin sf12_a10_supply_recount.json)
 
-\textbf{Downstream.} The recovery reproduces on San Francisco. Vanilla BC is
-null ($+0.0017$, $n = 12$, 7/12 positive, n.s.); upweighting recovers the
+\textbf{Downstream.} The recovery reproduces on San Francisco. Van\-illa BC is
+null ($+0.0017$, $n = 12$, 7/12 positive, n.s.); upweighting recovers
 fairness with a monotone, sign-unanimous dose-response --- $+0.0242$ (w10)
 and $+0.0309$ (w20), each 6/6 at the $p = .031$ floor --- and at the
 adopted dose the flagship comparison reaches $n = 12$ here as well:
