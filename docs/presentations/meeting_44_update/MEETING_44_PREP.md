@@ -1,8 +1,10 @@
 # Meeting 44 prep — status update + the Figure-1 decision
 
-*Prepared 2026-07-20 for Robert's meeting with Dr. Zhang (week of 2026-07-20).
-New location note: meeting prep now lives in `docs/presentations/<meeting>/`
-(earlier meetings used `famail_temporal/baselines/meeting_prep/`).*
+*Prepared 2026-07-20 for Robert's meeting with Dr. Zhang (week of 2026-07-20);
+updated 2026-07-22 with the submission-week execution record and the new
+reproducibility document (§3). New location note: meeting prep now lives in
+`docs/presentations/<meeting>/` (earlier meetings used
+`famail_temporal/baselines/meeting_prep/`).*
 
 **Deadlines:** abstract **submitted 2026-07-19** (KDD 2027 Research Track
 Cycle 1, OpenReview; "we can always modify the submission"). Full paper due
@@ -32,10 +34,10 @@ Cycle 1, OpenReview; "we can always modify the submission"). Full paper due
   DP gap −0.890 (14.199 → 13.309), Theil −0.0087) → contributions.
   ST-SiameseNet is now cited at first mention.
 - **Introduction reference check:** referenced resources verified to exist.
-  The two citations added for the categories paragraph (FairGAN, DECAF) are
-  the only refs still awaiting full manual verification — flagged P0 in
-  `paper/CITATION_PRIORITY_CHECKLIST.md`, promised before submission per
-  Dr. Kash's mandate.
+  The two citations added for the categories paragraph (FairGAN, DECAF)
+  were machine-verified against primary sources on 2026-07-21 (pages/DOI
+  added, claim-fit confirmed); Robert's human pass per Dr. Kash's mandate
+  is the remaining step — see agenda item 2.
 - **Related work:** each of the four themes now closes with the concrete
   limitation FATE addresses (Dr. Zhang's "state the contrast" note).
 
@@ -70,10 +72,23 @@ Cycle 1, OpenReview; "we can always modify the submission"). Full paper due
   formulation-independent (absolute-value variant tracks the signed one);
   §4.5 records it.
 
-**Manuscript logistics**
-- Renders 12pp; ranked cut plan to the 8-page limit is ready
-  (`paper/reviews/2026-07-18-ranked-cut-list.md`, wave-by-wave with
-  re-measurement; appendix skeleton lands with the first relocation).
+**Manuscript logistics — cut campaign EXECUTED (2026-07-21)**
+- Main content cut **10.6 → ~8.4 pages** via eight measured waves plus a
+  §3/§4 restructure, against the strict 8-page submission limit (KDD rules:
+  8 content pages at submission; 9 content + 12 total only on acceptance).
+- A structured appendix (A Derivations / B Editor Implementation / C Extended
+  Results / D Statistical Protocol) now carries the relocated material, every
+  block labeled with its origin so it can return at camera-ready.
+- **Zero protected content lost**: all headline numbers, disclosures, and
+  caveats survived; a ~55-number audit of §4 against artifacts found 0
+  mismatches. The typography lint gate was tightened from 8pt to 5pt.
+- Remaining **~0.4 page to strict 8.0 is a content decision** — see agenda
+  item 5.
+- Robert's read-aloud editing pass has covered §1 through §4.1; §4 onward in
+  progress. Both P0 citations (FairGAN, DECAF) are now machine-verified
+  against primary sources with pages/DOI added; only the human pass remains.
+- A PII/anonymity scan of the built PDF is clean (anonymous author block,
+  no metadata leaks, self-citations in compliant third person).
 - Anonymous sigconf build with real venue metadata (KDD '27, San Jose).
 
 ---
@@ -119,16 +134,91 @@ objection).
 
 ---
 
-## 3. Other agenda items
+## 3. NEW: the reproducibility record — `PAPER/REPRODUCIBILITY.md` (2026-07-21)
+
+*The T17 capstone from the Meeting-40 task list, landed this week. One
+document that makes every number in the paper independently re-derivable.*
+
+**What it is.** The map from **every headline paper claim** to (a) its
+curated, git-tracked artifact, (b) the raw results directory that produced
+it, (c) the run-ledger row that launched it, and (d) the exact command and
+environment record. 39 claim rows covering the Shenzhen editor, downstream
+suites, baselines, feature-set robustness, and the San Francisco
+replication.
+
+**Why it exists (four purposes):**
+1. **Reviewer and PI trust.** "Where does this number come from?" is now a
+   one-lookup question for any value in §4 — claim → artifact → command,
+   with per-artifact SHA-256 checksums and environment fingerprints
+   (Python/Torch/CUDA/GPU + pip-freeze hash).
+2. **Era discipline, made mechanical.** The project's biggest recurring
+   hazard has been stale-era numbers. The document gives the verification
+   rule: never trust a directory name or prose — read the artifact's own
+   `config_snapshot` (α\* = 0.1/0.8/0.1, TAIL_LEN = 4) and its edit-count
+   fingerprint (Shenzhen 2,337 + 7,545; San Francisco 1,330 + 629). It also
+   flags the one trap a re-runner would hit: the committed config's ALPHA
+   defaults are *not* α\*; the weights are applied per run via overrides.
+3. **The name translations, recorded once.** Repo/code "famail" = paper
+   "FATE"; artifact key `f_causal` = paper symbol F_demo (code keys
+   unchanged); the 2026-05-14 sign-convention erratum; "3feat" = HGC;
+   "4feat" = PRIMARY + logpopdensity. This is the mapping-of-record the
+   paper README points to.
+4. **Seed for the anonymized artifact repository** (the Meeting-43
+   anonymity workstream): the document is PII-free by construction — no
+   names, emails, or institutions — so it can be copied into the anonymous
+   repo as its reproducibility README.
+
+**The evidence behind it (not just claims):**
+- A 2026-07-15 read-only audit certified the whole input chain: every
+  checked §4 number matches its artifact JSON to full precision; all 38
+  curated artifact twins are byte-identical to their raw sources; **zero
+  correctness-critical discrepancies**.
+- **The headline corpus re-derives exactly**: an end-to-end replication
+  under clean `main` (S10-REPLICATION) reproduced every metric and count of
+  the promoted Shenzhen corpus, including ΔF_demo +0.022561.
+- Re-run recipes per experiment class (editor, external fairness, channel
+  decomposition, weighted-BC, fidelity, variance, baselines), commands
+  verbatim from the run ledger, GPU/CPU noted.
+
+**Honest gaps it records** (disclosed, not hidden): the oversampling
+baseline arms predate environment fingerprinting; some older `PAPER/` prose
+docs still state superseded-era numbers (the document says which, and to
+trust `config_snapshot` instead); and no data-availability/licensing
+statement exists yet for the datasets — a decision needed for the anonymous
+artifact repo (agenda item 3).
+
+**Rider closed this week:** the one reviewer-facing statistics gap the
+audit flagged — the feature-set robustness table's lift-up cells carried no
+significance statement — is closed: the channel decompositions for both
+alternate feature sets exist (bootstrap B = 2,000), all intervals exclude
+zero, and the table now marks significance directly (HGC total +0.0594
+[+0.0181, +0.1013]; 4FEAT +0.1461 [+0.0900, +0.2039]).
+
+---
+
+## 4. Other agenda items
 
 1. **Reading-B / D1 acknowledgment** — the SF two-tier framing in §4.7 has
    not yet been walked through with Dr. Zhang (decided and executed
    post-Meeting-43); this meeting is the slot.
-2. **Citation verification status** — the two new intro refs are the only
-   unverified ones (P0); verification before submission per Dr. Kash's
-   Meeting-43 mandate.
-3. **Anonymity / artifact repo** — PII scrub + anonymous repo status check
-   before the full-paper submission (Meeting-43 workstream).
+2. **Citation verification status** — the two new intro refs (FairGAN,
+   DECAF) are now **machine-verified against primary sources** (NeurIPS
+   proceedings page fetched live; DBLP + IEEE DOI; pages/DOI added to
+   refs.bib; claim-fit confirmed). What remains is Robert's human pass per
+   Dr. Kash's Meeting-43 mandate — for DECAF an eyeball of the proceedings
+   page; for FairGAN the IEEE Xplore page (bot-blocked, genuinely needs
+   human eyes).
+3. **Anonymity / artifact repo** — the manuscript-side scan is **clean**
+   (anonymous author block, no PDF metadata leaks, third-person
+   self-citations). Remaining for the anonymous artifact repo: scrub of
+   repo docs/comments, and a **data-availability/licensing statement**,
+   which exists nowhere yet — needs a decision with Dr. Zhang
+   (`REPRODUCIBILITY.md` is ready to seed the repo, see §3).
 4. **Colors** — the refreshed palette is already applied to both figures
    (and to both Figure-1 variants, so the A/B/C comparison also previews
    it); confirm Dr. Zhang is happy with the direction.
+5. **The last ~0.4 page to the strict 8-page limit** — the approved cut
+   plans are fully spent; what remains is a content decision: drop a
+   secondary beat, compress §2 further, or consolidate §4 evidence.
+   Whatever moves is restorable at camera-ready (9 content pages + 12
+   total on acceptance).
