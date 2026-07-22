@@ -18,7 +18,7 @@ Both must pass before every commit. Warnings are tolerated during drafting; erro
    trim-vs-trim+lift ablation (mark the line `% lint-allow: ablation`).
 2. **F_demo label (renamed from F_causal, Zhang-approved 2026-07-20) + associational caveat.** No causality-claim language.
    Paper symbol is F_demo; code/artifact keys remain `f_causal` (historical) — the README of
-   record for that mapping is this line plus REPRODUCIBILITY.md when it lands.
+   record for that mapping is this line plus `PAPER/REPRODUCIBILITY.md` §2 (landed 2026-07-21).
 3. **The spoken "54%" figure is banned** until grounded. Absolute deltas only
    (+0.0226 SZ / +0.0316 SF, the α\*-era headline; the 0.2-era +0.0222/+0.0328
    are superseded — do not quote as current).
