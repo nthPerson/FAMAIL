@@ -305,9 +305,10 @@ $L_\infty$ clip,
 so no pickup ever moves more than $\varepsilon = 2$ cells from its recorded
 location, regardless of iteration count --- the $\varepsilon$-bound
 reinterpreted as an identity-preservation budget rather than an attack-stealth
-budget. Gradients flow back to the discrete grid to update cell counts by a 
-temperature-annealed 
-soft-cell assignment (Appendix~\ref{app:editor}).
+budget. A temperature-annealed soft cell assignment makes the discrete
+cell counts differentiable in the continuous edit offsets, so gradients
+flow from the objective back to the coordinates being edited
+(Appendix~\ref{app:editor}).
 % The discrete grid is bridged by a temperature-annealed soft cell
 % assignment (Appendix~\ref{app:editor}).
 % src: PAPER/objective-motivation/MOTIVATION.md (editor); PAPER/argument/03_fairness_theory.md
@@ -320,23 +321,19 @@ variant that separates over- from under-served units. Trim edits the
 trajectories whose pickups land in the highest-deficit units: each selected
 pickup relocates within the $\varepsilon$-ball, padding recorded demand into
 over-served, supply-rich cells so their measured over-service falls
-(\S\ref{sec:leveling}). Its optimization path is exactly the demand-only
-editor's.
+(\S\ref{sec:leveling}).
 % src: PAPER/argument/03_fairness_theory.md (per-cell attribution)
 
 \textbf{Lift: supply-gradient attribution.} The second mechanism asks of
 every active unit: \emph{how much fairer would the city's service be with
 marginally more taxi presence here, at this hour?} The quantity that answers
 it is the gradient of the objective with respect to supply. To obtain it we
-add an auxiliary \emph{supply-perturbation} input
-$\Delta S \in \mathbb{R}^{N}$ --- one entry of hypothetical added taxi presence
-per active unit --- evaluate every supply-dependent term at $S + \Delta S$, and
+evaluate the objective at hypothetically augmented supply $S + \Delta S$ and
 read $\partial \mathcal{L} / \partial S_i$ by automatic differentiation at
-$\Delta S = 0$: the marginal fairness effect of added presence at each of the
-$N \approx 34{,}500$ active units, in one backward pass. The result is a
+$\Delta S = 0$ --- the marginal fairness effect of added presence at each of
+the $N \approx 34{,}500$ active units, in one backward pass. The result is a
 \emph{value-of-presence} map over the city: large where added presence would
-most repair the fairness terms --- units starved of supply relative to their
-demand and demographic profile --- and small or negative where presence is
+most repair the fairness terms, and small or negative where presence is
 already abundant. Its $F_{\mathrm{demo}}$ component has a closed form, given
 with its autograd verification in Appendix~\ref{app:derivations}.
 % src: PAPER/supply-lift/LIFT_ALGORITHM_REFERENCE.md §4.1 (autograd-verified closed form)
