@@ -41,6 +41,13 @@ Status legend for what machines already did:
 Crossref/DOI metadata matched (front-end bot-blocked) · **NONE** = no publisher record exists.
 
 **Applied-changes log (controller sessions; checkboxes above/below remain Robert's alone):**
+- 2026-07-21 (later, P0 verification): `xu2018fairgan` + `vanbreugel2021decaf` machine-verified
+  against primary sources (proceedings.neurips.cc fetched live for DECAF; DBLP for both;
+  FairGAN DOI resolves to IEEE Xplore). refs.bib updated: FairGAN + pages 570--575 +
+  DOI 10.1109/BigData.2018.8622525; DECAF + pages 22221--22233. Claim-fit of the intro's
+  "synthesizing fair data" sentence confirmed for both. P0 rows' machine-status lines
+  updated accordingly; checkboxes untouched (Robert's manual pass still required — FairGAN's
+  terminal source is IEEE Xplore, bot-blocked, needs human eyes).
 - 2026-07-21: cite MOVES during the cut campaign + Robert's read-aloud pass (no new refs, no
   removals from refs.bib): Robert's guardrail cuts removed `hoermon2016` and
   `feng2020simulate` from §3 (both remain cited in §2 — adversarial-perturbation and
@@ -82,14 +89,21 @@ Crossref/DOI metadata matched (front-end bot-blocked) · **NONE** = no publisher
 
 - [ ] **xu2018fairgan** — Xu, Yuan, Zhang & Wu, *FairGAN: Fairness-aware Generative
   Adversarial Networks*, IEEE Big Data 2018 — NEW 2026-07-18 (Zhang-feedback citation for the
-  intro's data-generation category, `01:~58`). **Machine status: UNVERIFIED — added from
-  controller knowledge under deadline; entry deliberately carries no page numbers.** Check:
-  confirm venue/year/authors on IEEE Xplore and add pages/DOI.
+  intro's data-generation category, `01:~58`). **Machine status: PAGE (2026-07-21) — DBLP
+  record matched all fields; pages 570--575 + DOI 10.1109/BigData.2018.8622525 now in
+  refs.bib; claim-fit vs abstract confirmed (fair synthetic data generation via GAN matches
+  the intro's "synthesizing fair data").** Check: confirm on IEEE Xplore itself
+  (https://doi.org/10.1109/BigData.2018.8622525) — DBLP is corroboration, not terminal
+  under the verification standard above.
 - [ ] **vanbreugel2021decaf** — van Breugel, Kyono, Berrevoets & van der Schaar, *DECAF:
   Generating Fair Synthetic Data Using Causally-Aware Generative Networks*, NeurIPS 2021 —
-  NEW 2026-07-18 (same intro category, `01:~58`). **Machine status: UNVERIFIED — added from
-  controller knowledge under deadline.** Check: confirm on proceedings.neurips.cc (volume 34)
-  and add pages/URL.
+  NEW 2026-07-18 (same intro category, `01:~58`). **Machine status: PAGE (2026-07-21) —
+  proceedings.neurips.cc abstract page fetched live and matched title/authors/NeurIPS 34;
+  pages 22221--22233 (DBLP) now in refs.bib; claim-fit confirmed (fair synthetic tabular
+  data via causal-DAG GAN, inference-time debiasing).** Check: eyeball
+  https://proceedings.neurips.cc/paper/2021/hash/ba9fab001f67381e56e410575874d967-Abstract.html
+  — the publisher page is the terminal source and was already fetched; this one only needs
+  your eyes.
 
 - [ ] **goodfellow2015fgsm** — Goodfellow, Shlens & Szegedy, *Explaining and Harnessing
   Adversarial Examples* — used at `02:55`, `03:334` (FGSM origin / bounded adversarial perturbation).
