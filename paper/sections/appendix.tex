@@ -205,6 +205,16 @@ go/no-go threshold of $+0.3$ (full accounting $+0.882$); the realized
 $+0.053$ sits far below this unconstrained ceiling.
 % src: PAPER/supply-lift/FINDINGS.md §1.3 + data/oracle.json (G0 ceilings)
 
+\textbf{The two realism axes.} \emph{Fidelity-A} is the identity axis: the
+frozen driver-identity discriminator's mean score on matched pairs (an
+edited trajectory against a trace of its original driver; higher is
+better), the evaluation-time reading of the \S\ref{sec:objective}
+guardrail, and validated by its separation from mismatched-driver pairs.
+\emph{Fidelity-B} is the distributional axis: a Jensen--Shannon divergence
+over aggregate mobility statistics, computed against the raw corpus (raw
+scores 0); lower is better.
+% src: famail_temporal/baselines/run_level1_table_v2.py (fidelity_a = gate high_matched; fidelity_a_separation); PAPER/supply-lift/FINDINGS.md §6 (HuMID identity axis, higher better); tab:l1 raw row Fid-B 0.000 (raw-referenced)
+
 \textbf{Edited-corpus Fidelity-B components.} Supporting the realism
 disclosure of \S\ref{sec:exp-data-level}. The corpus-level Fidelity-B of
 $0.187$ concentrates in exactly the components a rerouted tail must move ---

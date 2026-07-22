@@ -111,8 +111,9 @@ driver has preserved human fidelity. The discriminator is trained once and
 never updated during editing. Under FATE's small bounded edits the discriminator's
 gradient is near zero, so it acts as a realism \emph{guardrail}, not a driver
 of edits; identity-axis stability under both phases is confirmed empirically
-(\S\ref{sec:experiments}). The distributional realism axis is scored
-separately at evaluation as \emph{Fidelity-B} (\S\ref{sec:exp-data-level}).
+and reported as \emph{Fidelity-A} (\S\ref{sec:experiments}). The
+distributional realism axis is scored separately at evaluation as
+\emph{Fidelity-B} (\S\ref{sec:exp-data-level}).
 % src: PAPER/objective-motivation/MOTIVATION.md (F_fidelity guardrail framing)
 
 \textbf{Scalarization.} The three terms combine linearly,
