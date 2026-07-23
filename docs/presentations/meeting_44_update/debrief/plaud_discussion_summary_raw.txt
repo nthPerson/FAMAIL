@@ -1,0 +1,39 @@
+Date & Time: 2026-07-23 10:53:00
+Location: [Insert Location]
+Attendees: Dr. Xin Zhang, Speaker 3/Laura
+## 1. Paper Narrative, Structure, and Positioning
+### Conclusion
+The paper's narrative and structure will be fundamentally reorganized to be more problem-driven and easier for reviewers to understand. The current version reads like a technical report documenting "what was done," but it needs to become a compelling story explaining "why it was done." The introduction will be rewritten to clearly articulate the core problem—the trade-off between fairness and fidelity in data—and highlight the specific challenges that make existing methods insufficient. To save space and improve focus, sections will be condensed, redundant information removed, and technical derivations moved to the appendix. The paper's core contribution is a data augmentation approach for imitation learning that improves fairness by editing trajectories and upweighting the edited samples.
+### Plan
+- [ ] Rewrite the abstract and introduction to emphasize a problem-driven framing, highlighting challenges and concisely linking the proposed methods to them. -- *Dr. Xin Zhang, Laura* (2026-07-26)
+- [ ] Rename the "task" section to "Problem Formulation" and rigorously define elements like trajectories, reward functions, and states/actions. -- *Speaker 3* (2026-07-30)
+- [ ] Add a "Challenges" subsection to the introduction explaining why the problem is difficult and why existing methods fail. -- *Speaker 3* (2026-07-30)
+- [ ] Shrink the "Related Work" section to a half-column for the main paper and move the full version to the appendix. -- *[Insert Executor Name(s)]*
+- [ ] Move detailed derivations (e.g., for R²_demo) and granular implementation details (e.g., grid cell configuration) to the appendix, keeping high-level motivations in the main text. -- *Speaker 3* (2026-07-30)
+- [ ] Remove duplicated statements between sections (e.g., problem setup details repeated in experiments). -- *Laura* (2026-07-26)
+- [ ] Adjust formatting (e.g., bulleted lists) to reduce wasted space. -- *Laura* (2026-07-26)
+- [ ] Complete the full paper rewrite and finalize for submission by Sunday, 2026-07-26. -- *Laura, Dr. Xin Zhang*
+## 2. Figure Readability and Clarity
+### Conclusion
+The figures, especially Figure 1, must be revised for better readability and to be more self-explanatory. Figure 1 is confusing and fails to instantly convey the paper's core idea. It will be revised to adopt the clear style of Figure 2, including a map background and explicit legends. The text within all figures must be enlarged, and internal spacing compacted. The principle for revising Figure 1 is that it should be a "teasing" figure that visually represents the relocation of resources, meaning the total number of taxis and passengers must remain constant between the "before" and "after" scenarios.
+### Plan
+- [ ] Revise Figure 1 to be self-explanatory by adding a map background, legends defining "advantaged" and "disadvantaged" districts, and clear icons. -- *Speaker 3*
+- [ ] Ensure the revised Figure 1 maintains a constant total number of taxis and passengers to accurately show resource relocation. -- *Speaker 3*
+- [ ] Add the pre-editing fairness score and visually represent the "3x service gap" directly within Figure 1. -- *[Insert Executor Names]*
+- [ ] Enlarge text within all figures to be more readable (slightly smaller than caption text). -- *Speaker 3*
+- [ ] Reduce spacing and gaps within figures to make them more compact. -- *Speaker 3*
+- [ ] Shorten figure captions to include only the most critical information.
+## 3. Terminology and Language
+### Conclusion
+The paper will standardize its terminology to improve clarity and align with domain conventions. The term "realism" will be replaced with "fidelity" in technical contexts. Vague or overly general language, often introduced by AI writing assistants, will be replaced with precise, specific descriptions. For example, claims like "data generation shifts the distribution" must be clarified to specify which distribution is affected and how.
+### Plan
+- [ ] Replace "realism" with "fidelity" in technical contexts and ensure the term is used consistently. -- *Laura* (2026-07-26)
+- [ ] Replace vague terms like "rebalancing" with precise, domain-specific language and explicitly name the related work being addressed. -- *Laura* (2026-07-26)
+- [ ] Adopt a manual rewrite-first workflow, using AI for refinement rather than first drafts to maintain specificity. -- *Laura* (2026-07-26)
+## 4. Technical and Formatting Issues
+### Conclusion
+Several technical and formatting issues were identified and will be addressed. The incorrect KDD paper template has already been corrected by Dr. Xin Zhang. To ensure code availability, an anonymous GitHub link will be provided in the introduction, though the repository may be empty at submission. Raw data will not be released. It was noted that all figures and tables should be referenced in the text.
+### Plan
+- [ ] Add an anonymous GitHub link for code release in the introduction. -- *Dr. Xin Zhang*
+- [ ] Prepare a data availability statement indicating code is available but raw data is not. -- *Laura* (2026-07-26)
+- [ ] Defer detailed reproducibility documentation until after submission. -- *Laura* (2026-07-30)
