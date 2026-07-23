@@ -1,30 +1,134 @@
 \section{Introduction}\label{sec:intro}
-% Drafted 2026-07-12 per docs/superpowers/specs/2026-07-12-paper-prose-sections-design.md.
-% All Shenzhen numbers are committed s10-corpus values (alpha* = 0.1/0.8/0.1). The SF
-% editor delta is hard-coded (not slot-marked): run r1 landed 2026-07-11 and section 4
-% already carries the artifact-sourced value; the intro mirrors it.
+% Rewritten 2026-07-24 per the Meeting-44 mandate (MEETING_44_DEBRIEF.md §4, §6):
+% problem-driven story, fairness-vs-fidelity trade-off as the spine, Challenges
+% beat (C1-C5), one-paragraph approach summary, contributions re-tied to the
+% challenges. Numbers formerly here (+0.0226, +0.0316, external-metric intervals)
+% live in §4; the leveling-down analogy and the 2,455-pickup disclosure live in
+% §3.3 (sec:leveling). Pre-rewrite version: paper-pre-rewrite-2026-07-23/.
+% Challenge numbering map vs debrief docs: C1=scarcity (debrief C5), C2=fidelity
+% (C1), C3=target (C2), C4=level-up (C3), C5=training survival (C4).
 
-Urban mobility policies are increasingly learned by imitation: models are
-trained to reproduce the trajectories real humans actually
-drove \cite{zhang2022cgail}. But trajectories carry more than behavior.
-They record the fleet's service allocation --- which neighborhoods drivers
-sought passengers in, and which they passed over --- and in real cities
-that allocation tracks demographics: housing prices, incomes, migrant
-population share. Models that imitate such data reproduce the inequity and
-re-enact it when deployed --- a feedback loop documented in other
-data-driven allocation systems \cite{ensign2018,lumisaac2016}.
+Urban mobility policies are increasingly learned by imitation: a model is
+trained to reproduce the trajectories that real taxi drivers drove, because
+those trajectories carry operating expertise that no simulator or hand-built
+policy provides \cite{zhang2019cgail,zhang2022cgail}.
+% TODO-cite(meeting-44, class c): slot a verified bias-inheritance companion
+% here when CITATION_CANDIDATES.md clears review.
+But the same trajectories also record where the fleet chose to serve, and in
+real cities that choice tracks demographics: housing prices, incomes, migrant
+population share. On the Shenzhen corpus we study, the advantaged district
+receives $3.0\times$ the taxi service per unit of demand that the
+disadvantaged district receives (Figure~\ref{fig:teaser}).
+% src: PAPER/supply-lift/data/a10/shz_a10_external_fairness.json
+% (MigrantRatio district_extremes disparate_impact.before 0.33252 ->
+% advantaged/disadvantaged service ratio 1/0.33252 = 3.0x) — same source as the
+% fig:teaser caption.
+A model trained on such a corpus learns the service gap along with the
+expertise, because nothing in imitation training distinguishes the two; once
+deployed, it re-enacts the gap and deepens the very data the next generation
+of models will train on \cite{ensign2018,lumisaac2016}. Repairing this is a
+trade-off between two properties of the data. We want the corpus to be
+\emph{fairer}, and we want it to keep its \emph{fidelity}: edited or
+replacement data must still look like real human driving, or the policy
+trained on it learns fiction. Interventions that buy fairness by giving up
+fidelity, or protect fidelity by leaving the data alone, leave the problem
+unsolved. That fairness-versus-fidelity trade-off is the problem this paper
+addresses.
 
-Interventions typically target one end of the pipeline or the other.
-In-processing methods regularize the model while leaving the demonstrations
-biased \cite{zheng2023}, so objective and training signal conflict.
-Data-generation and data-rebalancing methods instead alter the
-demonstrations --- synthesizing fair data
-\cite{xu2018fairgan,vanbreugel2021decaf} or reweighing and resampling them
-\cite{kamirancalders2012} --- but this can reduce realism, shift the
-distribution, and obscure the source of any fairness gain.
-Figure~\ref{fig:teaser} illustrates the gap: the demonstrations are worth
-preserving, yet a policy that imitates them unchanged learns the service gap
-they record.
+Existing interventions act either on the model or on the data, and each
+leaves one side of the trade-off open. In-processing methods act on the
+model: they add a fairness penalty to its training objective while the
+demonstrations stay as recorded \cite{zheng2023}.
+% TODO-cite(meeting-44, class a): add >=1 verified companion (ideally 2025-26)
+% for the model-side class when CITATION_CANDIDATES.md clears review.
+The model is asked to be fairer than every example it is shown, and the
+correction lives inside that one model's loss: the corpus itself stays
+biased for every other model trained on it. Data-side generation instead
+synthesizes a fairer dataset outright, for example with generative networks
+constrained to remove the protected signal
+\cite{xu2018fairgan,vanbreugel2021decaf}.
+% TODO-cite(meeting-44, class b): add a verified recent (2024-26) fair-generation
+% companion when CITATION_CANDIDATES.md clears review.
+Generation pays for fairness with fidelity: the synthetic trajectories are
+samples from a model rather than records of human driving, and nothing
+guarantees they remain drivable routes or plausible seeking behavior.
+Data-side reweighing and resampling \cite{kamirancalders2012} change how
+often existing trajectories are seen during training; this can rebalance who
+is represented, but it cannot create taxi service in neighborhoods where the
+recorded fleet seldom went.
+
+Achieving fairness and fidelity together is hard for five concrete reasons.
+They are the reasons the families above fall short, and each one dictates a
+component of our method:
+\begin{itemize}
+\item \textbf{C1: the data is scarce.} Real demonstrations are expensive to
+collect and carry expertise that cannot be regenerated, so discarding the
+biased slice, or replacing the corpus with synthetic data, discards the
+asset. The repair must \emph{edit the data we have}.
+\item \textbf{C2: edits must preserve fidelity.} An edit that improves
+fairness is worthless if the edited trajectory no longer reads as real
+driving. Every FATE edit is bounded to a two-cell radius and checked by a
+frozen driver-identity discriminator: an edited trajectory must still be
+recognizable as its original driver (\S\ref{sec:objective}).
+\item \textbf{C3: equal service is the wrong target.} A business district
+should out-serve a quiet residential block, because its demand is higher.
+The right target is the part of service that demand does \emph{not} explain:
+FATE optimizes $F_{\mathrm{demo}}$, the share of demand-adjusted service
+variation left unexplained by demographics (\S\ref{sec:objective}).
+\item \textbf{C4: fairness must level up, not down.} A service gap can close
+by reducing service among the over-served while the under-served gain
+nothing, and we show demand-only editing behaves exactly this way here
+(\S\ref{sec:leveling}). The editor therefore needs a supply channel that
+adds real taxi presence where it is missing (\S\ref{sec:editor}).
+\item \textbf{C5: the gains must survive training.} The edited slice is
+roughly a tenth of the corpus, and standard imitation training averages a
+tenth away. The edited demonstrations must be upweighted during training,
+and the recovered fairness must be traced to the edits rather than to the
+upweighting itself (\S\ref{sec:downstream}, \S\ref{sec:experiments}).
+\end{itemize}
+
+FATE (Fairness-Aware Trajectory Editing) answers these challenges as data
+augmentation for imitation learning. It keeps the real corpus and edits its
+most-biased slice in place, selecting trajectories by an exact attribution
+of the fairness deficit (C1). Each edit is a bounded relocation of a
+recorded pickup, or a bounded reroute of a driver's final seeking minutes,
+small enough that the frozen identity discriminator
+\cite{ren2020stsiamese} still recognizes the driver (C2). Edits follow the
+gradient of a differentiable objective whose primary term is the
+demand-adjusted fairness $F_{\mathrm{demo}}$ (C3) and whose supply channel
+rewards moving real taxi presence into under-served neighborhoods (C4).
+The edited demonstrations are then upweighted during behavior cloning,
+instance reweighing \cite{kamirancalders2012} transplanted to
+demonstrations, so the corpus's fairness survives training (C5). The gains
+at the corpus level do not depend on which model later consumes the data;
+the training-survival claim we demonstrate with behavior cloning, the
+simplest and most widely used imitation family, and extending it to
+adversarial imitation is future work.\footnote{Code (anonymized for double-blind
+review): \url{https://anonymous.4open.science/r/FATE-review}.
+% TODO(Robert, before submission): create the anonymous repository and
+% replace this placeholder URL; an empty repository at submission is
+% acceptable per the PI (Meeting 44).
+}
+
+\textbf{Contributions.}
+\begin{itemize}
+\item \textbf{A fairness-aware trajectory editor.} Bounded edits to real
+trajectories, chosen by attribution and gated by a frozen
+driver-iden\-tity discriminator, optimizing de\-mand-ad\-justed demographic
+fairness (C1--C3; \S\ref{sec:method}).
+\item \textbf{A structural diagnosis of de\-mand-only editing.} It
+improves measured fairness while the under-served gain nothing; we show
+why, and why a differentiable supply channel is the remedy (C4;
+\S\ref{sec:leveling}).
+\item \textbf{A transfer recipe with edit-specificity controls.} Upweighted
+behavior cloning carries the corpus's fairness into trained policies;
+random-subset and most-fair controls isolate the edits as the cause (C5;
+\S\ref{sec:experiments}).
+\item \textbf{Two-city validation on never-optimized measures.} The full
+protocol runs on Shenzhen and San Francisco trajectories, scored on
+external fairness measures (demographic parity, disparate impact, the
+Theil index) that the objective never optimizes (\S\ref{sec:experiments}).
+\end{itemize}
 
 \begin{figure}[t]
   \centering
@@ -60,77 +164,3 @@ they record.
   marked with plus signs, into the disadvantaged district.}
   \label{fig:teaser}
 \end{figure}
-
-FATE takes a third position. As \emph{data augmentation}, it keeps the real
-corpus, edits a small slice of its most unfair trajectories, and generates
-nothing. At most $k$ trajectories are edited ($k = 10{,}000$ on the primary
-city, about a tenth of the corpus), each perturbed within a two-cell radius
-under a frozen driver-identity discriminator (ST-SiameseNet)
-\cite{ren2020stsiamese}, so realism is inherited from the data rather than
-re-learned. The edited demonstrations are then \emph{upweighted} during
-imitation --- instance reweighing \cite{kamirancalders2012} transplanted to
-demonstrations --- so the edited slice's fairness survives training instead
-of being averaged away.
-
-FATE's first editing phase, \emph{trim}, moves only demand: it relocates
-recorded pickups within over-served areas, improving measured fairness on the
-primary city without helping the under-served group at all. Every one of the 
-pickups it edits originates in an advantaged cell and not one lands in
-a disadvantaged cell, so the gap closes only by reducing over-service ---
-analogous to the classic leveling-down objection to equalization
-\cite{parfit1997,mittelstadt2024}, though here service is relocated rather
-than removed.
-% src: PAPER/external-metrics/LEVELING_DOWN_MECHANISM.md (2,455/2,455 flow analysis; pre-supply-lift doc) — corroborated at alpha*: PAPER/supply-lift/data/a10/shz_trimonly_a10_external_fairness.json (mean(Y|disadv) 7.0734 -> 7.0734 exactly)
-This behavior is structural --- the constrained optimum of any demand-only
-editor on this objective (\S\ref{sec:leveling}) --- and that diagnosis
-dictated the second phase. \emph{Lift} reroutes drivers' final seeking
-minutes into under-served areas and makes their supply consequences
-differentiable and endogenous to the objective: the editor is rewarded for
-providing service where it improves fairness, not merely for redistributing
-demand. Together, trim and lift raise demand-adjusted demographic fairness on
-Shenzhen by $+0.0226$
-% src: PAPER/supply-lift/data/a10/shz_a10_metrics.json (deltas.f_causal)
-and add statistically robust taxi presence to the under-served group
-(\S\ref{sec:exp-data-level}).
-% src: PAPER/supply-lift/data/a10/shz_a10_channel_decomposition.json (channels.supply / supply_tier2)
-On San Francisco the protocol reruns with no algorithm or metric 
-change, and the data-level, external-metric, and downstream
-conclusions reproduce ($+0.0316$; \S\ref{sec:exp-sf}).
-% src: PAPER/supply-lift/data/a10/sf12_a10_metrics.json (run r1)
-
-Neither edit survives training on its own. The edited slice is a tenth of
-the corpus, and a vanilla behavior-cloning objective averages it away ---
-a genuine null we verify (\S\ref{sec:exp-downstream}). Upweighting the edited
-demonstrations recovers the fairness with a monotone dose-response, and
-two controls pin the recovery to the edit itself: neither upweighting an
-equal-sized random subset nor upweighting the corpus's already-fairest
-trajectories reproduces it. Because a fairness method scored on its own
-objective proves little, evaluation rides on established measures the
-objective never optimizes --- demographic parity, disparate impact, and the
-Theil index --- computed before and after editing; all three improve on the
-primary city, every interval excluding zero (\S\ref{sec:exp-data-level}).
-% src: see §4 external-metrics table tab:external-sz (DI, DP gap, Theil rows);
-% famail_temporal/baselines/external_fairness/results/shenzhen-primary-supplylift-s10/external_fairness.json
-% (DI + DP gap: metrics.MigrantRatio.district_extremes.{disparate_impact,demographic_parity}.delta;
-%  Theil is top-level `theil`.delta -- between-region, NOT axis-specific)
-On the primary city, a targeted demographic-oversampling baseline captures
-only part of the data-level gain despite fabricating 10.5\% of the corpus,
-and its untargeted placebo degrades fairness outright
-(\S\ref{sec:exp-baselines}).
-% src: PAPER/baselines/demographic-oversampling/FINDINGS.md
-
-\textbf{Contributions.}
-\begin{itemize}
-\item \textbf{A fairness-aware trajectory editor.} Two editing phases under
-one differentiable objective, each driven by an exact attribution mechanism
-(\S\ref{sec:attribution}).
-\item \textbf{A structural diagnosis of de\-mand-only editing.} De\-mand-only
-editing improves fairness without touching the under-served; we 
-show why a differentiable supply channel is the remedy.
-\item \textbf{A transfer recipe with edit-specificity controls.}
-Upweighted imitation carries fairness into trained policies; controls
-isolate the edit as the cause.
-\item \textbf{Two-city validation on never-optimized measures.} The full 
-protocol runs on Shenzhen and San Francisco trajectories, scored on external 
-fairness measures the objective never optimizes.
-\end{itemize}
