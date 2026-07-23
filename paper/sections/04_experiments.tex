@@ -140,8 +140,9 @@ net out.
 
 \textbf{Provenance disclosures.} About 5\% of trim edits (118/2{,}455) had no
 king-compliant repair and were reverted post hoc, before fairness metrics were 
-computed. A pre-build go/no-go bound on the supply-channel headroom, and the
-realized lift-up's distance below it, are in Appendix~\ref{app:results}.
+computed. Before building lift we bounded the largest under-served service
+gain the supply channel could possibly deliver; that bound, and the far
+smaller realized gain, are in Appendix~\ref{app:results}.
 % src: PAPER/supply-lift/FINDINGS.md §8 (skip-on-infeasible)
 % (2026-07-22: Robert cut the 'moved every metric favorably' clause and compressed rule-first
 % to 'before fairness metrics were computed' (matches §3.4); gate detail = appendix Headroom-ceiling block)
@@ -187,22 +188,21 @@ and migrant DP gap $-0.052$ versus $-0.073$ (both CIs excluding zero). % lint-al
 
 \textbf{Data quality (four sources).} We score four corpora --- raw, edited,
 BC-generated, and GAN-generated --- on fairness and both fidelity axes, with
-generators trained from scratch for this comparison and Fidelity-A gated by the
-real-anchored identity check (\S\ref{sec:objective}); the claim under test is
+generators trained from scratch for this comparison and Fidelity-A gated using 
+the realism guardrail of \S\ref{sec:objective}; the claim under test is
 that the edited corpus is the fairest source that remains faithful on both
-realism axes. The claim holds: the edited corpus is the fairest source and
-faithful to driver identity (gate passed, matched 0.848 vs.\ mismatched
+realism axes. The claim holds: the edited corpus is the fairest source
+faithful to driver identity (Fidelity-A gate passed, matched 0.848 vs.\ mismatched
 0.193), with Fidelity-B 0.187 the disclosed divergence of the bounded edits
 (Table~\ref{tab:l1}, Appendix~\ref{app:results}). One instability we surface
-rather than smooth: the Shenzhen GAN's Fidelity-B is bimodal across seeds, and
-the collapse mode Shenzhen generators have shown before returns in some seeds
-here, while the SF GAN stays uniformly healthy (\S\ref{sec:exp-sf}); the
+rather than smooth: the Shenzhen GAN's Fidelity-B is bimodal across seeds, 
+while the SF GAN stays uniformly healthy (\S\ref{sec:exp-sf}); the
 per-seed spread is in Appendix~\ref{app:results}.
 
 \textbf{Vanilla training averages the edit away.} A driver-conditioned BC
 policy trained on the edited corpus at uniform weight is not fairer than one
 trained on raw: paired $\Delta F_{\mathrm{demo}} = +0.0016$ ($n = 12$,
-7/12 positive, $p = .11$, n.s.) --- the null that motivates the upweighting
+7/12 positive, $p = 0.11$, n.s.) --- the null that motivates the upweighting
 recipe (\S\ref{sec:downstream}).
 % src: PAPER/supply-lift/data/a10/shz_a10_wbc_n12_pooled_stats.json (edited arm pooled seeds 0-11; was +0.0022 n=6 p=.16 pre-pooling; WBC-N12 2026-07-18)
 
@@ -215,8 +215,7 @@ Wilcoxon $p = .00049$, $t$-interval $[+0.0278,$ $+0.0315]$ --- while both % lint
 controls stay null at the same $n = 12$ (random $-0.0017$, most-fair
 $+0.0012$, mixed signs, n.s.).
 % src: PAPER/supply-lift/data/a10/shz_a10_wbc_n12_pooled_stats.json (pooled seeds 0-5 + 6-11; 12/12 floor = 2/4096 = .000488; t_p 1.2e-12; WBC-N12 2026-07-18)
-Extending
-the dose saturates, not unbounded growth --- w30 sits at the knee of the
+Extending the dose saturates, not unbounded growth --- w30 sits at the knee of the
 curve, not at a tuned endpoint (w40/w50 values and the per-step increment
 list in Appendix~\ref{app:results}). Neither
 control reproduces it at any dose: the random-subset placebo is
@@ -227,26 +226,23 @@ on Shenzhen while both controls significantly \emph{degrade} it at w30, but not
 on San Francisco (\S\ref{sec:exp-sf}); per-dose values are in
 Appendix~\ref{app:results}. Fidelity-A is unchanged at every weight;
 Fidelity-B rises dose-monotonically --- the expected signature of deliberately
-shifting population statistics toward the edited slice, disclosed rather than
-netted out (Appendix~\ref{app:results}).
+shifting population statistics toward the edited slice (Appendix~\ref{app:results}).
 % src: famail_temporal/results/weighted_bc_sweep/alpha_sweep_s10_c80_f10_filtered_6seed/paired_stats.json + dose_response.json
 
 \textbf{Model-level variance} across paired retrainings is real but an order
 of magnitude below the upweighting effect (Appendix~\ref{app:results}).
 
-\textbf{The allocation boundary.} Metric propagation is not
-the whole story. We roll out the trained policies and measure the share of
-pickups they allocate to disadvantaged areas at the adopted weights, both
-sides for a like-for-like comparison: the
-demand-only corpus tilts by $-0.0049$ at w30 and trim+lift by $-0.0033$
-(each 0/6 seeds, $p = .031$) --- roughly $33\%$ attenuation, not a
-reversal --- with seeking-state shares n.s.\ at every weight in both
-suites.
-% src: famail_temporal/baselines/external_fairness/results/option_a_rollout_a10/summary.json + option_a_rollout_trimonly_a10/summary.json (edited_w30.MigrantRatio.pickups.share_D_delta; states n.s.)
-We claim the data-level lift-up and the metric propagation; we disclose the
-allocation boundary, which motivates training-side allocation constraints as
-future work rather than further data-side editing alone.
+\textbf{The allocation boundary.} Rolled-out policies still allocate a
+slightly smaller share of pickups to disadvantaged areas: $-0.0049$ at w30
+on the demand-only corpus and $-0.0033$ under trim+lift (each 0/6 seeds,
+$p = .031$), attenuated by roughly a third, not reversed. We claim the
+data-level lift-up and the metric propagation, disclose this boundary, and
+motivate training-side allocation constraints as future work.
+% src: famail_temporal/baselines/external_fairness/results/option_a_rollout_a10/summary.json + option_a_rollout_trimonly_a10/summary.json (edited_w30.MigrantRatio.pickups.share_D_delta; seeking-state shares n.s. at every weight in both suites)
 % src: PAPER/supply-lift/data/rollout_supplylift_summary.json + rollout_trimonly_prior_summary.json; FINDINGS.md §9
+% (2026-07-22: COMPRESSED from the full block per Robert's space push, pending his final call —
+% protected disclosure (allocation drain); SF §4.7 replicates it by name and §5's 'rollout gap'
+% future-work clause depends on it, so full deletion needs those two fixed too; original in git)
 
 \subsection{Data-Augmentation Baselines}\label{sec:exp-baselines}
 
