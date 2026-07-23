@@ -67,14 +67,13 @@ F_{\mathrm{demo}}
 \end{equation}
 Eq.~\eqref{eq:fdemo} is the stage-two regression in closed form: the
 numerator is its residual sum of squares, the denominator its total; $H$ is
-constant, so each edit step implicitly re-fits the regression exactly. As a
-ratio of quadratic forms in $R$ it is smooth, so exact gradients flow from
-the fairness score through $Y$ to the coordinates being edited, and the
-idempotence of its projections supports the exact per-unit attribution of
+constant, so each edit step implicitly re-fits the regression exactly. It is
+smooth, so exact gradients flow through $Y$ to the coordinates being edited,
+and its projections' idempotence underlies the per-unit attribution of
 \S\ref{sec:attribution}. The quantity $r^{2}_{\mathrm{demo}}$ is interpretable
-as the share of demand-adjusted service inequity attributable to demographics;
-the Frisch--Waugh--Lovell exactness behind that reading and the $O(N)$
-evaluation identity are given in Appendix~\ref{app:derivations}.
+as the share of demand-adjusted service inequity attributable to demographics
+(the Frisch--Waugh--Lovell exactness behind that reading and the $O(N)$
+evaluation identity: Appendix~\ref{app:derivations}).
 Boundary cases orient the scale: $R \in \operatorname{span}(X)$ gives
 $F_{\mathrm{demo}} = 0$ (fully unfair), and $R \perp X$ gives $1$ (fully
 fair).

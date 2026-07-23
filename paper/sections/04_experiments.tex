@@ -120,11 +120,11 @@ large variance and is not significant, $+0.0352$ [$-0.0095$, $+0.0814$]. The
 supply channel (rerouted tails adding presence) is significant under
 \emph{both} accounting conventions. Under the optimizer's
 \emph{fractional-presence} convention it is $+0.0176$ [$+0.0128$, $+0.0225$]; % lint-allow: coincidental CI bound (s10 fractional-presence/tier-1 interval, not the trim-only headline delta)
-under the \emph{distinct-taxi} accounting it is $+0.0411$ [$+0.0346$,
-$+0.0479$]. That accounting re-counts supply from raw GPS as distinct taxis
-per neighborhood-hour with the edited tails substituted, and it reproduces
-the production supply grid exactly (MAE 0.0, 100\% history match): the
-stricter semantics, not an approximation.
+under the \emph{distinct-taxi} accounting (supply re-counted from raw GPS;
+it reproduces the production supply grid exactly) it is $+0.0411$
+[$+0.0346$, $+0.0479$].
+% recount mechanics trimmed 2026-07-23 (argument triage): per neighborhood-hour, edited tails
+% substituted, MAE 0.0, 100% history match — LIFT_ALGORITHM_REFERENCE.md §10 + REPRODUCIBILITY.md
 % src: famail_temporal/results/2026-07-10T02-06-37_alpha_sweep_s10_c80_f10_filtered/channel_decomposition.json (channel panel; Total = mean(Y|disadv.) +0.0529 row above)
 % src: <s10>/channel_decomposition.json + <s10>/supply_recount.json
 % src (recount validity properties): PAPER/supply-lift/FINDINGS.md §4 (G2, machinery unchanged)
@@ -221,16 +221,14 @@ Wilcoxon $p = .00049$, $t$-interval $[+0.0278,$ $+0.0315]$ --- while both % lint
 controls stay null at the same $n = 12$ (random $-0.0017$, most-fair
 $+0.0012$, mixed signs, n.s.).
 % src: PAPER/supply-lift/data/a10/shz_a10_wbc_n12_pooled_stats.json (pooled seeds 0-5 + 6-11; 12/12 floor = 2/4096 = .000488; t_p 1.2e-12; WBC-N12 2026-07-18)
-Extending the dose saturates, with w30 at the knee of the
-curve, not at a tuned endpoint (see Appendix~\ref{app:results} for w40/w50 
-values and per-step increment list). Neither
+Extending the dose saturates, with w30 at the knee, not a tuned endpoint
+(w40/w50 in Appendix~\ref{app:results}). Neither
 control reproduces it at any dose: the random-subset placebo is
 null-to-negative throughout, and the most-fair selection control reaches
 $+0.0033$ at w10 --- significant, but under a sixth of the edited arm's
 gain --- then fades to n.s.\ at every higher dose. $F_{\mathrm{spatial}}$ also propagates
-on Shenzhen while both controls significantly \emph{degrade} it at w30, but not
-on San Francisco (\S\ref{sec:exp-sf}); per-dose values are in
-Appendix~\ref{app:results}. Fidelity-A is unchanged at every weight;
+on Shenzhen, though not on San Francisco (\S\ref{sec:exp-sf}); per-dose
+values and the control contrast are in Appendix~\ref{app:results}. Fidelity-A is unchanged at every weight;
 Fidelity-B rises dose-monotonically --- the expected signature of deliberately
 shifting population statistics toward the edited slice (Appendix~\ref{app:results}).
 % src: famail_temporal/results/weighted_bc_sweep/alpha_sweep_s10_c80_f10_filtered_6seed/paired_stats.json + dose_response.json
@@ -257,11 +255,9 @@ single-step signed-gradient attacks on the frozen identity discriminator
 a seeded random-jitter placebo. The gradient arms are \emph{iFGSM\slash
 FGSM with random restart} \cite{kurakin2017ifgsm,goodfellow2015fgsm}
 (PGD-style random initialization within the
-$\varepsilon$ ball \cite{madry2018pgd}); a pre-registered $\delta = 0$ no-op ablation did not
-stall because the
-deployed head compares embeddings by \emph{concatenation}, not stationary at
-an identical pair (Appendix~\ref{app:editor}). The random-start arms are the
-reported ones. Results: Table~\ref{tab:baselines}.
+$\varepsilon$ ball \cite{madry2018pgd}); the random-start arms are the
+reported ones (the pre-registered $\delta = 0$ ablation:
+Appendix~\ref{app:editor}). Results: Table~\ref{tab:baselines}.
 
 One result lands against the pre-registered expectation: random jitter
 \emph{does} raise $F_{\mathrm{demo}}$, by $+0.0135$ --- indiscriminately
@@ -290,12 +286,12 @@ to get there, where FATE redistributes observed behavior at zero inflation
 and reaches $+0.0226$. The untargeted placebo (same fabrication without targeting)
 \emph{degrades} fairness, $-0.0172$, so the gain is targeting-specific; and
 the placebo's DP gap explodes ($+2.8$) because fabricated supply lands
-predominantly in already-advantaged cells --- a measured demonstration that
+mostly in already-advantaged cells --- a measured demonstration that
 ratio metrics can be gamed by fabrication, the demand-endo\-ge\-ne\-ity concern of
-\S\ref{sec:leveling} made concrete. Two disclosures: the corpus cannot even
-supply the matched dose without re-duplication (Appendix~\ref{app:results}),
-and fidelity is not scored for this arm --- duplicates of real trajectories
-pass any realism check by construction.
+\S\ref{sec:leveling} made concrete. Two disclosures: the matched dose needs
+re-duplication (Appendix~\ref{app:results}), and fidelity is not
+scored --- duplicates of real trajectories pass any realism check by
+construction.
 % src: PAPER/baselines/demographic-oversampling/FINDINGS.md §2-5
 
 \textbf{Fairness-method baselines (training-side).} The remaining comparison
@@ -311,12 +307,10 @@ disadvantaged group ($-0.0010$, negative on all six, $p = .031$). An
 in-processing penalty
 in the spirit of \cite{zheng2023} --- the imitation loss plus $\lambda$
 times the demo\-graph\-ic-parity gap in predicted next-cell mass --- is inert at
-every trainable dose, destructive only where it dominates. The signed
-formulation (advantaged minus disadvantaged, the direction the data
-over-serves) and the absolute-value formulation behave the same at every
-$\lambda$; neither offers a constructive operating range. The full
-$\lambda$ grid, both formulations, the collapse magnitudes, and the
-$10^{-5}$ loss-share derivation are in Appendix~\ref{app:results}.
+every trainable dose, destructive only where it dominates, identically
+under its signed and absolute-value formulations. The full $\lambda$ grid,
+collapse magnitudes, and the $10^{-5}$ loss-share derivation are in
+Appendix~\ref{app:results}.
 Neither training-side intervention reproduces any part of the recovery
 that editing the demonstrations provides.
 % src: famail_temporal/results/weighted_bc_sweep/fairness_baseline_6seed/paired_stats.json (fair_reweigh; edited_w30 +0.0302 replicated internally)
@@ -406,12 +400,10 @@ San Francisco tests whether the \emph{conclusions} reproduce.
 ($+0.0316$), $F_{\mathrm{spatial}}$ $+0.0139$, with Fidelity-A stability and % lint-allow: coincidental value (SF a10 F_spatial delta, not the trim-only F_demo headline)
 lift's Fidelity-B cost re-measured in the four-source comparison below
 (Appendix~\ref{app:results}). Every external instrument improves: Theil $-0.0079$
-(CI $[-0.0094, -0.0065]$), and the migrant-axis DP gap is significant under
-\emph{both} grouping conventions (district extremes $-0.0729$,
-CI $[-0.1132, -0.0259]$; median split $-0.0370$, CI $[-0.0733, -0.0002]$),
-with DI significant under district extremes ($+0.0058$,
-CI $[+0.0004, +0.0103]$) and n.s.\ under median split --- a grouping
-dependence we state rather than hide (the SF sample is 12 drivers).
+(CI $[-0.0094, -0.0065]$); the migrant-axis DP gap is significant under
+\emph{both} grouping conventions, DI under one and n.s.\ under the other
+--- a grouping dependence we state rather than hide (the SF sample is 12
+drivers; per-convention values in Appendix~\ref{app:results}).
 % src: PAPER/supply-lift/data/a10/sf12_a10_metrics.json + sf12_a10_external_fairness.json
 
 \textbf{The supply channel replicates; the ratio tension is an accounting

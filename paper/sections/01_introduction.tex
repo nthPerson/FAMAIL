@@ -41,13 +41,13 @@ they record.
   % src: PAPER/supply-lift/data/a10/shz_a10_external_fairness.json
   % (MigrantRatio district_extremes disparate_impact.before 0.33252 ->
   % advantaged/disadvantaged service ratio 1/0.33252 = 3.0x)
-  The recorded trajectories are valuable human expertise, so instead of
-  filtering or regenerating them FATE makes bounded, attribution-chosen
-  edits to the most-biased slice (the \emph{edited corpus}, right).
+  The trajectories are valuable human expertise, so rather than filter or
+  regenerate them, FATE makes bounded, attribution-chosen edits to the
+  most-biased slice (the \emph{edited corpus}, right).
   % NOTE (2026-07-16): no quantified bias share here by design — k=10,000
   % is an edit budget (~10% of the corpus), not a measured extent of bias.
   A policy imitating the raw corpus learns the service gap; trained on the
-  upweighted edited demonstrations, it learns a measurably fairer policy.
+  upweighted edited corpus, it is measurably fairer.
   Figure~\ref{fig:overview} shows the editor.}
   \Description{Two side-by-side pipelines, with an arrow labeled FATE
   transforming the left pipeline's raw corpus into the right pipeline's

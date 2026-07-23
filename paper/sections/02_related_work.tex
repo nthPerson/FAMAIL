@@ -18,7 +18,7 @@ distribution --- the setting this paper requires. Both instruments reappear
 here in unfamiliar roles: reweighing
 applied to edited demonstrations rather than labeled examples, and the parity
 condition transplanted from a classifier's predictions to a continuous
-spatial service ratio and made a differentiable editing objective.
+spatial service ratio as a differentiable editing objective.
 
 \textbf{Fairness in urban transportation.} Transportation equity has its own
 measurement tradition, in which the Gini index over service distributions is
@@ -30,9 +30,9 @@ racial prediction-error gap from 0.361 to 0.084 \cite{zheng2023}.
 % verified: paper/reviews/2026-07-12-prose-citation-audit.md (zheng2023 Table 2, Conv-LSTM arm)
 That correction, however, leaves the demonstrations biased: it lives inside
 one model's loss and does not transfer to any other consumer of the data.
-FATE addresses the same bias one stage earlier --- on the demonstrations the
-model trains on, rather than inside its loss --- and is scored on equity
-measures its objective never optimizes.
+FATE addresses the same bias one stage earlier, on the demonstrations
+rather than inside the loss, and is scored on equity measures its
+objective never optimizes.
 
 \textbf{Imitation learning for mobility, and mobility as identity.}
 Imitation learning is an established route to urban mobility models:
@@ -57,8 +57,8 @@ estimation \cite{bengio2013ste} and continuous
 relaxation \cite{jang2017gumbel,maddison2017concrete}. Algorithmic recourse showed that the same
 counterfactual tooling can prescribe beneficial change rather than attack
 \cite{ustun2019recourse,wachter2018counterfactual}, but only to flip one
-individual's decision --- with no population-level fairness target and no
-obligation to preserve a data distribution's realism. FATE extends that
+individual's decision, with no population-level fairness target and no
+data-realism obligation. FATE extends that
 constructive reading from the individual to the population: the bounded
 perturbation edits real trajectories to reduce demographic service inequity,
 and the $\varepsilon$-bound is reinterpreted from an attack-stealth budget to
