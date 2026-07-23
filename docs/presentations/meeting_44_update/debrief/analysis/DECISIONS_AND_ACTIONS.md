@@ -1,5 +1,12 @@
 # Meeting 44 — Decisions, Actions & Submission Logistics
 
+> ⚠️ **POST-DEBRIEF CORRECTIONS (Robert, 2026-07-23) — parts of this document are superseded.**
+> 1. Dr. Zhang WAS reviewing the CURRENT paper content (Robert transferred it to Overleaf pre-meeting; she views and will edit there). Retract every "stale copy / older version / discount-as-render-artifact" inference in this file — ALL her feedback binds against the current text.
+> 2. Template: per Robert, conform to her direction to NOT use the `\keywords{...}` block (the "corrected template adds keywords" reading is superseded); verify against KDD template standards.
+> 3. Raw data: releasable IF 100% anonymous (not a flat no); in-paper data references must not leak identifying information.
+> 4. Hat-matrix citation: stays in the main body (derivation content still moves to the appendix).
+> Authoritative record: ../MEETING_44_DEBRIEF.md (§2, §3, §6, §7).
+
 **Meeting:** 44 · 2026-07-23 (Thu) · ~2h00m · Robert (RA, he/him) + Dr. Xin Zhang (PI, she/her)
 **Purpose:** Full-draft review of the FATE KDD 2027 paper. **Global verdict: paper too complicated → problem-driven simplification rewrite before submission.**
 **Submission target discussed:** Sunday **2026-07-26** (ahead of the Monday **2026-07-27** deadline).

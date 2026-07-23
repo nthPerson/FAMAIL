@@ -50,50 +50,79 @@ temporarily during the rewrite is fine.
   unverified in-meeting — this check closes that action (A20).
 - Agreed plan: **submit Sunday 2026-07-26** (D24) — treat Sunday evening as the real deadline.
 
-### 2.2 Template
-- The compile Dr. Zhang reviewed showed a **CCS-concepts block; the corrected template
-  replaces it with keywords** (header-metadata swap, same acmart sigconf/review/anonymous
-  class — no layout/page-count change indicated). She made the edit in **her own copy**, but
-  **where that copy lives was never named** (not said to be Overleaf/email/repo). → Robert
-  must ask her where it is, or reconcile directly. Note: local `main.tex` (identical to
-  origin's) already has `\keywords{...}` and **no** `CCSXML`/`\ccsdesc` block — reconcile
-  before assuming any local change is needed.
+### 2.2 Template (corrected per Robert, 2026-07-23 post-debrief)
+- The template she reviewed surfaced a **CCS-concepts vs keywords** problem, and she has
+  already fixed the template in her copy on **Overleaf** (Robert's clarification: she views
+  and will edit there — the earlier "location never named" blocker is dissolved).
+- **Robert's directive (authoritative):** in the upcoming edit, **conform to Dr. Zhang's
+  direction to NOT use the `\keywords{...}` block**, and **double-check compliance with the
+  KDD template standards**. Note: the Plaud summary claims the corrected template *adds* a
+  keywords section — Robert's account (he attended) supersedes the machine summary;
+  reconcile against her actual Overleaf template when adopting.
+- Local `main.tex` currently has `\keywords{...}` and no `CCSXML`/`\ccsdesc` block → the
+  concrete local action is to remove/adjust the keywords block to match her template.
 
-### 2.3 Data & code availability (D19)
-- **Raw data is NOT released** (source: Dr. Yanhua Li) — and she said not to dwell on it in
-  the paper. The Plaud action item "document licensing constraints" **inverts her actual
-  instruction** — disregard it.
+### 2.3 Data & code availability (D19 — refined by Robert post-debrief)
+- **Raw data: releasable ONLY IF 100% anonymous** (Robert's reading of the discussion; this
+  refines the flat "not released" in the meeting notes). Default posture remains no-release;
+  any release path requires complete anonymization. Source: Dr. Yanhua Li.
+- **In-paper caution (new):** how the paper references the data must not leak identifying
+  information (collection/provider specifics, uncleaned coordinates, anything traceable) —
+  fold this into the PII pass.
 - Ship **anonymized data + code via an anonymous GitHub link in the introduction**;
   **empty repo at submission is acceptable**; artifact pledge proceeds on code availability.
   Repo/link creation implicitly Robert's.
 - Data-availability statement: minimal — code shared via GitHub. Detailed reproducibility
   documentation **deferred until after submission** (PAPER/REPRODUCIBILITY.md remains our
-  internal seed).
+  internal seed). The Plaud action item "document licensing constraints" **inverts her
+  actual instruction** (don't dwell on it in-paper) — disregard it.
 
 ---
 
-## 3. What she actually reviewed (read before acting on any figure/layout complaint)
+## 3. What she reviewed — CORRECTED (Robert, 2026-07-23 post-debrief; supersedes the first reading)
 
-- Her PDF was a **broken and stale render**: figures failed with a package conflict, she
-  worked partly from **screenshots**, and she **could not locate Figure 2**. Whitespace and
-  figure-placement complaints should be re-checked against a clean compile of the current
-  draft before spending effort.
-- Her copy predates the last ~23 local commits (origin sits at `cdf3e4d`, cut-wave W8).
-  Already done locally, which her copy lacked:
+**Dr. Zhang WAS working with the current paper content.** Robert transferred the full
+updated draft to Overleaf before the meeting; Overleaf is where she views it and where she
+plans to make her own edits. The debrief's initial "broken, stale compile" reading is
+**RETRACTED**, and every inference built on it is void: **no complaint may be discounted as
+a version artifact — all feedback binds against the current text.** The in-meeting
+rendering trouble on her side (figures failing with a package conflict [0:12:15], working
+from screenshots, not finding Figure 2 on screen) was an environment/navigation hiccup
+during the call, not evidence of stale content.
 
-| Her ask | Local status |
-|---|---|
-| "Task" → "Problem Formulation" [1:25:21] | Heading already renamed (`03_methodology.tex:3`); **residual `\textbf{Task.}` run-in at l.29 must go**; rigorous state/action/reward definitions only partly present |
-| ≤8 pages | Content already under 8pp (References ~95% down p8) — Robert told her so live [0:17:35]; "~11 pages" was Robert describing his **pre-compression** draft [0:48:44], not her page count |
-| Shorter teaser caption | One trim already landed 07-22; her bar ("essential info only" [0:17:24]) is stricter — trim further |
-| Move detail to appendix | Argument-triage moves (allocation boundary, SF detail, recount mechanics) already landed 07-22; her policy extends this (F_demo derivation, grid-cell config) |
+Reinterpretations that follow:
 
-- Misc transcription artifacts: "Laura" (even at [1:39:40]) = Robert; "Katie" = "KDD"; only
-  two attendees.
+- **"It's just a task" [1:25:21] targets the CURRENT text.** The §3 heading already reads
+  "Problem Formulation" (`03_methodology.tex:3`), so her critique lands on the
+  `\textbf{Task.}` paragraph run-in (l.29) and on the formulation's lack of rigor. The
+  substantive ask is fully open: rename the run-in and add explicit
+  trajectory/state/action/reward definitions [1:32:12].
+- **The teaser caption she called overly detailed is the already-trimmed 07-22 version** —
+  her bar ("essential info only" [0:17:24]) requires cutting further.
+- **Whitespace, in-figure text size, spacing, and figure-clarity complaints are about the
+  real, current figures.** All stand as actionable now; nothing is deferred to a re-check.
+- **Her appendix policy extends (not duplicates) the 07-22 argument-triage moves**: she saw
+  the draft with those moves already made and still wants more moved (F_demo derivation,
+  grid-cell config, full related work).
+- Unchanged attribution facts (independent of what she viewed): "~11 pages" was Robert
+  describing his own **pre-compression** draft [0:48:44], not her page count — content is
+  under 8pp and Robert told her so live [0:17:35]; "Laura" (even at [1:39:40]) = Robert;
+  "Katie" = "KDD"; only two attendees.
+
+**Overleaf is the coordination surface**: her corrected template and her possible new
+§1/abstract .tex will appear there; local git remains our working source of truth, with a
+merge/reconcile event planned ~1–2 days out (§6.1, §8).
 
 ---
 
 ## 4. The mandate — seven planks
+
+**Governing style rule (Robert, 2026-07-23, binding for the whole rewrite):** every
+statement self-explanatory; every section self-contained (assume the reviewer scans in
+mid-paper, has not read earlier sections, and will not read the cited works); prioritize
+domain-specific language and avoid ALL unnecessary generalities, cleverness, and patterns
+that force the reader to self-interpret; the story carries the minimum detail necessary to
+introduce and validate the method, structured as Dr. Zhang instructed.
 
 1. **Fairness-vs-fidelity trade-off is the spine.** Existing methods buy fairness at the
    cost of fidelity; FATE achieves both. "the fairness versus realism tradeoff is a major
@@ -117,11 +146,15 @@ temporarily during the rewrite is fine.
    distribution shifts and at what level (data / model / hyperparameter) the intervention acts.
 6. **Ruthless main-text/appendix split**: §2 related work → **half a column**, full version
    to appendix [1:20:02]; §1 approach summary → **one paragraph** + anonymous code link
-   [0:50:46]; **F_demo derivation (including the hat-matrix reference) → appendix**, main
-   text keeps `1−R²_demo` + meaning + pointer (adjudicated below, §7); grid-cell/implementation
-   config → appendix; remove §3/§4 duplication (0.01° grid stated in both).
-7. **Terminology + de-AI-ification**: "realism" → **"fidelity"** in technical contexts
-   [1:41:47] while keeping paper-specific Fidelity-A/B distinct [1:51:04]; replace vague
+   [0:50:46]; **F_demo derivation → appendix**, main text keeps `1−R²_demo` + meaning +
+   pointer **+ the bare hat-matrix citation** (`hoaglinwelsch1978` stays in body per
+   Robert's §6.6 call; the derivation content moves per [1:23:32]–[1:24:14]);
+   grid-cell/implementation config → appendix; remove §3/§4 duplication (0.01° grid
+   stated in both).
+7. **Terminology + de-AI-ification**: her ask was "realism" → **"fidelity"** in technical
+   contexts [1:41:47] while keeping paper-specific Fidelity-A/B distinct [1:51:04]
+   (execution refined by Robert's §6.3 answer: neither word is forced — the concept must
+   be self-explanatory wherever introduced, and "realism" is optional); replace vague
    GPT-flavored phrases ("rebalancing models," "data generation shifts the distribution");
    workflow reversed — **human-write-first, AI refine after** [0:19:38ff].
 
@@ -155,35 +188,53 @@ in its style and stand alone (Robert's "read them in combination" was overruled)
    palette while rebuilding.
 8. Conflicts to resolve deliberately (C1–C9 in the spec): conservation vs visible-3×;
    in-figure numbers vs compactness; map background vs the logged map-free design decision;
-   her broken render vs real whitespace issues; imitation-model layer stays (her removal
-   suggestion was withdrawn — core to the transfer claim).
+   imitation-model layer stays (her removal suggestion was withdrawn — core to the transfer
+   claim). (The spec's "her render vs real issues" caveat is void per §3: all whitespace/
+   clarity complaints are about the current figures and stand.)
 
 ---
 
-## 6. Open decisions Robert must make (genuine disagreements or unassigned choices)
+## 6. Open decisions — ANSWERED (Robert, 2026-07-23 post-debrief)
 
-1. **Who writes the new §1/abstract**: she said she may draft her own rewrite in a new .tex
-   file [1:52:42]/[2:00:03]. Coordinate before either side writes — merge risk (and the
-   editor-conflict recipe applies if both touch the same files).
-2. **Top-line scope claim**: her repeated narrowing to "data augmentation for imitation
-   learning / behavior cloning" (beyond-BC = future work, D28) vs Robert's "dual finding"
-   framing. Abstract/intro currently claim the general version.
-3. **"Fidelity" vs "realism"**: her new rule (fidelity) collides with her own earlier
-   literature-backed "realism" rule; Robert was mid-defense when the topic closed. OPEN
-   (F44) — decide one, sweep consistently, keep Fidelity-A/B distinct.
-4. **Robert's standing defenses** (PUSHED-BACK-STANDS or OPEN in the ledger): "in-processing"
-   as a term, the "distribution shift" claim, intentional §3/§4 duplication. Decide which to
-   concede in the rewrite vs keep with better wording.
-5. **Which early evidence goes into Figure 1** (GAIL number? news fallback?) — and whether it
-   fits without wrecking the teaser's simplicity.
-6. **Hat-matrix bare cite**: mandate sends the derivation + ref to the appendix; keeping a
-   bare `\cite{hoaglinwelsch1978}` in body prose costs ~0 lines if Robert wants reviewer
-   cover — style call.
-7. **Challenges content**: the C1–C4 candidate set in NARRATIVE_STRATEGY.md Part 3 is
-   inference — Robert picks/words the actual challenges.
-8. **Caption interpretation** (low risk): shorten caption *content* to essentials [0:17:24]
-   while following template caption *formatting* [0:19:16] — confirm reading with her only if
-   convenient.
+1. **§1/abstract ownership → parallel tracks.** Dr. Zhang makes her own edits in a separate
+   environment (Overleaf); we also write a new §1/abstract ourselves; the two versions get
+   merged/reconciled before the deadline (Robert: "probably in a day or two"). Treat the
+   reconcile as a real scheduled event (3-way against the pre-rewrite base; editor-conflict
+   recipe applies).
+2. **Top-line scope → dual finding retained, scoped per claim (working position).** Robert
+   leans dual-finding and asked for a defensibility check; Fable's recommendation (recorded
+   as the working position, confirm during the rewrite): keep the dual finding — it IS the
+   argument (the vanilla-BC null shows data-level gains alone don't survive training; the
+   upweighting recovery completes it) — but scope each claim honestly: data-level claims
+   are learner-agnostic (the corpus is measured before any training), while the transfer
+   claim is stated as "demonstrated with behavior cloning" wherever made, with one
+   future-work clause beyond BC (which also satisfies her D28). Rationale: an unscoped
+   IL-wide transfer claim is attackable, especially with GAIL as the motivating example and
+   no GAIL training run in the paper.
+3. **Fidelity vs realism → neither word is forced.** Wherever the concept appears, the
+   sentence must be self-explanatory so the reader needs no prior knowledge of the term;
+   "realism" may be used or dropped ("it's not a requirement to use it"). Her Overleaf
+   edits may still impose "fidelity" — reconcile at merge. Fidelity-A/B stay distinct as
+   the paper-specific instruments.
+4. **Standing defenses → balanced concession.** Keep terms that are genuinely the most
+   reasonable expression ("in-processing" probably stays) but give every such term enough
+   in-place context to be understood cold — Dr. Zhang's confusion came from missing
+   context, not the word itself. Binding assumption: the reader has NOT read the paper
+   start-to-finish and will NOT read the cited works; every section/paragraph must be
+   self-contained for a scanning reader.
+5. **Fig-1 early evidence → deferred.** Re-pose the question concretely when the Figure-1
+   edit starts (with FIGURE_REVISION_SPEC on the table).
+6. **Hat-matrix citation → STAYS in the main body** (bare cite next to `1−R²_demo`); the
+   derivation content still moves to the appendix.
+7. **Challenges → C1–C4 approved, C5 added.** C1 fidelity-under-editing, C2 demand-adjusted
+   fairness target, C3 level-up-not-down, C4 survival-through-training (NARRATIVE_STRATEGY
+   §3.1), plus **C5: human-derived demonstration data is scarce, so filtering out the
+   unfair data is not an option** (scarcity forces editing over filtering/regeneration).
+   Additionally: sweep the current §1/§2 for further implicit challenges worth promoting,
+   and keep the challenge set consistent everywhere it appears (intro beat, methodology
+   mapping, contributions).
+8. **Captions → essentials-only, confirmed.** No Zhang check needed; both agree. Template
+   caption *formatting* still follows her corrected template.
 
 ---
 
@@ -203,17 +254,30 @@ in its style and stand alone (Robert's "read them in combination" was overruled)
 - **Prior-agenda items NOT raised** in the meeting: argument-triage ratification by name,
   D1/Reading-B science walk-through (she cut the numbers drill-down short), FairGAN/DECAF
   citation verification, PII/anonymity checks. These remain on our internal checklist.
+- **Post-debrief corrections from Robert (2026-07-23)** — supersede the corresponding
+  first-pass readings above and in `analysis/`:
+  1. **Version**: the "broken, stale compile" reading is RETRACTED — she reviewed the
+     CURRENT content on Overleaf (Robert transferred it pre-meeting); all feedback binds
+     against the current text (§3).
+  2. **Template**: do NOT use the `\keywords{...}` block (Robert's account supersedes the
+     Plaud summary's "corrected template adds keywords"); verify against KDD template
+     standards (§2.2).
+  3. **Raw data**: anonymity-conditional release (OK if 100% anonymous), not a flat no;
+     plus a new in-paper data-reference PII caution (§2.3).
+  4. **Hat-matrix**: the bare citation stays in the main body (Robert's call); only the
+     derivation content moves (§4 plank 6, §6.6).
 
 ---
 
-## 8. Proposed schedule (deadline-driven; today = Thu 07-23)
+## 8. Schedule (deadline-driven; today = Thu 07-23)
 
 | When | What |
 |---|---|
-| Thu eve | Robert reads this debrief + answers §6 decisions; asks Dr. Zhang where the corrected template lives; watch for her §1 .tex |
-| Fri | §1/abstract rewrite (problem-driven, Challenges, one-¶ approach, anon link) + §2 half-column/appendix split; citation additions (≥2/class, 2025–26) |
-| Sat | Figure 1 rebuild (conservation, labels, in-figure numbers) + methodology reshape (derivation → appendix, dedup, Task run-in) + terminology sweep (fidelity, precision fixes) |
-| Sun | Full gates, page check, PII/anonymity re-check, template reconciliation, anonymous repo link live, **submit** (well before AoE midnight) |
+| Thu eve ✅ | Debrief delivered; Robert answered §6; corrections folded into this doc |
+| Fri | Our §1/abstract rewrite (problem-driven, C1–C5, one-¶ approach, anon code link) + §2 half-column/appendix split + citation additions (≥2/class, 2025–26; checklist rows same session). Dr. Zhang works in parallel on Overleaf |
+| Sat | Figure 1 rebuild (conservation, district labels, in-figure numbers) + §3 reshape (derivation → appendix keeping the bare hat-matrix cite, grid-cell dedup, `\textbf{Task.}` run-in fix, rigorous state/action/reward definitions) + self-containment/terminology sweep |
+| Sat/Sun | **Merge/reconcile with Dr. Zhang's parallel edits** (her §1/abstract .tex + her template; 3-way vs pre-rewrite base) |
+| Sun | Full gates, page check, PII pass **including the data-reference leak check**, template compliance (no `\keywords{...}`), anonymous repo link live, **submit well before AoE midnight** |
 
 Working rules unchanged: protected register (headline numbers + disclosures survive somewhere),
 era discipline, citation-checklist same-session rule, explicit staging, surface-never-smooth.
