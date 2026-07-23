@@ -164,10 +164,10 @@ the demand floor $d_0$, where removing demand changes nothing.
 % src: PAPER/external-metrics/LEVELING_DOWN_MECHANISM.md; LIFT_ALGORITHM_REFERENCE.md §1 (32x; 93%)
 (iii)~\emph{Supply-side inequity:} median taxi presence is 1.8 in disadvantaged
 versus 17.6 in advantaged cells, and a demand-only editor cannot touch this supply.
-A greedy oracle (an unconstrained search that upper-bounds what any editor
-could achieve) closes the remaining escape route: the only demand-side way to
-raise the under-served group's service ratio is to delete its recorded
-pickups, which is perverse.
+A greedy unconstrained search, which upper-bounds what any editor could
+achieve, rules out the last demand-side option: raising the under-served
+group's service ratio would require deleting its recorded pickups, which is
+perverse.
 % src: LIFT_ALGORITHM_REFERENCE.md §1 (median presence 1.8 vs 17.6; oracle perversity)
 
 The deeper cause unifies the editor's limitation with the metric's. Recorded

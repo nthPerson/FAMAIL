@@ -139,21 +139,26 @@ net out.
 % src: famail_temporal/results/level1_table_v2/supply_lift_shz_5seed/level1_v2_multiseed.json (edited row: Fid-A, Fid-B 0.187)
 
 \textbf{Provenance disclosures.} About 5\% of trim edits (118/2{,}455) had no
-king-compliant repair and were reverted post hoc; the rule was adopted before
-its metric effects were computed, and it moved every metric favorably --- the
-infeasible edits were actively counterproductive. A pre-build oracle gate
-bounded the supply-channel headroom, and the realized lift-up sits far below
-that realism-free ceiling, as a realism-bounded editor should
-(Appendix~\ref{app:results}).
+king-compliant repair and were reverted post hoc, before fairness metrics were 
+computed. A pre-build go/no-go bound on the supply-channel headroom, and the
+realized lift-up's distance below it, are in Appendix~\ref{app:results}.
 % src: PAPER/supply-lift/FINDINGS.md §8 (skip-on-infeasible)
+% (2026-07-22: Robert cut the 'moved every metric favorably' clause and compressed rule-first
+% to 'before fairness metrics were computed' (matches §3.4); gate detail = appendix Headroom-ceiling block)
 
 \textbf{Ablation: trim-only versus trim+lift.}\label{sec:exp-ablation}
 With trim frozen inside the combined editor (\S\ref{sec:editor}), the
 lift-disabled run reproduces the demand-only editor exactly, so every
-difference between the trim-only and trim+lift columns below isolates lift ---
+difference between the trim-only and trim+lift columns below isolates lift
 and certifies \S\ref{sec:leveling}: demand-only editing improves the
 metrics without raising under-served service; the supply channel is what
 changes that.
+% With trim frozen inside the combined editor (\S\ref{sec:editor}), the
+% lift-disabled run reproduces the demand-only editor exactly, so every
+% difference between the trim-only and trim+lift columns below isolates lift ---
+% and certifies \S\ref{sec:leveling}: demand-only editing improves the
+% metrics without raising under-served service; the supply channel is what
+% changes that.
 
 Three metrics carry the qualitative story, and the structural expectation from
 \S\ref{sec:leveling} re-verifies exactly at the adopted weights: under
@@ -161,9 +166,10 @@ trim-only, every external instrument still improves significantly (DP
 $-0.611$, DI $+0.0098$, Theil $-0.0059$, all CIs excluding zero) --- but the
 disadvantaged group's service level is unchanged while the advantaged level
 falls, so the improvement is pure top-down redistribution. Under trim+lift
-the same level rises with a bootstrap interval excluding zero, and the
-secondary spatial metric turns from a cost to a gain: the lift mechanism is
-the difference between redistributing service and providing it. On Shenzhen
+the disadvantaged level rises with a bootstrap interval excluding zero, and
+$\Delta F_{\mathrm{spatial}}$ flips from negative to positive: trim only
+redistributes existing service; lift adds taxi presence where it was
+missing. On Shenzhen
 the trim-only versus trim+lift contrast is
 $\Delta F_{\mathrm{demo}}$ $+0.0146$ versus $+0.0226$, % lint-allow: ablation
 $\Delta F_{\mathrm{spatial}}$ $-0.0011$ versus $+0.0061$, and % lint-allow: ablation

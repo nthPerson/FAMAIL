@@ -142,7 +142,7 @@ twins).
 | variance (§4.4) | +0.0030±0.0022, n=10, 9/10 positive, Wilcoxon p=.0039 | `shz_a10_variance10_aggregate.json` | `variance_suite/supply_lift_shz_10seed` | B2-VAR-SZ |
 | rollout attenuation (§4.4) | trim+lift −0.0033 vs trim-only −0.0049 (both 0/6, p=.031) → ~33% | `shz_a10_rollout_summary.json` + `shz_trimonly_a10_rollout_summary.json` | `option_a_rollout_a10` + `option_a_rollout_trimonly_a10` | R5-rollout-a10 + R5b-trimonly-rollout |
 | pareto (§4.6) | filter@K=2455 0.7935 vs edit 0.8214 (filtering inverts the gain) | `shz_a10_pareto_points.csv` | `analysis/pareto_supplylift` | Q7-pareto |
-| oracle ceiling (§ gate) | +0.786 supply-only; +0.882 full (0.882001) | `oracle.json` | `analysis/supply_lift_oracle_out` | (Stage-0, pre-campaign) |
+| headroom ceiling, pre-build gate (paper: "unconstrained greedy search"; App. C) | +0.786 supply-only; +0.882 full (0.882001) | `oracle.json` | `analysis/supply_lift_oracle_out` | (Stage-0, pre-campaign) |
 
 ### 6.3 Baselines and fairness-intervention controls (§4.5)
 
