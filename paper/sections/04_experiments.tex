@@ -202,8 +202,13 @@ per-seed spread is in Appendix~\ref{app:results}.
 \textbf{Vanilla training averages the edit away.} A driver-conditioned BC
 policy trained on the edited corpus at uniform weight is not fairer than one
 trained on raw: paired $\Delta F_{\mathrm{demo}} = +0.0016$ ($n = 12$,
-7/12 positive, $p = 0.11$, n.s.) --- the null that motivates the upweighting
-recipe (\S\ref{sec:downstream}).
+7/12 positive, $p = 0.11$, n.s.) --- the null predicted in 
+\S\ref{sec:downstream}, and the reason the upweighting recipe exists.
+% \textbf{Vanilla training averages the edit away.} A driver-conditioned BC
+% policy trained on the edited corpus at uniform weight is not fairer than one
+% trained on raw: paired $\Delta F_{\mathrm{demo}} = +0.0016$ ($n = 12$,
+% 7/12 positive, $p = 0.11$, n.s.) --- the null that motivates the upweighting
+% recipe (\S\ref{sec:downstream}).
 % src: PAPER/supply-lift/data/a10/shz_a10_wbc_n12_pooled_stats.json (edited arm pooled seeds 0-11; was +0.0022 n=6 p=.16 pre-pooling; WBC-N12 2026-07-18)
 
 \textbf{Upweighting recovers it, edit-specifically.} With the edited
@@ -215,9 +220,9 @@ Wilcoxon $p = .00049$, $t$-interval $[+0.0278,$ $+0.0315]$ --- while both % lint
 controls stay null at the same $n = 12$ (random $-0.0017$, most-fair
 $+0.0012$, mixed signs, n.s.).
 % src: PAPER/supply-lift/data/a10/shz_a10_wbc_n12_pooled_stats.json (pooled seeds 0-5 + 6-11; 12/12 floor = 2/4096 = .000488; t_p 1.2e-12; WBC-N12 2026-07-18)
-Extending the dose saturates, not unbounded growth --- w30 sits at the knee of the
-curve, not at a tuned endpoint (w40/w50 values and the per-step increment
-list in Appendix~\ref{app:results}). Neither
+Extending the dose saturates, with w30 at the knee of the
+curve, not at a tuned endpoint (see Appendix~\ref{app:results} for w40/w50 
+values and per-step increment list). Neither
 control reproduces it at any dose: the random-subset placebo is
 null-to-negative throughout, and the most-fair selection control reaches
 $+0.0033$ at w10 --- significant, but under a sixth of the edited arm's
@@ -245,7 +250,6 @@ motivate training-side allocation constraints as future work.
 % future-work clause depends on it, so full deletion needs those two fixed too; original in git)
 
 \subsection{Data-Augmentation Baselines}\label{sec:exp-baselines}
-
 None of the baselines below optimizes a fairness objective; they are
 \emph{editing-quality} baselines that test whether FATE's gains come from
 its objective or merely from bounded perturbation (or corpus resampling)
@@ -255,10 +259,12 @@ perturbation arms.
 
 \textbf{Perturbation arms.} Three arms attack the same trajectories the
 headline edit selected, at the same $\varepsilon = 2$: iterative and
-single-step signed-gradient attacks on the frozen identity discriminator, and
+single-step signed-gradient attacks on the frozen identity discriminator
+\cite{hu2023stifgsm}, and
 a seeded random-jitter placebo. The gradient arms are \emph{iFGSM\slash
-FGSM with random restart} (PGD-style random initialization within the
-$\varepsilon$ ball); a pre-registered $\delta = 0$ no-op ablation did not
+FGSM with random restart} \cite{kurakin2017ifgsm,goodfellow2015fgsm}
+(PGD-style random initialization within the
+$\varepsilon$ ball \cite{madry2018pgd}); a pre-registered $\delta = 0$ no-op ablation did not
 stall because the
 deployed head compares embeddings by \emph{concatenation}, not stationary at
 an identical pair (Appendix~\ref{app:editor}). The random-start arms are the
@@ -280,7 +286,8 @@ random is the weakest mover.
 % src: famail_temporal/baselines/baseline_table/baseline_table.json (random Fid-B(JS)/adjacency; Fid-A ~0.846)
 
 \textbf{Demographic oversampling.} The naive lift-up baseline: duplicate
-real trajectories originating in demographically disadvantaged regions (all
+real trajectories originating in demographically disadvantaged regions
+\cite{kamirancalders2012,zietlow2022} (all
 three equity axes, phantom driver IDs, rigid $\pm 1$-cell jitter), additively
 rebuilding both demand and supply at doses matched to FATE's budget. At
 the matched duplication dose $d = 10{,}000$, targeted oversampling improves
@@ -291,7 +298,7 @@ and reaches $+0.0226$. The untargeted placebo (same fabrication without targetin
 \emph{degrades} fairness, $-0.0172$, so the gain is targeting-specific; and
 the placebo's DP gap explodes ($+2.8$) because fabricated supply lands
 predominantly in already-advantaged cells --- a measured demonstration that
-ratio metrics can be gamed by fabrication, the demand-endogeneity concern of
+ratio metrics can be gamed by fabrication, the demand-endo\-ge\-ne\-ity concern of
 \S\ref{sec:leveling} made concrete. Two disclosures: the corpus cannot even
 supply the matched dose without re-duplication (Appendix~\ref{app:results}),
 and fidelity is not scored for this arm --- duplicates of real trajectories

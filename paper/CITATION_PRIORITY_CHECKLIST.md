@@ -41,6 +41,15 @@ Status legend for what machines already did:
 Crossref/DOI metadata matched (front-end bot-blocked) · **NONE** = no publisher record exists.
 
 **Applied-changes log (controller sessions; checkboxes above/below remain Robert's alone):**
+- 2026-07-22 (Robert's §4.4 citation-gap pass): perturbation arms now cite their methods —
+  `kurakin2017ifgsm` + `goodfellow2015fgsm` on the iFGSM/FGSM label, `hu2023stifgsm` on the
+  identity-discriminator attack clause (the ST instantiation), and ONE NEW ENTRY
+  `madry2018pgd` (DBLP-verified; row above) on "PGD-style random initialization". The
+  demographic-oversampling arm now cites its class: `kamirancalders2012,zietlow2022`
+  attached to "duplicate real trajectories originating in demographically disadvantaged
+  regions" (sampling-for-fairness + augmentation-helps-the-worst-off). All reused keys already have rows; the
+  fairness-method paragraph needed no change (kamirancalders2012 + zheng2023 already
+  cited). Count now 45 entries.
 - 2026-07-21 (later, P0 verification): `xu2018fairgan` + `vanbreugel2021decaf` machine-verified
   against primary sources (proceedings.neurips.cc fetched live for DECAF; DBLP for both;
   FairGAN DOI resolves to IEEE Xplore). refs.bib updated: FairGAN + pages 570--575 +
@@ -113,6 +122,16 @@ Crossref/DOI metadata matched (front-end bot-blocked) · **NONE** = no publisher
   **Check/decide:** keep community-standard "ICLR 2015" booktitle, or recast as `@misc` arXiv
   citation. Look at how the ST-iFGSM paper (the KDD template) cites it and match that.
   Query: `google: "Explaining and Harnessing Adversarial Examples" ICLR 2015 site:iclr.cc`
+
+- [ ] **madry2018pgd** — Madry, Makelov, Schmidt, Tsipras & Vladu, *Towards Deep Learning
+  Models Resistant to Adversarial Attacks*, ICLR 2018 — NEW 2026-07-22 (Robert's §4.4
+  citation-gap pass): cited at the perturbation arms' "PGD-style random initialization
+  within the $\varepsilon$ ball" (`04:~262`). **Machine status: PAGE (2026-07-22) — DBLP
+  matched authors/venue/year (ICLR 2018 poster, arXiv:1706.06083); claim-fit: random start
+  within the $\varepsilon$ ball is this paper's contribution.** Check: eyeball
+  https://openreview.net/forum?id=rJzIBfZAb (ICLR 2018 has OpenReview as its record; no
+  formal page numbers).
+  Query: `google: "Towards Deep Learning Models Resistant to Adversarial Attacks" ICLR 2018`
 
 - [ ] **feldman2015** — Feldman et al., *Certifying and Removing Disparate Impact*, KDD 2015,
   pp 259–268 — used at `02:13` (DI remover), `03:92` (**fairness-as-predictability — F1
