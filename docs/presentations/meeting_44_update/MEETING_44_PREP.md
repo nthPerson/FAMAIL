@@ -2,9 +2,11 @@
 
 *Prepared 2026-07-20 for Robert's meeting with Dr. Zhang (week of 2026-07-20);
 updated 2026-07-22 with the submission-week execution record and the new
-reproducibility document (§3). New location note: meeting prep now lives in
-`docs/presentations/<meeting>/` (earlier meetings used
-`famail_temporal/baselines/meeting_prep/`).*
+reproducibility document (§3); updated 2026-07-23: **the length problem is
+solved** — content is under the strict 8-page limit after the argument-triage
+campaign (agenda item 5 is now a ratification, not a decision). New location
+note: meeting prep now lives in `docs/presentations/<meeting>/` (earlier
+meetings used `famail_temporal/baselines/meeting_prep/`).*
 
 **Deadlines:** abstract **submitted 2026-07-19** (KDD 2027 Research Track
 Cycle 1, OpenReview; "we can always modify the submission"). Full paper due
@@ -72,21 +74,36 @@ Cycle 1, OpenReview; "we can always modify the submission"). Full paper due
   formulation-independent (absolute-value variant tracks the signed one);
   §4.5 records it.
 
-**Manuscript logistics — cut campaign EXECUTED (2026-07-21)**
-- Main content cut **10.6 → ~8.4 pages** via eight measured waves plus a
-  §3/§4 restructure, against the strict 8-page submission limit (KDD rules:
-  8 content pages at submission; 9 content + 12 total only on acceptance).
-- A structured appendix (A Derivations / B Editor Implementation / C Extended
-  Results / D Statistical Protocol) now carries the relocated material, every
-  block labeled with its origin so it can return at camera-ready.
+**Manuscript logistics — LENGTH SOLVED (2026-07-23)**
+- Main content cut **10.6 → under 8.0 pages** (references now begin ~95%
+  down page 8): eight measured waves + §3/§4 restructure (07-21), then the
+  **argument-triage campaign** (07-22/23) executed with Robert's per-item
+  tier approvals. KDD rules: 8 content pages at submission; 9 content + 12
+  total only on acceptance.
+- Argument triage, what moved to the appendix (all restorable at
+  camera-ready, every number preserved with origin notes): the rollout
+  **allocation-boundary** disclosure (both cities; §5's future-work clause
+  anchors it), the **SF downstream detail** (n=12 control spreads, extended
+  doses, grouping-convention CIs), the **distinct-taxi recount mechanics**,
+  and several depth items (δ=0 ablation aside, penalty-formulation detail,
+  saturation/oversampling compression). Kept on Robert's call: the
+  leveling-down "analogy is inexact" refinement, the random-jitter surprise
+  paragraph, the intervention-categories paragraph, all five §2 theme
+  closers in Dr. Zhang's contrast cadence.
 - **Zero protected content lost**: all headline numbers, disclosures, and
-  caveats survived; a ~55-number audit of §4 against artifacts found 0
-  mismatches. The typography lint gate was tightened from 8pt to 5pt.
-- Remaining **~0.4 page to strict 8.0 is a content decision** — see agenda
-  item 5.
-- Robert's read-aloud editing pass has covered §1 through §4.1; §4 onward in
-  progress. Both P0 citations (FairGAN, DECAF) are now machine-verified
-  against primary sources with pages/DOI added; only the human pass remains.
+  caveats survive in main text or appendix; a ~55-number audit of §4 found 0
+  mismatches. Lint gate at 5pt. ⚠️ The margin is knife-edge: almost any
+  main-text addition pushes references back to page 9.
+- Robert's read-aloud pass now covers **§1 through §4 complete**; next:
+  polish §5 and check the appendix. The pass also drove a reader-clarity
+  sweep: "tier-1/tier-2" renamed **fractional-presence / distinct-taxi**
+  accounting; Fidelity-A/B now defined at their §3.2 source + a two-axes
+  appendix gloss; the k/n seed-count notation defined in §4.1; "oracle"
+  and other flashy register retired; em-dashes near-eliminated.
+- Citations: FairGAN + DECAF machine-verified (pages/DOI added); a §4.4
+  citation-gap pass added method cites (iFGSM/FGSM/PGD/oversampling class)
+  incl. one new DBLP-verified entry (Madry et al., PGD). Human pass: three
+  refs remain (see agenda item 2).
 - A PII/anonymity scan of the built PDF is clean (anonymous author block,
   no metadata leaks, self-citations in compliant third person).
 - Anonymous sigconf build with real venue metadata (KDD '27, San Jose).
@@ -201,13 +218,13 @@ zero, and the table now marks significance directly (HGC total +0.0594
 1. **Reading-B / D1 acknowledgment** — the SF two-tier framing in §4.7 has
    not yet been walked through with Dr. Zhang (decided and executed
    post-Meeting-43); this meeting is the slot.
-2. **Citation verification status** — the two new intro refs (FairGAN,
-   DECAF) are now **machine-verified against primary sources** (NeurIPS
-   proceedings page fetched live; DBLP + IEEE DOI; pages/DOI added to
-   refs.bib; claim-fit confirmed). What remains is Robert's human pass per
-   Dr. Kash's Meeting-43 mandate — for DECAF an eyeball of the proceedings
-   page; for FairGAN the IEEE Xplore page (bot-blocked, genuinely needs
-   human eyes).
+2. **Citation verification status** — FairGAN, DECAF, and the new
+   Madry-et-al. (PGD) entry are all **machine-verified against primary
+   sources** (NeurIPS proceedings page fetched live; DBLP + IEEE DOI;
+   pages/DOI added to refs.bib; claim-fit confirmed). What remains is
+   Robert's human pass per Dr. Kash's Meeting-43 mandate — DECAF and PGD
+   need a proceedings/OpenReview eyeball; FairGAN needs the IEEE Xplore
+   page (bot-blocked, genuinely needs human eyes).
 3. **Anonymity / artifact repo** — the manuscript-side scan is **clean**
    (anonymous author block, no PDF metadata leaks, third-person
    self-citations). Remaining for the anonymous artifact repo: scrub of
@@ -217,8 +234,10 @@ zero, and the table now marks significance directly (HGC total +0.0594
 4. **Colors** — the refreshed palette is already applied to both figures
    (and to both Figure-1 variants, so the A/B/C comparison also previews
    it); confirm Dr. Zhang is happy with the direction.
-5. **The last ~0.4 page to the strict 8-page limit** — the approved cut
-   plans are fully spent; what remains is a content decision: drop a
-   secondary beat, compress §2 further, or consolidate §4 evidence.
-   Whatever moves is restorable at camera-ready (9 content pages + 12
+5. **RESOLVED (2026-07-23): the length decision was made and executed** as
+   the argument-triage campaign (Robert's per-item approvals; see the
+   manuscript-logistics block above for exactly what moved and what was
+   kept). Content is now under the strict 8-page limit. The ask for Dr.
+   Zhang shrinks to **ratifying the triage**: the moved items are in the
+   appendix with origin notes and return at camera-ready (9 content + 12
    total on acceptance).
