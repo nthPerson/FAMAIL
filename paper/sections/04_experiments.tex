@@ -36,7 +36,8 @@ $k = 2{,}000$ (1{,}330 trim + 629 lift).
 seeds (identical seeding before each arm), so per-seed differences cancel
 shared seed noise. With $n = 6$ paired seeds we read effects from the mean
 $\Delta$, its $t$-interval, and dose-response monotonicity, and treat
-$p = 0.031$ only as a sign-unanimity certificate. The flagship w30 comparison
+$p = 0.031$ only as a sign-unanimity certificate. Sign counts are written
+$k/n$: the delta was positive on $k$ of the $n$ seed pairs. The flagship w30 comparison
 is additionally run at $n = 12$ paired seeds in both cities, where an exact
 Wilcoxon $p$ can survive multiple-comparison correction.
 External fairness metrics are compared before versus after editing on the data alone,
@@ -213,8 +214,8 @@ trained on raw: paired $\Delta F_{\mathrm{demo}} = +0.0016$ ($n = 12$,
 
 \textbf{Upweighting recovers it, edit-specifically.} With the edited
 demonstrations upweighted, the paired gain is monotone in the weight and
-sign-unanimous: $+0.0217$ (w10) and $+0.0267$ (w20), each 6/6 at the
-$p = .031$ floor. At the adopted dose we extend the flagship comparison to
+sign-unanimous: $+0.0217$ (w10) and $+0.0267$ (w20), each 6/6
+(positive on all six seed pairs, the $p = .031$ floor). At the adopted dose we extend the flagship comparison to
 $n = 12$ paired seeds: $+0.0297 \pm 0.0029$ (w30), 12/12 positive, exact
 Wilcoxon $p = .00049$, $t$-interval $[+0.0278,$ $+0.0315]$ --- while both % lint-allow: coincidental value (n=12 pooled CI lower bound, computed 2026-07-18; not the old-alpha supply-lift number)
 controls stay null at the same $n = 12$ (random $-0.0017$, most-fair
@@ -239,8 +240,9 @@ of magnitude below the upweighting effect (Appendix~\ref{app:results}).
 
 \textbf{The allocation boundary.} Rolled-out policies still allocate a
 slightly smaller share of pickups to disadvantaged areas: $-0.0049$ at w30
-on the demand-only corpus and $-0.0033$ under trim+lift (each 0/6 seeds,
-$p = .031$), attenuated by roughly a third, not reversed. We claim the
+on the demand-only corpus and $-0.0033$ under trim+lift (negative on all
+six seed pairs in both suites, $p = .031$), attenuated by roughly a third,
+not reversed. We claim the
 data-level lift-up and the metric propagation, disclose this boundary, and
 motivate training-side allocation constraints as future work.
 % src: famail_temporal/baselines/external_fairness/results/option_a_rollout_a10/summary.json + option_a_rollout_trimonly_a10/summary.json (edited_w30.MigrantRatio.pickups.share_D_delta; seeking-state shares n.s. at every weight in both suites)
@@ -314,7 +316,8 @@ disadvantaged-origin demonstrations --- moves demand-adjusted fairness the
 \emph{wrong} way ($-0.0227$, all six seeds negative, $p = .031$) while
 paying the same distributional cost as w30 upweighting (Fidelity-B
 $+0.0144$), and its rolled-out policies still tilt allocation away from the % lint-allow: coincidental value (fair_reweigh paired Fid-B delta, not the trim-only F_demo headline)
-disadvantaged group ($-0.0010$, 0/6, $p = .031$). An in-processing penalty
+disadvantaged group ($-0.0010$, negative on all six, $p = .031$). An
+in-processing penalty
 in the spirit of \cite{zheng2023} --- the imitation loss plus $\lambda$
 times the demo\-graph\-ic-parity gap in predicted next-cell mass --- is inert at
 every trainable dose, destructive only where it dominates. The signed
@@ -451,14 +454,16 @@ channel independently replicates.
 
 \textbf{Downstream.} The recovery reproduces on San Francisco. Van\-illa BC is
 null ($+0.0017$, $n = 12$, 7/12 positive, n.s.); upweighting recovers
-fairness with a monotone, sign-unanimous dose-response ($+0.0242$ (w10)
-and $+0.0309$ (w20), each 6/6 at the $p = .031$ floor) and at the
+fairness with a monotone dose-response: $+0.0242$ at w10 and $+0.0309$
+at w20, each positive on all six seed pairs. At the
 adopted dose the flagship comparison reaches $n = 12$ here as well:
 $+0.0333 \pm 0.0050$ (w30), 12/12 positive, exact Wilcoxon $p = .00049$,
 as on Shenzhen (\S\ref{sec:exp-downstream}). The $n = 12$ controls sharpen
 the contrast rather than soften it: the random placebo turns significantly
-\emph{negative} ($-0.0077$, 2/12, $p = .0024$), and the most-fair selection
-control is significantly positive but dominated ($+0.0059$, 10/12,
+\emph{negative} ($-0.0077$, positive on only 2 of 12, $p = .0024$), and the
+most-fair selection
+control is significantly positive but dominated ($+0.0059$, 10 of 12
+positive,
 $p = .0020$, about a sixth of the edited arm's gain; at $n = 6$ per dose it
 was significantly negative at w10 and n.s.\ at w20).
 % src: PAPER/supply-lift/data/a10/sf12_a10_wbc_n12_pooled_stats.json (pooled seeds 0-5 + 6-11; SF-WBC-N12 2026-07-18; prior n=6 values: vanilla +0.0026 5/6 p=.0625; w30 +0.0332 6/6; random -0.0069 n.s.)
@@ -476,22 +481,23 @@ primary city's small significant positive effect (\S\ref{sec:exp-downstream});
 the seed detail is in Appendix~\ref{app:results}.
 The allocation boundary (\S\ref{sec:exp-downstream}) also replicates:
 rolled-out policies still tilt pickup share away from disadvantaged areas
---- $-0.0432$ at w30 on the demand-only corpus and $-0.0335$ with trim+lift
-(each 0/6 seeds, $p = .031$) --- roughly $22\%$ attenuation, not a reversal,
+($-0.0432$ at w30 on the demand-only corpus and $-0.0335$ with trim+lift,
+negative on all six seed pairs in both suites, $p = .031$) --- roughly
+$22\%$ attenuation, not a reversal,
 at roughly ten times the primary city's magnitudes.
 % src: famail_temporal/baselines/external_fairness/results/option_a_rollout_sf12_tl/summary.json + option_a_rollout_sf12_trimonly/summary.json (edited_w30.MigrantRatio.pickups.share_D_delta; C3-SF-ROLLOUT 2026-07-17; attenuation 1-0.0335/0.0432=22.5%)
 The four-source comparison also reproduces: the edited corpus is the fairest
 source while identity-faithful, with the full table in
 Appendix~\ref{app:results}.
 
-\textbf{San Francisco caveats.} ACS foreign-born share proxies the migrant axis (not
-hukou); the 12-driver density-matched subsample is small; 14.9\% of raw
-Cabspotting trajectories violate king-move adjacency at source (GPS gaps), so
-absolute compliance is unattainable --- the edited corpus is \emph{more}
-compliant than raw (87.6\% vs.\ 85.2\%), and the cross-city gate is
-edit-relative compliance (100\%); and the GAN-generated source's
-distributional collapse is a city-dependent property: the fresh SF run's GAN
-stayed healthy, Fidelity-B 0.039, so any collapse-based cautionary note
-applies only to the city where it is measured.
+\textbf{San Francisco caveats.} ACS foreign-born share proxies the migrant 
+axis; the 12-driver density-matched subsample is small; and 14.9\% of raw
+Cabspotting trajectories violate king-move adjacency at source (GPS gaps),
+so no corpus built from this data can be fully compliant. The standard we
+hold the editor to is therefore that its own edits introduce no violations
+(all of them comply), and the edited corpus ends \emph{more} compliant than
+raw (87.6\% vs.\ 85.2\%). The Shenzhen GAN's distributional collapse does
+not recur here (Fidelity-B 0.039, cf.\ \S\ref{sec:exp-downstream}); that
+cautionary note is city-specific.
 % src: famail_temporal/results/level1_table_v2/supply_lift_sf12_5seed/level1_v2_multiseed.json (gan row)
 % src: PAPER/supply-lift/data/a10/sf12_a10_metrics.json (provenance.compliance.filtered: 0.87647/0.85197); PAPER/argument/07_limitations.md §5-7 (era-neutral caveats; FINDINGS.md §10 is the old-alpha doc — do not copy numbers from it)
