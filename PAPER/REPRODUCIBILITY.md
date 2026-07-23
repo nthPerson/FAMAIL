@@ -30,6 +30,7 @@ files, and the `tab:featsets` channel-decomposition gap has been run.
 | `F_spatial`, `F_demo` | fairness scores | **1 = fairest.** Sign-convention erratum dated 2026-05-14: artifacts dated **before** 2026-05-14 carry the inverted sign. All α\* artifacts postdate the erratum and use the current (1 = fairest) convention. |
 | `3feat` = {housing, GDP, comp} | **HGC** column | one feature set, two names (audit L2). Before-edit F_demo 0.8069. |
 | `4feat` | **PRIMARY + logpopdensity** | i.e. {housing, comp, migrant, **logpopdensity**}. **NOT** 3feat + logpop (audit L1). Before-edit F_demo 0.7253 disambiguates. |
+| tier-1 / tier-2 (artifact keys `supply_tier2`, `total_tier2`, `S_tier2_after.npz`; older docs) | **"fractional-presence"** / **"distinct-taxi"** accounting | paper prose renamed 2026-07-22 (the ordinals read as rank to first-time readers); tier-1 = the optimizer's fractional-presence convention, tier-2 = the distinct-taxi recount from raw GPS. Code/artifact keys unchanged. |
 | `trim` | the demand-only editor / editing phase | trim selects via **"demand deficit attribution"** |
 | `lift` | the supply-adding editing phase | lift selects via **"supply-gradient attribution"** |
 

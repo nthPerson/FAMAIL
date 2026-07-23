@@ -124,11 +124,13 @@ sweep summarized in \S\ref{sec:exp-robustness}: six full editing runs across the
 simplex (fidelity fixed at $0.1$), each scored on all three metric classes. The
 optimized $\Delta F_{\mathrm{demo}}$ is flat --- within $0.001$ --- for
 $\alpha_{\mathrm{sp}} \in [0, 0.55]$; the class (ii) supply-channel lift-up
-declines monotonically with $\alpha_{\mathrm{sp}}$ and is significant on both
-tiers only for $\alpha_{\mathrm{sp}} \le 0.2$; and class (iii) instruments
+declines monotonically with $\alpha_{\mathrm{sp}}$ and is significant under
+both accounting conventions only for $\alpha_{\mathrm{sp}} \le 0.2$; and
+class (iii) instruments
 improve significantly at every point. The adopted $(0.1, 0.8, 0.1)$ is the
-three-class criterion's selection --- robust on the primary axis, load-bearing
-only for the lift-up property.
+three-class criterion's selection: any weighting in the flat range delivers
+the same $\Delta F_{\mathrm{demo}}$, and the low $\alpha_{\mathrm{sp}}$ is
+what keeps the supply-channel lift-up significant.
 
 \begin{figure}[t]
   \centering
@@ -136,16 +138,18 @@ only for the lift-up property.
   \caption{The weight sweep, scored beyond the optimized metrics. (A) On the
   optimized plane, $\Delta F_{\mathrm{demo}}$ is flat across
   $\alpha_{\mathrm{sp}} \in [0, 0.55]$. (B) The design-targeted lift-up
-  declines monotonically with spatial weight and is significant on both
-  supply tiers only for $\alpha_{\mathrm{sp}} \le 0.2$ (filled = 95\% CI
+  declines monotonically with spatial weight and is significant under both
+  accounting conventions only for $\alpha_{\mathrm{sp}} \le 0.2$ (filled = 95\% CI
   excludes 0). The adopted $(0.1, 0.8, 0.1)$ is the three-class criterion's
   selection.}
   % src: PAPER/objective-motivation/weight-sensitivity/extended_frontier.json via paper/figures/make_figures.py
   \Description{Two stacked panels. Panel A: scatter of the weight sweep on
-  the optimized-metric plane; the causal-fairness delta is flat across the
+  the optimized-metric plane; the demographic-fairness delta is flat across
+  the
   spatial weight while the spatial delta rises. Panel B: line chart showing
   the lift-up quantity declining monotonically as the spatial weight grows,
-  significant on both supply tiers only at low spatial weight; the adopted
+  significant under both accounting conventions only at low spatial weight;
+  the adopted
   configuration is marked.}
   \label{fig:alpha-pareto}
 \end{figure}

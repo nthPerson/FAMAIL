@@ -84,7 +84,7 @@ def frontier_figure() -> None:
                      bbox=LABEL_BBOX, zorder=4)
     axA.set_xlabel(r"$\Delta F_\mathrm{spatial}$")
     axA.set_ylabel(r"$\Delta F_\mathrm{demo}$")
-    axA.set_title("A · optimized metrics: flat in the demographic axis", loc="left")
+    axA.set_title(r"A · optimized metrics: $\Delta F_\mathrm{demo}$ is flat", loc="left")
     axA.grid(True, color=FAINT, linewidth=0.4, alpha=0.6)
     axA.set_axisbelow(True)
     pad = 0.0012
@@ -95,8 +95,8 @@ def frontier_figure() -> None:
     series = [
         ("total_yd", "total_sig", r"total $\Delta\,\mathrm{mean}(Y\,|\,\mathrm{disadv.})$",
          "-", "o", GRAY),
-        ("supply_t2", "t2_sig", "supply, tier-2 (distinct-taxi)", "--", "s", INK),
-        ("supply_t1", "t1_sig", "supply, tier-1", ":", "^", INK),
+        ("supply_t2", "t2_sig", "supply, distinct-taxi", "--", "s", INK),
+        ("supply_t1", "t1_sig", "supply, fractional-presence", ":", "^", INK),
     ]
     for key, sig_key, label, ls, mk, color in series:
         ys = [p[key] for p in pts]
@@ -111,9 +111,9 @@ def frontier_figure() -> None:
     axB.annotate(r"total $\Delta\,\mathrm{mean}(Y\,|\,\mathrm{disadv.})$",
                  (0.035, 0.0745), fontsize=6.2, color=GRAY, ha="left",
                  bbox=LABEL_BBOX, zorder=4)
-    axB.annotate("supply, tier-2 (distinct-taxi)", (0.15, 0.043),
+    axB.annotate("supply, distinct-taxi", (0.15, 0.043),
                  fontsize=6.2, color=INK, ha="left", bbox=LABEL_BBOX, zorder=4)
-    axB.annotate("supply, tier-1", (0.03, 0.004), fontsize=6.2, color=INK,
+    axB.annotate("supply, fractional-presence", (0.03, 0.004), fontsize=6.2, color=INK,
                  ha="left", bbox=LABEL_BBOX, zorder=4)
     axB.axhline(0, color=GRAY, linewidth=0.6)
     axB.axvline(adopted, color=ACCENT, linewidth=0.8, alpha=0.9,
