@@ -238,18 +238,9 @@ shifting population statistics toward the edited slice (Appendix~\ref{app:result
 \textbf{Model-level variance} across paired retrainings is real but an order
 of magnitude below the upweighting effect (Appendix~\ref{app:results}).
 
-\textbf{The allocation boundary.} Rolled-out policies still allocate a
-slightly smaller share of pickups to disadvantaged areas: $-0.0049$ at w30
-on the demand-only corpus and $-0.0033$ under trim+lift (negative on all
-six seed pairs in both suites, $p = .031$), attenuated by roughly a third,
-not reversed. We claim the
-data-level lift-up and the metric propagation, disclose this boundary, and
-motivate training-side allocation constraints as future work.
-% src: famail_temporal/baselines/external_fairness/results/option_a_rollout_a10/summary.json + option_a_rollout_trimonly_a10/summary.json (edited_w30.MigrantRatio.pickups.share_D_delta; seeking-state shares n.s. at every weight in both suites)
-% src: PAPER/supply-lift/data/rollout_supplylift_summary.json + rollout_trimonly_prior_summary.json; FINDINGS.md §9
-% (2026-07-22: COMPRESSED from the full block per Robert's space push, pending his final call —
-% protected disclosure (allocation drain); SF §4.7 replicates it by name and §5's 'rollout gap'
-% future-work clause depends on it, so full deletion needs those two fixed too; original in git)
+% (2026-07-22 argument-triage, Robert's call: the allocation-boundary block moved to
+% Appendix C ('Rollout allocation shares, both cities') with the SF replication passage;
+% §5's future-work clause anchors it. Main text claims metric propagation only.)
 
 \subsection{Data-Augmentation Baselines}\label{sec:exp-baselines}
 None of the baselines below optimizes a fairness objective; they are
@@ -458,34 +449,14 @@ fairness with a monotone dose-response: $+0.0242$ at w10 and $+0.0309$
 at w20, each positive on all six seed pairs. At the
 adopted dose the flagship comparison reaches $n = 12$ here as well:
 $+0.0333 \pm 0.0050$ (w30), 12/12 positive, exact Wilcoxon $p = .00049$,
-as on Shenzhen (\S\ref{sec:exp-downstream}). The $n = 12$ controls sharpen
-the contrast rather than soften it: the random placebo turns significantly
-\emph{negative} ($-0.0077$, positive on only 2 of 12, $p = .0024$), and the
-most-fair selection
-control is significantly positive but dominated ($+0.0059$, 10 of 12
-positive,
-$p = .0020$, about a sixth of the edited arm's gain; at $n = 6$ per dose it
-was significantly negative at w10 and n.s.\ at w20).
-% src: PAPER/supply-lift/data/a10/sf12_a10_wbc_n12_pooled_stats.json (pooled seeds 0-5 + 6-11; SF-WBC-N12 2026-07-18; prior n=6 values: vanilla +0.0026 5/6 p=.0625; w30 +0.0332 6/6; random -0.0069 n.s.)
-The extended doses saturate here too, flat past w40, with the same
-dominated-control pattern as the alternate feature sets
-(\S\ref{sec:exp-robustness}); per-dose values are in
-Appendix~\ref{app:results}.
+as on Shenzhen (\S\ref{sec:exp-downstream}), with both $n = 12$ controls
+far below the edited arm (control spreads, extended doses, and variance
+detail in Appendix~\ref{app:results}).
+% src: PAPER/supply-lift/data/a10/sf12_a10_wbc_n12_pooled_stats.json (pooled seeds 0-5 + 6-11; SF-WBC-N12 2026-07-18; random -0.0077 2/12 p=.0024 sig-NEGATIVE; most-fair +0.0059 10/12 p=.0020 dominated ~1/6 of edited; prior n=6: vanilla +0.0026 5/6 p=.0625; w30 +0.0332 6/6; random -0.0069 n.s.)
 One city difference stated plainly:
 $F_{\mathrm{spatial}}$ does \emph{not} propagate on SF ($-0.0040$ at w30,
-n.s.); the primary-city result at the adopted weights is reported in
-\S\ref{sec:exp-downstream}.
+n.s.; the primary-city result is in \S\ref{sec:exp-downstream}).
 % src: famail_temporal/results/weighted_bc_sweep/supply_lift_a10_sf12_filtered_6seed/paired_stats.json
-The SF model-level variance suite stays null at $n = 10$ seeds, unlike the
-primary city's small significant positive effect (\S\ref{sec:exp-downstream});
-the seed detail is in Appendix~\ref{app:results}.
-The allocation boundary (\S\ref{sec:exp-downstream}) also replicates:
-rolled-out policies still tilt pickup share away from disadvantaged areas
-($-0.0432$ at w30 on the demand-only corpus and $-0.0335$ with trim+lift,
-negative on all six seed pairs in both suites, $p = .031$) --- roughly
-$22\%$ attenuation, not a reversal,
-at roughly ten times the primary city's magnitudes.
-% src: famail_temporal/baselines/external_fairness/results/option_a_rollout_sf12_tl/summary.json + option_a_rollout_sf12_trimonly/summary.json (edited_w30.MigrantRatio.pickups.share_D_delta; C3-SF-ROLLOUT 2026-07-17; attenuation 1-0.0335/0.0432=22.5%)
 The four-source comparison also reproduces: the edited corpus is the fairest
 source while identity-faithful, with the full table in
 Appendix~\ref{app:results}.

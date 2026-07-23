@@ -325,6 +325,13 @@ against the edited corpus's 0.187.
 % src: famail_temporal/baselines/baseline_table/baseline_table.json (Shenzhen Fid-B(JS)/adjacency-violation columns)
 
 \textbf{San Francisco downstream detail.} Supporting \S\ref{sec:exp-sf}.
+At $n = 12$ the controls sharpen the contrast rather than soften it: the
+random placebo turns significantly \emph{negative} ($-0.0077$, positive on
+only 2 of 12, $p = .0024$), and the most-fair selection control is
+significantly positive but about a sixth of the edited arm's gain
+($+0.0059$, 10 of 12 positive, $p = .0020$; at $n = 6$ per dose it was
+significantly negative at w10 and n.s.\ at w20).
+% src: PAPER/supply-lift/data/a10/sf12_a10_wbc_n12_pooled_stats.json (SF-WBC-N12 2026-07-18)
 Extended doses: $+0.0370$ (w40) and $+0.0371$ (w50), each 6/6, flat past
 w40; the random control stays null-to-negative and the most-fair selection
 control stays significantly \emph{positive} ($+0.0063$/$+0.0066$) --- the
@@ -341,6 +348,24 @@ divergence).
 % src: famail_temporal/results/weighted_bc_sweep/supply_lift_a10_sf12_dose_ext_6seed/paired_stats.json (SF-WBC-DOSEEXT 2026-07-17; increments w30->w40 +0.0038, w40->w50 +0.0001)
 % src: famail_temporal/results/variance_suite/supply_lift_sf12_10seed/aggregate.json (paired_delta.f_causal; B2-VAR-SF 2026-07-16; n=5 suite retained)
 % src: famail_temporal/results/level1_table_v2/supply_lift_sf12_5seed/level1_v2_multiseed.json
+
+\textbf{Rollout allocation shares (both cities).} Supporting the future-work
+discussion of \S\ref{sec:conclusion}. Beyond metric propagation, we rolled
+out the trained policies and measured the share of pickups they allocate to
+disadvantaged areas. That share still tilts slightly negative: on Shenzhen,
+$-0.0049$ at w30 on the demand-only corpus and $-0.0033$ under trim+lift
+(negative on all six seed pairs in both suites, $p = .031$), attenuated by
+roughly a third, not reversed; San Francisco replicates the pattern at
+roughly ten times the magnitude ($-0.0432$ demand-only, $-0.0335$
+trim+lift, again negative on all six seed pairs in both suites), roughly
+$22\%$ attenuation. Seeking-state shares are n.s.\ at every weight in both
+suites. The paper claims the data-level lift-up and the metric propagation;
+this allocation gap is what motivates training-side allocation constraints
+as future work.
+% src: famail_temporal/baselines/external_fairness/results/option_a_rollout_a10/summary.json + option_a_rollout_trimonly_a10/summary.json (edited_w30.MigrantRatio.pickups.share_D_delta; SZ)
+% src: famail_temporal/baselines/external_fairness/results/option_a_rollout_sf12_tl/summary.json + option_a_rollout_sf12_trimonly/summary.json (C3-SF-ROLLOUT 2026-07-17; attenuation 1-0.0335/0.0432=22.5%)
+% src: PAPER/supply-lift/data/rollout_supplylift_summary.json + rollout_trimonly_prior_summary.json; FINDINGS.md §9
+% (moved from §4.3 'The allocation boundary' + the §4.6 SF passage, argument-triage 2026-07-22; restore at camera-ready if space allows)
 
 \section{Statistical Protocol Details}\label{app:protocol}
 

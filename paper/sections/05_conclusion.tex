@@ -11,8 +11,7 @@ the edits improve established fairness measures the objective never
 optimizes, and, unlike the demand-only editor whose gains never reached the
 under-served group, the supply channel adds statistically significant taxi
 presence to that group. Upweighted behavior cloning carries those gains into
-trained policies, and the control arms confirm the edit itself --- not
-oversampling, not selection --- is what carries them.
+trained policies, and the control arms confirm the edit itself is what carries them.
 
 The claims come with stated bounds. The optimized fairness term is
 associational: a partial $R^2$ over roughly ten district-level demographic
@@ -38,6 +37,7 @@ Two directions follow naturally. The first is the single-pass editor
 and the gradient decides each edit's character. The second is transfer:
 whether other imitation objectives and adversarially trained generators
 inherit the edited corpus's fairness as upweighted behavior cloning does,
-whether training-side allocation constraints can close the rollout gap that
-data editing alone only attenuates, and whether the recipe holds on further
+whether training-side allocation constraints can close the rollout
+allocation gap that data editing alone only attenuates
+(Appendix~\ref{app:results}), and whether the recipe holds on further
 cities.
