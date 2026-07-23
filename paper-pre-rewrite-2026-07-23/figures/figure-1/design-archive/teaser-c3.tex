@@ -1,0 +1,153 @@
+% Teaser figure, Concept 3 — "three claims, three panels", horizontally-
+% oriented panels stacked vertically. Column-width; \input inside a figure
+% environment. Sibling of figures/figure-1 (same palette); chart-space on
+% purpose — Figure 1 owns map-space. Panels (b) and (c) are shared with
+% Concept 4 (teaser-c4.tex); panel (a) adds the problem statement.
+%
+% All numbers Shenzhen, alpha* = (0.1, 0.8, 0.1), s10 corpus. Provenance:
+% % src: PAPER/supply-lift/data/a10/shz_a10_external_fairness.json
+%        metrics.MigrantRatio.district_extremes.supply_demand_ratio.before:
+%        mean_advantaged 21.272333, mean_disadvantaged 7.073448 (ratio 3.01x;
+%        DI before 0.332519); after/deltas + theil as in teaser-c4.tex
+% % src: PAPER/supply-lift/data/a10/shz_trimonly_a10_external_fairness.json
+%        mean_disadvantaged 7.073448 -> 7.073448 (bit-identical; the pin)
+% % src: PAPER/supply-lift/data/a10/shz_a10_weighted_bc_paired_stats.json
+%        (series + CIs as in teaser-c4.tex)
+\definecolor{figink}{HTML}{1A1A1A}
+\definecolor{figgray}{HTML}{6F6F6F}
+\definecolor{figfaint}{HTML}{C9C9C9}
+\definecolor{figaccent}{HTML}{0F62FE}
+\definecolor{figtrim}{HTML}{D55E00}
+\begin{tikzpicture}[x=1cm, y=1cm, line cap=round, line join=round,
+  dotbefore/.pic={\fill[figink] (0,0) circle (0.055);},
+  dotafter/.pic={\draw[figink, fill=white, line width=0.7pt]
+                 (0,0) circle (0.055);},
+  dotafteracc/.pic={\draw[figaccent, fill=white, line width=0.8pt]
+                    (0,0) circle (0.06);},
+  pinmark/.pic={\draw[figtrim, fill=white, line width=0.8pt]
+                (0,0.075) -- (0.075,0) -- (0,-0.075) -- (-0.075,0) -- cycle;},
+  tri/.pic={\fill[figaccent] (0,0.075) -- (-0.065,-0.045)
+            -- (0.065,-0.045) -- cycle;},
+  trid/.pic={\draw[figgray, fill=white, line width=0.7pt]
+             (0,-0.075) -- (-0.065,0.045) -- (0.065,0.045) -- cycle;},
+  circctl/.pic={\draw[figgray, fill=white, line width=0.7pt]
+                (0,0) circle (0.055);},
+  dumbbell/.style={-{Stealth[length=4pt, width=3.2pt]}, figgray,
+                   line width=0.8pt},
+  dumbbellacc/.style={-{Stealth[length=4.5pt, width=3.6pt]}, figaccent,
+                      line width=1.0pt},
+  axisline/.style={figink!75, line width=0.5pt},
+  gridfaint/.style={figfaint, line width=0.4pt}]
+
+  % =========================================================================
+  % Panel (a): the service gap in the real demonstrations (the problem)
+  % =========================================================================
+  \node[anchor=west, font=\footnotesize, text=figink] at (0,0)
+    {(a) Real demonstrations encode a $3.0\times$ service gap};
+
+  % bars: taxi service per unit demand, linear scale 0.216 cm per unit
+  \node[anchor=east, font=\tiny, text=figink] at (2.5,-0.55) {advantaged};
+  \draw[figink, fill=figfaint, line width=0.5pt]
+    (2.6,-0.7) rectangle (7.195,-0.4);   % 21.272 * 0.216
+  \node[anchor=west, font=\tiny, text=figgray] at (7.28,-0.55) {21.27};
+  \node[anchor=east, font=\tiny, text=figink] at (2.5,-1.1) {under-served};
+  \draw[figink, fill=figfaint, line width=0.5pt]
+    (2.6,-1.25) rectangle (4.128,-0.95); % 7.073 * 0.216
+  \node[anchor=west, font=\tiny, text=figgray] at (4.21,-1.1) {7.07};
+  \node[anchor=west, font=\tiny, text=figgray] at (4.85,-1.1)
+    {$3.0\times$ less taxi service per unit demand};
+  \node[anchor=west, font=\tiny, text=figgray] at (0.2,-1.62)
+    {mean supply--demand ratio; imitation-trained policies inherit the gap};
+
+  % =========================================================================
+  % Panel (b): editing improves measures the objective never optimizes
+  % =========================================================================
+  \node[anchor=west, font=\footnotesize, text=figink] at (0,-2.1)
+    {(b) Editing ${\sim}10\%$ improves never-optimized measures};
+
+  \foreach \y/\lab/\bv/\av/\dv in {
+      -2.65/{DP gap ($\downarrow$)}/{14.199}/{13.309}/{$-0.890$},
+      -3.20/{DI ($\rightarrow\!1$)}/{0.333}/{0.349}/{$+0.0162$},
+      -3.75/{Theil ($\downarrow$)}/{0.155}/{0.146}/{$-0.0087$}}{
+    \node[anchor=east, font=\tiny, text=figink] at (2.5,\y) {\lab};
+    \node[anchor=east, font=\tiny, text=figgray] at (3.38,\y) {\bv};
+    \pic at (3.55,\y) {dotbefore};
+    \draw[dumbbell] (3.72,\y) -- (5.36,\y);
+    \pic at (5.55,\y) {dotafter};
+    \node[anchor=west, font=\tiny, text=figgray] at (5.72,\y) {\av};
+    \node[anchor=east, font=\tiny, text=figink] at (8.4,\y) {\dv*};
+  }
+  \draw[gridfaint] (0.2,-4.08) -- (8.3,-4.08);
+  \node[anchor=east, font=\tiny, text=figink, align=right] at (2.5,-4.52)
+    {under-served\\service ($\uparrow$)};
+  \node[anchor=east, font=\tiny, text=figgray] at (3.38,-4.52) {7.0734};
+  \pic at (3.55,-4.52) {dotbefore};
+  \draw[dumbbellacc] (3.72,-4.52) -- (5.34,-4.52);
+  \pic at (5.55,-4.52) {dotafteracc};
+  \node[anchor=west, font=\tiny, text=figgray] at (5.72,-4.52) {7.1263};
+  \node[anchor=east, font=\tiny, text=figaccent] at (8.4,-4.52)
+    {$+0.0529$*};
+  \pic at (3.55,-4.95) {pinmark};
+  \node[anchor=west, font=\tiny, text=figtrim] at (3.72,-4.95)
+    {trim-only ablation: 7.0734 --- exactly unchanged};
+  \node[anchor=west, font=\tiny, text=figgray] at (0.2,-5.38)
+    {*\,95\% CI excludes zero \,$\cdot$\, each row on its own scale
+     \,$\cdot$\, $\rightarrow$ = fairer};
+
+  % =========================================================================
+  % Panel (c): the gain survives training; controls fail
+  % =========================================================================
+  \node[anchor=west, font=\footnotesize, text=figink] at (0,-5.86)
+    {(c) Upweighted imitation carries the gain; controls fail};
+
+  % plot geometry: x(w) = 1.1 + w*(7.1/32);
+  % y(v) = -8.74 + (v+0.004)*(2.6/0.036)   [panel (b) of c4 shifted by -1.24]
+  % y refs: v=0 -> -8.451; 0.01 -> -7.729; 0.02 -> -7.007; 0.03 -> -6.284
+  % ALL data coordinates below generated by gen_coords.py from
+  % shz_a10_weighted_bc_paired_stats.json — regenerate, don't hand-edit.
+  \draw[axisline] (1.1,-8.74) -- (1.1,-5.96);
+  \foreach \yy/\lb in {-8.451/0.00, -7.729/0.01, -7.007/0.02, -6.284/0.03}{
+    \draw[axisline] (1.02,\yy) -- (1.1,\yy);
+    \node[anchor=east, font=\tiny, text=figgray] at (1.0,\yy) {\lb};
+  }
+  \draw[gridfaint, dashed] (1.1,-8.451) -- (8.2,-8.451);
+  \draw[axisline] (1.1,-9.04) -- (8.2,-9.04);
+  \foreach \xx/\lb in {1.322/1, 3.319/10, 5.538/20, 7.756/30}{
+    \draw[axisline] (\xx,-9.04) -- (\xx,-9.12);
+    \node[anchor=north, font=\tiny, text=figgray] at (\xx,-9.14) {\lb};
+  }
+  \node[anchor=north, font=\tiny, text=figink] at (4.65,-9.42)
+    {upweight $w$ on the edited demonstrations};
+  \node[anchor=west, font=\tiny, text=figgray] at (1.3,-6.29)
+    {$\Delta F_{\mathrm{causal}}$ (policy, edited $-$ raw, $n=6$ seeds)};
+
+  % edited series (w=1 IS vanilla BC on edited data: the null)
+  \foreach \xx/\ylo/\yhi in {1.322/-8.537/-8.043, 3.319/-7.131/-6.642,
+                             5.537/-6.741/-6.304, 7.756/-6.544/-5.998}
+    \draw[figaccent!60, line width=0.6pt] (\xx,\ylo) -- (\xx,\yhi)
+      (\xx-0.05,\ylo) -- (\xx+0.05,\ylo) (\xx-0.05,\yhi) -- (\xx+0.05,\yhi);
+  \draw[figaccent, line width=1.0pt] (1.322,-8.290) -- (3.319,-6.886)
+    -- (5.537,-6.524) -- (7.756,-6.271);
+  \foreach \xx/\yy in {1.322/-8.290, 3.319/-6.886, 5.537/-6.524,
+                       7.756/-6.271}
+    \pic at (\xx,\yy) {tri};
+  \node[font=\tiny, text=figink] at (5.6,-7.49)
+    {upweighted edited demos (6/6 seeds)};
+  \node[anchor=west, font=\tiny, text=figgray] at (1.35,-8.69)
+    {$w{=}1$: vanilla BC, n.s.};
+
+  % most-fair selection control: fades with dose
+  \draw[figgray, dashed, line width=0.8pt] (3.319,-8.210) -- (5.537,-8.328)
+    -- (7.756,-8.385);
+  \foreach \xx/\yy in {3.319/-8.210, 5.537/-8.328, 7.756/-8.385}
+    \pic at (\xx,\yy) {trid};
+  \node[anchor=south, font=\tiny, text=figgray] at (5.5,-8.14)
+    {most-fair selection control: fades};
+
+  % random-upweighting control: null
+  \draw[figgray, dotted, line width=0.8pt] (3.319,-8.554) -- (7.756,-8.617);
+  \foreach \xx/\yy in {3.319/-8.554, 7.756/-8.617}
+    \pic at (\xx,\yy) {circctl};
+  \node[anchor=north, font=\tiny, text=figgray] at (5.5,-8.68)
+    {random upweighting: null};
+\end{tikzpicture}

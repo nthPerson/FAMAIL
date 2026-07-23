@@ -1,0 +1,163 @@
+% Teaser figure, Concept 4 — "data-level -> model-level transfer" (+ pinned
+% trim-only marker from Concept 1). Column-width; \input this file inside a
+% figure environment. Sibling of figures/figure-1 (same palette, same label
+% vocabulary); chart-space on purpose — Figure 1 owns map-space.
+%
+% All numbers Shenzhen, alpha* = (0.1, 0.8, 0.1), s10 corpus. Provenance:
+% % src: PAPER/supply-lift/data/a10/shz_a10_external_fairness.json
+%        metrics.MigrantRatio.district_extremes: demographic_parity
+%        14.198885 -> 13.308692 (delta -0.890193, CI [-0.992226, -0.785435]);
+%        disparate_impact 0.332519 -> 0.348731 (delta +0.016212,
+%        CI [+0.013554, +0.018883]); supply_demand_ratio.mean_disadvantaged
+%        7.073448 -> 7.126312 (delta +0.052865, CI via channel_decomposition
+%        [+0.0086, +0.0989], same as sec. 4 table); theil node
+%        0.154978 -> 0.146330 (delta -0.008648, CI [-0.009722, -0.007608])
+% % src: PAPER/supply-lift/data/a10/shz_trimonly_a10_external_fairness.json
+%        mean_disadvantaged 7.073448 -> 7.073448 (bit-identical; the pin)
+% % src: PAPER/supply-lift/data/a10/shz_a10_weighted_bc_paired_stats.json
+%        f_causal: edited (w=1) +0.0022 p=.156 n.s. [CI -0.0012,+0.0057];
+%        edited_w10 +0.0217 [+0.0183,+0.0251]; edited_w20 +0.0267
+%        [+0.0237,+0.0297]; edited_w30 +0.0302 [+0.0264,+0.0340] (all
+%        p=.03125, 6/6 seeds); most_fair_w10 +0.0033* / w20 +0.0017 n.s. /
+%        w30 +0.0009 n.s.; random_w10 -0.0014 n.s. / w30 -0.0023 n.s.
+% Edited-slice share (~10%): s10 corpus metrics.json (~9,900 of ~100k).
+\definecolor{figink}{HTML}{1A1A1A}
+\definecolor{figgray}{HTML}{6F6F6F}
+\definecolor{figfaint}{HTML}{C9C9C9}
+\definecolor{figaccent}{HTML}{0F62FE}
+\definecolor{figtrim}{HTML}{D55E00}
+\begin{tikzpicture}[x=1cm, y=1cm, line cap=round, line join=round,
+  % markers (grayscale-safe: identity = shape + fill, color reinforces)
+  dotbefore/.pic={\fill[figink] (0,0) circle (0.055);},
+  dotafter/.pic={\draw[figink, fill=white, line width=0.7pt]
+                 (0,0) circle (0.055);},
+  dotafteracc/.pic={\draw[figaccent, fill=white, line width=0.8pt]
+                    (0,0) circle (0.06);},
+  pinmark/.pic={\draw[figtrim, fill=white, line width=0.8pt]
+                (0,0.075) -- (0.075,0) -- (0,-0.075) -- (-0.075,0) -- cycle;},
+  tri/.pic={\fill[figaccent] (0,0.075) -- (-0.065,-0.045)
+            -- (0.065,-0.045) -- cycle;},
+  trid/.pic={\draw[figgray, fill=white, line width=0.7pt]
+             (0,-0.075) -- (-0.065,0.045) -- (0.065,0.045) -- cycle;},
+  circctl/.pic={\draw[figgray, fill=white, line width=0.7pt]
+                (0,0) circle (0.055);},
+  dumbbell/.style={-{Stealth[length=4pt, width=3.2pt]}, figgray,
+                   line width=0.8pt},
+  dumbbellacc/.style={-{Stealth[length=4.5pt, width=3.6pt]}, figaccent,
+                      line width=1.0pt},
+  axisline/.style={figink!75, line width=0.5pt},
+  gridfaint/.style={figfaint, line width=0.4pt}]
+
+  % =========================================================================
+  % Panel (a): after editing — never-optimized measures improve
+  % =========================================================================
+  \node[anchor=west, font=\footnotesize, text=figink] at (0,0)
+    {(a) Editing improves measures the objective never optimizes};
+
+  % three metric-class rows: label | before val | dumbbell | after val | delta
+  \foreach \y/\lab/\bv/\av/\dv in {
+      -0.55/{DP gap ($\downarrow$)}/{14.199}/{13.309}/{$-0.890$},
+      -1.10/{DI ($\rightarrow\!1$)}/{0.333}/{0.349}/{$+0.0162$},
+      -1.65/{Theil ($\downarrow$)}/{0.155}/{0.146}/{$-0.0087$}}{
+    \node[anchor=east, font=\tiny, text=figink] at (2.5,\y) {\lab};
+    \node[anchor=east, font=\tiny, text=figgray] at (3.38,\y) {\bv};
+    \pic at (3.55,\y) {dotbefore};
+    \draw[dumbbell] (3.72,\y) -- (5.36,\y);
+    \pic at (5.55,\y) {dotafter};
+    \node[anchor=west, font=\tiny, text=figgray] at (5.72,\y) {\av};
+    \node[anchor=east, font=\tiny, text=figink] at (8.4,\y) {\dv*};
+  }
+
+  % separator before the punchline row
+  \draw[gridfaint] (0.2,-1.98) -- (8.3,-1.98);
+
+  % punchline row: under-served mean service RISES (+ the trim-only pin)
+  \node[anchor=east, font=\tiny, text=figink, align=right] at (2.5,-2.42)
+    {under-served\\service ($\uparrow$)};
+  \node[anchor=east, font=\tiny, text=figgray] at (3.38,-2.42) {7.0734};
+  \pic at (3.55,-2.42) {dotbefore};
+  \draw[dumbbellacc] (3.72,-2.42) -- (5.34,-2.42);
+  \pic at (5.55,-2.42) {dotafteracc};
+  \node[anchor=west, font=\tiny, text=figgray] at (5.72,-2.42) {7.1263};
+  \node[anchor=east, font=\tiny, text=figaccent] at (8.4,-2.42)
+    {$+0.0529$*};
+  % pin: the demand-only ablation leaves this row exactly unchanged
+  \pic at (3.55,-2.85) {pinmark};
+  \node[anchor=west, font=\tiny, text=figtrim] at (3.72,-2.85)
+    {trim-only ablation: 7.0734 --- exactly unchanged};
+
+  \node[anchor=west, font=\tiny, text=figgray] at (0.2,-3.28)
+    {*\,95\% CI excludes zero \,$\cdot$\, each row on its own scale
+     \,$\cdot$\, $\rightarrow$ = fairer};
+
+  % =========================================================================
+  % bridge: the method, in one line
+  % =========================================================================
+  \draw[-{Stealth[length=5.5pt, width=4.5pt]}, figink, line width=1.0pt]
+    (0.45,-3.62) -- (0.45,-4.22);
+  \node[anchor=west, font=\tiny, text=figink, align=left] at (0.75,-3.92)
+    {\emph{upweighted imitation:} every edit within a two-cell ball;
+     nothing generated;\\
+     the edited ${\sim}10\%$ of demonstrations upweighted
+     $\times w$ during behavior cloning};
+
+  % =========================================================================
+  % Panel (b): after training — the gain transfers, edit-specifically
+  % =========================================================================
+  \node[anchor=west, font=\footnotesize, text=figink] at (0,-4.62)
+    {(b) The gain survives training; controls fail};
+
+  % plot geometry: x(w) = 1.1 + w*(7.1/32); y(v) = -7.5 + (v+0.004)*(2.6/0.036)
+  % y refs: v=0 -> -7.211; 0.01 -> -6.489; 0.02 -> -5.767; 0.03 -> -5.044
+  % ALL data coordinates below generated by gen_coords.py from
+  % shz_a10_weighted_bc_paired_stats.json — regenerate, don't hand-edit.
+  % y-axis
+  \draw[axisline] (1.1,-7.5) -- (1.1,-4.72);
+  \foreach \yy/\lb in {-7.211/0.00, -6.489/0.01, -5.767/0.02, -5.044/0.03}{
+    \draw[axisline] (1.02,\yy) -- (1.1,\yy);
+    \node[anchor=east, font=\tiny, text=figgray] at (1.0,\yy) {\lb};
+  }
+  % zero line
+  \draw[gridfaint, dashed] (1.1,-7.211) -- (8.2,-7.211);
+  % x-axis
+  \draw[axisline] (1.1,-7.8) -- (8.2,-7.8);
+  \foreach \xx/\lb in {1.322/1, 3.319/10, 5.538/20, 7.756/30}{
+    \draw[axisline] (\xx,-7.8) -- (\xx,-7.88);
+    \node[anchor=north, font=\tiny, text=figgray] at (\xx,-7.9) {\lb};
+  }
+  \node[anchor=north, font=\tiny, text=figink] at (4.65,-8.18)
+    {upweight $w$ on the edited demonstrations};
+  \node[anchor=west, font=\tiny, text=figgray] at (1.3,-5.05)
+    {$\Delta F_{\mathrm{causal}}$ (policy, edited $-$ raw, $n=6$ seeds)};
+
+  % --- edited series (w=1 IS vanilla BC on edited data: the null) ---------
+  % CI whiskers first (behind marks)
+  \foreach \xx/\ylo/\yhi in {1.322/-7.297/-6.803, 3.319/-5.891/-5.402,
+                             5.537/-5.501/-5.064, 7.756/-5.304/-4.758}
+    \draw[figaccent!60, line width=0.6pt] (\xx,\ylo) -- (\xx,\yhi)
+      (\xx-0.05,\ylo) -- (\xx+0.05,\ylo) (\xx-0.05,\yhi) -- (\xx+0.05,\yhi);
+  \draw[figaccent, line width=1.0pt] (1.322,-7.050) -- (3.319,-5.646)
+    -- (5.537,-5.284) -- (7.756,-5.031);
+  \foreach \xx/\yy in {1.322/-7.050, 3.319/-5.646, 5.537/-5.284,
+                       7.756/-5.031}
+    \pic at (\xx,\yy) {tri};
+  \node[font=\tiny, text=figink] at (5.6,-6.25)
+    {upweighted edited demos (6/6 seeds)};
+  \node[anchor=west, font=\tiny, text=figgray] at (1.35,-7.45)
+    {$w{=}1$: vanilla BC, n.s.};
+
+  % --- most-fair selection control: fades with dose ------------------------
+  \draw[figgray, dashed, line width=0.8pt] (3.319,-6.970) -- (5.537,-7.088)
+    -- (7.756,-7.145);
+  \foreach \xx/\yy in {3.319/-6.970, 5.537/-7.088, 7.756/-7.145}
+    \pic at (\xx,\yy) {trid};
+  \node[anchor=south, font=\tiny, text=figgray] at (5.5,-6.90)
+    {most-fair selection control: fades};
+
+  % --- random-upweighting control: null ------------------------------------
+  \draw[figgray, dotted, line width=0.8pt] (3.319,-7.314) -- (7.756,-7.377);
+  \foreach \xx/\yy in {3.319/-7.314, 7.756/-7.377}
+    \pic at (\xx,\yy) {circctl};
+  \node[anchor=north, font=\tiny, text=figgray] at (5.5,-7.44)
+    {random upweighting: null};
+\end{tikzpicture}

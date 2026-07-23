@@ -1,0 +1,403 @@
+\section{Derivations}\label{app:derivations}
+
+This appendix carries the closed-form details of $F_{\mathrm{demo}}$ deferred
+from \S\ref{sec:objective}. The projection form of Eq.~\eqref{eq:fdemo} is what
+makes the measure usable as an \emph{optimization objective} rather than a
+one-shot audit. Demographics are fixed attributes of the cells, so $H$ is a
+constant of the optimization: as editing moves $R$, Eq.~\eqref{eq:fdemo}
+implicitly re-fits the demographic regression exactly at every step, with no
+coefficients to refresh and nothing trained inside the editing loop. Nor is the
+$N \times N$ projection ever materialized: by the normal equations,
+$R^{\top}(I-H)R = R^{\top}R -
+(\tilde{X}^{\top}R)^{\top}(\tilde{X}^{\top}\tilde{X})^{-1}(\tilde{X}^{\top}R)$,
+so each evaluation costs a few length-$N$ inner products.
+% src: objective_function/causal_fairness/f_causal_term_reformulation/chosen_formulation/OPTION_B_FORMULATION.md §3.3, §5 (constant H; implicit exact re-fit; differentiability)
+% src: famail_temporal/fairness/hat_matrices.py (compact evaluation identity; dense N×N infeasible at production N)
+By the Frisch--Waugh--Lovell theorem \cite{frischwaugh1933,lovell1963}, the
+residualize-then-project construction recovers exactly the demographic
+coefficients of the full multiple regression, so $r^{2}_{\mathrm{demo}}$ is
+interpretable as the share of demand-adjusted service inequity attributable to
+demographics; measuring fairness through the statistical dependence between
+protected attributes and outcomes follows the predictability logic of
+\cite{feldman2015}, with the direction reversed: there, disparate impact is
+certified by predicting the protected attribute from the data; here, the
+demographics predict the adjusted service residual.
+
+\textbf{Per-unit deficit partition.} Because $M$ and $I-H$ are idempotent,
+the explained share $r^{2}_{\mathrm{demo}}$ of Eq.~\eqref{eq:fdemo} admits
+the exact per-unit decomposition
+\begin{equation}\label{eq:unit-attr}
+r^{2}_{\mathrm{demo}}
+\;=\; \sum_i \frac{(MR)_i^{2} - \bigl((I-H)R\bigr)_i^{2}}{R^{\top}MR},
+\end{equation}
+a mathematically exact partition of the fairness deficit across active
+units; a signed variant separates over- from under-served units. This is
+the demand-deficit attribution that drives trim (\S\ref{sec:attribution}).
+% src: PAPER/argument/03_fairness_theory.md (per-cell attribution)
+
+\textbf{Supply-gradient closed form.} The $F_{\mathrm{demo}}$ component of
+the value-of-presence map of \S\ref{sec:attribution} has the closed form
+\begin{equation}\label{eq:supply-grad}
+\frac{\partial F_{\mathrm{demo}}}{\partial S_i}
+\;=\; \frac{2}{R^{\top}MR}\;
+\frac{\bigl((I-H)R\bigr)_i - F_{\mathrm{demo}}\,(MR)_i}{\max(D_i,\, d_0)},
+\end{equation}
+against which the automatic gradient is verified.
+% src: PAPER/supply-lift/LIFT_ALGORITHM_REFERENCE.md §4.1 (autograd-verified closed form)
+
+\textbf{Spatial-equity closed form.} The $F_{\mathrm{spatial}}$ term of
+\S\ref{sec:objective} scores the inequality of two supply-normalized service
+rates --- the demand-service ratio $\mathrm{DSR}_i = D_i / S_i$ and the
+arrival-service ratio $\mathrm{ASR}_i = A_i / S_i$, with $A_i$ the unit's
+recorded dropoffs and $D_i$, $S_i$ as in \S\ref{sec:problem} --- with the
+Gini index, an inequality measure widely used in transportation equity
+research \cite{horchergraham2021,karner2024}. The Gini enters as a pairwise
+mean absolute difference, differentiable almost everywhere and hence usable
+inside the gradient objective:
+\begin{equation}\label{eq:fspatial}
+\begin{split}
+\mathrm{Gini}(x) &\;=\; \frac{\sum_{i}\sum_{j}\,\lvert x_i - x_j\rvert}
+{2N^{2}\,\bar{x}},\\
+F_{\mathrm{spatial}} &\;=\; 1 - \tfrac{1}{2}\bigl(\mathrm{Gini}(\mathrm{DSR})
++ \mathrm{Gini}(\mathrm{ASR})\bigr).
+\end{split}
+\end{equation}
+% src: PAPER/argument/03_fairness_theory.md (F_spatial definition)
+% src: famail_temporal/fairness/spatial.py (DSR/ASR ratios; sorted-identity evaluation, no N² materialization)
+% src: famail_temporal/docs/RESEARCHER_HANDOFF.md §4 (DSR/ASR acronym expansions)
+
+\section{Editor Implementation Details}\label{app:editor}
+
+This appendix collects the editor implementation details deferred from
+\S\ref{sec:editor}.
+
+\textbf{Soft cell assignment.} The discrete grid is bridged by
+tem\-per\-a\-ture-annealed soft cell assignment
+\cite{jang2017gumbel,maddison2017concrete,bengio2013ste} over the same
+$5{\times}5$ window used to aggregate supply, moving from broad early
+exploration to precise late assignment; the best iterate is kept.
+
+\textbf{Editor constants.} In lift, the pickup moves by the full offset
+$\delta$ and earlier tail states move by linearly tapered fractions
+$w_j = j/\ell$ ($0.25/0.5/0.75/1.0$ at $\ell = 4$), with the anchor state
+before the tail fixed. Each moved seeking state contributes $1/12$ of an hourly
+presence unit to each cell of its $5{\times}5$ neighborhood in the supply
+perturbation $\Delta S$, and the objective evaluates supply as
+$\mathrm{clamp}(S + \Delta S,\, s_0)$ with supply floor $s_0 = 0.1$.
+% src: PAPER/supply-lift/LIFT_ALGORITHM_REFERENCE.md §3, §5-6 (taper, presence mass, floors, live fidelity tail)
+
+\textbf{King-move repair.} The source data is preprocessed --- following the
+pipeline of \cite{zhang2022cgail} --- to satisfy a king-move rule: consecutive
+states move at most one cell per axis, $\max(|dx|,|dy|) \le 1$. Edits should
+not be held to a lower standard than the data they edit; a bounded two-cell
+pickup move would silently violate the very rule the source trajectories are
+filtered on. Discretized edits therefore pass through an exact
+backward-reachability repair that returns the king-compliant assignment
+nearest the tapered targets, or reports that none exists.
+% src: LIFT_ALGORITHM_REFERENCE.md §3 (king-move rule), §6 (repair; lift skips in-loop)
+
+\textbf{Linearized-offset screen.} The candidate screen of
+\S\ref{sec:attribution}, in detail. Each trajectory's tail --- its last
+$\ell$ seeking states and pickup --- is rigidly translated by every nonzero
+integer offset $\delta \in [-\varepsilon, \varepsilon]^{2}$, and each
+translation is scored by its linearized gain: the value-of-presence
+collected at the tail's new positions minus that at its old ones, each state
+weighted by the presence mass it carries and the map summed over the same
+$5{\times}5$ window through which presence spreads (\S\ref{sec:problem}). A
+trajectory's score is its best offset.
+
+\textbf{Perturbation-arm stationarity.} Detail for the
+baselines of \S\ref{sec:exp-baselines}. We pre-registered
+$\delta = 0$-initialized ablation arms expecting a no-op --- a
+difference-mode Siamese head has zero subgradient at an identical pair ---
+but the deployed discriminator compares embeddings by \emph{concatenation},
+which is not stationary there: measured, the $\delta = 0$ arms attack rather
+than stall (the iterative arm lands within $0.0003$ of its random-start
+twin; the single-step arm differs with initialization, as a one-step method
+must). The stationarity assumption held only for the head we did not deploy.
+% src: famail_temporal/results/2026-07-13T06-26-19/…06-27-50 arm metrics (nors); deployed checkpoint combination_mode="concatenation" (fidelity/model.py); gradient-at-zero verified live 2026-07-13
+
+\section{Extended Results}\label{app:results}
+
+\textbf{Weight sensitivity.} Fig.~\ref{fig:alpha-pareto} reports the full weight
+sweep summarized in \S\ref{sec:exp-robustness}: six full editing runs across the
+simplex (fidelity fixed at $0.1$), each scored on all three metric classes. The
+optimized $\Delta F_{\mathrm{demo}}$ is flat --- within $0.001$ --- for
+$\alpha_{\mathrm{sp}} \in [0, 0.55]$; the class (ii) supply-channel lift-up
+declines monotonically with $\alpha_{\mathrm{sp}}$ and is significant under
+both accounting conventions only for $\alpha_{\mathrm{sp}} \le 0.2$; and
+class (iii) instruments
+improve significantly at every point. The adopted $(0.1, 0.8, 0.1)$ is the
+three-class criterion's selection: any weighting in the flat range delivers
+the same $\Delta F_{\mathrm{demo}}$, and the low $\alpha_{\mathrm{sp}}$ is
+what keeps the supply-channel lift-up significant.
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\linewidth]{figures/extended_frontier.pdf}
+  \caption{The weight sweep, scored beyond the optimized metrics. (A) On the
+  optimized plane, $\Delta F_{\mathrm{demo}}$ is flat across
+  $\alpha_{\mathrm{sp}} \in [0, 0.55]$. (B) The design-targeted lift-up
+  declines monotonically with spatial weight and is significant under both
+  accounting conventions only for $\alpha_{\mathrm{sp}} \le 0.2$ (filled = 95\% CI
+  excludes 0). The adopted $(0.1, 0.8, 0.1)$ is the three-class criterion's
+  selection.}
+  % src: PAPER/objective-motivation/weight-sensitivity/extended_frontier.json via paper/figures/make_figures.py
+  \Description{Two stacked panels. Panel A: scatter of the weight sweep on
+  the optimized-metric plane; the demographic-fairness delta is flat across
+  the
+  spatial weight while the spatial delta rises. Panel B: line chart showing
+  the lift-up quantity declining monotonically as the spatial weight grows,
+  significant under both accounting conventions only at low spatial weight;
+  the adopted
+  configuration is marked.}
+  \label{fig:alpha-pareto}
+\end{figure}
+
+\textbf{Feature-set robustness.} Extending the summary in
+\S\ref{sec:exp-robustness}: the channel mix behind the reproduced lift-up is
+not constant --- on the primary set the demand channel is n.s., while under
+both alternate sets it is significant and carries most of the larger totals ---
+so the added-presence mechanism replicates while the demand-side share varies
+with the feature set, and we report the decomposition rather than the total
+alone. Table~\ref{tab:featsets} gives every layer of the argument under the two
+alternate sets.
+
+\begin{table}[t]
+\caption{Feature-set robustness under trim+lift (Shenzhen; $\Delta$ rows are
+after $-$ before edit). $^{*}$-marked rows: every cell's paired-bootstrap
+95\% interval excludes zero ($B = 2{,}000$ for
+$\Delta\,\mathrm{mean}(Y \mid \mathrm{disadv.})$; $B = 1{,}000$ for
+DI/DP/Theil).}
+\label{tab:featsets}
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{lrrr}
+\toprule
+ & \{hous,comp,migr\} & \{hous,gdp,comp\} & +logpopdens \\
+\midrule
+before-edit $F_{\mathrm{demo}}$ & 0.7988 & 0.8069 & 0.7253 \\
+editor $\Delta F_{\mathrm{demo}}$ & $+0.0226$ & $+0.0206$ & $+0.0220$ \\
+$\Delta\,\mathrm{mean}(Y \mid \mathrm{disadv.})^{*}$ & $+0.0529$ & $+0.0594$ & $+0.1461$ \\ % src: {shenzhen-primary-supplylift-s10,shenzhen-hgc-supplylift,shenzhen-4feat-supplylift}/external_fairness.json: metrics.MigrantRatio.district_extremes.supply_demand_ratio.{after,before}.mean_disadvantaged, delta at full precision (4FEAT 7.219558-7.073448=+0.1461). TOTAL quantity (both channels), decomposed in tab:channels — label deliberately NOT "lift-up": per §4.2 the lift-up CLAIM rides the supply channel; delta-only per DI/Theil convention. all three totals CI-sig (PRIMARY [+0.0086,+0.0989]; HGC [+0.0181,+0.1013]; 4FEAT [+0.0900,+0.2039]; B=2000, A1 runs 2026-07-16).
+DI $\Delta$ (migrant/extremes)$^{*}$ & $+0.0162$ & $+0.0147$ & $+0.0191$ \\ % src: same external_fairness.json: disparate_impact.delta_ci — HGC [+0.0120,+0.0171], 4FEAT [+0.0158,+0.0223], B=1000 (PRIMARY CI in tab:external-sz)
+DP gap $\Delta^{*}$ & $-0.890$ & $-0.787$ & $-0.886$ \\ % src: same external_fairness.json: metrics.MigrantRatio.district_extremes.demographic_parity.delta (identical to supply_demand_ratio.delta_gap -- DP IS the gap, do not also add a gap row; delta_ci — HGC [-0.8839,-0.6827], 4FEAT [-0.9924,-0.7712])
+Theil $\Delta^{*}$ & $-0.0087$ & $-0.0080$ & $-0.0085$ \\ % src: same files, top-level theil.delta_ci — HGC [-0.0090,-0.0070], 4FEAT [-0.0096,-0.0074]
+L1: edited fairest faithful? & see Tab.~\ref{tab:l1} & yes & yes \\ % src: per-set level1_v2_multiseed.json (HGC 0.8275 / 4FEAT 0.7473 fairest, both Fid-A ~0.845; GAN Fid-B bimodality reproduces seed-for-seed in all three sets)
+vanilla-BC transfer (w1) & see~\S\ref{sec:exp-downstream} & $+0.0022$ & $+0.0011$ (n.s.) \\ % src: hgc w1 is sign-unanimous (6/6, p=.031) though a tenth of its w30 gain — row renamed from 'null' for honesty
+weighted-BC w30 & see~\S\ref{sec:exp-downstream} & $+0.0248$ & $+0.0256$ \\
+\quad random placebo (w30) & $-0.0023$ (n.s.) & $-0.0019$ (n.s.) & $-0.0044$ (n.s.) \\
+\quad most-fair select (w30) & $+0.0009$ (n.s.) & $+0.0054$ & $+0.0072$ \\
+variance (b0 vs FATE) & see~\S\ref{sec:exp-downstream} & null & null \\ % src: hgc +0.0029±0.0038 / 4feat +0.0003±0.0028, both mixed-sign at n=5 — null under the pre-registered sign-consistency reading (PRIMARY was all-positive)
+\bottomrule
+\end{tabular}
+\end{table}
+% src (PRIMARY column): s10 corpus metrics.json + shenzhen-primary-supplylift-s10 external_fairness.json
+
+\textbf{Filtering versus editing.} Detail for the filtering rebuttal of
+\S\ref{sec:exp-robustness}. Deleting the $K$ most-biased trajectories rather
+than editing them inverts the gain: $F_{\mathrm{demo}}$ falls to 0.7935 at the
+maximum $K = 2{,}455$, where editing the same attribution-selected slice
+raises it to 0.8214 --- so neither removing nor selecting data
+(\S\ref{sec:exp-downstream}) substitutes for editing it.
+% src: famail_temporal/results/analysis/pareto_supplylift/pareto_points.csv (Q7-pareto ledger row)
+
+\textbf{Supply-channel upper bound.} Supporting the provenance disclosure of
+\S\ref{sec:exp-data-level}. Before the lift phase was built, an unconstrained
+greedy search bounded the largest achievable gain at $+0.786$ on
+$\mathrm{mean}(Y \mid \mathrm{disadv.})$ --- $2.6\times$ the pre-registered
+threshold of $+0.3$ for proceeding with the build (full accounting
+$+0.882$); the realized $+0.053$ sits far below this realism-free ceiling,
+as a realism-bounded editor should.
+% src: PAPER/supply-lift/FINDINGS.md §1.3 + data/oracle.json (G0 ceilings)
+
+\textbf{The two realism axes.} \emph{Fidelity-A} is the identity axis: the
+frozen driver-identity discriminator's mean score on matched pairs (an
+edited trajectory against a trace of its original driver; higher is
+better), the evaluation-time reading of the \S\ref{sec:objective}
+guardrail, and validated by its separation from mismatched-driver pairs.
+\emph{Fidelity-B} is the distributional axis: a Jensen--Shannon divergence
+over aggregate mobility statistics, computed against the raw corpus (raw
+scores 0); lower is better.
+% src: famail_temporal/baselines/run_level1_table_v2.py (fidelity_a = gate high_matched; fidelity_a_separation); PAPER/supply-lift/FINDINGS.md §6 (HuMID identity axis, higher better); tab:l1 raw row Fid-B 0.000 (raw-referenced)
+
+\textbf{Edited-corpus Fidelity-B components.} Supporting the realism
+disclosure of \S\ref{sec:exp-data-level}. The corpus-level Fidelity-B of
+$0.187$ concentrates in exactly the components a rerouted tail must move ---
+terminal cell (0.635), net displacement (0.147), coverage (0.142) --- while
+trajectory length, which neither editing phase alters, barely registers
+(0.060).
+% src: famail_temporal/results/level1_table_v2/supply_lift_shz_5seed/level1_v2_multiseed.json (edited row fidelity_b_per_component)
+
+\textbf{Four-source data-quality comparison (Shenzhen).} The full table behind
+the four-source claim of \S\ref{sec:exp-downstream}: raw, edited, BC-gen\-er\-ated,
+and GAN-generated corpora scored on fairness and both fidelity axes (means over
+five seeds; the GAN row's Fidelity-B is seed-bimodal, detailed next).
+\begin{table}[t]
+\caption{Data-quality comparison, four sources (Shenzhen; means over five
+seeds; the GAN row's Fidelity-B is seed-bimodal --- see text).}
+\label{tab:l1}
+\small
+\begin{tabular}{lrrr}
+\toprule
+source & $F_{\mathrm{demo}}$ & Fid.-A ($\uparrow$) & Fid.-B ($\downarrow$) \\
+\midrule
+raw & 0.7988 & 0.848 & 0.000 \\
+\textbf{edited (trim+lift)} & \textbf{0.8214} & 0.844 & 0.187 \\
+bc-generated & 0.7980 & 0.848 & 0.011 \\
+gan-generated & 0.8089 & 0.848 & 0.171 \\
+\bottomrule
+\end{tabular}
+\end{table}
+% src: famail_temporal/results/level1_table_v2/supply_lift_shz_5seed/level1_v2_multiseed.json
+
+\textbf{Shenzhen GAN per-seed spread.} Supporting the four-source
+disclosure of \S\ref{sec:exp-downstream}. The Shenzhen GAN's Fidelity-B mean
+of 0.171 hides a bimodal split across seeds ($\pm 0.129$; three of five
+seeds at 0.197--0.295, two at 0.03--0.04), and its worst seeds fail
+broadband --- length-component divergence 0.247 where the edited corpus sits
+at 0.060.
+% src: famail_temporal/results/level1_table_v2/supply_lift_shz_5seed/level1_v2_multiseed.json (gan fidelity_b values + per-component)
+
+\textbf{Upweighting dose saturation (Shenzhen).} Supporting
+\S\ref{sec:exp-downstream}. Beyond the adopted w30, the edited arm's gain
+extends to $+0.0323$ (w40) and $+0.0339$ (w50), each 6/6, with the per-step
+increment shrinking monotonically ($+0.0050$, $+0.0035$, $+0.0021$,
+$+0.0016$) --- w30 sits at the knee.
+% src: famail_temporal/results/weighted_bc_sweep/alpha_sweep_s10_c80_f10_filtered_6seed/dose_response.json
+
+\textbf{Downstream $F_{\mathrm{spatial}}$ and fidelity dose detail (Shenzhen).}
+Supporting \S\ref{sec:exp-downstream}. $F_{\mathrm{spatial}}$ propagates from
+$+0.0008$ at uniform weight to $+0.0052$ at w30 (each $p = .031$), while at w30
+both controls significantly degrade it. Fidelity-A is unchanged at every weight
+(all n.s., $|\Delta|$ at most $+0.0007$); Fidelity-B rises dose-monotonically
+from $0.020$ to $0.027$ absolute, against raw $0.013$.
+% src: famail_temporal/results/weighted_bc_sweep/alpha_sweep_s10_c80_f10_filtered_6seed/paired_stats.json + dose_response.json
+
+\textbf{Oversampling re-duplication (Shenzhen).} Supporting
+\S\ref{sec:exp-baselines}. Only 8{,}241 distinct disadvantaged-origin
+trajectories exist, so meeting the matched dose $d = 10{,}000$ requires
+1{,}759 draws that repeat earlier ones.
+% src: PAPER/baselines/demographic-oversampling/FINDINGS.md §2-5
+
+\textbf{Model-level variance ($n = 5$ versus $n = 10$).} Supporting
+\S\ref{sec:exp-downstream}. A paired baseline-vs-FATE comparison at uniform
+weight gives $\Delta F_{\mathrm{demo}} = +0.0030 \pm 0.0022$ at $n = 10$
+seeds (9/10 positive; Wilcoxon $p = .0039$): the training procedure alone
+transmits a small but real fraction of the edit, an order of magnitude below
+the upweighted gains, so the weighting lever remains what carries the
+transfer. This $n = 10$ effect size is unchanged from the original five-seed
+suite ($+0.0031$) and now clears conventional significance outright
+($t$-test $p = .0019$).
+% src: famail_temporal/results/variance_suite/supply_lift_shz_10seed/aggregate.json (paired_delta.f_causal; B2-VAR-SZ 2026-07-16; n=5 suite retained at variance_suite/supply_lift_shz_5seed)
+
+\textbf{Fairness-penalty $\lambda$ grid.} Detail for the in-processing
+penalty baseline of \S\ref{sec:exp-baselines}. The penalty was tested in
+both a signed formulation (advantaged minus disadvantaged, the direction the
+data over-serves) and an absolute-value formulation. It is inert at every
+dose that trains stably (six-seed suites:
+$|\Delta F_{\mathrm{demo}}| \le 0.0009$ signed at
+$\lambda \in \{1,$ $3.16,$ $10\}$, $+0.0008$ absolute at $\lambda = 10$, all
+n.s.; single-seed probes at $\lambda = 100$ agree; the term contributes on
+the order of $10^{-5}$ of the loss), and destructive only at the dose where
+it finally dominates: at $\lambda = 1000$ the signed form collapses
+$F_{\mathrm{demo}}$ by $-0.2053$ with Fidelity-B at 0.514, the absolute form
+by $-0.1293$ (negative on all six seeds) with Fidelity-B at 0.363, against raw's
+$\approx 0.013$. The absolute formulation's shallower collapse is the gap
+pushing back once it crosses zero; the two formulations track each other at
+every $\lambda$.
+% RESOLVED(formulation) 2026-07-18: FB-PENALTY-ABS pilot+suite — absolute tracks signed at every
+% dose (pilot point-by-point on the signed grid; inert <=100, catastrophic at 1000); the spec's
+% pre-committed rule fired on its "drop the scoping" branch. Prior NOTE(formulation) retired.
+% src (1e-5 derivation): probe-observed gap magnitudes ~1e-6 (task-4 report + fairness_penalty_probe)
+% x lambda<=10 vs CE ~O(1); penalty_values not persisted by the harness — camera-ready chore to persist.
+% src: famail_temporal/results/weighted_bc_sweep/fairness_penalty_6seed/paired_stats.json + fairness_penalty_probe/ (lambda 100/1000 single-seed probes)
+% src: famail_temporal/results/weighted_bc_sweep/fairness_penalty_abs_{pilot,6seed}/ (FB-PENALTY-ABS 2026-07-18: l10 +0.0008 n.s.; l1000 -0.1293 6/6, Fid-B 0.363)
+
+\textbf{Perturbation-arm per-arm figures.} Supporting
+\S\ref{sec:exp-baselines}. On San Francisco the three perturbation arms
+violate king-move adjacency wholesale (72.0/87.0/97.5\%) and pay
+$2$--$4\times$ the edited corpus's distributional divergence (0.198--0.418
+against 0.098).
+% src: famail_temporal/results/2026-07-16T16-08-{05_baseline_ifgsm,16_baseline_fgsm,23_baseline_random}_sf12/metrics.json (B1 runs 2026-07-16; SF Fid-B from level1 sf12 edited row = 0.098)
+On Shenzhen the gradient arms violate king-move adjacency (54.4\% iFGSM,
+91.4\% FGSM) with distributional divergence 0.143 and 0.339 respectively,
+against the edited corpus's 0.187.
+% src: famail_temporal/baselines/baseline_table/baseline_table.json (Shenzhen Fid-B(JS)/adjacency-violation columns)
+
+\textbf{San Francisco downstream detail.} Supporting \S\ref{sec:exp-sf}.
+At $n = 12$ the controls sharpen the contrast rather than soften it: the
+random placebo turns significantly \emph{negative} ($-0.0077$, positive on
+only 2 of 12, $p = .0024$), and the most-fair selection control is
+significantly positive but about a sixth of the edited arm's gain
+($+0.0059$, 10 of 12 positive, $p = .0020$; at $n = 6$ per dose it was
+significantly negative at w10 and n.s.\ at w20).
+% src: PAPER/supply-lift/data/a10/sf12_a10_wbc_n12_pooled_stats.json (SF-WBC-N12 2026-07-18)
+Extended doses: $+0.0370$ (w40) and $+0.0371$ (w50), each 6/6, flat past
+w40; the random control stays null-to-negative and the most-fair selection
+control stays significantly \emph{positive} ($+0.0063$/$+0.0066$) --- the
+dominated-control pattern of the alternate feature sets
+(\S\ref{sec:exp-robustness}).
+External-instrument grouping detail: the DP gap is $-0.0729$
+[$-0.1132$, $-0.0259$] under district extremes and $-0.0370$ [$-0.0733$,
+$-0.0002$] under median split; DI is $+0.0058$ [$+0.0004$, $+0.0103$]
+under district extremes and n.s.\ under median split.
+% src: PAPER/supply-lift/data/a10/sf12_a10_external_fairness.json (MigrantRatio, both conventions; moved from §4.6 main text, argument-triage 2026-07-23) Model-level variance: the SF suite stays null
+at $n = 10$ seeds ($\Delta F_{\mathrm{demo}} = -0.0009 \pm 0.0035$, mixed
+signs, closer to zero than at $n = 5$), unlike the primary city's small
+significant positive effect. Four sources (generators retrained from
+scratch; identity gate passed, matched 0.958 vs.\ mismatched 0.034): the
+edited corpus is the fairest source ($F_{\mathrm{demo}}$ 0.9067 vs.\ GAN
+0.8795, raw 0.8752, BC 0.8744) while identity-faithful (Fidelity-A 0.9581
+$\approx$ raw 0.9578; Fidelity-B 0.098, the expected bounded-edit
+divergence).
+% src: famail_temporal/results/weighted_bc_sweep/supply_lift_a10_sf12_dose_ext_6seed/paired_stats.json (SF-WBC-DOSEEXT 2026-07-17; increments w30->w40 +0.0038, w40->w50 +0.0001)
+% src: famail_temporal/results/variance_suite/supply_lift_sf12_10seed/aggregate.json (paired_delta.f_causal; B2-VAR-SF 2026-07-16; n=5 suite retained)
+% src: famail_temporal/results/level1_table_v2/supply_lift_sf12_5seed/level1_v2_multiseed.json
+
+\textbf{Rollout allocation shares (both cities).} Supporting the future-work
+discussion of \S\ref{sec:conclusion}. Beyond metric propagation, we rolled
+out the trained policies and measured the share of pickups they allocate to
+disadvantaged areas. That share still tilts slightly negative: on Shenzhen,
+$-0.0049$ at w30 on the demand-only corpus and $-0.0033$ under trim+lift
+(negative on all six seed pairs in both suites, $p = .031$), attenuated by
+roughly a third, not reversed; San Francisco replicates the pattern at
+roughly ten times the magnitude ($-0.0432$ demand-only, $-0.0335$
+trim+lift, again negative on all six seed pairs in both suites), roughly
+$22\%$ attenuation. Seeking-state shares are n.s.\ at every weight in both
+suites. The paper claims the data-level lift-up and the metric propagation;
+this allocation gap is what motivates training-side allocation constraints
+as future work.
+% src: famail_temporal/baselines/external_fairness/results/option_a_rollout_a10/summary.json + option_a_rollout_trimonly_a10/summary.json (edited_w30.MigrantRatio.pickups.share_D_delta; SZ)
+% src: famail_temporal/baselines/external_fairness/results/option_a_rollout_sf12_tl/summary.json + option_a_rollout_sf12_trimonly/summary.json (C3-SF-ROLLOUT 2026-07-17; attenuation 1-0.0335/0.0432=22.5%)
+% src: PAPER/supply-lift/data/rollout_supplylift_summary.json + rollout_trimonly_prior_summary.json; FINDINGS.md §9
+% (moved from §4.3 'The allocation boundary' + the §4.6 SF passage, argument-triage 2026-07-22; restore at camera-ready if space allows)
+
+\section{Statistical Protocol Details}\label{app:protocol}
+
+This appendix collects the statistical-protocol details deferred from
+\S\ref{sec:exp-setup}.
+
+\textbf{Exact-Wilcoxon floor arithmetic.} With $n = 6$ paired seeds the
+two-sided Wilcoxon signed-rank $p$ floors at $0.03125$, attained exactly
+when all six seeds share a sign, which is why $p = 0.031$ reads only as a
+sign-unanimity certificate. The flagship w30 comparison at $n = 12$ paired
+seeds has floor $.00049$, low enough for an exact Wilcoxon $p$ to survive
+multiple-comparison correction. Suites with $n = 5$ seeds cannot reach
+$p < 0.05$ (floor $0.0625$) and are reported as effect-versus-noise.
+% src: PAPER/argument/04_evaluation.md §3; PAPER/external-metrics/FINDINGS.md §1, §5
+
+\textbf{Why the bootstrap resamples units.} A driver-level bootstrap is
+unavailable rather than declined: the demand grid is a mean-hourly artifact,
+not a per-driver sum, and supply is environmental, so $Y$ does not decompose
+into driver contributions. Active grid units are the only available
+resampling level.
+% src: PAPER/external-metrics/FINDINGS.md §5
+
+\textbf{Instrument definitions.} The service ratio $Y$ is grouped
+per equity axis (housing price, compensation, migrant share) under two
+conventions, district extremes and median split. Demographic parity (DP) is
+the signed gap between the group levels
+$\mathrm{mean}(Y \mid \mathrm{disadv.})$ and
+$\mathrm{mean}(Y \mid \mathrm{adv.})$; disparate impact (DI) is their ratio
+(1 = parity); the Theil index is between-region and grouping independent.
+% src: PAPER/external-metrics/FINDINGS.md §1, §4.3 (DP≡gap disclosure)

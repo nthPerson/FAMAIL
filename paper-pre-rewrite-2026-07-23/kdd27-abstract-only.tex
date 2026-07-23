@@ -1,0 +1,44 @@
+% Standalone title + abstract PDF for the KDD 2027 submission form.
+% Shares sections/00_abstract.tex with main.tex, so the abstract text here can
+% never drift from the manuscript. Build:
+%   latexmk -pdf -interaction=nonstopmode -halt-on-error kdd27-abstract-only.tex
+% Differences from main.tex, deliberately:
+%   - no `review` option  -> no line numbers (they read as noise on a 1-page PDF)
+%   - no \input of sections 01-05
+\documentclass[sigconf,anonymous]{acmart}
+\settopmatter{printacmref=false}
+\setcopyright{none}
+\microtypesetup{expansion=false} % see main.tex for why (local font shim)
+
+\begin{document}
+
+\title{Mitigating Demonstration Bias via Fairness-Aware Trajectory Editing}
+
+\author{Robert Ashe}
+\affiliation{%
+  \institution{San Diego State University}
+  \city{San Diego}\state{CA}\country{USA}}
+\email{rashe7414@sdsu.edu}
+\author{Xin Zhang}
+\affiliation{%
+  \institution{San Diego State University}
+  \city{San Diego}\state{CA}\country{USA}}
+\email{xzhang@sdsu.edu}
+
+\begin{abstract}
+\input{sections/00_abstract}
+\end{abstract}
+
+\keywords{fairness, imitation learning, data augmentation, trajectory editing,
+urban mobility}
+
+\acmConference[KDD '27]{ACM SIGKDD Conference on Knowledge Discovery and Data
+  Mining}{August 1--5, 2027}{San Jose, CA, USA}
+\acmYear{2027}
+\copyrightyear{2027}
+\acmISBN{}
+\acmDOI{}
+
+\maketitle
+
+\end{document}
