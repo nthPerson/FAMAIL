@@ -1,10 +1,24 @@
 \section{Derivations}\label{app:derivations}
 
 This appendix carries the closed-form details of $F_{\mathrm{demo}}$ deferred
-from \S\ref{sec:objective}. The projection form of Eq.~\eqref{eq:fdemo} is what
+from \S\ref{sec:objective}. With $X$ the z-scored demographic matrix,
+$\tilde{X} = [\mathbf{1}\; X]$ its design matrix,
+$H = \tilde{X}(\tilde{X}^{\top}\tilde{X})^{-1}\tilde{X}^{\top}$ the \emph{hat
+matrix} of the stage-two regression (the projection onto the column space of
+$\tilde{X}$ \cite{hoaglinwelsch1978}), and $M$ the centering matrix,
+Eq.~\eqref{eq:fdemo} evaluates in closed form as
+\begin{equation}\label{eq:fdemo-closed}
+F_{\mathrm{demo}}
+\;=\; \frac{R^{\top}(I-H)\,R}{R^{\top}M\,R}
+\;=\; 1 - r^{2}_{\mathrm{demo}} ,
+\end{equation}
+the stage-two regression evaluated without ever fitting it explicitly: the
+numerator is its residual sum of squares, the denominator its total.
+% (H-matrix construction moved here from §3.2 on 2026-07-24, Meeting-44 mandate)
+This projection form is what
 makes the measure usable as an \emph{optimization objective} rather than a
 one-shot audit. Demographics are fixed attributes of the cells, so $H$ is a
-constant of the optimization: as editing moves $R$, Eq.~\eqref{eq:fdemo}
+constant of the optimization: as editing moves $R$, Eq.~\eqref{eq:fdemo-closed}
 implicitly re-fits the demographic regression exactly at every step, with no
 coefficients to refresh and nothing trained inside the editing loop. Nor is the
 $N \times N$ projection ever materialized: by the normal equations,
@@ -24,8 +38,8 @@ certified by predicting the protected attribute from the data; here, the
 demographics predict the adjusted service residual.
 
 \textbf{Per-unit deficit partition.} Because $M$ and $I-H$ are idempotent,
-the explained share $r^{2}_{\mathrm{demo}}$ of Eq.~\eqref{eq:fdemo} admits
-the exact per-unit decomposition
+the explained share $r^{2}_{\mathrm{demo}}$ of Eq.~\eqref{eq:fdemo-closed}
+admits the exact per-unit decomposition
 \begin{equation}\label{eq:unit-attr}
 r^{2}_{\mathrm{demo}}
 \;=\; \sum_i \frac{(MR)_i^{2} - \bigl((I-H)R\bigr)_i^{2}}{R^{\top}MR},
@@ -70,6 +84,15 @@ F_{\mathrm{spatial}} &\;=\; 1 - \tfrac{1}{2}\bigl(\mathrm{Gini}(\mathrm{DSR})
 
 This appendix collects the editor implementation details deferred from
 \S\ref{sec:editor}.
+
+\textbf{Grid configuration.} Both cities discretize space into
+$0.01^{\circ}$ grid cells and hourly time blocks (\S\ref{sec:problem}):
+a $48{\times}90$ cell grid on Shenzhen and a $32{\times}30$ grid on San
+Francisco. The resolution is an implementation choice; the formulation
+requires only a discrete partition of space and time.
+% src: PAPER/argument/02_datasets.md (0.01° grid, hourly blocks, per-city dims)
+% (moved here from §3.1/§4.1 on 2026-07-24 — Meeting-44 [1:29:27]/[1:37:28]:
+% resolution to appendix, defined once)
 
 \textbf{Soft cell assignment.} The discrete grid is bridged by
 tem\-per\-a\-ture-annealed soft cell assignment
@@ -403,85 +426,69 @@ $\mathrm{mean}(Y \mid \mathrm{adv.})$; disparate impact (DI) is their ratio
 % src: PAPER/external-metrics/FINDINGS.md §1, §4.3 (DP≡gap disclosure)
 
 \section{Extended Related Work}\label{app:related}
-% Moved VERBATIM from sections/02_related_work.tex on 2026-07-24 (Meeting-44
-% mandate [1:20:02]: main-text related work compressed to half a column).
-% Five themes, each closing with a one-sentence FATE contrast (Dr. Zhang's
-% original cadence). Restore-at-camera-ready candidate.
+% Compressed 2026-07-24 to hold the 12-page TOTAL bound (Robert's directive) while the
+% appendix absorbed the F_demo closed form + grid config. The original VERBATIM five-theme
+% survey (Dr. Zhang's per-theme FATE-contrast cadence) is preserved at commit c2f4cb9 and in
+% paper-pre-rewrite-2026-07-23/sections/02_related_work.tex — camera-ready restoration can
+% draw on either. All 33 cite keys of the original are retained below.
 
-\textbf{Fairness interventions in machine learning.} Fairness interventions
-are conventionally grouped by where they act: pre-processing methods repair
-the training data, in-processing methods constrain the learner, and
-post-processing methods adjust its outputs \cite{barocas2023}. FATE belongs
-to the pre-processing family, whose canonical instruments --- instance
-reweighing \cite{kamirancalders2012} and disparate-impact repair of feature
-distributions \cite{feldman2015} --- were built for labeled classification
-data. Among formal fairness definitions \cite{vermarubin2018}, FATE targets
-conditional statistical parity \cite{corbettdavies2017}: disparities count
-only after permitted factors are adjusted for. As formulated, none operate on
-sequential demonstrations or measures fairness over a spatial service
-distribution --- the setting this paper requires. Both instruments reappear
-here in unfamiliar roles: reweighing
-applied to edited demonstrations rather than labeled examples, and the parity
-condition transplanted from a classifier's predictions to a continuous
-spatial service ratio as a differentiable editing objective.
+\textbf{Fairness interventions in machine learning.} They group into
+pre-, in-, and post-processing \cite{barocas2023}; the pre-processing
+instruments FATE builds on are instance reweighing \cite{kamirancalders2012}
+and disparate-impact repair \cite{feldman2015}, both built for labeled
+classification data. Among formal definitions \cite{vermarubin2018}, FATE
+targets conditional statistical parity \cite{corbettdavies2017}. As
+formulated, none operate on sequential demonstrations or score fairness
+over a spatial service distribution. FATE moves reweighing onto edited
+demonstrations, and the parity condition onto a continuous spatial service
+ratio used as a differentiable editing objective.
 
-\textbf{Fairness in urban transportation.} Transportation equity has its own
-measurement tradition, in which the Gini index over service distributions is
-the most widely used instrument \cite{horchergraham2021,karner2024},
-alongside entropy- and welfare-based indices
-\cite{theil1967,atkinson1970,demaio2007}. The closest modeling neighbor
-regularizes a ride-hailing demand predictor at training time, shrinking a
-racial prediction-error gap from 0.361 to 0.084 \cite{zheng2023}.
+\textbf{Fairness in urban transportation.} Transportation equity measures
+service distributions with the Gini index \cite{horchergraham2021,karner2024}
+and entropy- or welfare-based indices \cite{theil1967,atkinson1970,demaio2007}.
+The closest modeling neighbor regularizes a ride-hailing demand predictor at
+training time, shrinking a racial prediction-error gap from 0.361 to 0.084
+\cite{zheng2023};
 % verified: paper/reviews/2026-07-12-prose-citation-audit.md (zheng2023 Table 2, Conv-LSTM arm)
-That correction, however, leaves the demonstrations biased: it lives inside
-one model's loss and does not transfer to any other consumer of the data.
-FATE addresses the same bias one stage earlier, on the demonstrations
-rather than inside the loss, and is scored on equity measures its
-objective never optimizes.
+that correction lives inside one model's loss and does not transfer to any
+other consumer of the data. FATE addresses the same bias one stage earlier,
+on the demonstrations, and is scored on equity measures its objective never
+optimizes.
 
 \textbf{Imitation learning for mobility, and mobility as identity.}
-Imitation learning is an established route to urban mobility models:
-conditional GAIL variants recover taxi-driver strategies from trajectories
+Conditional GAIL variants recover taxi-driver strategies from trajectories
 \cite{zhang2019cgail,zhang2022cgail}, explainable extensions expose the
 recovered policies \cite{pan2020xgail}, and neural simulators generate human
-mobility \cite{feng2020simulate} --- but this literature optimizes realism, and
-none audits or repairs the demographic fairness of the imitated allocation. A parallel line establishes that individual mobility is
-highly identifying: trajectory-user linking recovers who generated a trace
-\cite{gao2017tuler,zhou2018tulvae,miao2020deeptul}, and Siamese verification
-decides whether two seeking traces share a driver \cite{ren2020stsiamese}.
-FATE contributes no new generator or imitation algorithm; it edits the
-demonstrations such models consume, and repurposes the identity-verification
-line as a frozen realism guardrail, avoiding the instability of a live
-adversarial game \cite{hoermon2016}.
+mobility \cite{feng2020simulate}; this line optimizes realism and never
+audits the demographic fairness of the imitated allocation. A parallel line
+establishes that mobility is highly identifying: trajectory-user linking
+\cite{gao2017tuler,zhou2018tulvae,miao2020deeptul} and Siamese verification
+of seeking traces \cite{ren2020stsiamese}. FATE contributes no new generator
+or imitation algorithm; it edits the demonstrations such models consume, and
+repurposes the identity-verification line as a frozen fidelity guardrail,
+avoiding the instability of a live adversarial game \cite{hoermon2016}.
 
 \textbf{Adversarial perturbation and recourse.} The editing machinery
-descends from adversarial examples: bounded signed-gradient perturbations
+descends from bounded signed-gradient perturbations
 \cite{goodfellow2015fgsm,kurakin2017ifgsm} instantiated spatio-temporally
 \cite{hu2023stifgsm}, with discrete structure bridged by straight-through
-estimation \cite{bengio2013ste} and continuous
-relaxation \cite{jang2017gumbel,maddison2017concrete}. Algorithmic recourse showed that the same
-counterfactual tooling can prescribe beneficial change rather than attack
-\cite{ustun2019recourse,wachter2018counterfactual}, but only to flip one
-individual's decision, with no population-level fairness target and no
-data-realism obligation. FATE extends that
-constructive reading from the individual to the population: the bounded
-perturbation edits real trajectories to reduce demographic service inequity,
-and the $\varepsilon$-bound is reinterpreted from an attack-stealth budget to
-one for preserving driver identity.
+estimation \cite{bengio2013ste} and continuous relaxation
+\cite{jang2017gumbel,maddison2017concrete}. Algorithmic recourse reads the
+same counterfactual tooling constructively \cite{ustun2019recourse,
+wachter2018counterfactual}, but only to flip one individual's decision, with
+no population-level fairness target and no data-realism obligation. FATE
+extends the constructive reading from the individual to the population, and
+the $\varepsilon$-bound is reinterpreted from an attack-stealth budget to an
+identity-preservation budget.
 
-\textbf{Leveling down and feedback loops.} Two critiques frame what a
-fairness gain should mean. The leveling-down objection --- equality achieved
-by making the better-off worse rather than the worse-off better --- originates
-in the ethics of equality \cite{parfit1997} and has been applied to
-machine-learning fairness constraints \cite{mittelstadt2024}, with data
-augmentation observed to be the one intervention class that helps the
+\textbf{Leveling down and feedback loops.} The leveling-down objection
+(equality achieved by making the better-off worse rather than the worse-off
+better) originates in the ethics of equality \cite{parfit1997}, has been
+applied to machine-learning fairness constraints \cite{mittelstadt2024}, and
+data augmentation is the one intervention class observed to help the
 disadvantaged group instead \cite{zietlow2022}. Feedback-loop analyses show
 that allocation systems trained on their own historical output entrench a
-self-reinforcing bias \cite{ensign2018,lumisaac2016} --- in our domain, the
-continued under-service of already-underserved neighborhoods. Both critiques
-apply here: our demand-only editor \emph{trim} only manipulates
-over-service, an analogue of leveling down (\S\ref{sec:leveling}); the
-supply channel \emph{lift} exists expressly to level up, rerouting real
-taxi presence into under-served neighborhoods; and because demand recorded
-where service is thin understates true need, demand endogeneity bounds
-what any demand-adjusted metric can see.
+self-reinforcing bias \cite{ensign2018,lumisaac2016}. Both critiques shape
+this paper: trim's demand-only editing is an analogue of leveling down
+(\S\ref{sec:leveling}), lift exists expressly to level up, and demand
+endogeneity bounds what any demand-adjusted metric can see.

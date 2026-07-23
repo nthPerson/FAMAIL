@@ -2,10 +2,11 @@
 
 \subsection{Problem Formulation}\label{sec:problem}
 
-We study taxi service allocation on a city discretized into $0.01^{\circ}$ grid
-cells $g$ and hourly time blocks $t$; a pair $i=(g,t)$ with recorded activity is
-an \emph{active unit}, and $N$ denotes their count ($N \approx 34{,}500$ on the
-primary city). Each active unit carries a demand $D_i$ and a supply $S_i$:
+We study taxi service allocation on a city discretized into grid cells $g$
+and hourly time blocks $t$ (the cell resolution and per-city grid dimensions
+are configuration, Appendix~\ref{app:editor}); a pair $i=(g,t)$ with recorded
+activity is an \emph{active unit}, and $N$ denotes their count
+($N \approx 34{,}500$ on the primary city). Each active unit carries a demand $D_i$ and a supply $S_i$:
 demand is its recorded pickups, and supply is active-taxi presence
 aggregated over the $5{\times}5$ cell neighborhood, matching how a cruising
 taxi is visible to nearby demand. Service received relative to demand is the \emph{service ratio}
@@ -20,17 +21,25 @@ share. These covariates resolve at district granularity, which bounds the
 resolution of any demographic analysis built on them (\S\ref{sec:objective}).
 % src: PAPER/argument/02_datasets.md
 
-The data itself is a corpus $\mathcal{T}$ of real per-driver trajectories, each
-a sequence of passenger-seeking states ending in a pickup. The trajectories are 
-the editable objects; $D$ and $S$ are
-deterministic aggregations of $\mathcal{T}$, so moving where a driver seeks and
-picks up moves demand and supply with it.
+The data itself is a corpus $\mathcal{T} = \{\tau\}$ of real per-driver
+trajectories. A trajectory $\tau = (s_1, \dots, s_T)$ is a time-ordered
+sequence of states: each state $s_j = (g_j, t_j)$ records the cell and time
+block its driver occupied while seeking a passenger, and the final state
+$s_T$ is the pickup. Imitation here is supervised: there is no reward
+function, and the recorded state transitions are the only training signal.
+A policy $\pi$ is trained by behavior cloning to predict a driver's next
+state from their recent states (\S\ref{sec:downstream}), so the policy can
+only be as fair as the corpus it imitates. The trajectories are the editable
+objects; $D$ and $S$ are deterministic aggregations of $\mathcal{T}$ (demand
+counts a unit's recorded pickups, supply its $5{\times}5$-neighborhood taxi
+presence), so moving where a driver seeks and picks up moves demand and
+supply with it.
 
-\textbf{Task.} Given a corpus $\mathcal{T}$ whose service allocation is
+\textbf{Problem.} Given a corpus $\mathcal{T}$ whose service allocation is
 demographically inequitable, produce an edited corpus $\mathcal{T}'$ that
-(i) is measurably fairer; (ii) remains realistic at the level of individual
-trajectories: edited trajectories must remain recognizable
-to a frozen driver-identity discriminator as their original drivers; and
+(i) is measurably fairer; (ii) preserves fidelity at the level of individual
+trajectories: an edited trajectory must remain recognizable
+to a frozen driver-identity discriminator as its original driver; and
 (iii) transfers its fairness into a policy trained on it by imitation. FATE
 is a \emph{data-augmentation} method: it edits a small, attribution-targeted
 slice of the real trajectories and generates nothing. At most $k$
@@ -43,7 +52,7 @@ fairness is not averaged away (\S\ref{sec:downstream}).
 \subsection{The Fairness Objective}\label{sec:objective}
 
 FATE edits trajectories by gradient ascent on a single differentiable
-objective that combines demographic fairness, spatial equity, and realism.
+objective that combines demographic fairness, spatial equity, and fidelity.
 
 \textbf{Demand-adjusted demographic fairness ($F_{\mathrm{demo}}$, primary).}
 Raw parity across neighborhoods is the wrong target: taxi service legitimately
@@ -51,33 +60,29 @@ tracks demand, and a business district \emph{should} see more pickups than a
 quiet residential block. We therefore measure fairness only in the component of
 service that demand does not explain (the logic of conditional statistical
 parity \cite{corbettdavies2017}, which restricts disparities to those not
-explained by permitted factors). Stage one fits a flexible power basis $g_0(D)$
+explained by permitted factors). Stage one fits a flexible curve $g_0(D)$
 from per-unit demand to the service ratio and takes the residual
-$R_i = Y_i - g_0(D_i)$; stage two regresses that residual on the demographics
-and asks how much they explain. We evaluate stage two in closed form rather
-than through an explicitly fitted regression: with $X$ the z-scored
-demographic matrix, $\tilde{X} = [\mathbf{1}\; X]$ its design matrix,
-$H = \tilde{X}(\tilde{X}^{\top}\tilde{X})^{-1}\tilde{X}^{\top}$ the \emph{hat
-matrix} of that regression (the projection onto the column space of
-$\tilde{X}$ \cite{hoaglinwelsch1978}), and $M$ the centering matrix,
+$R_i = Y_i - g_0(D_i)$: the part of each unit's service that demand does not
+account for. Stage two asks how much of that residual the demographics
+explain, as the coefficient of determination $r^{2}_{\mathrm{demo}}$ of a
+regression of $R$ on the z-scored demographics. Fairness is the unexplained
+share,
 \begin{equation}\label{eq:fdemo}
-F_{\mathrm{demo}}
-\;=\; \frac{R^{\top}(I-H)\,R}{R^{\top}M\,R}
-\;=\; 1 - r^{2}_{\mathrm{demo}} .
+F_{\mathrm{demo}} \;=\; 1 - r^{2}_{\mathrm{demo}} ,
 \end{equation}
-Eq.~\eqref{eq:fdemo} is the stage-two regression in closed form: the
-numerator is its residual sum of squares, the denominator its total; $H$ is
-constant, so each edit step implicitly re-fits the regression exactly. It is
-smooth, so exact gradients flow through $Y$ to the coordinates being edited,
-and its projections' idempotence underlies the per-unit attribution of
-\S\ref{sec:attribution}. The quantity $r^{2}_{\mathrm{demo}}$ is interpretable
-as the share of demand-adjusted service inequity attributable to demographics
-(the Frisch--Waugh--Lovell exactness behind that reading and the $O(N)$
-evaluation identity: Appendix~\ref{app:derivations}).
-Boundary cases orient the scale: $R \in \operatorname{span}(X)$ gives
-$F_{\mathrm{demo}} = 0$ (fully unfair), and $R \perp X$ gives $1$ (fully
-fair).
+the fraction of demand-adjusted service variation that demographics cannot
+predict: $F_{\mathrm{demo}} = 0$ means demographics fully explain who is
+over- and under-served (fully unfair), and $F_{\mathrm{demo}} = 1$ means
+they explain none of it (fully fair). Both stages are evaluated in closed
+form through the regression's projection (hat) matrix
+\cite{hoaglinwelsch1978}, so the measure is smooth, exact gradients flow
+through $Y$ to the coordinates being edited, and every edit step re-fits the
+regression exactly, with nothing trained inside the editing loop. The closed
+form, its exact per-unit attribution, and the $O(N)$ evaluation identity are
+in Appendix~\ref{app:derivations}.
 % src: PAPER/objective-motivation/MOTIVATION.md; PAPER/argument/03_fairness_theory.md
+% (closed form/H-matrix construction moved to app:derivations 2026-07-24 per
+% Meeting-44 [1:23:32]-[1:24:14]: keep 1-r^2 + meaning + bare hat-matrix cite here)
 
 Two important caveats. First, $F_{\mathrm{demo}}$ (\emph{demo}
 for demographic dependence) is an \emph{associational} quantity: the
@@ -100,15 +105,15 @@ unit). The closed form is in Appendix~\ref{app:derivations}. Being
 demographic-independent, the term acts as a spatial smoothness regularizer
 complementing $F_{\mathrm{demo}}$.
 
-\textbf{Realism guardrail ($F_{\mathrm{fidelity}}$).} An edit that improves
+\textbf{Fidelity guardrail ($F_{\mathrm{fidelity}}$).} An edit that improves
 fairness by producing trajectories no real driver would generate is useless
 for training a realistic imitation model. Because individual mobility signatures
 are highly identifying \cite{gao2017tuler,zhou2018tulvae,miao2020deeptul}, we score
-realism with a frozen driver-identity discriminator of the ST-SiameseNet
+fidelity with a frozen driver-identity discriminator of the ST-SiameseNet
 family \cite{ren2020stsiamese}: an edited trajectory that still reads as its
 driver has preserved human fidelity. The discriminator is trained once and
 never updated during editing. Under FATE's small bounded edits the discriminator's
-gradient is near zero, so it acts as a realism \emph{guardrail}, not a driver
+gradient is near zero, so it acts as a fidelity \emph{guardrail}, not a driver
 of edits; identity-axis stability under both phases is confirmed empirically
 and reported as \emph{Fidelity-A} (\S\ref{sec:experiments}). The
 distributional realism axis is scored separately at evaluation as
@@ -247,9 +252,9 @@ flow from the objective back to the coordinates being edited
 (Appendix~\ref{app:editor}).
 % src: PAPER/objective-motivation/MOTIVATION.md (editor); PAPER/argument/03_fairness_theory.md
 
-\textbf{Trim: demand deficit attribution.} Because $M$ and $I-H$ are
-idempotent, the explained share $r^{2}_{\mathrm{demo}}$ of
-Eq.~\eqref{eq:fdemo} admits an exact per-unit partition of the fairness
+\textbf{Trim: demand deficit attribution.} Because the projections behind
+Eq.~\eqref{eq:fdemo} are idempotent, the explained share
+$r^{2}_{\mathrm{demo}}$ admits an exact per-unit partition of the fairness
 deficit across active units (Appendix~\ref{app:derivations}), with a signed
 variant that separates over- from under-served units. Trim edits the
 trajectories whose pickups land in the highest-deficit units: each selected
