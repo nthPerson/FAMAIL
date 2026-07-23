@@ -41,6 +41,19 @@ Status legend for what machines already did:
 Crossref/DOI metadata matched (front-end bot-blocked) · **NONE** = no publisher record exists.
 
 **Applied-changes log (controller sessions; checkboxes above/below remain Robert's alone):**
+- 2026-07-24 (Meeting-44 rewrite batch 2 — intro citation classes): FIVE NEW entries + P0
+  rows (top of P0), filling Dr. Zhang's ≥2-per-class + 2025-26 recency mandate. Hunter
+  subagent verified against primary sources, then the controller INDEPENDENTLY re-verified
+  all five (DBLP JSON / frontiersin.org / aclanthology.org / proceedings.mlr.press fetched
+  live this session); full evidence trail:
+  `docs/presentations/meeting_44_update/debrief/analysis/CITATION_CANDIDATES.md`. §1 slots:
+  in-processing sentence now `zheng2023,lamalfa2026fairppo,zhao2025fairdrlst`; generation
+  sentence extended with a diffusion clause (`hastingsblow2025diffaug`); new ¶1 sentence
+  cites `zhao2017menshopping,wang2021directional` as SUPERVISED bias-amplification evidence
+  (deliberate honest scope: no IL-specific bias-inheritance paper exists); reweighing
+  sentence now `kamirancalders2012,feldman2015` (existing key re-used, no new entry).
+  Class (e) (fairness-motivated trajectory EDITING) deliberately left empty: the hunter
+  found no such work, which supports FATE's novelty claim. Count now 50 entries.
 - 2026-07-22 (Robert's §4.4 citation-gap pass): perturbation arms now cite their methods —
   `kurakin2017ifgsm` + `goodfellow2015fgsm` on the iFGSM/FGSM label, `hu2023stifgsm` on the
   identity-discriminator attack clause (the ST instantiation), and ONE NEW ENTRY
@@ -95,6 +108,45 @@ Crossref/DOI metadata matched (front-end bot-blocked) · **NONE** = no publisher
 ---
 
 ## P0 — Decisions & unresolved items (do these first; each needs human judgment)
+
+**(2026-07-24 batch — Meeting-44 intro citation classes; machine-verified twice, human pass pending)**
+
+- [ ] **lamalfa2026fairppo** — La Malfa, Zhang, Luck & Black, *Fairness Aware Reinforcement
+  Learning via Proximal Policy Optimization*, AAAI 2026, pp. 22725--22733,
+  DOI 10.1609/aaai.v40i27.39434 — NEW 2026-07-24: cited at §1's in-processing sentence.
+  **Machine status: PAGE (2026-07-24) — DBLP JSON (conf/aaai/MalfaZLB26: authors/venue/
+  pages/DOI) + arXiv:2502.03953 abstract; claim-fit: adds a fairness penalty (demographic
+  parity / conditional statistical parity variants) to PPO's objective.** Check: AAAI OJS
+  via https://doi.org/10.1609/aaai.v40i27.39434 (publisher page not bot-fetched; needs
+  human eyes).
+- [ ] **zhao2025fairdrlst** — Zhao, Shao, Chan, Xu & Salim, *FairDRL-ST: Disentangled
+  Representation Learning for Fair Spatio-Temporal Mobility Prediction*, ACM SIGSPATIAL
+  2025, pp. 103--106, DOI 10.1145/3748636.3762713 — NEW 2026-07-24: cited at §1's
+  in-processing sentence; the tightest zheng2023 companion (fair mobility-demand
+  prediction). **Machine status: PAGE (2026-07-24) — DBLP JSON (SIGSPATIAL/GIS 2025) +
+  arXiv:2508.07518 ("Accepted as a Research Paper (short) at ACM SIGSPATIAL 2025").**
+  Check: ACM DL via https://doi.org/10.1145/3748636.3762713 (ACM DL bot-blocked; needs
+  human eyes). Note it is a SHORT paper.
+- [ ] **hastingsblow2025diffaug** — Hastings Blow, Qian, Gibson, Obiomon & Dong, *Data
+  Augmentation via Diffusion Model to Enhance AI Fairness*, Frontiers in Artificial
+  Intelligence 8:1530397, 2025, DOI 10.3389/frai.2025.1530397 — NEW 2026-07-24: cited at
+  §1's generation sentence (diffusion clause). **Machine status: PAGE (2026-07-24) —
+  frontiersin.org article page fetched LIVE (title/authors/volume/DOI + Tab-DDPM
+  fairness-improvement claim).** Check: quick glance at the Frontiers page; lowest risk
+  of the five.
+- [ ] **zhao2017menshopping** — Zhao, Wang, Yatskar, Ordonez & Chang, *Men Also Like
+  Shopping: Reducing Gender Bias Amplification using Corpus-level Constraints*, EMNLP
+  2017, pp. 2979--2989, DOI 10.18653/v1/D17-1323 — NEW 2026-07-24: cited at §1 ¶1's
+  bias-amplification sentence, which is deliberately worded for SUPERVISED scope ("models
+  trained on human-sourced data"), NOT imitation-specific (no IL-specific work exists;
+  see CITATION_CANDIDATES.md class c). **Machine status: PAGE (2026-07-24) —
+  aclanthology.org/D17-1323 fetched LIVE.** Check: quick glance + confirm the ¶1 wording
+  keeps the supervised scope after any edits.
+- [ ] **wang2021directional** — Wang & Russakovsky, *Directional Bias Amplification*,
+  ICML 2021, PMLR 139, pp. 10882--10893 — NEW 2026-07-24: cited alongside
+  zhao2017menshopping, same supervised-scope framing. **Machine status: PAGE
+  (2026-07-24) — proceedings.mlr.press/v139/wang21t.html fetched LIVE.** Check: quick
+  glance.
 
 - [ ] **xu2018fairgan** — Xu, Yuan, Zhang & Wu, *FairGAN: Fairness-aware Generative
   Adversarial Networks*, IEEE Big Data 2018 — NEW 2026-07-18 (Zhang-feedback citation for the

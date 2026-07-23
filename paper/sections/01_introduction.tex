@@ -12,8 +12,6 @@ Urban mobility policies are increasingly learned by imitation: a model is
 trained to reproduce the trajectories that real taxi drivers drove, because
 those trajectories carry operating expertise that no simulator or hand-built
 policy provides \cite{zhang2019cgail,zhang2022cgail}.
-% TODO-cite(meeting-44, class c): slot a verified bias-inheritance companion
-% here when CITATION_CANDIDATES.md clears review.
 But the same trajectories also record where the fleet chose to serve, and in
 real cities that choice tracks demographics: housing prices, incomes, migrant
 population share. On the Shenzhen corpus we study, the advantaged district
@@ -24,9 +22,12 @@ disadvantaged district receives (Figure~\ref{fig:teaser}).
 % advantaged/disadvantaged service ratio 1/0.33252 = 3.0x) — same source as the
 % fig:teaser caption.
 A model trained on such a corpus learns the service gap along with the
-expertise, because nothing in imitation training distinguishes the two; once
-deployed, it re-enacts the gap and deepens the very data the next generation
-of models will train on \cite{ensign2018,lumisaac2016}. Repairing this is a
+expertise, because nothing in imitation training distinguishes the two;
+models trained on human-sourced data are documented to reproduce, and even
+amplify, the biases that data records
+\cite{zhao2017menshopping,wang2021directional}. Once deployed, the imitator
+re-enacts the gap and deepens the very data the next generation of models
+will train on \cite{ensign2018,lumisaac2016}. Repairing this is a
 trade-off between two properties of the data. We want the corpus to be
 \emph{fairer}, and we want it to keep its \emph{fidelity}: edited or
 replacement data must still look like real human driving, or the policy
@@ -38,24 +39,23 @@ addresses.
 Existing interventions act either on the model or on the data, and each
 leaves one side of the trade-off open. In-processing methods act on the
 model: they add a fairness penalty to its training objective while the
-demonstrations stay as recorded \cite{zheng2023}.
-% TODO-cite(meeting-44, class a): add >=1 verified companion (ideally 2025-26)
-% for the model-side class when CITATION_CANDIDATES.md clears review.
+demonstrations stay as recorded
+\cite{zheng2023,lamalfa2026fairppo,zhao2025fairdrlst}.
 The model is asked to be fairer than every example it is shown, and the
 correction lives inside that one model's loss: the corpus itself stays
 biased for every other model trained on it. Data-side generation instead
-synthesizes a fairer dataset outright, for example with generative networks
-constrained to remove the protected signal
-\cite{xu2018fairgan,vanbreugel2021decaf}.
-% TODO-cite(meeting-44, class b): add a verified recent (2024-26) fair-generation
-% companion when CITATION_CANDIDATES.md clears review.
+synthesizes a fairer dataset outright, with generative networks constrained
+to remove the protected signal \cite{xu2018fairgan,vanbreugel2021decaf} or
+with diffusion models whose synthetic samples improve downstream fairness
+\cite{hastingsblow2025diffaug}.
 Generation pays for fairness with fidelity: the synthetic trajectories are
 samples from a model rather than records of human driving, and nothing
 guarantees they remain drivable routes or plausible seeking behavior.
-Data-side reweighing and resampling \cite{kamirancalders2012} change how
-often existing trajectories are seen during training; this can rebalance who
-is represented, but it cannot create taxi service in neighborhoods where the
-recorded fleet seldom went.
+Data-side reweighing changes how often existing trajectories are seen
+during training, and repair methods adjust recorded features in place
+\cite{kamirancalders2012,feldman2015}; both rebalance what is represented,
+but neither can create taxi service in neighborhoods where the recorded
+fleet seldom went.
 
 Achieving fairness and fidelity together is hard for five concrete reasons.
 They are the reasons the families above fall short, and each one dictates a
