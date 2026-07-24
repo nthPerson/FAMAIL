@@ -12,9 +12,9 @@ trajectories of a real taxi fleet, and those trajectories record the
 fleet's demographic service inequity along with its expertise, so a
 faithful imitator learns both. Repairing the inequity is a trade-off
 between fairness and fidelity: regenerating or heavily rewriting the data
-makes it fairer but it stops resembling what real drivers do, while adding
-a fairness penalty to one model's training loss leaves the demonstrations
-themselves biased for every other model trained on them. We present FATE,
+makes it fairer but it stops resembling real driver behavior, while adding 
+a fairness penalty to a model's training loss makes that one model fairer 
+without changing the biased demonstrations underneath it. We present FATE,
 fairness-aware trajectory editing: a data augmentation method that
 \emph{edits} a small, attribution-chosen slice of the real trajectories in
 place and upweights the edited demonstrations during behavior cloning so
@@ -25,7 +25,7 @@ falls, and \emph{lift} reroutes drivers' final seeking minutes into
 under-served areas, with the supply consequences of the reroute part of
 what the objective optimizes. Every edit stays within a two-cell radius,
 and a frozen ST-SiameseNet driver-identity discriminator verifies that an
-edited trajectory still reads as its original driver. On taxi trajectories
+edited trajectory still resembles the original driver behavior. On taxi trajectories
 from two cities (Shenzhen; San Francisco), editing improves established
 fairness measures that the objective never optimizes: demographic parity,
 disparate impact, and the Theil index. Where demand-only editing improves
