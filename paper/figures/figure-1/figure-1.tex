@@ -111,72 +111,83 @@
   % raw corpus chip (left source): GPS-trace image, gray traces only
   % (corpus_background_raw.png was drawn for this 2.7x1.2 box; its bottom
   % third is left clear for the label — keep the label position fixed)
+  % chip enlarged to 3.0x1.55cm (Robert 2026-07-24: fit the now-larger 3-band
+  % text; image mildly stretched to fill; left edge aligns with the panel below)
   \begin{scope}
-    \clip[rounded corners=2pt] (1.15,-1.55) rectangle (3.85,-0.35);
-    \node[inner sep=0pt] at (2.5,-0.95)
-      {\includegraphics[width=2.7cm, height=1.2cm]{\figonedir corpus_background_raw.png}};
+    \clip[rounded corners=2pt] (0.9,-1.80) rectangle (3.9,-0.25);
+    \node[inner sep=0pt] at (2.4,-1.025)
+      {\includegraphics[width=3.0cm, height=1.55cm]{\figonedir corpus_background_raw.png}};
   \end{scope}
-  \draw[panelframe, rounded corners=2pt] (1.15,-1.55) rectangle (3.85,-0.35);
-  \node[font=\tiny, text=figink, align=center] at (2.5,-1.33)
-    {raw corpus\\ \textcolor{figgray}{real human driver trajectories}};
-  % service-gap value: a 3rd chip-label line overflowed the cleared bottom
-  % zone, so the value goes in a white-backed top-right corner node (brief
-  % fallback). src: PAPER/supply-lift/data/a10/shz_a10_external_fairness.json (MigrantRatio district_extremes disparate_impact.before 0.33252 -> 1/0.33252 = 3.0x)
-  \node[lbl, anchor=north east, font=\scriptsize, text=figink] at (3.78,-0.42)
-    {\textbf{service gap: 3.0$\times$}};
+  \draw[panelframe, rounded corners=2pt] (0.9,-1.80) rectangle (3.9,-0.25);
+  % identity label (primary): bold name + regular subtitle, white-backed, at
+  % the TOP of the chip over the traces (Robert 2026-07-24: chip identity is
+  % the largest text; the metric moves to the cleared bottom zone below)
+  \node[lbl, font=\scriptsize, text=figink, align=center] at (2.4,-0.58)
+    {\textbf{raw corpus}\\ \textcolor{figgray}{real human driver trajectories}};
+  % metric (secondary): demographically explained share of the service
+  % imbalance, printed in the image's cleared bottom third. src: committed
+  % F_demo 0.7988 => explained share r^2 = 1 - F_demo = 0.2012, printed 20%.
+  \node[lbl, font=\scriptsize, text=figink] at (2.4,-1.55)
+    {demographic dependence: \textbf{20\%}};
   % edited corpus chip (right source): same trace rendering with the
-  % FATE-edited slice in accent + its "+" tag baked into the image
+  % FATE-edited slice in accent + its "+" tag baked into the image. The right
+  % pipeline is back at its original x (chip center 6.6); the chip is enlarged
+  % to 3.0x1.55cm to fit the 3-band text, right edge near the panel below.
   \begin{scope}
-    \clip[rounded corners=2pt] (5.1,-1.55) rectangle (7.8,-0.35);
-    \node[inner sep=0pt] at (6.45,-0.95)
-      {\includegraphics[width=2.7cm, height=1.2cm]{\figonedir corpus_background_edited.png}};
+    \clip[rounded corners=2pt] (5.1,-1.80) rectangle (8.1,-0.25);
+    \node[inner sep=0pt] at (6.6,-1.025)
+      {\includegraphics[width=3.0cm, height=1.55cm]{\figonedir corpus_background_edited.png}};
   \end{scope}
   \draw[figaccent, line width=0.9pt, rounded corners=2pt]
-    (5.1,-1.55) rectangle (7.8,-0.35);
-  \node[font=\tiny, text=figink, align=center] at (6.45,-1.33)
-    {edited corpus\\ \textcolor{figgray}{most-biased slice edited in place}};
-  % Metric swapped 2026-07-24 (Robert's read-aloud note: 3.0x vs 2.9x was too
-  % subtle a contrast for a teaser). Now the relative drop in the
-  % demographically explained share of service imbalance:
-  % src: committed F_demo 0.7988 -> 0.8214 (§4.2; metrics.json deltas) =>
-  % explained share r^2 = 1 - F_demo: 0.2012 -> 0.1786, relative drop
-  % 0.0226/0.2012 = 11.2%, printed as -11%.
-  \node[lbl, anchor=north east, font=\scriptsize, text=figink, align=right]
-    at (7.73,-0.42)
-    {\textbf{demographic bias}\\\textbf{in service: $-11\%$}};
-  % FATE transforms the raw corpus into the edited corpus (provenance arrow:
-  % chip right-side center -> chip left-side center, label above)
-  \draw[flowacc] (3.85,-0.95) -- (5.1,-0.95);
+    (5.1,-1.80) rectangle (8.1,-0.25);
+  \node[lbl, font=\scriptsize, text=figink, align=center] at (6.6,-0.58)
+    {\textbf{edited corpus}\\ \textcolor{figgray}{most-biased slice edited in place}};
+  % metric (secondary): relative drop in the demographically explained share
+  % of the service imbalance. src: committed F_demo 0.7988 -> 0.8214 (§4.2;
+  % metrics.json deltas) => explained share r^2 = 1 - F_demo: 0.2012 -> 0.1786,
+  % relative drop 0.0226/0.2012 = 11.2%, printed as "down 11%".
+  \node[lbl, font=\scriptsize, text=figink] at (6.6,-1.55)
+    {demographic dependence: \textbf{down 11\%}};
+  % FATE transforms the raw corpus into the edited corpus (provenance arrow at
+  % chip-center height spanning the restored 1.2cm inter-chip gap, label above)
+  \draw[flowacc] (3.9,-1.025) -- (5.1,-1.025);
   \node[anchor=south, font=\scriptsize, text=figgray, inner sep=1.5pt]
-    at (4.475,-0.95) {FATE};
+    at (4.5,-1.025) {FATE};
 
   % =========================================================================
-  % Chips -> model boxes (straight verticals)
+  % Chips -> model boxes (straight verticals). These arrows bridge the fixed
+  % chips (above) to the lower pipeline, which is shifted down 0.25cm (below)
+  % so the enlarged chips keep a full 0.50cm arrow; box tops land at -2.30.
   % =========================================================================
-  \draw[flow] (2.5,-1.55) -- (2.5,-2.05);
-  \node[anchor=west, font=\scriptsize, text=figgray] at (2.53,-1.80) {imitate as-is};
-  \draw[flowacc] (6.45,-1.55) -- (6.45,-2.05);
-  \node[anchor=west, font=\scriptsize, text=figgray] at (6.48,-1.80)
-    {imitate edited};
+  \draw[flow] (2.5,-1.80) -- (2.5,-2.30);
+  \node[lbl, font=\scriptsize, text=figgray] at (2.5,-2.05) {imitate as-is};
+  \draw[flowacc] (6.45,-1.80) -- (6.45,-2.30);
+  \node[lbl, font=\scriptsize, text=figgray] at (6.45,-2.05) {imitate edited};
+
+  % lower pipeline (model boxes, rollouts, futures, captions, legend) shifted
+  % down 0.25cm to make vertical room for the taller chips (Robert 2026-07-24)
+  \begin{scope}[shift={(0,-0.25)}]
 
   % =========================================================================
   % Model boxes
   % =========================================================================
-  \draw[panelframe, rounded corners=2pt] (1.35,-2.6) rectangle (3.65,-2.05);
-  \node[font=\tiny, text=figink] at (2.5,-2.325) {standard imitation model};
+  \draw[panelframe, rounded corners=2pt] (1.1,-2.6) rectangle (3.9,-2.05);
+  \node[font=\scriptsize, text=figink] at (2.5,-2.325) {standard imitation model};
   % light blue fill groups the intervention pipeline (border stays gray so
-  % the fill, not another saturated outline, does the grouping)
+  % the fill, not another saturated outline, does the grouping); both boxes
+  % widened to 2.8cm to hold the \scriptsize labels (Dr. Zhang 2026-07-24: no
+  % \tiny), centered on the original pipeline x (6.45) after the shift revert
   \draw[panelframe, fill=figchipfill, rounded corners=2pt]
-    (5.3,-2.6) rectangle (7.6,-2.05);
-  \node[font=\tiny, text=figink] at (6.45,-2.325) {upweighted imitation model};
+    (5.05,-2.6) rectangle (7.85,-2.05);
+  \node[font=\scriptsize, text=figink] at (6.45,-2.325) {upweighted imitation model};
 
   % =========================================================================
   % Model -> future arrows
   % =========================================================================
   \draw[flow] (2.5,-2.6) -- (2.5,-2.9);
-  \node[anchor=west, font=\tiny, text=figgray] at (2.53,-2.75) {rolls out trajectories};
+  \node[lbl, font=\scriptsize, text=figgray] at (2.5,-2.75) {rolls out trajectories};
   \draw[flowacc] (6.45,-2.6) -- (6.45,-2.9);
-  \node[anchor=west, font=\tiny, text=figgray] at (6.48,-2.75) {rolls out trajectories};
+  \node[lbl, font=\scriptsize, text=figgray] at (6.45,-2.75) {rolls out trajectories};
 
   % =========================================================================
   % The two future city grids over the SZ street map (fig-2's background):
@@ -213,10 +224,10 @@
   % disadvantaged district (blue): 1 taxi + 1 pick  (ratio 1/1 = 1.0)
   \pic at (3.825,-4.025) {taxi};
   \pic[figgray] at (3.375,-4.475) {pick};
-  % district labels (white-backed; \tiny is the only size that fits the panel)
-  \node[lbl, font=\tiny, text=figink, align=center] at (2.25,-4.28)
+  % district labels (white-backed; \scriptsize per Dr. Zhang 2026-07-24: no \tiny)
+  \node[lbl, font=\scriptsize, text=figink, align=center] at (2.25,-4.28)
     {advantaged\\district};
-  \node[lbl, font=\tiny, text=figink, align=center] at (3.42,-3.31)
+  \node[lbl, font=\scriptsize, text=figink, align=center] at (3.42,-3.31)
     {disadvantaged\\district};
   % --- RIGHT future: fairness gains survive training (softer tints) ---
   \begin{scope}
@@ -247,10 +258,10 @@
   \pic at (7.925,-4.025) {taxi};
   \pic at (7.475,-4.025) {taxinew};
   \pic[figgray] at (7.475,-4.475) {pick};
-  % district labels
-  \node[lbl, font=\tiny, text=figink, align=center] at (6.40,-4.28)
+  % district labels (\scriptsize per Dr. Zhang 2026-07-24: no \tiny)
+  \node[lbl, font=\scriptsize, text=figink, align=center] at (6.40,-4.28)
     {advantaged\\district};
-  \node[lbl, font=\tiny, text=figink, align=center] at (7.52,-3.31)
+  \node[lbl, font=\scriptsize, text=figink, align=center] at (7.52,-3.31)
     {disadvantaged\\district};
   % strip captions (em-dash-free; LEFT gains the downstream-evidence \ref,
   % which renders as ?? in the harness — expected)
@@ -274,4 +285,5 @@
   \draw[figaccent, line width=0.8pt]
     (5.41,-5.6) -- (5.51,-5.6) (5.46,-5.65) -- (5.46,-5.55);
   \node[anchor=west, font=\scriptsize, text=figgray] at (5.61,-5.6) {moved by the edit};
+  \end{scope}
 \end{tikzpicture}
