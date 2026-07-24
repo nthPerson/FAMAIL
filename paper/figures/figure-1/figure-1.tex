@@ -135,9 +135,15 @@
     (5.1,-1.55) rectangle (7.8,-0.35);
   \node[font=\tiny, text=figink, align=center] at (6.45,-1.33)
     {edited corpus\\ \textcolor{figgray}{most-biased slice edited in place}};
-  % src: same file, disparate_impact.after 0.34873 -> 1/0.34873 = 2.87x, printed as 2.9x
-  \node[lbl, anchor=north east, font=\scriptsize, text=figink] at (7.73,-0.42)
-    {\textbf{service gap: 2.9$\times$}};
+  % Metric swapped 2026-07-24 (Robert's read-aloud note: 3.0x vs 2.9x was too
+  % subtle a contrast for a teaser). Now the relative drop in the
+  % demographically explained share of service imbalance:
+  % src: committed F_demo 0.7988 -> 0.8214 (§4.2; metrics.json deltas) =>
+  % explained share r^2 = 1 - F_demo: 0.2012 -> 0.1786, relative drop
+  % 0.0226/0.2012 = 11.2%, printed as -11%.
+  \node[lbl, anchor=north east, font=\scriptsize, text=figink, align=right]
+    at (7.73,-0.42)
+    {\textbf{demographic bias}\\\textbf{in service: $-11\%$}};
   % FATE transforms the raw corpus into the edited corpus (provenance arrow:
   % chip right-side center -> chip left-side center, label above)
   \draw[flowacc] (3.85,-0.95) -- (5.1,-0.95);

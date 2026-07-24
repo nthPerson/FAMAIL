@@ -68,34 +68,29 @@ during training, and repair methods adjust recorded features in place
 but neither can create taxi service in neighborhoods where the recorded
 fleet seldom went.
 
-Achieving fairness and fidelity together is hard for five concrete reasons.
-They are the reasons the families above fall short, and each one dictates a
-component of our method:
+Achieving both at once is hard for five concrete reasons; they are why the
+families above fall short, and each dictates a component of our method:
 \begin{itemize}
-\item \textbf{C1: the data is scarce.} Real demonstrations are expensive to
-collect and carry expertise that cannot be regenerated, so discarding the
-biased slice, or replacing the corpus with synthetic data, discards the
-asset. The repair must \emph{edit the data we have}.
-\item \textbf{C2: edits must preserve fidelity.} An edit that improves
-fairness is worthless if the edited trajectory no longer reads as real
-driving. Every FATE edit is bounded to a two-cell radius and checked by a
-frozen driver-identity discriminator: an edited trajectory must still be
-recognizable as its original driver (\S\ref{sec:objective}).
+\item \textbf{C1: the data is scarce.} Real demonstrations are expensive
+and irreplaceable, so discarding the biased slice or regenerating the
+corpus discards the asset: the repair must \emph{edit the data we have}.
+\item \textbf{C2: edits must preserve fidelity.} A fairness edit is
+worthless if the result no longer reads as real driving; every edit is
+therefore bounded and gated by a frozen driver-identity discriminator that
+must still recognize the original driver (\S\ref{sec:objective}).
 \item \textbf{C3: equal service is the wrong target.} A business district
-should out-serve a quiet residential block, because its demand is higher.
-The right target is the part of service that demand does \emph{not} explain:
-FATE optimizes $F_{\mathrm{demo}}$, the share of demand-adjusted service
-variation left unexplained by demographics (\S\ref{sec:objective}).
-\item \textbf{C4: fairness must level up, not down.} A service gap can close
-by reducing service among the over-served while the under-served gain
-nothing, and we show demand-only editing behaves exactly this way here
-(\S\ref{sec:leveling}). The editor therefore needs a supply channel that
-adds real taxi presence where it is missing (\S\ref{sec:editor}).
-\item \textbf{C5: the gains must survive training.} The edited slice is
-roughly a tenth of the corpus, and standard imitation training averages a
-tenth away. The edited demonstrations must be upweighted during training,
-and the recovered fairness must be traced to the edits rather than to the
-upweighting itself (\S\ref{sec:downstream}, \S\ref{sec:experiments}).
+should out-serve a quiet block; the right target is the service variation
+that demand does \emph{not} explain, FATE's objective $F_{\mathrm{demo}}$
+(\S\ref{sec:objective}).
+\item \textbf{C4: fairness must level up, not down.} A gap can close while
+the under-served gain nothing; demand-only editing demonstrably behaves
+this way here (\S\ref{sec:leveling}), so the editor needs a supply channel
+that adds real taxi presence where it is missing (\S\ref{sec:editor}).
+\item \textbf{C5: the gains must survive training.} Standard imitation
+training averages a tenth-of-corpus edit away; the edited demonstrations
+must be upweighted, and the recovered fairness traced to the edits rather
+than to the upweighting itself (\S\ref{sec:downstream},
+\S\ref{sec:experiments}).
 \end{itemize}
 
 FATE (Fairness-Aware Trajectory Editing) answers these challenges as data
@@ -155,19 +150,24 @@ Theil index) that the objective never optimizes (\S\ref{sec:experiments}).
   demand, and a standard imitation model reproduces that gap (left).
   % src: PAPER/supply-lift/data/a10/shz_a10_external_fairness.json
   % (MigrantRatio district_extremes disparate_impact.before 0.33252 ->
-  % advantaged/disadvantaged service ratio 1/0.33252 = 3.0x; .after
-  % 0.34873 -> 2.87x, printed 2.9x — both values also appear in-figure
-  % on the corpus chips, % src comments in figure-1.tex)
+  % advantaged/disadvantaged service ratio 1/0.33252 = 3.0x; raw chip)
   Rather than filter or regenerate the valuable human trajectories, FATE
-  edits the most-biased slice in place
+  edits the most-biased slice in place: demographics explain $11\%$ less
+  of the service imbalance afterward,
+  % src (edited chip + the 11%): committed F_demo 0.7988 -> 0.8214 (§4.2)
+  % => explained share r^2 = 1 - F_demo: 0.2012 -> 0.1786, relative drop
+  % 0.0226/0.2012 = 11.2%, printed -11% (metric swapped from 2.9x on
+  % Robert's 2026-07-24 read-aloud note: the 3.0x-vs-2.9x contrast was
+  % too subtle for a teaser).
   % NOTE (2026-07-16): no quantified bias share here by design — k=10,000
   % is an edit budget (~10% of the corpus), not a measured extent of bias.
-  and upweights it during training: taxi presence moves to the
-  under-served district, and the trained policy is measurably fairer
-  (right). Figure~\ref{fig:overview} shows the editor.}
+  and upweighting the edits carries the gain through training: the trained
+  policy is measurably fairer (right). Figure~\ref{fig:overview} shows the
+  editor.}
   \Description{Two side-by-side pipelines, with an arrow labeled FATE
   transforming the left pipeline's raw corpus, labeled with a 3.0 times
-  service gap, into the right pipeline's edited corpus, labeled 2.9 times.
+  service gap, into the right pipeline's edited corpus, labeled demographic
+  bias in service down 11 percent.
   On the left, the raw corpus of real human driver trajectories trains a
   standard imitation model; its rolled-out city grid, drawn over a street
   map with labeled advantaged and disadvantaged districts, holds six taxis
