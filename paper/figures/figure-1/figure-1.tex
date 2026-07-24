@@ -137,6 +137,14 @@
   % rollout grids + captions + legend were authored with grid top at -2.9;
   % \gridShift moves that whole block so the grid top lands on \rowBotT:
   \pgfmathsetmacro\gridShift{\rowBotT+2.9}%          = -1.5
+  % authored grid corners (inside the \gridShift scope these are the panel
+  % edges): \gTop/\gBot are \rowBotT/\rowBotB un-shifted; the x-edges are the
+  % column macros \colLL/\colLR (left panel) and \colRL/\colRR (right panel).
+  \pgfmathsetmacro\gTop{\rowBotT-\gridShift}%        = -2.9  authored panel top
+  \pgfmathsetmacro\gBot{\rowBotB-\gridShift}%        = -4.7  authored panel bottom
+  % district-label margin: every district label is placed BY CONSTRUCTION with
+  % this same gap to each of its two nearest panel edges (Robert 2026-07-24 r4)
+  \def\lblM{0.13}%    label-to-frame margin (cm), measured from the lbl box edge
 
   % =========================================================================
   % Corpus chips (top row): identical 3.15x1.8 frames overlaying their grids;
@@ -252,16 +260,21 @@
   \foreach \x/\y in {1.125/-3.125, 1.575/-3.125, 2.025/-3.125,
                      1.125/-3.575, 1.575/-3.575, 2.025/-3.575}
     \pic at (\x,\y) {taxi};
-  \foreach \x/\y in {1.125/-4.025, 1.125/-4.475}
+  % the two advantaged pickups moved to column x=2.475 (near the boundary),
+  % vacating the lower-left corner for the "advantaged district" label
+  % (Robert 2026-07-24 r4). Still inside amber: bottom-row boundary is x=2.925.
+  \foreach \x/\y in {2.475/-4.025, 2.475/-4.475}
     \pic[figgray] at (\x,\y) {pick};
   % disadvantaged district (blue): 1 taxi + 1 pick  (ratio 1/1 = 1.0)
   \pic at (3.825,-4.025) {taxi};
   \pic[figgray] at (3.375,-4.475) {pick};
-  % district labels (white-backed; \scriptsize per Dr. Zhang 2026-07-24: no \tiny)
-  \node[lbl, font=\scriptsize, text=figink, align=center] at (2.25,-4.28)
-    {advantaged\\district};
-  \node[lbl, font=\scriptsize, text=figink, align=center] at (3.42,-3.31)
-    {disadvantaged\\district};
+  % district labels placed BY CONSTRUCTION with equal margin \lblM to their two
+  % nearest panel edges (Robert 2026-07-24 r4): advantaged in the lower-LEFT
+  % corner, disadvantaged in the top-RIGHT corner, both fully inside amber/blue.
+  \node[lbl, font=\scriptsize, text=figink, align=center, anchor=south west]
+    at (\colLL+\lblM,\gBot+\lblM) {advantaged\\district};
+  \node[lbl, font=\scriptsize, text=figink, align=center, anchor=north east]
+    at (\colLR-\lblM,\gTop-\lblM) {disadvantaged\\district};
   % --- RIGHT future: fairness gains survive training (softer tints) ---
   \begin{scope}
     \clip (5.0,-4.7) rectangle (8.15,-2.9);
@@ -284,18 +297,21 @@
   \foreach \x/\y in {5.225/-3.125, 5.675/-3.125, 6.125/-3.125,
                      5.225/-3.575, 5.675/-3.575}
     \pic at (\x,\y) {taxi};
-  \pic[figgray] at (5.225,-4.475) {pick};
-  \pic at (5.675,-4.475) {picknew};
+  % the advantaged pick + picknew moved to column x=6.575 (near the boundary),
+  % mirroring the biased column and vacating the lower-left corner for the label;
+  % picknew keeps its accent (an edit relocating a pickup WITHIN amber).
+  \pic[figgray] at (6.575,-4.475) {pick};
+  \pic at (6.575,-4.025) {picknew};
   % disadvantaged district (blue): 1 plain taxi + 1 taxinew (presence moved IN
   % by lift) + 1 plain pick  (totals conserved: 7 taxi, 3 pick)
   \pic at (7.925,-4.025) {taxi};
   \pic at (7.475,-4.025) {taxinew};
   \pic[figgray] at (7.475,-4.475) {pick};
-  % district labels (\scriptsize per Dr. Zhang 2026-07-24: no \tiny)
-  \node[lbl, font=\scriptsize, text=figink, align=center] at (6.40,-4.28)
-    {advantaged\\district};
-  \node[lbl, font=\scriptsize, text=figink, align=center] at (7.52,-3.31)
-    {disadvantaged\\district};
+  % district labels placed BY CONSTRUCTION (same \lblM margin as the biased column)
+  \node[lbl, font=\scriptsize, text=figink, align=center, anchor=south west]
+    at (\colRL+\lblM,\gBot+\lblM) {advantaged\\district};
+  \node[lbl, font=\scriptsize, text=figink, align=center, anchor=north east]
+    at (\colRR-\lblM,\gTop-\lblM) {disadvantaged\\district};
   % strip captions (em-dash-free; LEFT gains the downstream-evidence \ref,
   % which renders as ?? in the harness — expected)
   \node[font=\scriptsize, text=figink, align=center] at (2.475,-5.05)
