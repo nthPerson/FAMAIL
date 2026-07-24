@@ -114,22 +114,21 @@ families above fall short, and each dictates a component of our method:
 and irreplaceable, so discarding the biased slice or regenerating the
 corpus discards the asset: the repair must \emph{edit the data we have}.
 \item \textbf{C2: edits must preserve fidelity.} A fairness edit is
-worthless if the result no longer reads as real driving; every edit is
+worthless if the result no longer resembles real driving; every edit is
 therefore bounded and gated by a frozen driver-identity discriminator that
 must still recognize the original driver (\S\ref{sec:objective}).
 \item \textbf{C3: equal service is the wrong target.} A business district
-should out-serve a quiet block; the right target is the service variation
-that demand does \emph{not} explain, FATE's objective $F_{\mathrm{demo}}$
-(\S\ref{sec:objective}).
-\item \textbf{C4: fairness must level up, not down.} A gap can close while
-the under-served gain nothing; demand-only editing demonstrably behaves
-this way here (\S\ref{sec:leveling}), so the editor needs a supply channel
+should receive more service than a quiet residential block; the proper objective 
+is the service variation that demand does \emph{not} explain, FATE's objective 
+$F_{\mathrm{demo}}$ (\S\ref{sec:objective}).
+\item \textbf{C4: fairness must level up, not down.} Fairness can improve while
+the under-served gain nothing; demand-only editing does exactly this
+here (\S\ref{sec:leveling}), so the editor needs a supply channel
 that adds real taxi presence where it is missing (\S\ref{sec:editor}).
 \item \textbf{C5: the gains must survive training.} Standard imitation
-training averages a tenth-of-corpus edit away; the edited demonstrations
+training averages targeted edits away; the edited demonstrations
 must be upweighted, and the recovered fairness traced to the edits rather
-than to the upweighting itself (\S\ref{sec:downstream},
-\S\ref{sec:experiments}).
+than to the upweighting itself (\S\ref{sec:downstream}, \S\ref{sec:experiments}).
 \end{itemize}
 
 FATE (Fairness-Aware Trajectory Editing) answers these challenges as data
@@ -138,17 +137,17 @@ most-biased slice in place, selecting trajectories by an exact attribution
 of the fairness deficit (C1). Each edit is a bounded relocation of a
 recorded pickup, or a bounded reroute of a driver's final seeking minutes,
 small enough that the frozen identity discriminator
-\cite{ren2020stsiamese} still recognizes the driver (C2). Edits follow the
-gradient of a differentiable objective whose primary term is the
-demand-adjusted fairness $F_{\mathrm{demo}}$ (C3) and whose supply channel
+\cite{ren2020stsiamese} still recognizes the driver (C2). Edits are guided by the
+gradient of a differentiable objective whose primary fairness term is the
+demand-adjusted $F_{\mathrm{demo}}$ (C3) and whose supply channel
 rewards moving real taxi presence into under-served neighborhoods (C4).
-The edited demonstrations are then upweighted during behavior cloning,
+The edited demonstrations are upweighted during behavior cloning,
 instance reweighing \cite{kamirancalders2012} transplanted to
 demonstrations, so the corpus's fairness survives training (C5). The gains
-at the corpus level do not depend on which model later consumes the data;
-the training-survival claim we demonstrate with behavior cloning, the
-simplest and most widely used imitation family, and extending it to
-adversarial imitation is future work.\footnote{Code (anonymized for double-blind
+at the corpus level do not depend on which model later consumes the data; we 
+demonstrate the training-survival claim with behavior cloning, the
+simplest and most widely used imitation family, leaving extensions to
+adversarial imitation as future work.\footnote{Code (anonymized for double-blind
 review): \url{https://anonymous.4open.science/r/FATE-review}.
 % TODO(Robert, before submission): create the anonymous repository and
 % replace this placeholder URL; an empty repository at submission is
@@ -158,19 +157,19 @@ review): \url{https://anonymous.4open.science/r/FATE-review}.
 \textbf{Contributions.}
 \begin{itemize}
 \item \textbf{A fairness-aware trajectory editor.} Bounded edits to real
-trajectories, chosen by attribution and gated by a frozen
-driver-iden\-tity discriminator, optimizing de\-mand-ad\-justed demographic
+trajectories, chosen by attribution with fidelity enforced by a frozen
+driver-identity discriminator, optimizing demand-adjusted demographic
 fairness (C1--C3; \S\ref{sec:method}).
-\item \textbf{A structural diagnosis of de\-mand-only editing.} It
-improves measured fairness while the under-served gain nothing; we show
-why, and why a differentiable supply channel is the remedy (C4;
-\S\ref{sec:leveling}).
+\item \textbf{A structural diagnosis of demand-only editing.} Editing
+demand alone improves measured fairness while the under-served gain
+nothing; we show why this is the case, and how a differentiable supply
+channel is the remedy (C4; \S\ref{sec:leveling}).
 \item \textbf{A transfer recipe with edit-specificity controls.} Upweighted
 behavior cloning carries the corpus's fairness into trained policies;
 random-subset and most-fair controls isolate the edits as the cause (C5;
 \S\ref{sec:experiments}).
 \item \textbf{Two-city validation on never-optimized measures.} The full
-protocol runs on Shenzhen and San Francisco trajectories, scored on
+protocol runs on trajectores from Shenzhen and San Francisco, scored on
 external fairness measures (demographic parity, disparate impact, the
 Theil index) that the objective never optimizes (\S\ref{sec:experiments}).
 \end{itemize}
