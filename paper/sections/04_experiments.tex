@@ -13,12 +13,12 @@
 taxi GPS trajectories on a $48{\times}90$ grid (cell resolution:
 Appendix~\ref{app:editor}), with district-level demographics. Raw data
 preprocessing included removing 106{,}677
-pickups with almost no matching drop-offs --- stuck GPS, not real demand.
+pickups with almost no matching drop-offs (stuck GPS, not real demand).
 % src: PAPER/argument/02_datasets.md (grid, cleanup counts)
 The external-validity city is San Francisco (Cabspotting): a 12-driver
 subsample matched on fleet density (\texttt{sf12}, $32{\times}30$ grid), with
 the same demographic feature names filled from ACS tract values. Density matching is
-required --- the full 536-taxi fleet saturates the supply measure and leaves
+required: the full 536-taxi fleet saturates the supply measure and leaves
 no editable fairness gradient.
 % src: PAPER/argument/02_datasets.md (sf12 selection, density matching)
 
@@ -38,9 +38,11 @@ seeds (identical seeding before each arm), so per-seed differences cancel
 shared seed noise. With $n = 6$ paired seeds we read effects from the mean
 $\Delta$, its $t$-interval, and dose-response monotonicity, and treat
 $p = 0.031$ only as a sign-unanimity certificate. Sign counts are written
-$k/n$: the delta was positive on $k$ of the $n$ seed pairs. The flagship w30 comparison
-is additionally run at $n = 12$ paired seeds in both cities, where an exact
-Wilcoxon $p$ can survive multiple-comparison correction.
+$k/n$: the delta was positive on $k$ of the $n$ seed pairs. The flagship
+comparison (the edited demonstrations upweighted $30\times$, written w30;
+\S\ref{sec:exp-downstream}) is additionally run at $n = 12$ paired seeds in
+both cities, where an exact Wilcoxon $p$ can survive multiple-comparison
+correction.
 External fairness metrics are compared before versus after editing on the data alone,
 with no model in the loop: one bootstrap resample of the active grid units
 is applied to both sides ($B = 1{,}000$, percentile), so the interval
@@ -51,18 +53,18 @@ why no driver-level bootstrap is available.
 % src: PAPER/argument/04_evaluation.md §3; PAPER/external-metrics/FINDINGS.md §1, §5
 
 \textbf{Metrics and claim discipline.} We separate three metric classes and
-label every claim as follows: (i) \emph{optimized} --- $F_{\mathrm{spatial}}$,
+label every claim as follows: (i) \emph{optimized}: $F_{\mathrm{spatial}}$,
 $F_{\mathrm{demo}}$, $F_{\mathrm{fidelity}}$, the quantities the editor's
-gradient sees; (ii) \emph{design-targeted but not optimized} --- the
+gradient sees; (ii) \emph{design-targeted but not optimized}: the
 supply\slash demand ratios and $\mathrm{mean}(Y)$ per group that lift was
 aimed at, so
-improvement there is confirmatory; and (iii) \emph{genuinely external} ---
+improvement there is confirmatory; and (iii) \emph{genuinely external}:
 demographic parity, disparate impact, the Theil index, and the distinct-taxi
 supply recount, absent from the objective.
 ``Improves metrics it never optimizes'' claims apply to class (iii) only. The
 external instruments are computed on the service ratio $Y$ over active units,
 grouped per equity axis: \emph{demographic parity} (DP; on a continuous outcome
-DP \emph{is} the supply/demand-ratio gap --- one number, reported once),
+DP \emph{is} the supply/demand-ratio gap: one number, reported once),
 \emph{disparate impact} (DI), and the between-region \emph{Theil} index,
 alongside the two group \emph{levels} $\mathrm{mean}(Y \mid \mathrm{disadv.})$
 and $\mathrm{mean}(Y \mid \mathrm{adv.})$, which are class (ii) context, not
@@ -77,7 +79,7 @@ Appendix~\ref{app:protocol}.
 
 \textbf{Optimized metrics.} Editing raises $F_{\mathrm{demo}}$ from 0.7988
 to 0.8214 ($+0.0226$) and $F_{\mathrm{spatial}}$ from 0.1034 to 0.1095
-($+0.0061$) --- class (i) numbers, reported for completeness rather than as
+($+0.0061$): class (i) numbers, reported for completeness rather than as
 evidence.
 % src: famail_temporal/results/2026-07-10T02-06-37_alpha_sweep_s10_c80_f10_filtered/metrics.json
 
@@ -113,8 +115,8 @@ $\mathrm{mean}(Y \mid \mathrm{adv.})$ & 21.272 & 20.435 & $-0.837$ \\
 
 \textbf{The lift-up claim rides the supply channel.} The
 $\mathrm{mean}(Y \mid \mathrm{disadv.})$ rise is a
-\emph{design-targeted} (class (ii)) quantity --- the lift mechanism was aimed at it --- so
-we decompose it rather than celebrate it. Evaluating $Y$ at
+\emph{design-targeted} (class (ii)) quantity (the lift mechanism was aimed
+at it), so we decompose it rather than celebrate it. Evaluating $Y$ at
 $(S,D) \to (S,D') \to (S',D')$ splits the delta exactly into a demand move and
 a supply move ($B{=}2{,}000$). The demand channel (pickup relocation) carries
 large variance and is not significant, $+0.0352$ [$-0.0095$, $+0.0814$]. The
@@ -130,13 +132,13 @@ it reproduces the production supply grid exactly) it is $+0.0411$
 % src: <s10>/channel_decomposition.json + <s10>/supply_recount.json
 % src (recount validity properties): PAPER/supply-lift/FINDINGS.md §4 (G2, machinery unchanged)
 
-\textbf{Realism.} Fidelity-A stability and lift's expected Fidelity-B
+\textbf{Fidelity.} Fidelity-A stability and lift's expected Fidelity-B
 distributional cost (whole-tail relocation shifts trajectory-shape statistics
 more than a pickup-only move) are re-measured on the adopted corpus:
 Fidelity-A 0.844 vs.\ raw 0.848; corpus-level Fidelity-B (a Jensen--Shannon
 divergence over aggregate mobility statistics \cite{feng2020simulate}) at
 0.187, concentrated in exactly the components a rerouted tail must move
-(Appendix~\ref{app:results}) --- a by-design trade-off we disclose rather than
+(Appendix~\ref{app:results}), a by-design trade-off we disclose rather than
 net out.
 % src: famail_temporal/results/level1_table_v2/supply_lift_shz_5seed/level1_v2_multiseed.json (edited row: Fid-A, Fid-B 0.187)
 
@@ -156,17 +158,11 @@ difference between the trim-only and trim+lift columns below isolates lift
 and certifies \S\ref{sec:leveling}: demand-only editing improves the
 metrics without raising under-served service; the supply channel is what
 changes that.
-% With trim frozen inside the combined editor (\S\ref{sec:editor}), the
-% lift-disabled run reproduces the demand-only editor exactly, so every
-% difference between the trim-only and trim+lift columns below isolates lift ---
-% and certifies \S\ref{sec:leveling}: demand-only editing improves the
-% metrics without raising under-served service; the supply channel is what
-% changes that.
 
 Three metrics carry the qualitative story, and the structural expectation from
 \S\ref{sec:leveling} re-verifies exactly at the adopted weights: under
 trim-only, every external instrument still improves significantly (DP
-$-0.611$, DI $+0.0098$, Theil $-0.0059$, all CIs excluding zero) --- but the
+$-0.611$, DI $+0.0098$, Theil $-0.0059$, all CIs excluding zero), but the
 disadvantaged group's service level is unchanged while the advantaged level
 falls, so the improvement is pure top-down redistribution. Under trim+lift
 the disadvantaged level rises with a bootstrap interval excluding zero, and
@@ -188,12 +184,12 @@ and migrant DP gap $-0.052$ versus $-0.073$ (both CIs excluding zero). % lint-al
 
 \subsection{Downstream Propagation (Shenzhen)}\label{sec:exp-downstream}
 
-\textbf{Data quality (four sources).} We score four corpora --- raw, edited,
-BC-generated, and GAN-generated --- on fairness and both fidelity axes, with
-generators trained from scratch for this comparison and Fidelity-A gated using 
-the realism guardrail of \S\ref{sec:objective}; the claim under test is
+\textbf{Data quality (four sources).} We score four corpora (raw, edited,
+BC-generated, and GAN-generated) on fairness and both fidelity axes, with
+generators trained from scratch for this comparison and Fidelity-A gated using
+the fidelity guardrail of \S\ref{sec:objective}; the claim under test is
 that the edited corpus is the fairest source that remains faithful on both
-realism axes. The claim holds: the edited corpus is the fairest source
+fidelity axes. The claim holds: the edited corpus is the fairest source
 faithful to driver identity (Fidelity-A gate passed, matched 0.848 vs.\ mismatched
 0.193), with Fidelity-B 0.187 the disclosed divergence of the bounded edits
 (Table~\ref{tab:l1}, Appendix~\ref{app:results}). One instability we surface
@@ -204,7 +200,7 @@ per-seed spread is in Appendix~\ref{app:results}.
 \textbf{Vanilla training averages the edit away.} A driver-conditioned BC
 policy trained on the edited corpus at uniform weight is not fairer than one
 trained on raw: paired $\Delta F_{\mathrm{demo}} = +0.0016$ ($n = 12$,
-7/12 positive, $p = 0.11$, n.s.) --- the null predicted in 
+7/12 positive, $p = 0.11$, n.s.): the null predicted in
 \S\ref{sec:downstream}, and the reason the upweighting recipe exists.
 % src: PAPER/supply-lift/data/a10/shz_a10_wbc_n12_pooled_stats.json (edited arm pooled seeds 0-11; was +0.0022 n=6 p=.16 pre-pooling; WBC-N12 2026-07-18)
 
@@ -213,7 +209,7 @@ demonstrations upweighted, the paired gain is monotone in the weight and
 sign-unanimous: $+0.0217$ (w10) and $+0.0267$ (w20), each 6/6
 (positive on all six seed pairs, the $p = .031$ floor). At the adopted dose we extend the flagship comparison to
 $n = 12$ paired seeds: $+0.0297 \pm 0.0029$ (w30), 12/12 positive, exact
-Wilcoxon $p = .00049$, $t$-interval $[+0.0278,$ $+0.0315]$ --- while both % lint-allow: coincidental value (n=12 pooled CI lower bound, computed 2026-07-18; not the old-alpha supply-lift number)
+Wilcoxon $p = .00049$, $t$-interval $[+0.0278,$ $+0.0315]$, while both % lint-allow: coincidental value (n=12 pooled CI lower bound, computed 2026-07-18; not the old-alpha supply-lift number)
 controls stay null at the same $n = 12$ (random $-0.0017$, most-fair
 $+0.0012$, mixed signs, n.s.).
 % src: PAPER/supply-lift/data/a10/shz_a10_wbc_n12_pooled_stats.json (pooled seeds 0-5 + 6-11; 12/12 floor = 2/4096 = .000488; t_p 1.2e-12; WBC-N12 2026-07-18)
@@ -221,11 +217,11 @@ Extending the dose saturates, with w30 at the knee, not a tuned endpoint
 (w40/w50 in Appendix~\ref{app:results}). Neither
 control reproduces it at any dose: the random-subset placebo is
 null-to-negative throughout, and the most-fair selection control reaches
-$+0.0033$ at w10 --- significant, but under a sixth of the edited arm's
-gain --- then fades to n.s.\ at every higher dose. $F_{\mathrm{spatial}}$ also propagates
+$+0.0033$ at w10 (significant, but under a sixth of the edited arm's
+gain), then fades to n.s.\ at every higher dose. $F_{\mathrm{spatial}}$ also propagates
 on Shenzhen, though not on San Francisco (\S\ref{sec:exp-sf}); per-dose
 values and the control contrast are in Appendix~\ref{app:results}. Fidelity-A is unchanged at every weight;
-Fidelity-B rises dose-monotonically --- the expected signature of deliberately
+Fidelity-B rises dose-monotonically: the expected signature of deliberately
 shifting population statistics toward the edited slice (Appendix~\ref{app:results}).
 % src: famail_temporal/results/weighted_bc_sweep/alpha_sweep_s10_c80_f10_filtered_6seed/paired_stats.json + dose_response.json
 
@@ -256,17 +252,17 @@ reported ones (the pre-registered $\delta = 0$ ablation:
 Appendix~\ref{app:editor}). Results: Table~\ref{tab:baselines}.
 
 One result lands against the pre-registered expectation: random jitter
-\emph{does} raise $F_{\mathrm{demo}}$, by $+0.0135$ --- indiscriminately
-diffusing the selected trajectories diffuses their over-service too --- but it
+\emph{does} raise $F_{\mathrm{demo}}$, by $+0.0135$ (indiscriminately
+diffusing the selected trajectories diffuses their over-service too), but it
 does so by breaking the trajectories: 98.8\% of its perturbed trajectories
 violate king-move adjacency and its distributional divergence reaches 0.447,
 against the edited corpus's disclosed 0.187, while FATE edits are
 king-compliant by construction (per-arm figures in
 Appendix~\ref{app:results}). Identity fidelity survives every arm
-($\approx 0.846$) --- too small a perturbation to break driver identity, so
+($\approx 0.846$): the perturbation is too small to break driver identity, so
 adjacency and distributional axes carry the comparison. The three perturbation arms replicate on San
-Francisco --- all well below the editor's $+0.0316$, all violating adjacency
-wholesale --- and the random-jitter fairness surprise does not recur there;
+Francisco (all well below the editor's $+0.0316$, all violating adjacency
+wholesale), and the random-jitter fairness surprise does not recur there;
 random is the weakest mover.
 % src: famail_temporal/baselines/baseline_table/baseline_table.json (random Fid-B(JS)/adjacency; Fid-A ~0.846)
 
@@ -277,16 +273,16 @@ three equity axes, phantom driver IDs, rigid $\pm 1$-cell jitter), additively
 rebuilding both demand and supply at doses matched to FATE's budget. At
 the matched duplication dose $d = 10{,}000$, targeted oversampling improves
 $F_{\mathrm{demo}}$ by $+0.0153$ (dose-monotone:
-$+0.0059$, $+0.0097$, $+0.0153$) --- but it fabricates 10.5\% of the corpus
+$+0.0059$, $+0.0097$, $+0.0153$), but it fabricates 10.5\% of the corpus
 to get there, where FATE redistributes observed behavior at zero inflation
 and reaches $+0.0226$. The untargeted placebo (same fabrication without targeting)
 \emph{degrades} fairness, $-0.0172$, so the gain is targeting-specific; and
 the placebo's DP gap explodes ($+2.8$) because fabricated supply lands
-mostly in already-advantaged cells --- a measured demonstration that
+mostly in already-advantaged cells: a measured demonstration that
 ratio metrics can be gamed by fabrication, the demand-endo\-ge\-ne\-ity concern of
 \S\ref{sec:leveling} made concrete. Two disclosures: the matched dose needs
 re-duplication (Appendix~\ref{app:results}), and fidelity is not
-scored --- duplicates of real trajectories pass any realism check by
+scored, since duplicates of real trajectories pass any fidelity check by
 construction.
 % src: PAPER/baselines/demographic-oversampling/FINDINGS.md §2-5
 
@@ -294,15 +290,15 @@ construction.
 is against fairness methods proper, applied where they usually live: at
 training time, on the raw corpus, scored by the full paired protocol.
 Instance reweighing in the Kamiran--Calders style
-\cite{kamirancalders2012} --- inverse group-service weights favoring
-disadvantaged-origin demonstrations --- moves demand-adjusted fairness the
+\cite{kamirancalders2012} (inverse group-service weights favoring
+disadvantaged-origin demonstrations) moves demand-adjusted fairness the
 \emph{wrong} way ($-0.0227$, all six seeds negative, $p = .031$) while
 paying the same distributional cost as w30 upweighting (Fidelity-B
 $+0.0144$), and its rolled-out policies still tilt allocation away from the % lint-allow: coincidental value (fair_reweigh paired Fid-B delta, not the trim-only F_demo headline)
 disadvantaged group ($-0.0010$, negative on all six, $p = .031$). An
 in-processing penalty
-in the spirit of \cite{zheng2023} --- the imitation loss plus $\lambda$
-times the demo\-graph\-ic-parity gap in predicted next-cell mass --- is inert at
+in the spirit of \cite{zheng2023} (the imitation loss plus $\lambda$
+times the demo\-graph\-ic-parity gap in predicted next-cell mass) is inert at
 every trainable dose, destructive only where it dominates, identically
 under its signed and absolute-value formulations. The full $\lambda$ grid,
 collapse magnitudes, and the $10^{-5}$ loss-share derivation are in
@@ -337,9 +333,11 @@ demog.\ oversampling (targeted) & $+0.0153$ & $+0.0052$ & 10.5\% \\
 
 \subsection{Robustness and Sensitivity}\label{sec:exp-robustness}
 
-The control rows are re-measured deliberately: the random placebo is
+Under the two alternate demographic feature sets introduced below, the
+transfer controls of \S\ref{sec:exp-downstream} are re-measured
+deliberately: the random placebo is
 null-to-negative under every feature set, and the most-fair selection
-control --- null on the primary set --- is significantly \emph{positive}
+control, null on the primary set, is significantly \emph{positive}
 under both alternate sets ($+0.0054$ and $+0.0072$ at w30, a fifth to a
 quarter of the edited arm's gain). We report the strongest controls we
 found rather than average them away: even where selection captures a
@@ -353,7 +351,7 @@ housing--GDP--compensation set ($+0.0022$, a tenth of its w30 gain).
 
 \textbf{Weight sensitivity.} A weight sweep of six full editing runs, 
 each scored on all three metric classes, shows the optimized
-$\Delta F_{\mathrm{demo}}$ flat --- within $0.001$ --- for
+$\Delta F_{\mathrm{demo}}$ flat (within $0.001$) for
 $\alpha_{\mathrm{sp}} \in [0, 0.55]$, while the class (ii) supply-channel
 lift-up declines monotonically with $\alpha_{\mathrm{sp}}$ and is significant
 under both accounting conventions only for $\alpha_{\mathrm{sp}} \le 0.2$.
@@ -397,8 +395,8 @@ San Francisco tests whether the \emph{conclusions} reproduce.
 lift's Fidelity-B cost re-measured in the four-source comparison below
 (Appendix~\ref{app:results}). Every external instrument improves: Theil $-0.0079$
 (CI $[-0.0094, -0.0065]$); the migrant-axis DP gap is significant under
-\emph{both} grouping conventions, DI under one and n.s.\ under the other
---- a grouping dependence we state rather than hide (the SF sample is 12
+\emph{both} grouping conventions, DI under one and n.s.\ under the other:
+a grouping dependence we state rather than hide (the SF sample is 12
 drivers; per-convention values in Appendix~\ref{app:results}).
 % src: PAPER/supply-lift/data/a10/sf12_a10_metrics.json + sf12_a10_external_fairness.json
 
@@ -407,7 +405,7 @@ artifact.} The supply channel is again positive
 and
 significant under \emph{both} conventions: frac\-tional-pres\-ence
 $+0.0209$ (CI $[+0.0122,$ $+0.0300]$) and dis\-tinct-taxi $+0.1027$
-(CI $[+0.0872,$ $+0.1203]$) --- the largest distinct-taxi supply effect of
+(CI $[+0.0872,$ $+0.1203]$), the largest distinct-taxi supply effect of
 any corpus in this study (Shenzhen's three feature sets: $+0.0411$,
 $+0.0211$, $+0.0771$; \S\ref{sec:exp-robustness}). But as on the prior
 corpus, lift also reroutes \emph{pickups} into under-served cells, raising
@@ -418,14 +416,14 @@ total $\mathrm{mean}(Y \mid \mathrm{disadv.})$ moves net-negative
 ($-0.0324$, CI excludes 0). We read this net-negative as a
 demand-endogeneity finding, not a failed replication: recorded demand in
 under-served areas was suppressed, and serving it raises the ratio's
-denominator --- the mechanism \S\ref{sec:leveling} predicts, observed in
+denominator: the mechanism \S\ref{sec:leveling} predicts, observed in
 the wild. The distinct-taxi recount resolves the tension: the \emph{total}
 turns
-significantly \emph{positive} ($+0.0493$, CI $[+0.0185,$ $+0.0790]$) ---
-the real supply improvement outweighs the demand-side denominator increase.
-More rides \emph{served} in under-served areas is a demand-side parity gain
---- DP, DI, and Theil all improve on San Francisco --- while the supply
-channel independently replicates.
+significantly \emph{positive} ($+0.0493$, CI $[+0.0185,$ $+0.0790]$),
+so the real supply improvement outweighs the demand-side denominator
+increase. More rides \emph{served} in under-served areas is a demand-side
+parity gain (DP, DI, and Theil all improve on San Francisco), while the
+supply channel independently replicates.
 % DECIDED 2026-07-16 (Robert): Reading B leads (external-metrics / demand-endogeneity framing).
 % D1 RESOLVED 2026-07-18: tier-2 recount CONFIRMS Reading B — supply_tier2 +0.1027 CI-sig,
 % total_tier2 flips SIG-POSITIVE +0.0493. Provisional status retired; PI ack still owed.

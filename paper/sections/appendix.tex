@@ -217,20 +217,20 @@ variance (b0 vs FATE) & see~\S\ref{sec:exp-downstream} & null & null \\ % src: h
 \S\ref{sec:exp-robustness}. Deleting the $K$ most-biased trajectories rather
 than editing them inverts the gain: $F_{\mathrm{demo}}$ falls to 0.7935 at the
 maximum $K = 2{,}455$, where editing the same attribution-selected slice
-raises it to 0.8214 --- so neither removing nor selecting data
+raises it to 0.8214; neither removing nor selecting data
 (\S\ref{sec:exp-downstream}) substitutes for editing it.
 % src: famail_temporal/results/analysis/pareto_supplylift/pareto_points.csv (Q7-pareto ledger row)
 
 \textbf{Supply-channel upper bound.} Supporting the provenance disclosure of
 \S\ref{sec:exp-data-level}. Before the lift phase was built, an unconstrained
 greedy search bounded the largest achievable gain at $+0.786$ on
-$\mathrm{mean}(Y \mid \mathrm{disadv.})$ --- $2.6\times$ the pre-registered
-threshold of $+0.3$ for proceeding with the build (full accounting
-$+0.882$); the realized $+0.053$ sits far below this realism-free ceiling,
-as a realism-bounded editor should.
+$\mathrm{mean}(Y \mid \mathrm{disadv.})$, which is $2.6\times$ the
+pre-registered threshold of $+0.3$ for proceeding with the build (full
+accounting $+0.882$); the realized $+0.053$ sits far below this
+fidelity-unconstrained ceiling, as a fidelity-bounded editor should.
 % src: PAPER/supply-lift/FINDINGS.md §1.3 + data/oracle.json (G0 ceilings)
 
-\textbf{The two realism axes.} \emph{Fidelity-A} is the identity axis: the
+\textbf{The two fidelity axes.} \emph{Fidelity-A} is the identity axis: the
 frozen driver-identity discriminator's mean score on matched pairs (an
 edited trajectory against a trace of its original driver; higher is
 better), the evaluation-time reading of the \S\ref{sec:objective}
@@ -240,10 +240,10 @@ over aggregate mobility statistics, computed against the raw corpus (raw
 scores 0); lower is better.
 % src: famail_temporal/baselines/run_level1_table_v2.py (fidelity_a = gate high_matched; fidelity_a_separation); PAPER/supply-lift/FINDINGS.md §6 (HuMID identity axis, higher better); tab:l1 raw row Fid-B 0.000 (raw-referenced)
 
-\textbf{Edited-corpus Fidelity-B components.} Supporting the realism
+\textbf{Edited-corpus Fidelity-B components.} Supporting the fidelity
 disclosure of \S\ref{sec:exp-data-level}. The corpus-level Fidelity-B of
-$0.187$ concentrates in exactly the components a rerouted tail must move ---
-terminal cell (0.635), net displacement (0.147), coverage (0.142) --- while
+$0.187$ concentrates in exactly the components a rerouted tail must move
+(terminal cell 0.635, net displacement 0.147, coverage 0.142), while
 trajectory length, which neither editing phase alters, barely registers
 (0.060).
 % src: famail_temporal/results/level1_table_v2/supply_lift_shz_5seed/level1_v2_multiseed.json (edited row fidelity_b_per_component)
