@@ -328,8 +328,8 @@ bending real behavior rather than inventing it.
 The screen only \emph{nominates}: each nominee's tail is then translated under
 the full objective. The pickup moves by the full offset $\delta$, earlier tail
 states move by linearly tapered fractions of it, and the anchor state before
-the tail never moves. Edits physically route the trajectory through the
-under-served area before picking up without teleporting into it. The moved
+the tail never moves. Edits physically route the trajectory 
+through the under-served area before the pickup without teleporting. The moved
 states carry supply with them, differentiably, contributing presence to
 the same $\Delta S$ over the $5{\times}5$ neighborhood. Supply is thus
 \emph{endogenous}: the optimizer sees the supply
@@ -358,12 +358,16 @@ nominees
 edits), and the supply gradient is computed on the post-trim state.
 % src: LIFT_ALGORITHM_REFERENCE.md §4.3, §5 (budget split, phase order)
 The two-phase structure is a scientific control, not an algorithmic
-necessity. Freezing trim keeps its optimization identical to the demand-only
-editor, which buys two properties: demand-only results reproduce exactly
-inside the combined run, and the trim-only versus trim+lift comparison is a
-clean ablation in which every difference is attributable to the new
-mechanism. A unified single-pass editor is a natural extension we leave
-as future work.
+necessity. Lift runs after trim and never alters trim's edits, so trim
+behaves identically with or without lift: the demand-only results of
+\S\ref{sec:leveling} carry over into the combined run unchanged, and any
+difference in the trim-only versus trim+lift ablation
+(\S\ref{sec:exp-ablation}) is caused by lift alone. A unified single-pass editor is a natural extension we
+leave as future work.
+% 2026-07-24 (Robert): "Freezing trim keeps its optimization identical to
+% the demand-only editor, which buys two properties" recast in plain
+% cause-and-effect ("simplify" directive); forward ref to the §4 ablation
+% block added. Prior wording in git (0a638fd parent).
 % src: docs/presentations/meeting_42_update/trim_plus_lift_explainer.md §3; LIFT_ALGORITHM_REFERENCE.md §14
 
 \textbf{Downstream recipe: upweighted imitation.}\label{sec:downstream}
