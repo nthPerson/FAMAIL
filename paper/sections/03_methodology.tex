@@ -111,16 +111,15 @@ what a demand-only editor can achieve.
 % src: PAPER/objective-motivation/MOTIVATION.md (associational caveat; demand endogeneity)
 
 \textbf{Spatial equity ($F_{\mathrm{spatial}}$, secondary).}
-The construction adapts an established measure of taxi-service inequality:
-Su et al.~\cite{su2018taxigini} score every zone of Shenzhen by its
-arrival and departure service rates and measure the city's spatial
-inequality as the Gini coefficient of each rate. FATE forms the same pair
+The construction adapts Su et al.~\cite{su2018taxigini}, who score every
+zone of Shenzhen by its arrival and departure service rates and measure
+the city's spatial inequality as the Gini coefficient of each rate. FATE forms the same pair
 of rates per active unit, normalized by local taxi presence: the
 \emph{departure-service ratio} $\mathrm{DSR}_i = D_i / S_i$ (pickups per
 unit of taxi presence) and the \emph{arrival-service ratio}
 $\mathrm{ASR}_i = A_i / S_i$ (dropoffs per unit). $F_{\mathrm{spatial}}$
-is one minus the mean of their two Gini indices, so larger is fairer; the
-closed form is in Appendix~\ref{app:derivations}. Being
+is one minus the mean of their two Gini indices; the closed form is in
+Appendix~\ref{app:derivations}. Being
 demographic-independent, the term acts as a spatial smoothness regularizer
 complementing $F_{\mathrm{demo}}$.
 % src (lineage): su2018taxigini (Su, Fang, Xu & Huang, IJGI 7(6):230, 2018)
@@ -195,7 +194,7 @@ than removing it from starved ones, and 93\% of disadvantaged units sit at
 the demand floor $d_0$, where removing demand changes nothing.
 % src: PAPER/external-metrics/LEVELING_DOWN_MECHANISM.md; LIFT_ALGORITHM_REFERENCE.md §1 (32x; 93%)
 (iii)~\emph{Supply-side inequity:} median taxi presence is 1.8 in disadvantaged
-versus 17.6 in advantaged cells, and a demand-only editor cannot touch this supply.
+cells versus 17.6 in advantaged cells, and a demand-only editor cannot touch this supply.
 A greedy unconstrained search, which upper-bounds what any editor could
 achieve, rules out the last demand-side option: raising the under-served
 group's service ratio would require deleting its recorded pickups, which is
@@ -248,12 +247,19 @@ behavior into under-served cells.
 \subsection{The Editor: Attribution, Trim, and Lift}\label{sec:editor}
 
 \label{sec:attribution}%
-The objective is optimized one trajectory at a time, so FATE must decide which
-trajectories are worth editing. Two attribution mechanisms
-make that decision, one per editing phase: \emph{demand deficit attribution}
-locates where unfairness concentrates and drives the demand-side
-phase, and \emph{supply-gradient attribution} locates where added taxi presence
-would most improve fairness and drives the supply-side phase.
+The editor runs in three steps (Figure~\ref{fig:overview}):
+\emph{attribution} selects trajectories worth editing, \emph{trim}
+relocates excess pickups within over-served areas, and \emph{lift}
+reroutes final seeking states into under-served cells. The objective is
+optimized one trajectory at a time, so each phase carries its own
+selection mechanism: \emph{demand deficit attribution} locates where
+unfairness concentrates and drives trim, and \emph{supply-gradient
+attribution} locates where added taxi presence would most improve fairness
+and drives lift.
+% 2026-07-24 (Robert): opener now summarizes all three steps by name +
+% first in-text ref to fig:overview (previously referenced only from the
+% teaser caption). Step glosses reuse fig-2-caption language verbatim-ish
+% ("relocates excess pickups", "final seeking states") for consistency.
 
 Both phases repurpose bounded adversarial
 perturbation \cite{goodfellow2015fgsm,kurakin2017ifgsm}, in its
@@ -280,11 +286,16 @@ flow from the objective back to the coordinates being edited
 (Appendix~\ref{app:editor}).
 % src: PAPER/objective-motivation/MOTIVATION.md (editor); PAPER/argument/03_fairness_theory.md
 
-\textbf{Trim: demand deficit attribution.} Because the projections behind
-Eq.~\eqref{eq:fdemo} are idempotent, the explained share
-$r^{2}_{\mathrm{demo}}$ admits an exact per-unit partition of the fairness
-deficit across active units (Appendix~\ref{app:derivations}), with a signed
-variant that separates over- from under-served units. Trim edits the
+\textbf{Trim: demand deficit attribution.} The explained share
+$r^{2}_{\mathrm{demo}}$ of Eq.~\eqref{eq:fdemo} splits exactly across the
+active units: each carries a defined share of the
+fairness deficit, and the shares sum to the whole with nothing lost or
+double-counted (Appendix~\ref{app:derivations}); a signed variant
+separates over- from under-served units.
+% 2026-07-24 (Robert): "Because the projections ... are idempotent" retired
+% from the body (plain-language mandate); the idempotency justification
+% lives in App A ("Because M and I-H are idempotent", per-unit partition).
+Trim edits the
 trajectories whose pickups land in the highest-deficit units: each selected
 pickup relocates within the $\varepsilon$-ball, padding recorded demand into
 over-served, supply-rich cells so their measured over-service falls
