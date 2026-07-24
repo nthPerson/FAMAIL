@@ -106,95 +106,128 @@
     {Bias is learned from data — fairness can be, too};
 
   % =========================================================================
-  % Two corpus chips (arrow sources: the raw corpus and the edited corpus)
+  % Relative layout macros (Robert 2026-07-24, round 3): every alignment is
+  % built from these so the columns/rows hold by construction. "biased column"
+  % = raw side, "fair column" = edited side; top row = corpus chips, middle
+  % row = model boxes, bottom row = rollout grids.
   % =========================================================================
-  % raw corpus chip (left source): GPS-trace image, gray traces only
-  % (corpus_background_raw.png was drawn for this 2.7x1.2 box; its bottom
-  % third is left clear for the label — keep the label position fixed)
-  % chip enlarged to 3.0x1.55cm (Robert 2026-07-24: fit the now-larger 3-band
-  % text; image mildly stretched to fill; left edge aligns with the panel below)
+  % column x-edges: the corpus chips overlay the rollout grids EXACTLY
+  \def\colLL{0.9}%    biased column left  (= left grid left edge)
+  \def\colLR{4.05}%   biased column right (= left grid right edge)
+  \def\colRL{5.0}%    fair column left    (= right grid left edge)
+  \def\colRR{8.15}%   fair column right   (= right grid right edge)
+  \pgfmathsetmacro\cxL{(\colLL+\colLR)/2}%   biased column center = 2.475
+  \pgfmathsetmacro\cxR{(\colRL+\colRR)/2}%   fair column center   = 6.575
+  \pgfmathsetmacro\chipW{\colLR-\colLL}%     all four chips 3.15 wide
+  \def\chipH{1.8}%                           all four chips 1.8 tall (= grid H)
+  \def\rowGap{0.9}%   equal gap top->mid and mid->bot (fits 2-line rollout label)
+  \def\boxH{0.55}%    model-box height (unchanged)
+  % row y-edges, top-down (each derived from the one above):
+  \def\rowTopT{-0.25}%                        top row (corpus chips) top
+  \pgfmathsetmacro\rowTopB{\rowTopT-\chipH}%  = -2.05  chips bottom
+  \pgfmathsetmacro\rowMidT{\rowTopB-\rowGap}% = -2.95  model boxes top
+  \pgfmathsetmacro\rowMidB{\rowMidT-\boxH}%   = -3.5   model boxes bottom
+  \pgfmathsetmacro\rowBotT{\rowMidB-\rowGap}% = -4.4   grids top
+  \pgfmathsetmacro\rowBotB{\rowBotT-\chipH}%  = -6.2   grids bottom
+  \pgfmathsetmacro\chipMidY{(\rowTopT+\rowTopB)/2}%  = -1.15 chip vert center
+  \pgfmathsetmacro\boxMidY{(\rowMidT+\rowMidB)/2}%   = -3.225 box vert center
+  \pgfmathsetmacro\gapTMy{(\rowTopB+\rowMidT)/2}%    imitate-label y = -2.5
+  \pgfmathsetmacro\gapMBy{(\rowMidB+\rowBotT)/2}%    rolls-out-label y = -3.95
+  \pgfmathsetmacro\fateX{(\colLR+\colRL)/2}%         FATE label x = 4.525
+  % rollout grids + captions + legend were authored with grid top at -2.9;
+  % \gridShift moves that whole block so the grid top lands on \rowBotT:
+  \pgfmathsetmacro\gridShift{\rowBotT+2.9}%          = -1.5
+
+  % =========================================================================
+  % Corpus chips (top row): identical 3.15x1.8 frames overlaying their grids;
+  % bold name + gray subtitle at top, GPS traces in the middle band, metric at
+  % the cleared bottom. raw metric 1 line, edited metric 2 lines (fits inside).
+  % =========================================================================
+  % raw corpus chip (biased column): LEFT edge = left grid left (\colLL)
   \begin{scope}
-    \clip[rounded corners=2pt] (0.9,-1.80) rectangle (3.9,-0.25);
-    \node[inner sep=0pt] at (2.4,-1.025)
-      {\includegraphics[width=3.0cm, height=1.55cm]{\figonedir corpus_background_raw.png}};
+    \clip[rounded corners=2pt] (\colLL,\rowTopB) rectangle (\colLR,\rowTopT);
+    \node[inner sep=0pt] at (\cxL,\chipMidY)
+      {\includegraphics[width=3.15cm, height=1.8cm]{\figonedir corpus_background_raw.png}};
   \end{scope}
-  \draw[panelframe, rounded corners=2pt] (0.9,-1.80) rectangle (3.9,-0.25);
-  % identity label (primary): bold name + regular subtitle, white-backed, at
-  % the TOP of the chip over the traces (Robert 2026-07-24: chip identity is
-  % the largest text; the metric moves to the cleared bottom zone below)
-  \node[lbl, font=\scriptsize, text=figink, align=center] at (2.4,-0.58)
+  \draw[panelframe, rounded corners=2pt] (\colLL,\rowTopB) rectangle (\colLR,\rowTopT);
+  % identity label (primary): bold name + regular subtitle, white-backed, at the
+  % TOP over the traces; anchored to the frame top so all four names align
+  \node[lbl, font=\scriptsize, text=figink, align=center, anchor=north]
+    at (\cxL,\rowTopT-0.10)
     {\textbf{raw corpus}\\ \textcolor{figgray}{real human driver trajectories}};
-  % metric (secondary): demographically explained share of the service
-  % imbalance, printed in the image's cleared bottom third. src: committed
-  % F_demo 0.7988 => explained share r^2 = 1 - F_demo = 0.2012, printed 20%.
-  \node[lbl, font=\scriptsize, text=figink] at (2.4,-1.55)
+  % metric (secondary), anchored to the frame bottom: src committed F_demo
+  % 0.7988 => explained share r^2 = 1 - F_demo = 0.2012, printed 20%.
+  \node[lbl, font=\scriptsize, text=figink, anchor=south]
+    at (\cxL,\rowTopB+0.12)
     {demographic dependence: \textbf{20\%}};
-  % edited corpus chip (right source): same trace rendering with the
-  % FATE-edited slice in accent + its "+" tag baked into the image. The right
-  % pipeline is back at its original x (chip center 6.6); the chip is enlarged
-  % to 3.0x1.55cm to fit the 3-band text, right edge near the panel below.
+  % edited corpus chip (fair column): RIGHT edge = right grid right (\colRR)
   \begin{scope}
-    \clip[rounded corners=2pt] (5.1,-1.80) rectangle (8.1,-0.25);
-    \node[inner sep=0pt] at (6.6,-1.025)
-      {\includegraphics[width=3.0cm, height=1.55cm]{\figonedir corpus_background_edited.png}};
+    \clip[rounded corners=2pt] (\colRL,\rowTopB) rectangle (\colRR,\rowTopT);
+    \node[inner sep=0pt] at (\cxR,\chipMidY)
+      {\includegraphics[width=3.15cm, height=1.8cm]{\figonedir corpus_background_edited.png}};
   \end{scope}
   \draw[figaccent, line width=0.9pt, rounded corners=2pt]
-    (5.1,-1.80) rectangle (8.1,-0.25);
-  \node[lbl, font=\scriptsize, text=figink, align=center] at (6.6,-0.58)
+    (\colRL,\rowTopB) rectangle (\colRR,\rowTopT);
+  \node[lbl, font=\scriptsize, text=figink, align=center, anchor=north]
+    at (\cxR,\rowTopT-0.10)
     {\textbf{edited corpus}\\ \textcolor{figgray}{most-biased slice edited in place}};
-  % metric (secondary): relative drop in the demographically explained share
-  % of the service imbalance. src: committed F_demo 0.7988 -> 0.8214 (§4.2;
-  % metrics.json deltas) => explained share r^2 = 1 - F_demo: 0.2012 -> 0.1786,
-  % relative drop 0.0226/0.2012 = 11.2%, printed as "down 11%".
-  \node[lbl, font=\scriptsize, text=figink] at (6.6,-1.55)
-    {demographic dependence: \textbf{down 11\%}};
-  % FATE transforms the raw corpus into the edited corpus (provenance arrow at
-  % chip-center height spanning the restored 1.2cm inter-chip gap, label above)
-  \draw[flowacc] (3.9,-1.025) -- (5.1,-1.025);
+  % metric (secondary): relative drop in the explained share. src: committed
+  % F_demo 0.7988 -> 0.8214 (§4.2; metrics.json) => r^2 = 1 - F_demo:
+  % 0.2012 -> 0.1786, relative drop 0.0226/0.2012 = 11.2%. Broken to two lines
+  % (label / bold value) so the longer wording sits fully inside the frame.
+  \node[lbl, font=\scriptsize, text=figink, align=center, anchor=south]
+    at (\cxR,\rowTopB+0.12)
+    {demographic dependence:\\\textbf{down 11\%}};
+  % FATE provenance arrow spans the 0.95cm inter-chip gap at chip mid-height
+  \draw[flowacc] (\colLR,\chipMidY) -- (\colRL,\chipMidY);
   \node[anchor=south, font=\scriptsize, text=figgray, inner sep=1.5pt]
-    at (4.5,-1.025) {FATE};
+    at (\fateX,\chipMidY) {FATE};
 
   % =========================================================================
-  % Chips -> model boxes (straight verticals). These arrows bridge the fixed
-  % chips (above) to the lower pipeline, which is shifted down 0.25cm (below)
-  % so the enlarged chips keep a full 0.50cm arrow; box tops land at -2.30.
+  % Chips -> model boxes (top row -> middle row; gap = \rowGap). The label sits
+  % to the RIGHT of each arrow (one line, inside its column) so the whole arrow
+  % stays visible.
   % =========================================================================
-  \draw[flow] (2.5,-1.80) -- (2.5,-2.30);
-  \node[lbl, font=\scriptsize, text=figgray] at (2.5,-2.05) {imitate as-is};
-  \draw[flowacc] (6.45,-1.80) -- (6.45,-2.30);
-  \node[lbl, font=\scriptsize, text=figgray] at (6.45,-2.05) {imitate edited};
-
-  % lower pipeline (model boxes, rollouts, futures, captions, legend) shifted
-  % down 0.25cm to make vertical room for the taller chips (Robert 2026-07-24)
-  \begin{scope}[shift={(0,-0.25)}]
+  \draw[flow] (\cxL,\rowTopB) -- (\cxL,\rowMidT);
+  \node[anchor=west, font=\scriptsize, text=figgray] at (\cxL+0.06,\gapTMy)
+    {imitate as-is};
+  \draw[flowacc] (\cxR,\rowTopB) -- (\cxR,\rowMidT);
+  \node[anchor=west, font=\scriptsize, text=figgray] at (\cxR+0.06,\gapTMy)
+    {imitate edited};
 
   % =========================================================================
-  % Model boxes
+  % Model boxes (middle row): centered on the column centers, 2.8cm wide, so
+  % they sit under the chips and over the grids by construction.
   % =========================================================================
-  \draw[panelframe, rounded corners=2pt] (1.1,-2.6) rectangle (3.9,-2.05);
-  \node[font=\scriptsize, text=figink] at (2.5,-2.325) {standard imitation model};
-  % light blue fill groups the intervention pipeline (border stays gray so
-  % the fill, not another saturated outline, does the grouping); both boxes
-  % widened to 2.8cm to hold the \scriptsize labels (Dr. Zhang 2026-07-24: no
-  % \tiny), centered on the original pipeline x (6.45) after the shift revert
+  \draw[panelframe, rounded corners=2pt]
+    (\cxL-1.4,\rowMidB) rectangle (\cxL+1.4,\rowMidT);
+  \node[font=\scriptsize, text=figink] at (\cxL,\boxMidY) {standard imitation model};
+  % light blue fill groups the intervention pipeline (border stays gray so the
+  % fill, not another saturated outline, does the grouping)
   \draw[panelframe, fill=figchipfill, rounded corners=2pt]
-    (5.05,-2.6) rectangle (7.85,-2.05);
-  \node[font=\scriptsize, text=figink] at (6.45,-2.325) {upweighted imitation model};
+    (\cxR-1.4,\rowMidB) rectangle (\cxR+1.4,\rowMidT);
+  \node[font=\scriptsize, text=figink] at (\cxR,\boxMidY) {upweighted imitation model};
 
   % =========================================================================
-  % Model -> future arrows
+  % Model boxes -> rollout grids (middle row -> bottom row; gap = \rowGap, ~3x
+  % the old gap). Full 0.9cm arrow with a two-line "rolls out / trajectories"
+  % label to the RIGHT, inside the column (right label stays left of \colRR).
   % =========================================================================
-  \draw[flow] (2.5,-2.6) -- (2.5,-2.9);
-  \node[lbl, font=\scriptsize, text=figgray] at (2.5,-2.75) {rolls out trajectories};
-  \draw[flowacc] (6.45,-2.6) -- (6.45,-2.9);
-  \node[lbl, font=\scriptsize, text=figgray] at (6.45,-2.75) {rolls out trajectories};
+  \draw[flow] (\cxL,\rowMidB) -- (\cxL,\rowBotT);
+  \node[anchor=west, font=\scriptsize, text=figgray, align=left]
+    at (\cxL+0.06,\gapMBy) {rolls out\\trajectories};
+  \draw[flowacc] (\cxR,\rowMidB) -- (\cxR,\rowBotT);
+  \node[anchor=west, font=\scriptsize, text=figgray, align=left]
+    at (\cxR+0.06,\gapMBy) {rolls out\\trajectories};
 
   % =========================================================================
   % The two future city grids over the SZ street map (fig-2's background):
   % translucent regional tints (streets stay visible), a district label pair
   % in EACH panel, glyphs CONSERVED across panels (relocation, not add/remove:
-  % both panels total 7 taxi + 3 pick).
+  % both panels total 7 taxi + 3 pick). The whole grid block (+ captions +
+  % legend below) is shifted by \gridShift so the grid top lands on \rowBotT.
   % =========================================================================
+  \begin{scope}[shift={(0,\gridShift)}]
   % --- LEFT future: the gap learned and re-enacted (starker tints) ---
   % street map: include at panel WIDTH 3.15cm (image is 5:4, so natural height
   % 2.52cm); \clip to the 1.8cm-tall panel, vertically centered, so the map is
