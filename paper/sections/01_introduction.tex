@@ -139,28 +139,33 @@ Theil index) that the objective never optimizes (\S\ref{sec:experiments}).
 %   \input{figures/figure-1/figure-1-bc}
   \input{figures/figure-1/figure-1}
   \caption{
-  A real fleet's service demonstrates bias: on Shenzhen taxi GPS
-  trajectories, the advantaged district receives $3.0\times$ the taxi
-  service per unit demand.
+  Why FATE edits the data. On Shenzhen taxi GPS trajectories the
+  advantaged district receives $3.0\times$ the taxi service per unit
+  demand, and a standard imitation model reproduces that gap (left).
   % src: PAPER/supply-lift/data/a10/shz_a10_external_fairness.json
   % (MigrantRatio district_extremes disparate_impact.before 0.33252 ->
-  % advantaged/disadvantaged service ratio 1/0.33252 = 3.0x)
-  The trajectories are valuable human expertise, so rather than filter or
-  regenerate them, FATE makes bounded, attribution-chosen edits to the
-  most-biased slice (the \emph{edited corpus}, right).
+  % advantaged/disadvantaged service ratio 1/0.33252 = 3.0x; .after
+  % 0.34873 -> 2.87x, printed 2.9x — both values also appear in-figure
+  % on the corpus chips, % src comments in figure-1.tex)
+  Rather than filter or regenerate the valuable human trajectories, FATE
+  edits the most-biased slice in place
   % NOTE (2026-07-16): no quantified bias share here by design — k=10,000
   % is an edit budget (~10% of the corpus), not a measured extent of bias.
-  A policy imitating the raw corpus learns the service gap; trained on the
-  upweighted edited corpus, it is measurably fairer.
-  Figure~\ref{fig:overview} shows the editor.}
+  and upweights it during training: taxi presence moves to the
+  under-served district, and the trained policy is measurably fairer
+  (right). Figure~\ref{fig:overview} shows the editor.}
   \Description{Two side-by-side pipelines, with an arrow labeled FATE
-  transforming the left pipeline's raw corpus into the right pipeline's
-  edited corpus. On the left, a raw corpus of
-  real human driver trajectories trains a standard imitation model; its
-  rolled-out city map keeps taxis clustered in the advantaged district
-  while waiting pickups fill the disadvantaged district. On the right, a
-  corpus whose most-biased slice has been edited trains an upweighted
-  imitation model; its rolled-out map moves taxi presence and pickups,
-  marked with plus signs, into the disadvantaged district.}
+  transforming the left pipeline's raw corpus, labeled with a 3.0 times
+  service gap, into the right pipeline's edited corpus, labeled 2.9 times.
+  On the left, the raw corpus of real human driver trajectories trains a
+  standard imitation model; its rolled-out city grid, drawn over a street
+  map with labeled advantaged and disadvantaged districts, holds six taxis
+  and two pickups in the advantaged district and one taxi and one pickup
+  in the disadvantaged district: the gap is unchanged after training. On
+  the right, the edited corpus trains an upweighted imitation model; its
+  rolled-out grid conserves the same totals, but one taxi has moved into
+  the disadvantaged district and a relocated pickup stays within the
+  advantaged district, both marked with plus signs matching the legend
+  entry moved by the edit.}
   \label{fig:teaser}
 \end{figure}
