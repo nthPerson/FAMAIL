@@ -6,22 +6,12 @@ We study taxi service allocation on a city discretized into grid cells $g$
 and hourly time blocks $t$ (see Appendix~\ref{app:editor} for cell resolution 
 and per-city grid dimensions); a pair $i=(g,t)$ with recorded
 activity is an \emph{active unit}, and $N$ denotes their count
-($N \approx 34{,}500$ on the primary city). Each active unit carries a demand $D_i$ and a supply $S_i$:
-demand is its recorded pickups, and supply is active-taxi presence
+($N \approx 34{,}500$ on the primary city). Each active unit carries a demand 
+$D_i$ and a supply $S_i$: demand is its recorded pickups, and supply is active-taxi presence
 aggregated over the $5{\times}5$ cell neighborhood, matching how a cruising
 taxi is visible to nearby demand. Service received relative to demand is the \emph{service ratio}
 $Y_i = S_i / \max(D_i, d_0)$, where the demand floor $d_0 = 0.5$ prevents
 near-empty cells from producing unbounded ratios.
-% We study taxi service allocation on a city discretized into grid cells $g$
-% and hourly time blocks $t$ (the cell resolution and per-city grid dimensions
-% are configuration, Appendix~\ref{app:editor}); a pair $i=(g,t)$ with recorded
-% activity is an \emph{active unit}, and $N$ denotes their count
-% ($N \approx 34{,}500$ on the primary city). Each active unit carries a demand $D_i$ and a supply $S_i$:
-% demand is its recorded pickups, and supply is active-taxi presence
-% aggregated over the $5{\times}5$ cell neighborhood, matching how a cruising
-% taxi is visible to nearby demand. Service received relative to demand is the \emph{service ratio}
-% $Y_i = S_i / \max(D_i, d_0)$, where the demand floor $d_0 = 0.5$ prevents
-% near-empty cells from producing unbounded ratios.
 % src: PAPER/argument/02_datasets.md (0.01° grid, hourly blocks);
 % src: PAPER/supply-lift/LIFT_ALGORITHM_REFERENCE.md §3 (floors, 5×5 presence); §4.1 (N = 34,524 active units, Shenzhen)
 
@@ -35,15 +25,29 @@ The data itself is a corpus $\mathcal{T} = \{\tau\}$ of real per-driver
 trajectories. A trajectory $\tau = (s_1, \dots, s_T)$ is a time-ordered
 sequence of states: each state $s_j = (g_j, t_j)$ records the cell and time
 block its driver occupied while seeking a passenger, and the final state
-$s_T$ is the pickup. Imitation here is supervised: there is no reward
-function, and the recorded state transitions are the only training signal.
+$s_T$ is the pickup. The imitation we demonstrate on this corpus
+(\S\ref{sec:downstream}) is supervised: there is no reward function, and
+the recorded state transitions are the only training signal.
 A policy $\pi$ is trained by behavior cloning to predict a driver's next
-state from their recent states (\S\ref{sec:downstream}), so the policy can
+state from their recent states, so the policy can
 only be as fair as the corpus it imitates. The trajectories are the editable
 objects; $D$ and $S$ are deterministic aggregations of $\mathcal{T}$ (demand
 counts a unit's recorded pickups, supply its $5{\times}5$-neighborhood taxi
 presence), so moving where a driver seeks and picks up moves demand and
 supply with it.
+% The data itself is a corpus $\mathcal{T} = \{\tau\}$ of real per-driver
+% trajectories. A trajectory $\tau = (s_1, \dots, s_T)$ is a time-ordered
+% sequence of states: each state $s_j = (g_j, t_j)$ records the cell and time
+% block its driver occupied while seeking a passenger, and the final state
+% $s_T$ is the pickup. Imitation here is supervised: there is no reward
+% function, and the recorded state transitions are the only training signal.
+% A policy $\pi$ is trained by behavior cloning to predict a driver's next
+% state from their recent states (\S\ref{sec:downstream}), so the policy can
+% only be as fair as the corpus it imitates. The trajectories are the editable
+% objects; $D$ and $S$ are deterministic aggregations of $\mathcal{T}$ (demand
+% counts a unit's recorded pickups, supply its $5{\times}5$-neighborhood taxi
+% presence), so moving where a driver seeks and picks up moves demand and
+% supply with it.
 
 \textbf{Problem.} Given a corpus $\mathcal{T}$ whose service allocation is
 demographically inequitable, produce an edited corpus $\mathcal{T}'$ that
@@ -62,10 +66,10 @@ fairness is not averaged away (\S\ref{sec:downstream}).
 \subsection{The Fairness Objective}\label{sec:objective}
 
 FATE edits trajectories by gradient ascent on a single differentiable
-objective that combines demographic fairness, spatial equity, and fidelity.
+objective that combines demographic fairness, spatial equity, and driver fidelity.
 
 \textbf{Demand-adjusted demographic fairness ($F_{\mathrm{demo}}$, primary).}
-Raw parity across neighborhoods is the wrong target: taxi service legitimately
+Fairness here cannot mean equal service everywhere: taxi service legitimately
 tracks demand, and a business district \emph{should} see more pickups than a
 quiet residential block. We therefore measure fairness only in the component of
 service that demand does not explain (the logic of conditional statistical
