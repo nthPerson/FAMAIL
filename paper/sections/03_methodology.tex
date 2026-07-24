@@ -3,8 +3,8 @@
 \subsection{Problem Formulation}\label{sec:problem}
 
 We study taxi service allocation on a city discretized into grid cells $g$
-and hourly time blocks $t$ (the cell resolution and per-city grid dimensions
-are configuration, Appendix~\ref{app:editor}); a pair $i=(g,t)$ with recorded
+and hourly time blocks $t$ (see Appendix~\ref{app:editor} for cell resolution 
+and per-city grid dimensions); a pair $i=(g,t)$ with recorded
 activity is an \emph{active unit}, and $N$ denotes their count
 ($N \approx 34{,}500$ on the primary city). Each active unit carries a demand $D_i$ and a supply $S_i$:
 demand is its recorded pickups, and supply is active-taxi presence
@@ -12,6 +12,16 @@ aggregated over the $5{\times}5$ cell neighborhood, matching how a cruising
 taxi is visible to nearby demand. Service received relative to demand is the \emph{service ratio}
 $Y_i = S_i / \max(D_i, d_0)$, where the demand floor $d_0 = 0.5$ prevents
 near-empty cells from producing unbounded ratios.
+% We study taxi service allocation on a city discretized into grid cells $g$
+% and hourly time blocks $t$ (the cell resolution and per-city grid dimensions
+% are configuration, Appendix~\ref{app:editor}); a pair $i=(g,t)$ with recorded
+% activity is an \emph{active unit}, and $N$ denotes their count
+% ($N \approx 34{,}500$ on the primary city). Each active unit carries a demand $D_i$ and a supply $S_i$:
+% demand is its recorded pickups, and supply is active-taxi presence
+% aggregated over the $5{\times}5$ cell neighborhood, matching how a cruising
+% taxi is visible to nearby demand. Service received relative to demand is the \emph{service ratio}
+% $Y_i = S_i / \max(D_i, d_0)$, where the demand floor $d_0 = 0.5$ prevents
+% near-empty cells from producing unbounded ratios.
 % src: PAPER/argument/02_datasets.md (0.01° grid, hourly blocks);
 % src: PAPER/supply-lift/LIFT_ALGORITHM_REFERENCE.md §3 (floors, 5×5 presence); §4.1 (N = 34,524 active units, Shenzhen)
 
