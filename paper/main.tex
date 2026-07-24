@@ -22,8 +22,12 @@
 \usetikzlibrary{arrows.meta}
 % Bulleted lists sit nearly flush with the paragraph margin (Robert,
 % 2026-07-24 read-aloud note: less indent, applied to every itemize).
-% acmart's default \leftmargini is much deeper; no extra package needed.
-\setlength{\leftmargini}{1.1em}
+% NOTE: a plain \setlength{\leftmargini}{...} is INERT under acmart — the
+% class's font-size macros re-run \@listi and reset it (verified: 5em test
+% moved nothing). enumitem takes over list geometry properly; leftmargin=*
+% puts the bullet at the paragraph margin with text indented one label-width.
+\usepackage{enumitem}
+\setlist[itemize]{leftmargin=*}
 
 \begin{document}
 
