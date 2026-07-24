@@ -111,13 +111,27 @@ what a demand-only editor can achieve.
 % src: PAPER/objective-motivation/MOTIVATION.md (associational caveat; demand endogeneity)
 
 \textbf{Spatial equity ($F_{\mathrm{spatial}}$, secondary).}
-$F_{\mathrm{spatial}}$ is one minus the mean Gini index of two
-supply-normalized rates: the \emph{demand-service ratio}
-$\mathrm{DSR}_i = D_i / S_i$ (pickups per unit of taxi presence) and the
-\emph{arrival-service ratio} $\mathrm{ASR}_i = A_i / S_i$ (dropoffs per
-unit). The closed form is in Appendix~\ref{app:derivations}. Being
+The construction adapts an established measure of taxi-service inequality:
+Su et al.~\cite{su2018taxigini} score every zone of Shenzhen by its
+arrival and departure service rates and measure the city's spatial
+inequality as the Gini coefficient of each rate. FATE forms the same pair
+of rates per active unit, normalized by local taxi presence: the
+\emph{departure-service ratio} $\mathrm{DSR}_i = D_i / S_i$ (pickups per
+unit of taxi presence) and the \emph{arrival-service ratio}
+$\mathrm{ASR}_i = A_i / S_i$ (dropoffs per unit). $F_{\mathrm{spatial}}$
+is one minus the mean of their two Gini indices, so larger is fairer; the
+closed form is in Appendix~\ref{app:derivations}. Being
 demographic-independent, the term acts as a spatial smoothness regularizer
 complementing $F_{\mathrm{demo}}$.
+% src (lineage): su2018taxigini (Su, Fang, Xu & Huang, IJGI 7(6):230, 2018)
+% §4.1-4.2 — per-TAZ arrival/departure service rates + a Gini coefficient per
+% rate, on Shenzhen taxi trajectories (Robert drew the ASR/DSR formulation
+% from this paper during objective design; PDF supplied 2026-07-24). FATE's
+% adaptation: rates per active unit, normalized by local taxi presence S_i
+% instead of fleet size x zone area x days; fairness = 1 - mean Gini.
+% DSR expansion corrected 2026-07-24 ("demand-service" -> "departure-service"
+% per the source; formula D_i/S_i unchanged; code keys + RESEARCHER_HANDOFF
+% keep the legacy expansion — mapping in paper/README.md conventions).
 
 \textbf{Fidelity guardrail ($F_{\mathrm{fidelity}}$).} An edit that improves
 fairness by producing trajectories no real driver would generate is useless

@@ -41,6 +41,15 @@ Status legend for what machines already did:
 Crossref/DOI metadata matched (front-end bot-blocked) · **NONE** = no publisher record exists.
 
 **Applied-changes log (controller sessions; checkboxes above/below remain Robert's alone):**
+- 2026-07-24 (late; Robert's F_spatial-lineage correction): ONE NEW entry `su2018taxigini`
+  (Robert supplied the source PDF — the paper the ASR/DSR service-rate formulation was
+  drawn from during objective design). §3.2 Spatial equity rewritten to name the lineage
+  explicitly; key also added to the App A (eq:fspatial context) and App E
+  (transportation-equity) Gini cite lists. Terminology corrected paper-wide with it:
+  DSR expansion "demand-service ratio" → "departure-service ratio" (their DSR =
+  departure service rate; formula D_i/S_i UNCHANGED; code keys + RESEARCHER_HANDOFF.md
+  keep the legacy expansion — mapping recorded in paper/README.md conventions).
+  Count now 51 entries.
 - 2026-07-24 (Meeting-44 rewrite batch 2 — intro citation classes): FIVE NEW entries + P0
   rows (top of P0), filling Dr. Zhang's ≥2-per-class + 2025-26 recency mandate. Hunter
   subagent verified against primary sources, then the controller INDEPENDENTLY re-verified
@@ -108,6 +117,20 @@ Crossref/DOI metadata matched (front-end bot-blocked) · **NONE** = no publisher
 ---
 
 ## P0 — Decisions & unresolved items (do these first; each needs human judgment)
+
+**(2026-07-24 late — Robert-supplied source; the fastest human tick on the list)**
+
+- [ ] **su2018taxigini** — Su, Fang, Xu & Huang, *Uncovering Spatial Inequality in Taxi
+  Services in the Context of a Subsidy War among E-Hailing Apps*, ISPRS Int. J. Geo-Inf.
+  7(6):230, 2018, DOI 10.3390/ijgi7060230 — NEW 2026-07-24: cited at §3.2 Spatial equity
+  (rewritten to name it as the source of the ASR/DSR pair + Gini-per-rate measurement)
+  and in the App A / App E transportation-Gini cite lists. **Machine status: PAGE-grade —
+  metadata read directly from the author PDF Robert supplied (title page + DOI footer);
+  this is the paper the formulation was drawn from during objective design (his
+  account).** Check (~2 min): the MDPI landing page via https://doi.org/10.3390/ijgi7060230,
+  and that §3.2's one-sentence description of their method reads fairly against their §4
+  (per-TAZ ASR/DSR; Gini per rate). Note their DSR = **departure** service rate — the
+  reason our expansion was corrected from "demand-service ratio".
 
 **(2026-07-24 batch — Meeting-44 intro citation classes; machine-verified twice, human pass pending)**
 

@@ -60,12 +60,13 @@ against which the automatic gradient is verified.
 % src: PAPER/supply-lift/LIFT_ALGORITHM_REFERENCE.md §4.1 (autograd-verified closed form)
 
 \textbf{Spatial-equity closed form.} The $F_{\mathrm{spatial}}$ term of
-\S\ref{sec:objective} scores the inequality of two supply-normalized service
-rates --- the demand-service ratio $\mathrm{DSR}_i = D_i / S_i$ and the
-arrival-service ratio $\mathrm{ASR}_i = A_i / S_i$, with $A_i$ the unit's
-recorded dropoffs and $D_i$, $S_i$ as in \S\ref{sec:problem} --- with the
-Gini index, an inequality measure widely used in transportation equity
-research \cite{horchergraham2021,karner2024}. The Gini enters as a pairwise
+\S\ref{sec:objective} scores the inequality of two supply-normalized
+service rates with the Gini index
+\cite{su2018taxigini,horchergraham2021,karner2024}, an inequality measure
+widely used in transportation equity research. The rates are
+$\mathrm{DSR}_i = D_i / S_i$, the departure-service ratio, and
+$\mathrm{ASR}_i = A_i / S_i$, the arrival-service ratio, with $A_i$ the
+unit's recorded dropoffs and $D_i$, $S_i$ as in \S\ref{sec:problem}. The Gini enters as a pairwise
 mean absolute difference, differentiable almost everywhere and hence usable
 inside the gradient objective:
 \begin{equation}\label{eq:fspatial}
@@ -78,7 +79,10 @@ F_{\mathrm{spatial}} &\;=\; 1 - \tfrac{1}{2}\bigl(\mathrm{Gini}(\mathrm{DSR})
 \end{equation}
 % src: PAPER/argument/03_fairness_theory.md (F_spatial definition)
 % src: famail_temporal/fairness/spatial.py (DSR/ASR ratios; sorted-identity evaluation, no N² materialization)
-% src: famail_temporal/docs/RESEARCHER_HANDOFF.md §4 (DSR/ASR acronym expansions)
+% NOTE (2026-07-24): DSR expansion now follows su2018taxigini ("departure
+% service rate" — the formulation's source, Robert); code and
+% RESEARCHER_HANDOFF.md §4 keep the legacy expansion "demand-service ratio"
+% (same formula D_i/S_i) — mapping in paper/README.md conventions.
 
 \section{Editor Implementation Details}\label{app:editor}
 
@@ -438,7 +442,8 @@ demonstrations, and the parity condition onto a continuous spatial service
 ratio used as a differentiable editing objective.
 
 \textbf{Fairness in urban transportation.} Transportation equity measures
-service distributions with the Gini index \cite{horchergraham2021,karner2024}
+service distributions with the Gini index
+\cite{su2018taxigini,horchergraham2021,karner2024}
 and entropy- or welfare-based indices \cite{theil1967,atkinson1970,demaio2007}.
 The closest modeling neighbor regularizes a ride-hailing demand predictor at
 training time, shrinking a racial prediction-error gap from 0.361 to 0.084

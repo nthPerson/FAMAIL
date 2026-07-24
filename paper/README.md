@@ -40,6 +40,12 @@ Both must pass before every commit. Warnings are tolerated during drafting; erro
     attribution"** (formerly "deficit attribution"); lift's is "supply-gradient
     attribution". Use the full name wherever the mechanism is meant; generic uses
     of "deficit" (e.g. "fairness deficit", "highest-deficit units") stay as-is.
+11. **DSR expansion (renamed 2026-07-24, Robert):** paper expansion is
+    **"departure-service ratio"**, matching its source su2018taxigini ("departure
+    service rate" — the paper the ASR/DSR pair was drawn from during objective
+    design). Formula unchanged (D_i/S_i, pickups per unit of taxi presence).
+    Code + famail_temporal docs (RESEARCHER_HANDOFF.md §4, fairness/spatial.py)
+    keep the legacy expansion "demand-service ratio"; artifact keys unaffected.
 
 ## Layout
 
