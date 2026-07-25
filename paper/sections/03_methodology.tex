@@ -1,13 +1,76 @@
 \section{Methodology}\label{sec:method}
-% T4 rewrites this opening: leading paragraph (FATE, two stages, Fig 2 ref, challenge map)
-% The former \subsection{Problem Formulation} (definitions + the Problem
-% paragraph) MOVED to sections/02_overview.tex in restructure task T3
-% (2026-07-24), carrying its \label{sec:problem} with it.
+% RESTRUCTURED 2026-07-24 (task T4): the former three subsections (objective /
+% why demand-only editing fails / the editor) are RE-GROUPED into a leading
+% paragraph plus five blocks, one per challenge C1--C5 of \S\ref{sec:overview}
+% (MEETING_DIGEST.md decision #6: each challenge answered by exactly one block,
+% in logical order). A regrouping, not a rewrite: every load-bearing sentence,
+% number, disclosure and % src: comment travelled with its material, and the
+% block order follows the three coarse stages of the new Figure~\ref{fig:overview}
+% (attribute -> trim+lift -> upweight). Editor detail already carried in full by
+% Appendix~\ref{app:editor} (soft cell assignment, taper/presence constants,
+% king-move rationale, the screen) is left there behind a pointer — the
+% restructure's one sanctioned overflow. The former \subsection{Problem
+% Formulation} MOVED to 02_overview.tex in T3 with \label{sec:problem}.
 
-\subsection{The Fairness Objective}\label{sec:objective}
+FATE has two stages: a budgeted, constrained edit of the recorded corpus, and
+an edit-aware weighting of the edited demonstrations during imitation. Neither
+is sufficient alone: the edit makes the corpus fairer, and the weighting keeps
+that fairness from being averaged away in training. Figure~\ref{fig:overview}
+sketches the pipeline, whose three coarse steps (attribute, edit, upweight)
+follow the block order below. Each block answers one challenge of
+\S\ref{sec:overview}: the objective answers C3, attribution under the budget
+C1, the two editing channels C4, the constraints on every edit C2, and
+edit-aware weighting C5.
+% src: restructure/meeting/analysis_C_claims.md C-2 (the two-stage wording,
+% adopted as proposed); MEETING_DIGEST.md decision #6 (leading paragraph).
 
+\begin{figure}[t]
+  \centering
+  % Figure 2 (fig:overview) is the NEW framework schematic, source
+  % figures/figure-2/framework.tex — ITERATE THERE (harness: framework-test.tex
+  % beside it; spec: restructure/figures/FIG2_FRAMEWORK_SPEC.md). It replaces the
+  % retired 3-panel stylized-city figure, whose source stays on disk unused
+  % (figures/figure-2/figure-2.tex). The figure is a SCHEMATIC: no real
+  % trajectory, edit or measured value is plotted — hence "schematic" in the
+  % caption and never "case study" (analysis_C_claims.md C-8).
+  \input{figures/figure-2/framework}
+  \caption{FATE framework (schematic). (1) Attribution scores every
+  trajectory's contribution to the corpus's collective fairness and selects
+  the $k \ll |\mathcal{T}|$ whose bounded edits would improve it most (the
+  attribution mechanisms are detailed in \S\ref{sec:attribution}). (2) The
+  selected trajectories receive bounded gradient edits under the fairness
+  objective: trim relocates recorded pickups within over-served areas, and
+  lift reroutes final seeking states into under-served cells; every edit stays
+  within $\varepsilon$ cells, is repaired for continuity, and is scored by a
+  frozen driver-identity discriminator inside the objective. (3) The $k$
+  edited demonstrations are upweighted during imitation so the corpus-level
+  fairness gain survives training; at uniform weights it is averaged away.}
+  \Description{A three-stage framework diagram read from top to bottom. The
+  first stage takes the raw trajectory corpus, scores each trajectory's
+  contribution to the corpus's collective fairness, and selects k of the
+  trajectories, k being much smaller than the corpus size, leaving the rest
+  unchanged. The second stage passes the selected trajectories through bounded
+  gradient edits under the fairness objective, drawn as two edit glyphs: a
+  trim that relocates a recorded pickup within an over-served area, and a lift
+  that reroutes a trajectory's final seeking states into an under-served area,
+  each edit bounded to epsilon cells and repaired for continuity. The third
+  stage trains a policy on the edited corpus by imitation with the edited
+  demonstrations upweighted, and ends in a contrast pair: under uniform
+  weights the bias is reproduced, and under upweighting the fairer service
+  allocation survives training.}
+  \label{fig:overview}
+\end{figure}
+
+\subsection{The Collective Fairness Objective}\label{sec:objective}
+
+Challenge C3 falls on the objective itself: what the editor ascends must be
+collective rather than per-trajectory, must credit demand for the service it
+explains, must be differentiable in the coordinates an edit moves, and must
+decompose exactly into local units, so a corpus-level disparity can be
+attributed to the trajectories that carry it (\S\ref{sec:attribution}).
 FATE edits trajectories by gradient ascent on a single differentiable
-objective that combines demographic fairness, spatial equity, and driver fidelity.
+objective that combines demographic fairness, spatial equity, and driver
+fidelity.
 
 \textbf{Demand-adjusted demographic fairness ($F_{\mathrm{demo}}$, primary).}
 Fairness here cannot mean equal service everywhere: taxi service legitimately
@@ -79,11 +142,11 @@ for training a realistic imitation model. Because individual mobility signatures
 are highly identifying \cite{gao2017tuler,zhou2018tulvae,miao2020deeptul}, we score
 fidelity with a frozen driver-identity discriminator of the ST-SiameseNet
 family \cite{ren2020stsiamese}: an edited trajectory that still reads as its
-driver has preserved human fidelity. The discriminator is trained once and
-never updated during editing. Under FATE's small bounded edits the discriminator's
-gradient is near zero, so it acts as a fidelity \emph{guardrail}, not a driver
-of edits; identity-axis stability under both phases is confirmed empirically
-and reported as \emph{Fidelity-A} (\S\ref{sec:experiments}). The
+driver has preserved human fidelity. It is trained once, never updated during
+editing, and has near-zero gradient under FATE's small bounded edits, so it
+acts as a fidelity \emph{guardrail} rather than a driver of edits;
+identity-axis stability under both phases is reported empirically as
+\emph{Fidelity-A} (\S\ref{sec:experiments}). The
 distributional fidelity axis is scored separately at evaluation as
 \emph{Fidelity-B} (\S\ref{sec:exp-data-level}).
 % src: PAPER/objective-motivation/MOTIVATION.md (F_fidelity guardrail framing)
@@ -96,111 +159,170 @@ distributional fidelity axis is scored separately at evaluation as
 \qquad \alpha = (0.1,\; 0.8,\; 0.1).
 \end{equation}
 % src: PAPER/objective-motivation/weight-sensitivity/ (EXTENDED_FRONTIER.md + DECISION.md, 2026-07-11)
-The weights are selected \emph{empirically}: a sweep of the weights
-(fidelity fixed at 0.1), scored across all three metric classes
-(\S\ref{sec:exp-setup}), selects $(0.1, 0.8, 0.1)$ by a three-class
-criterion: maximize $\Delta F_{\mathrm{demo}}$ subject to
-$\Delta F_{\mathrm{spatial}} \ge 0$ \emph{and} the supply-channel lift-up
-remaining significant under both accounting conventions. The full sweep, with the
-flatness and monotone-lift-up evidence behind the criterion, is reported in
-\S\ref{sec:exp-robustness}.
+The weights are selected \emph{empirically}: a sweep with fidelity fixed at
+0.1, scored across all three metric classes (\S\ref{sec:exp-setup}), selects
+$(0.1, 0.8, 0.1)$ by a three-class criterion, maximizing
+$\Delta F_{\mathrm{demo}}$ subject to $\Delta F_{\mathrm{spatial}} \ge 0$
+\emph{and} a supply-channel lift-up that stays significant under both
+accounting conventions; the full sweep, with the flatness and monotone
+lift-up evidence behind the criterion, is in \S\ref{sec:exp-robustness}.
 % src: PAPER/objective-motivation/weight-sensitivity/EXTENDED_FRONTIER.md (flatness, monotone lift-up, criterion)
 
-\subsection{Why Demand-Only Editing Cannot Help the Under-Served}\label{sec:leveling}
+\subsection{Attribution under an Edit Budget}\label{sec:editor}
 
-Relocating pickups is a demand-side lever: on its own it improves the fairness
-metrics only by redistributing service among better-served areas, while the
-under-served group gains nothing. On the primary city, every one of the
+\label{sec:attribution}%
+Challenge C1 is a spending problem: at most $k \ll |\mathcal{T}|$
+trajectories may change, and the objective is optimized one trajectory at a
+time, so each editing phase carries its own selection mechanism.
+\emph{Demand deficit attribution} locates where unfairness concentrates and
+drives trim; \emph{supply-gradient attribution} locates where added taxi
+presence would most improve fairness and drives lift.
+% 2026-07-24 (T4): the retired three-step opener ("The editor runs in three
+% steps ...") is superseded by the leading paragraph and the block headings; its
+% two-mechanism sentence survives here — the claim that must never collapse into
+% one ranked list feeding both editors (analysis_C_claims.md C-6, C-7).
+
+\textbf{Demand deficit attribution (trim's selection).} The explained share
+$r^{2}_{\mathrm{demo}}$ of Eq.~\eqref{eq:fdemo} splits exactly across the
+active units: each carries a defined share of the
+fairness deficit, and the shares sum to the whole with nothing lost or
+double-counted (Appendix~\ref{app:derivations}); a signed variant
+separates over- from under-served units. Trim takes the trajectories whose
+recorded pickups land in the highest-deficit units.
+% 2026-07-24 (Robert): "Because the projections ... are idempotent" retired
+% from the body (plain-language mandate); the idempotency justification
+% lives in App A ("Because M and I-H are idempotent", per-unit partition).
+% src: PAPER/argument/03_fairness_theory.md (per-cell attribution)
+
+\textbf{Supply-gradient attribution (lift's selection).} The second mechanism
+asks of every active unit: \emph{how much fairer would the city's service be
+with marginally more taxi presence here, at this hour?} The quantity that
+answers it is the gradient of the objective with respect to supply. We
+evaluate the objective at hypothetically augmented supply $S + \Delta S$ and
+read $\partial \mathcal{L} / \partial S_i$ by automatic differentiation at
+$\Delta S = 0$: the marginal fairness effect of added presence at each of the
+$N \approx 34{,}500$ active units, in one backward pass. The result is a
+\emph{value-of-presence} map over the city: large where added presence would
+most repair the fairness terms, and small or negative where presence is
+already abundant. Its $F_{\mathrm{demo}}$ component has a closed form, given
+with its autograd verification in Appendix~\ref{app:derivations}.
+% src: PAPER/supply-lift/LIFT_ALGORITHM_REFERENCE.md §4.1 (autograd-verified closed form)
+To turn the map into candidates, a linearized-offset screen ranks trajectories
+by the best bounded translation of their tail, a tail being the pickup plus up
+to four seeking states immediately before it (Appendix~\ref{app:editor});
+${\approx}80$k of the corpus's ${\approx}95$k trajectories are long enough to
+carry a movable tail. The screen favors trajectories that already nearly serve
+the right areas, and it only \emph{nominates}: each nominee's tail is then
+translated under the full objective.
+% src: PAPER/supply-lift/data/oracle.json (n_trajectories_len_ge3 80,427 of n_trajectories_total 95,297);
+% LIFT_ALGORITHM_REFERENCE.md §3 (tail = last min(TAIL_LEN=4, len-2) seeking states + the pickup, states[-1]);
+% §4.2 (the screen only nominates; full screen detail in app:editor)
+
+\textbf{Spending the budget.} Trim retains its selection by demand
+deficit attribution; lift fills the remaining budget with positive-score
+nominees
+(on the primary city, $k = 10{,}000$ splits into 2{,}455 trim and 7{,}545 lift
+edits), and the supply gradient is computed on the post-trim state.
+% src: LIFT_ALGORITHM_REFERENCE.md §4.3, §5 (budget split, phase order)
+Attribution is therefore not a post-hoc explanation of an edited corpus: it is
+the mechanism that decides which trajectories receive the budget.
+
+\subsection{Outcome-Side and Resource-Aware Editing}
+
+Challenge C4 warns that measured fairness can improve while the under-served
+gain nothing, and on our data a demand-only editor does exactly that. FATE
+therefore edits through two channels.
+
+\textbf{Outcome-side editing (the \emph{trim} operation).} Trim changes the
+measured allocation statistic without changing the process that provides
+service. Each selected pickup relocates within the $\varepsilon$-ball,
+padding recorded demand into over-served, supply-rich cells so their measured
+over-service falls, with supply frozen throughout.
+% src: PAPER/argument/03_fairness_theory.md (per-cell attribution; relocation
+% within the eps-ball) + restructure/ALGORITHM_FACTS.md §Editor (supply FROZEN
+% during trim; outcome-side/resource-aware pairing per ZHANG_DRAFT_DELTA)
+
+\textbf{Why demand-only editing cannot help the
+under-served.}\label{sec:leveling} On its own this lever only redistributes
+service among better-served areas. On the primary city, every one of the
 2{,}455 pickups edited by the demand-only editor originated in advantaged
 cells, and not one landed in a disadvantaged cell.
 % src: PAPER/external-metrics/LEVELING_DOWN_MECHANISM.md (2,455/2,455 flow analysis; pre-supply-lift doc) — corroborated at alpha*: PAPER/supply-lift/data/a10/shz_trimonly_a10_external_fairness.json (mean(Y|disadv) 7.0734 -> 7.0734 exactly)
 The pattern is analogous to the classic leveling-down objection to
-equalization \cite{parfit1997} (measured equality improves while the
-worst-off gain nothing), recently formalized for machine-learning fairness
-with a prescription to level \emph{up} instead \cite{mittelstadt2024}; data
+equalization \cite{parfit1997}, formalized for machine-learning fairness with
+a prescription to level \emph{up} instead \cite{mittelstadt2024}; data
 augmentation is the one intervention observed to help the disadvantaged group
 rather than pull others down \cite{zietlow2022}. The analogy is inexact in one
 instructive way: trim \emph{relocates} pickups under conservation rather than
 removing service, so nothing is destroyed; yet the under-served group is
 not helped at all.
 
-The behavior is the constrained optimum of the demand-only problem, not an
-optimizer artifact, for three structural reasons. (i)~\emph{Selection:} the
-deficit attribution that selects trim's edits (\S\ref{sec:editor}) concentrates
-in over-served, high-residual cells, so under-served cells are never edit
-candidates. (ii)~\emph{Leverage:} with supply frozen,
-$\partial Y_i / \partial D_i = -S_i / D_i^{2}$ makes padding demand into
-high-supply advantaged cells more consequential for $Y$
-than removing it from starved ones, and 93\% of disadvantaged units sit at
-the demand floor $d_0$, where removing demand changes nothing.
-% src: PAPER/external-metrics/LEVELING_DOWN_MECHANISM.md; LIFT_ALGORITHM_REFERENCE.md §1 (32x; 93%)
-(iii)~\emph{Supply-side inequity:} median taxi presence is 1.8 in disadvantaged
-cells versus 17.6 in advantaged cells, and a demand-only editor cannot touch this supply.
-A greedy unconstrained search, which upper-bounds what any editor could
-achieve, rules out the last demand-side option: raising the under-served
-group's service ratio would require deleting its recorded pickups, which is
-perverse.
-% src: LIFT_ALGORITHM_REFERENCE.md §1 (median presence 1.8 vs 17.6; oracle perversity)
+Three structural reasons make this the constrained optimum of the demand-only
+problem rather than an optimizer artifact. The deficit attribution that
+selects trim's edits (\S\ref{sec:attribution}) concentrates in over-served,
+high-residual cells, so under-served cells are never edit candidates. With
+supply frozen, $\partial Y_i / \partial D_i = -S_i / D_i^{2}$ makes padding
+demand into high-supply advantaged cells more consequential than removing it
+from starved ones, and 93\% of disadvantaged units sit at the
+demand floor $d_0$, where removing demand changes nothing. And median taxi
+presence is 1.8 in disadvantaged cells versus 17.6 in advantaged cells, which
+no demand edit can touch; a greedy unconstrained search, an upper bound on any
+editor, leaves only the perverse option of deleting the under-served group's
+recorded pickups.
+% src: PAPER/external-metrics/LEVELING_DOWN_MECHANISM.md; LIFT_ALGORITHM_REFERENCE.md §1 (32x; 93%; median presence 1.8 vs 17.6; oracle perversity)
 
-The deeper cause unifies the editor's limitation with the metric's. Recorded
-demand is not exogenous: where service has been thin, demand is suppressed and
+Recorded demand is also not exogenous, which unifies the editor's limitation
+with the metric's: where service has been thin, demand is suppressed and
 latent (the feedback-loop pathology documented for other public-allocation
-systems \cite{ensign2018,lumisaac2016}), so the same censored demand that
-hides inequity from a demand-adjusted metric leaves a demand-only editor
-nothing to move in under-served areas.
-
-This sets up the editor's second phase. The one non-perverse lever is the
-numerator: $\partial Y_i / \partial S_i = 1 / \max(D_i, d_0) > 0$ everywhere,
-and at the demand floor, $\Delta Y = 2\,\Delta S$, so raising under-served
-service requires adding taxi \emph{presence}: rerouting real seeking
-behavior into under-served cells.
+systems \cite{ensign2018,lumisaac2016}), so the same censoring that hides
+inequity from a demand-adjusted metric leaves a demand-only editor nothing to
+move in under-served areas. The one non-perverse lever is the numerator:
+$\partial Y_i / \partial S_i = 1 / \max(D_i, d_0)$ is positive everywhere, and
+$\Delta Y = 2\,\Delta S$ at the demand floor, so raising under-served service
+requires adding taxi \emph{presence}: rerouting real seeking behavior into
+under-served cells.
 % src: LIFT_ALGORITHM_REFERENCE.md §1-2 (dY/dS; oracle gate G0 covered in §4.4 + App. C)
 
-\begin{figure*}[t]
-  \centering
-  % Figure 1 is now TikZ (source: figures/figure-1/figure-1.tex — iterate THERE;
-  % variants spec: PAPER/figures/figure-1.md). The matplotlib draft below is
-  % kept commented out for comparison — flip the two lines to switch back.
-  % \includegraphics[width=0.92\textwidth]{figures/method_overview.pdf}
-  \input{figures/figure-2/figure-2}
-  \caption{FATE on a stylized city: attribution, then the two editing
-  phases. The street map is discretized into grid cells and split by a
-  district boundary into an advantaged and a disadvantaged district;
-  pickups and taxi presence are quantized to cells. (1) \emph{Attribute}:
-  taxi presence concentrates in the advantaged district while the
-  disadvantaged district carries unmet pickups; attribution scores each
-  trajectory's contribution to the fairness deficit and selects the ones
-  worth editing (\S\ref{sec:attribution}). (2) \emph{Trim} relocates excess
-  pickups within the advantaged district, improving fairness metrics while
-  the disadvantaged district gains nothing. (3) \emph{Lift}, in a detail
-  view of the under-served district: the rerouted tail bends the
-  trajectory's final seeking states into the cells where the supply
-  gradient says added presence improves fairness most.}
-  \Description{Three stylized city-grid panels. Panel 1, attribution: taxi
-  presence concentrates in an advantaged district while the disadvantaged
-  district carries unmet pickups, and attribution scores each trajectory's
-  contribution to this fairness deficit. Panel 2: trim relocates excess pickups within the
-  advantaged district; the disadvantaged district is untouched. Panel 3:
-  lift bends a trajectory's final seeking states into under-served cells,
-  carrying taxi presence with it.}
-  \label{fig:overview}
-\end{figure*}
-\subsection{The Editor: Attribution, Trim, and Lift}\label{sec:editor}
+\textbf{Resource-aware editing (the \emph{lift} operation).} Lift changes the
+provision process itself. It translates a nominated tail: the pickup moves by
+the full offset $\delta$, earlier tail states by linearly tapered fractions of
+it, and the anchor state before the tail never moves, so the edit physically
+routes the trajectory through the under-served area before the pickup without
+teleporting. The moved states carry supply with them, differentiably,
+contributing presence to $\Delta S$ over the same $5{\times}5$ neighborhood.
+Supply is thus \emph{endogenous}: the optimizer sees the supply consequences
+of its own moves and is rewarded for providing service where it improves
+fairness. The fidelity term scores the actual rerouted tail at every
+iteration, and each completed edit updates a shared running state, so later
+edits optimize against the results of previous edits.
+Appendix~\ref{app:editor} gives the taper weights, supply floor, and further
+editor detail. This is the distinction C4 turns on: an outcome-side edit
+changes only the measured outcome, while a resource-aware edit changes where
+service is provided and can benefit under-served areas directly.
+% src: PAPER/supply-lift/LIFT_ALGORITHM_REFERENCE.md §4.2–4.3 (screen; plan assembly)
 
-\label{sec:attribution}%
-The editor runs in three steps (Figure~\ref{fig:overview}):
-\emph{attribution} selects trajectories worth editing, \emph{trim}
-relocates excess pickups within over-served areas, and \emph{lift}
-reroutes final seeking states into under-served cells. The objective is
-optimized one trajectory at a time, so each phase carries its own
-selection mechanism: \emph{demand deficit attribution} locates where
-unfairness concentrates and drives trim, and \emph{supply-gradient
-attribution} locates where added taxi presence would most improve fairness
-and drives lift.
-% 2026-07-24 (Robert): opener now summarizes all three steps by name +
-% first in-text ref to fig:overview (previously referenced only from the
-% teaser caption). Step glosses reuse fig-2-caption language verbatim-ish
-% ("relocates excess pickups", "final seeking states") for consistency.
+The two-phase structure is a scientific control, not an algorithmic
+necessity. Lift runs after trim and never alters trim's edits, so trim
+behaves identically with or without lift: the demand-only results above carry
+over into the combined run unchanged, and any difference in the trim-only
+versus trim+lift ablation
+(\S\ref{sec:exp-ablation}) is caused by lift alone. A unified single-pass editor is a natural extension we
+leave as future work.
+% 2026-07-24 (Robert): "Freezing trim keeps its optimization identical to
+% the demand-only editor, which buys two properties" recast in plain
+% cause-and-effect ("simplify" directive); forward ref to the §4 ablation
+% block added. Prior wording in git (0a638fd parent). 2026-07-24 (T4): the
+% pointer "the demand-only results of \S\ref{sec:leveling}" became "above",
+% since that material is now a block inside this same subsection.
+% src: docs/presentations/meeting_42_update/trim_plus_lift_explainer.md §3; LIFT_ALGORITHM_REFERENCE.md §14
+
+\subsection{Validity- and Fidelity-Constrained Editing}\label{sec:phys-validity}
+
+Challenge C2 makes every edit a constrained edit: an edited trajectory must
+remain a record of the same driver's behavior and a physically realizable
+path. Two limits bound the intervention: the corpus-level budget $k$ caps how
+many trajectories may change, and the per-trajectory bound $\varepsilon$ caps
+how far any one of them may move.
 
 Both phases repurpose bounded adversarial
 perturbation \cite{goodfellow2015fgsm,kurakin2017ifgsm}, in its
@@ -208,7 +330,7 @@ spatio-temporal instantiation \cite{hu2023stifgsm}, \emph{constructively},
 in the spirit of algorithmic recourse
 \cite{ustun2019recourse,wachter2018counterfactual}: the same
 coun\-ter\-fac\-tual-perturbation tooling that finds a minimal input change to flip
-a decision instead prescribes a minimal, bounded, beneficial change. Per
+a decision instead prescribes a minimal, bounded, beneficial one. Per
 iteration, the edit offset takes a signed-gradient step under a cumulative
 $L_\infty$ clip,
 \begin{equation}\label{eq:step}
@@ -221,112 +343,52 @@ $L_\infty$ clip,
 so no pickup ever moves more than $\varepsilon = 2$ cells from its recorded
 location, regardless of iteration count: the $\varepsilon$-bound
 reinterpreted as an identity-preservation budget rather than an attack-stealth
-budget. A temperature-annealed soft cell assignment makes the discrete
-cell counts differentiable in the continuous edit perturbations, so gradients
-flow from the objective back to the coordinates being edited
-(Appendix~\ref{app:editor}).
+budget. A temperature-annealed soft cell assignment keeps the discrete cell
+counts differentiable in the edit offsets, so gradients flow from the
+objective back to the coordinates being edited (Appendix~\ref{app:editor}).
 % src: PAPER/objective-motivation/MOTIVATION.md (editor); PAPER/argument/03_fairness_theory.md
 
-\textbf{Trim: demand deficit attribution.} The explained share
-$r^{2}_{\mathrm{demo}}$ of Eq.~\eqref{eq:fdemo} splits exactly across the
-active units: each carries a defined share of the
-fairness deficit, and the shares sum to the whole with nothing lost or
-double-counted (Appendix~\ref{app:derivations}); a signed variant
-separates over- from under-served units.
-% 2026-07-24 (Robert): "Because the projections ... are idempotent" retired
-% from the body (plain-language mandate); the idempotency justification
-% lives in App A ("Because M and I-H are idempotent", per-unit partition).
-Trim edits the
-trajectories whose pickups land in the highest-deficit units: each selected
-pickup relocates within the $\varepsilon$-ball, padding recorded demand into
-over-served, supply-rich cells so their measured over-service falls
-(\S\ref{sec:leveling}).
-% src: PAPER/argument/03_fairness_theory.md (per-cell attribution)
-
-\textbf{Lift: supply-gradient attribution.} The second mechanism asks of
-every active unit: \emph{how much fairer would the city's service be with
-marginally more taxi presence here, at this hour?} The quantity that answers
-it is the gradient of the objective with respect to supply. To obtain it we
-evaluate the objective at hypothetically augmented supply $S + \Delta S$ and
-read $\partial \mathcal{L} / \partial S_i$ by automatic differentiation at
-$\Delta S = 0$ as the marginal fairness effect of added presence at each of
-the $N \approx 34{,}500$ active units, in one backward pass. The result is a
-\emph{value-of-presence} map over the city: large where added presence would
-most repair the fairness terms, and small or negative where presence is
-already abundant. Its $F_{\mathrm{demo}}$ component has a closed form, given
-with its autograd verification in Appendix~\ref{app:derivations}.
-% src: PAPER/supply-lift/LIFT_ALGORITHM_REFERENCE.md §4.1 (autograd-verified closed form)
-
-To turn the map into candidates, a linearized-offset screen ranks trajectories
-whose tails could bend into high-value cells, scoring each by its best bounded
-tail translation (Appendix~\ref{app:editor}). A tail is the pickup itself plus
-up to four seeking states immediately before it; ${\approx}80$k of the
-corpus's ${\approx}95$k trajectories are long enough to carry a movable tail.
-The screen favors trajectories that already nearly serve the right areas,
-bending real behavior rather than inventing it.
-% src: PAPER/supply-lift/data/oracle.json (n_trajectories_len_ge3 80,427 of n_trajectories_total 95,297);
-% LIFT_ALGORITHM_REFERENCE.md §3 (tail = last min(TAIL_LEN=4, len-2) seeking states + the pickup, states[-1])
-The screen only \emph{nominates}: each nominee's tail is then translated under
-the full objective. The pickup moves by the full offset $\delta$, earlier tail
-states move by linearly tapered fractions of it, and the anchor state before
-the tail never moves. Edits physically route the trajectory 
-through the under-served area before the pickup without teleporting. The moved
-states carry supply with them, differentiably, contributing presence to
-the same $\Delta S$ over the $5{\times}5$ neighborhood. Supply is thus
-\emph{endogenous}: the optimizer sees the supply
-consequences of its own moves and is rewarded for providing service where it
-improves fairness. The fidelity term
-scores the actual rerouted tail at every iteration, and each completed edit
-updates a shared running state, so later edits optimize against the results of
-previous edits. Appendix~\ref{app:editor} gives the taper weights,
-supply floor, and additional editor details.
-% src: PAPER/supply-lift/LIFT_ALGORITHM_REFERENCE.md §4.2–4.3 (screen; plan assembly)
-
-\textbf{Physical validity.}\label{sec:phys-validity} Edits must satisfy the same king-move rule the
+\textbf{Physical validity.} Edits are held to the same king-move rule the
 source trajectories are filtered on (consecutive states move at most one
-cell per axis), enforced by an exact backward-reachability repair detailed
-in Appendix~\ref{app:editor}. Infeasible edits are not applied: lift skips
+cell per axis), enforced by an exact backward-reachability repair
+(Appendix~\ref{app:editor}). Infeasible edits are not applied: lift skips
 them in-loop, and the small fraction of trim edits with no compliant repair
 (about 5\%) are reverted to the originals post hoc under the same rule,
 before computing fairness metric effects (\S\ref{sec:experiments}).
 % src: PAPER/supply-lift/data/a10/shz_a10_metrics.json (n_reverted_infeasible_trim 118/2,455 ≈ 4.8%);
 % PAPER/supply-lift/FINDINGS.md §8 (rule-first disclosure)
 
-\textbf{Budget and phase order.} Trim retains its selection by demand
-deficit attribution; lift fills the remaining budget with positive-score
-nominees
-(on the primary city, $k = 10{,}000$ splits into 2{,}455 trim and 7{,}545 lift
-edits), and the supply gradient is computed on the post-trim state.
-% src: LIFT_ALGORITHM_REFERENCE.md §4.3, §5 (budget split, phase order)
-The two-phase structure is a scientific control, not an algorithmic
-necessity. Lift runs after trim and never alters trim's edits, so trim
-behaves identically with or without lift: the demand-only results of
-\S\ref{sec:leveling} carry over into the combined run unchanged, and any
-difference in the trim-only versus trim+lift ablation
-(\S\ref{sec:exp-ablation}) is caused by lift alone. A unified single-pass editor is a natural extension we
-leave as future work.
-% 2026-07-24 (Robert): "Freezing trim keeps its optimization identical to
-% the demand-only editor, which buys two properties" recast in plain
-% cause-and-effect ("simplify" directive); forward ref to the §4 ablation
-% block added. Prior wording in git (0a638fd parent).
-% src: docs/presentations/meeting_42_update/trim_plus_lift_explainer.md §3; LIFT_ALGORITHM_REFERENCE.md §14
+The resulting pipeline is the same in both phases: propose a gradient edit,
+clip it to $\varepsilon$, discretize and repair continuity (skipping or
+reverting the edit if no compliant repair exists), evaluate the objective's
+fairness and fidelity terms and keep the best iterate, commit the accepted
+edit to the shared corpus state, and repeat until the budget is spent.
+% src: restructure/ALGORITHM_FACTS.md §Validity (the six-step pipeline, kept in
+% that order so no step reads as a fidelity accept/reject gate).
+Accept, skip, and revert are decided by validity, never by a fidelity
+threshold: the frozen discriminator is a weighted term in $\mathcal{L}$ at
+every iteration and an evaluation-time gate on the finished corpus
+(\emph{Fidelity-A}), certifying identity-level behavioral fidelity rather than
+full trajectory realism, with the remaining distributional cost disclosed as
+\emph{Fidelity-B} (\S\ref{sec:exp-data-level}).
 
-\textbf{Downstream recipe: upweighted imitation.}\label{sec:downstream}
-Editing alone is necessary but not sufficient. By design, the edited slice is
-roughly a tenth of the corpus, and a vanilla behavior-cloning objective that
-weights every demonstration equally averages it away and relearns the original
-bias; we verify this null empirically (\S\ref{sec:experiments}).
+\subsection{Edit-Aware Weighting}\label{sec:downstream}
+
+Challenge C5 is why editing alone is necessary but not sufficient. By design,
+the edited slice is roughly a tenth of the corpus, and a vanilla
+behavior-cloning objective that weights every demonstration equally averages
+it away and relearns the original bias; we verify this null empirically
+(\S\ref{sec:experiments}).
 % (derived: 10,000 / 95,297 ≈ 10.5%; src: PAPER/baselines/demographic-oversampling/FINDINGS.md corpus count)
 FATE therefore \emph{upweights} the edited
 demonstrations in the imitation loss: instance reweighing for fairness
 \cite{kamirancalders2012}, a member of the pre-processing family alongside
-disparate-impact repair \cite{feldman2015}, transplanted to imitation
+dis\-pa\-rate-impact repair \cite{feldman2015}, transplanted to imitation
 learning. Whether the recovery is specific to the \emph{edit}, rather than an
 artifact of oversampling or of selecting fair data, is tested against two
 controls (upweighting a size-matched random subset and upweighting the
 corpus's fairest trajectories), with outcomes reported in
-\S\ref{sec:experiments}. This intervention targets, on the training data, the
-same demonstration bias that in-processing regularization has addressed at the
-model level \cite{zheng2023}; FATE moves the intervention to the
-demonstrations themselves.
+\S\ref{sec:experiments}. The same demonstration bias has been addressed at the
+model level by in-processing regularization \cite{zheng2023}; FATE moves the
+intervention to the demonstrations themselves.
 % src: PAPER/objective-motivation/MOTIVATION.md (downstream pairing); PAPER/argument/04_evaluation.md §1 (controls)
