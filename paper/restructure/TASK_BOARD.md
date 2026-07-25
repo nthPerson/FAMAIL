@@ -21,10 +21,9 @@ into T5's first commit.
 - [x] Q4 anon-link scope — RULED 07-25: CODE + DATA wording (her full claim); the
       Sunday anonymity pass is now load-bearing; dataset (or pointer) must be in the
       anon repo by submission — STATUS: DONE
-- [ ] A0 Robert drops source assets into `paper/restructure/zhang/`:
-      `Zhang_restructuring_email.pdf`, `Zhang_paper_revision.pdf`, `teasing.png`
-      (the teaser PNG is REQUIRED for T-F2; the PDFs are nice-to-have since digests
-      exist) — STATUS: requested
+- [x] A0 source assets: `teasing.png` DELIVERED 07-25 (2750×1540 RGBA — T-F2
+      unblocked). The two PDFs remain nice-to-have (digests in this hub cover them).
+      — STATUS: DONE (PNG)
 - [ ] A1 Robert↔Zhang: confirm who clicks submit Sunday ([57:24] ambiguity) — STATUS: open
 
 ## Lane 1 — prose restructure (sequential; one implementer at a time; each task = gates-green commit)
@@ -97,9 +96,10 @@ into T5's first commit.
       harness in `paper/figures/figure-2/`; integrate as `fig:overview`; retired
       3-panel source stays in the dir, leaves main.tex. DELIVERABLE ALSO: standalone
       PDF for Robert to email Zhang EARLY (meeting A5 cheap-veto). — STATUS: ready
-- [ ] T-F2 Fig-1 swap per `figures/FIG1_TEASER_SPEC.md` Phase 1 (needs A0 PNG):
+- [ ] T-F2 Fig-1 swap per `figures/FIG1_TEASER_SPEC.md` Phase 1: copy
+      `restructure/zhang/teasing.png` → `figures/figure-1/teaser.png`;
       \includegraphics + her caption + new \Description; old TikZ teaser retired in
-      place. — STATUS: blocked(A0)
+      place. — STATUS: ready (PNG delivered)
 - [ ] T-F3 STRETCH (default SKIP per ADJ-1): real-data case-study figure for §4 from
       existing artifacts; only if T1–T9 + T-F1/F2 are done with time left; never
       relabel the schematic. — STATUS: parked
