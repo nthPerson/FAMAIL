@@ -52,14 +52,15 @@ into T5's first commit.
       CODE + DATA wording per Q4 ruling); decide fate of the 3.0× hook sentence (keep if it fits her flow —
       it is accurate and sourced); Fig-1 swap per T-F2. New cites → checklist rows.
       — STATUS: todo (after T3 lands labels)
-- [ ] T3 NEW `02_overview.tex` — move current §3.1 content here (label `sec:overview`;
-      moved labels travel with content): definitions with cGAIL-style **boldfaced
-      terms** → problem definition → five-challenge block (stacked bold lead-ins, NO
-      itemize env; C1 budget / C2 fidelity / C3 target / C4 level-up / C5 training).
-      main.tex: insert 02_overview input; move 02_related_work input after 04.
-      SCOPE CHANGE 07-24: NO file renames this sprint (02_related_work.tex and
-      05_conclusion.tex keep their names; filenames lag section order — post-deadline
-      cleanup item). Brief: `briefs/T3-overview.md`. — STATUS: brief ready
+- [x] T3 NEW `02_overview.tex` — DONE 07-24 (c699369): definitions boldfaced,
+      problem definition, five-challenge stacked block (C1 budget / C2 fidelity /
+      C3 target / C4 level-up / C5 training; C1 uses k ≪ |T|, notation catch);
+      sec:problem label moved with content (3 appendix referrers verified);
+      main.tex order 1–6; §3.1 excised from 03. Orchestrator polish: C2 clause
+      restructured; Meeting-44→07-24-meeting comment misnomer fixed.
+      ⚠ HANDOFF: §2 opens by defining HSTD — T2's intro ¶1 also defines it (hers,
+      authoritative); orchestrator dedups §2's parenthetical AT T2 COMMIT TIME.
+      NO file renames this sprint (02_related_work.tex renders as §5). — STATUS: DONE
 - [ ] T4 `03_methodology.tex` — leading ¶ (names FATE, two stages, refs
       Figure~\ref{fig:overview}, maps components → challenge labels); then five blocks
       per ADJ-3 mapping, each opening with its challenge: (1) collective fairness
