@@ -69,7 +69,12 @@ driver; and (iii) transfers its fairness into a policy trained on it by
 imitation. FATE is a \textbf{data-augmentation} method: it edits a small,
 attribution-targeted slice of the real trajectories and generates nothing. At
 most $k$ trajectories are edited ($k = 10{,}000$ on the primary city), each
-perturbed within an $L_\infty$ ball of radius $\varepsilon = 2$ grid cells.
+edit bounded to an $L_\infty$ ball of radius $\varepsilon = 2$ grid cells.
+% 2026-07-24 (T9, consistency micro-sweep): "each perturbed within" -> "each edit
+% bounded to". FATE's own edits are never called perturbations or attacks (that
+% vocabulary is reserved for the adversarial lineage and the baseline arms); the
+% replacement matches C2's "every edit bounded to a small neighborhood" and Fig.~2's
+% "every edit stays within eps cells".
 % src: LIFT_ALGORITHM_REFERENCE.md §3 (EPSILON_BALL, budget)
 The edited slice is then upweighted during downstream training so that its
 fairness is not averaged away (\S\ref{sec:downstream}).

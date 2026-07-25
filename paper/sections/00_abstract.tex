@@ -15,6 +15,9 @@
 % "greatest ... aggregate fairness impact" because selection is attribution- and
 % screen-guided, not provably optimal. Her text states no numbers, so the numeric src
 % pointers above are historical; the superseded M44 rewrite is in git history.
+% 2026-07-24 (restructure T9, ⚖ Robert's ruling): the evaluation sentence names both
+% cities. Her text said only "real-world HSTD"; the two-city naming is restored as the
+% smallest possible edit ("... from Shenzhen and San Francisco"), nothing else touched.
 Human-generated spatial-temporal data (HSTD), such as taxi trajectories,
 passenger trip records, and gig-worker traces, encodes not only human
 decision-making strategies but also demographic disparities in how services
@@ -36,7 +39,8 @@ objective. Because the edited demonstrations constitute only a small fraction of
 the corpus, their fairness signal can be diluted during downstream training.
 FATE therefore couples a limited edit budget with edit-aware weighting to
 preserve the influence of these targeted interventions. We instantiate FATE for
-taxi mobility and evaluate it on real-world HSTD. Results show that editing a
+taxi mobility and evaluate it on real-world HSTD from Shenzhen and San
+Francisco. Results show that editing a
 small fraction of the corpus improves multiple fairness measures and increases
 distinct-taxi presence in under-served areas. Edit-aware weighting further
 preserves these gains in learned policies, demonstrating that sparse, targeted

@@ -32,10 +32,13 @@ fairness objective, or would bounded perturbation or resampling produce it as
 well (\S\ref{sec:exp-baselines})? \textbf{RQ5}: do the conclusions hold under
 other demographic feature sets and other objective weights
 (\S\ref{sec:exp-robustness}), and do they reproduce on a second city
-(\S\ref{sec:exp-sf})? The trade-off among fairness, fidelity, validity, and
-what a fixed edit budget can reach is reported throughout, each cost stated
-where its gain is claimed. Shenzhen answers every question; San Francisco then
-tests whether the conclusions reproduce.
+(\S\ref{sec:exp-sf})? Shenzhen answers every question. The trade-off among
+fairness, fidelity, validity, and what a fixed edit budget can reach is
+reported throughout, each cost stated where its gain is claimed.
+% 2026-07-24 (T9, page-budget lever a): the closing "San Francisco then tests
+% whether the conclusions reproduce" is dropped — RQ5's own second clause above
+% asks exactly that, and \S\ref{sec:exp-sf} opens by stating it. "Shenzhen answers
+% every question" is kept (it is the division of labour, stated nowhere else).
 
 \subsection{Experimental Setup}\label{sec:exp-setup}
 \textbf{Datasets.} The primary city is Shenzhen: a 50-driver sample of real
@@ -414,9 +417,14 @@ significant on all three under \emph{both} accounting conventions
 (distinct-taxi: $+0.0411$, $+0.0211$, $+0.0771$).
 % src: {2026-07-13T04-41-12_..._hgc, 2026-07-13T17-04-22_..._4feat}_filtered/channel_decomposition.json (A1 2026-07-16 + A1' tier-2 rerun 2026-07-17, B=2000): totals +0.0594 [+0.0181,+0.1013] / +0.1461 [+0.0900,+0.2039]; supply t1 +0.0054 / +0.0608; supply TIER-2 +0.0211 [+0.0181,+0.0247] / +0.0771 [+0.0706,+0.0836]; demand +0.0539* / +0.0853* (PRIMARY: t1 +0.0176, t2 +0.0411, demand n.s.)
 
-\textbf{Filtering is not a substitute.} Deleting the $K$ most-biased
+\textbf{Filtering is not a substitute.} Deleting the most-biased
 trajectories instead of editing them underperforms editing (0.7935 vs.\
-0.8214; Appendix~\ref{app:results}).
+0.8214, at matched count; Appendix~\ref{app:results}).
+% 2026-07-24 (T9, consistency micro-sweep): the bare $K$ is dropped from the body.
+% It was never defined here, and the paper's budget symbol is lowercase $k$, so a
+% reader met $K$ as an apparent second budget. The appendix keeps $K$, where the
+% same sentence introduces it, and "at matched count" states what it equals
+% (K = 2,455 = trim's own selection size).
 % src: famail_temporal/results/analysis/pareto_supplylift/pareto_points.csv (Q7-pareto ledger row: 0.7935 at K=2,455)
 
 \subsection{Transferability: San Francisco}\label{sec:exp-sf}
@@ -471,9 +479,14 @@ the wild. The distinct-taxi recount resolves the tension: the \emph{total}
 turns
 significantly \emph{positive} ($+0.0493$, CI $[+0.0185,$ $+0.0790]$),
 so the real supply improvement outweighs the demand-side denominator
-increase. More rides \emph{served} in under-served areas is a demand-side
-parity gain, which the instruments above register, while the supply channel
-independently replicates.
+increase.
+% 2026-07-24 (T9, page-budget lever b — cross-city dedup residue): the closing
+% "More rides served in under-served areas is a demand-side parity gain, which the
+% instruments above register, while the supply channel independently replicates."
+% is dropped. Both halves are already stated in this paragraph: the parity reading
+% by the demand-endogeneity sentence above, the instrument coverage by "Every
+% external instrument improves as well" in Data level, and the channel replication
+% by this paragraph's own topic sentence.
 % DECIDED 2026-07-16 (Robert): Reading B leads (external-metrics / demand-endogeneity framing).
 % D1 RESOLVED 2026-07-18: tier-2 recount CONFIRMS Reading B — supply_tier2 +0.1027 CI-sig,
 % total_tier2 flips SIG-POSITIVE +0.0493. Provisional status retired; PI ack still owed.

@@ -17,12 +17,15 @@ an edit-aware weighting of the edited demonstrations during imitation. Neither
 is sufficient alone: the edit makes the corpus fairer, and the weighting keeps
 that fairness from being averaged away in training. Figure~\ref{fig:overview}
 sketches the pipeline, whose three coarse steps (attribute, edit, upweight)
-follow the block order below. Each block answers one challenge of
-\S\ref{sec:overview}: the objective answers C3, attribution under the budget
-C1, the two editing channels C4, the constraints on every edit C2, and
-edit-aware weighting C5.
+follow the five blocks below; each block answers one challenge of
+\S\ref{sec:overview}, named in its opening sentence.
 % src: restructure/meeting/analysis_C_claims.md C-2 (the two-stage wording,
 % adopted as proposed); MEETING_DIGEST.md decision #6 (leading paragraph).
+% 2026-07-24 (T9, page-budget lever a): the explicit C-map enumeration ("the
+% objective answers C3, attribution under the budget C1, ...") is dropped as the
+% THIRD statement of the same mapping — \S2's challenge block forward-points to
+% each block, and every block's first sentence names its own challenge. The
+% binding invariant (one challenge per block, MEETING_DIGEST #6) is kept.
 
 \begin{figure}[t]
   \centering
@@ -34,17 +37,21 @@ edit-aware weighting C5.
   % trajectory, edit or measured value is plotted — hence "schematic" in the
   % caption and never "case study" (analysis_C_claims.md C-8).
   \input{figures/figure-2/framework}
+  % 2026-07-24 (T9, page-budget lever c): caption geometry tightened. Dropped the
+  % parenthetical "(the attribution mechanisms are detailed in §3.2)" — the
+  % \S\ref survives as a bare pointer; the trim/lift glosses, which the figure's
+  % own two edit-glyph labels already carry verbatim; and the closing "at uniform
+  % weights it is averaged away", which the figure's terminal contrast box states
+  % ("bias reproduced / edits averaged away"). No claim removed.
   \caption{FATE framework (schematic). (1) Attribution scores every
   trajectory's contribution to the corpus's collective fairness and selects
-  the $k \ll |\mathcal{T}|$ whose bounded edits would improve it most (the
-  attribution mechanisms are detailed in \S\ref{sec:attribution}). (2) The
-  selected trajectories receive bounded gradient edits under the fairness
-  objective: trim relocates recorded pickups within over-served areas, and
-  lift reroutes final seeking states into under-served cells; every edit stays
-  within $\varepsilon$ cells, is repaired for continuity, and is scored by a
-  frozen driver-identity discriminator inside the objective. (3) The $k$
-  edited demonstrations are upweighted during imitation so the corpus-level
-  fairness gain survives training; at uniform weights it is averaged away.}
+  the $k \ll |\mathcal{T}|$ whose bounded edits would improve it most
+  (\S\ref{sec:attribution}). (2) The selected trajectories receive bounded
+  gradient edits under the fairness objective through the two channels trim
+  and lift; every edit stays within $\varepsilon$ cells, is repaired for
+  continuity, and is scored by a frozen driver-identity discriminator inside
+  the objective. (3) The $k$ edited demonstrations are upweighted during
+  imitation so the corpus-level fairness gain survives training.}
   \Description{A three-stage framework diagram read from top to bottom. The
   first stage takes the raw trajectory corpus, scores each trajectory's
   contribution to the corpus's collective fairness, and selects k of the
@@ -65,12 +72,14 @@ edit-aware weighting C5.
 
 Challenge C3 falls on the objective itself: what the editor ascends must be
 collective rather than per-trajectory, must credit demand for the service it
-explains, must be differentiable in the coordinates an edit moves, and must
-decompose exactly into local units, so a corpus-level disparity can be
-attributed to the trajectories that carry it (\S\ref{sec:attribution}).
-FATE edits trajectories by gradient ascent on a single differentiable
-objective that combines demographic fairness, spatial equity, and driver
-fidelity.
+explains, and must be differentiable and exactly decomposable into local
+units, so a corpus-level disparity can be attributed to the trajectories that
+carry it (\S\ref{sec:attribution}). FATE edits trajectories by gradient ascent
+on a single differentiable objective combining demographic fairness, spatial
+equity, and driver fidelity.
+% (T9 lever a: "differentiable in the coordinates an edit moves" folded into
+% "differentiable" — the coordinates clause is restated verbatim three lines
+% below, "exact gradients flow through Y to the coordinates being edited".)
 
 \textbf{Demand-adjusted demographic fairness ($F_{\mathrm{demo}}$, primary).}
 Fairness here cannot mean equal service everywhere: taxi service legitimately
@@ -296,10 +305,15 @@ fairness. The fidelity term scores the actual rerouted tail at every
 iteration, and each completed edit updates a shared running state, so later
 edits optimize against the results of previous edits.
 Appendix~\ref{app:editor} gives the taper weights, supply floor, and further
-editor detail. This is the distinction C4 turns on: an outcome-side edit
-changes only the measured outcome, while a resource-aware edit changes where
-service is provided and can benefit under-served areas directly.
+editor detail.
 % src: PAPER/supply-lift/LIFT_ALGORITHM_REFERENCE.md §4.2–4.3 (screen; plan assembly)
+% 2026-07-24 (T9, page-budget lever a): the T4-era closing sentence ("This is the
+% distinction C4 turns on: an outcome-side edit changes only the measured outcome,
+% while a resource-aware edit changes where service is provided ...") is dropped as
+% the FOURTH statement of the same distinction — it is carried by this block's
+% opening sentence, by the two \textbf lead-ins ("Trim changes the measured
+% allocation statistic without changing the process that provides service" /
+% "Lift changes the provision process itself"), and by C4 in \S2.
 
 The two-phase structure is a scientific control, not an algorithmic
 necessity. Lift runs after trim and never alters trim's edits, so trim
