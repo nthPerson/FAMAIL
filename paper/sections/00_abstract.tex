@@ -28,7 +28,7 @@
 % sentence: "further preserves" -> "carries ... into", matching \S6's verb, with
 % "demonstrating" dropped next to two uses of "demonstrations".
 Human-generated spatial-temporal data (HSTD), such as taxi trajectories,
-passenger trip records, and gig-worker traces, encodes not only human
+passenger trip records, and gig-worker traces, encode not only human
 decision-making strategies but also demographic disparities in how services
 are distributed across groups and regions. When such data is used for mobility
 modeling, simulation, and decision-making, these disparities can be learned and
@@ -45,13 +45,11 @@ the underlying resource-provision process and direct additional resources
 toward under-served areas. All edits satisfy spatial and continuity constraints, and a
 frozen driver-identity discriminator scores behavioral fidelity in the editing
 objective. Because the edited demonstrations are only a small fraction of the
-corpus, training that weights every demonstration equally averages their
-fairness signal away. FATE therefore upweights the edited demonstrations
-during downstream training. We instantiate FATE for
+corpus, training under uniform weights averages their fairness signal away, so
+FATE upweights them during downstream training. We instantiate FATE for
 taxi mobility and evaluate it on real-world HSTD from Shenzhen and San
-Francisco. Results show that editing a
-small fraction of the corpus improves multiple established fairness measures
-the objective never optimizes, and increases
+Francisco. Results show that these edits improve multiple established fairness
+measures the objective never optimizes, and increase
 distinct-taxi presence in under-served areas. Edit-aware weighting then
 carries these gains into learned policies, on 12 of 12 paired seeds in both
 cities ($p = .00049$): sparse, targeted trajectory intervention can improve

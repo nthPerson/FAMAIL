@@ -406,3 +406,37 @@ compressible glue that can absorb a line if the close read adds one.
 Conflict A (area tints: amber/cobalt default vs her green/pink, `\tzTintScheme`),
 Conflict B (taxi color: neutral default vs her blue, `\tzTaxiMode`), and D11 (the trim
 overlay exists, verified correct, and is OFF). Each flips with one macro.
+
+---
+
+# PART 5 — page-1 front matter fixed; the zero-margin warning is retired (2026-07-25)
+
+Robert spotted the ACM Reference Format block breaking across the column boundary on
+page 1. Diagnosis: that block needs 4 lines in column 1, but only 2 fit before acmart's
+permission block claims the bottom, so its last 2 lines ("Knowledge Discovery and Data
+Mining (KDD '27). ACM, New York, NY, USA, / 13 pages.") landed in column 2 between the
+Figure-1 caption and the §1 heading. The fix had to be worth **2** lines, not 1: freeing
+one would have pulled back only the first and orphaned "13 pages." in column 2.
+
+Applied (Robert's choice of four options, the hybrid): the lowest-significance CCS
+concept "Applied computing~Transportation" (100) removed, taking the CCS block from 3
+rendered lines to 2, plus two abstract trims worth ~10 words, both of which removed
+repetition rather than content — "training that weights every demonstration equally"
+→ "training under uniform weights" (the paper's own term in §4.3, §6 and Figure 2), and
+"editing a small fraction of the corpus improves" → "these edits improve" (the phrase
+"small fraction of the corpus" appeared twice in four sentences).
+
+**Result, and it is larger than the fix itself: the spill is gone, and main content now
+ends at line 921 of the 928 available on page 8 — roughly 7 rendered lines of headroom,
+where Part 3 recorded zero.** REFERENCES now begins on page 8. The close read has room
+to breathe, and the Overleaf-reflow risk Part 3 flagged is much reduced.
+
+Also this round: contribution 1's "while only a small subset of individual trajectories
+**can be modified**" was factually wrong (nothing prevents editing any trajectory; the
+editor applies to whatever attribution selects). It now reads "while only a small subset
+**is edited by design**" — Robert's pick from four alternatives, and 2 words shorter.
+
+⚠ Open, deliberately not touched: the abstract now reads "…gig-worker traces, **encode**
+not only human decision-making strategies" but two sentences later "When such data
+**is** used". Both treatments of *data* are defensible; the abstract should pick one.
+§1 uses the singular ("HSTD **is** not a neutral record").

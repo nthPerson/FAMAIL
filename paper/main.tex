@@ -86,17 +86,21 @@
        <concept_desc>Information systems~Spatial-temporal systems</concept_desc>
        <concept_significance>300</concept_significance>
    </concept>
-   <concept>
-       <concept_id>10010405.10010444.10010449</concept_id>
-       <concept_desc>Applied computing~Transportation</concept_desc>
-       <concept_significance>100</concept_significance>
-   </concept>
+% 2026-07-25 (Robert's ruling, page-1 front-matter fix): the fourth concept,
+% "Applied computing~Transportation" (significance 100, the lowest of the four),
+% was REMOVED here and below. Reason is typographic, not editorial: the rendered
+% CCS block was three lines, which pushed the ACM Reference Format block past the
+% bottom of column 1 so that its last two lines spilled into column 2 between the
+% Figure-1 caption and the \S1 heading. Dropping this one concept returns the CCS
+% block to two lines. The three that remain (Machine learning 500, Data mining
+% 300, Spatial-temporal systems 300) are the load-bearing ones for indexing this
+% paper. If the ids are regenerated at dl.acm.org/ccs per the TODO above and
+% Transportation is wanted back, re-check the column-1 fit at the same time.
 </ccs2012>
 \end{CCSXML}
 \ccsdesc[500]{Computing methodologies~Machine learning}
 \ccsdesc[300]{Information systems~Data mining}
 \ccsdesc[300]{Information systems~Spatial-temporal systems}
-\ccsdesc[100]{Applied computing~Transportation}
 % Prior keywords (retired 2026-07-24; kept for reference — they informed the
 % concept selection above):
 % \keywords{fairness, bias mitigation, imitation learning, behavior cloning,
