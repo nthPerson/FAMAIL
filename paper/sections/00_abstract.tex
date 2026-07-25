@@ -7,36 +7,38 @@
 % Rewritten 2026-07-24 per the Meeting-44 mandate (problem -> challenge -> approach
 % shape; self-explanatory language; "in-processing" and "distribution shift" jargon
 % glossed or removed). Pre-rewrite version: paper-pre-rewrite-2026-07-23/.
-Imitation-learned mobility policies are trained to reproduce the
-trajectories of a real taxi fleet, and those trajectories record the
-fleet's demographic service inequity along with its expertise, so a
-faithful imitator learns both. Repairing the inequity is a trade-off
-between fairness and fidelity: regenerating or heavily rewriting the data
-makes it fairer but it stops resembling real driver behavior, while adding 
-a fairness penalty to a model's training loss makes that one model fairer 
-without changing the biased demonstrations underneath it. We present FATE,
-fairness-aware trajectory editing: a data augmentation method that
-\emph{edits} a small, attribution-chosen slice of the real trajectories in
-place and upweights the edited demonstrations during behavior cloning so
-the fairness survives training. Two bounded, gradient-guided editing
-phases act under one differentiable objective: \emph{trim} relocates
-recorded pickups within over-served areas so their measured over-service
-falls, and \emph{lift} reroutes drivers' final seeking minutes into
-under-served areas, with the supply consequences of the reroute part of
-what the objective optimizes. Every edit stays within a two-cell radius,
-and a frozen ST-SiameseNet driver-identity discriminator verifies that an
-edited trajectory still resembles the original driver behavior. On taxi trajectories
-from two cities (Shenzhen; San Francisco), editing improves established
-fairness measures that the objective never optimizes: demographic parity,
-disparate impact, and the Theil index. Where demand-only editing improves
-such measures purely by reducing over-service, the supply channel opened
-by lift adds statistically significant taxi presence, counted as distinct
-vehicles, to under-served areas in both cities. Upweighted behavior
-cloning carries the fairness gains into trained policies, and does so
-specifically through the edited demonstrations: neither a
-random-up\-weight\-ing nor a most-fair selection control reproduces the
-transfer. A targeted demographic oversampling baseline on Shenzhen
-captures only part of the data-level gain at the cost of fabricating
-10.5\% of the corpus, and its untargeted placebo degrades fairness
-outright. FATE improves measured fairness without fabricating data and
-without obscuring which change produced the improvement.
+% Adopted from the PI's revision draft 2026-07-24 (late), restructure T1: her abstract
+% near-verbatim, with two pre-authorized claim repairs. (1) Fidelity is scored in the
+% editing objective by a frozen driver-identity discriminator, not enforced as a
+% per-edit constraint (ALGORITHM_FACTS "Validity", divergence D15); her
+% "behavioral-fidelity constraints" is reworded accordingly. (2) "estimated" added to
+% "greatest ... aggregate fairness impact" because selection is attribution- and
+% screen-guided, not provably optimal. Her text states no numbers, so the numeric src
+% pointers above are historical; the superseded M44 rewrite is in git history.
+Human-generated spatial-temporal data (HSTD), such as taxi trajectories,
+passenger trip records, and gig-worker traces, encodes not only human
+decision-making strategies but also demographic disparities in how services
+are distributed across groups and regions. When such data is used for mobility
+modeling, simulation, and decision-making, these disparities can be learned and
+propagated to downstream applications. Existing approaches either modify large
+portions of the data without tracing corpus-level disparity to specific
+trajectories, or constrain downstream models while leaving the biased
+demonstrations unchanged. We introduce FATE, a Fairness-Aware Trajectory
+Editing framework for budgeted fairness intervention in HSTD. Under a limited
+editing budget, FATE attributes corpus-level disparity to influential
+trajectories and applies bounded local edits with the greatest estimated
+aggregate fairness impact. It distinguishes outcome-side edits, which alter
+measured allocation statistics, from resource-aware edits, which modify the
+underlying service-provision process and direct additional resources toward
+under-served areas. All edits satisfy spatial and continuity constraints, and a
+frozen driver-identity discriminator scores behavioral fidelity in the editing
+objective. Because the edited demonstrations constitute only a small fraction of
+the corpus, their fairness signal can be diluted during downstream training.
+FATE therefore couples a limited edit budget with edit-aware weighting to
+preserve the influence of these targeted interventions. We instantiate FATE for
+taxi mobility and evaluate it on real-world HSTD. Results show that editing a
+small fraction of the corpus improves multiple fairness measures and increases
+distinct-taxi presence in under-served areas. Edit-aware weighting further
+preserves these gains in learned policies, demonstrating that sparse, targeted
+trajectory intervention can improve collective service fairness with limited
+data modification.
