@@ -1,0 +1,47 @@
+% Standalone test harness for the TikZ re-implementation of the Figure-1
+% teaser (fig:teaser). Compile IN THIS DIRECTORY -- never against
+% paper/main.tex:
+%   cd paper/figures/figure-1 && pdflatex -interaction=nonstopmode figure-1-teaser-test.tex
+%   pdftoppm -png -r 150 figure-1-teaser-test.pdf preview
+% Uses acmart so fonts, \columnwidth and \textheight are manuscript-true.
+% The caption below is a WORKING copy (Dr. Zhang's adopted caption, from
+% FIG1_TEASER_SPEC.md); the manuscript caption + \label{fig:teaser} live
+% in sections/01_introduction.tex.
+\documentclass[sigconf,review,anonymous]{acmart}
+\settopmatter{printacmref=false}
+\setcopyright{none}
+\microtypesetup{expansion=false} % same local-font shim as main.tex
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta}
+% the figure body resolves raster paths relative to main.tex; compiling
+% from inside figures/figure-1/ the prefix must be empty:
+\newcommand{\figonedir}{}
+\begin{document}
+\title{Figure-1 teaser test harness --- not the manuscript}
+\maketitle
+
+% Hard measurement of the figure box, so the two size gates are checked
+% by the compiler rather than by eye. Height gate: 135.0pt HARD (the PNG
+% renders at 241.15 x 135.0pt; the paper is over the page limit, so the
+% TikZ version must not be taller). This overrides the spec's stale
+% 0.45\textheight allowance.
+\newsavebox{\figbox}
+\sbox{\figbox}{\input{figure-1-teaser}}
+
+\noindent Column width: \the\columnwidth. Height budget (hard):
+135.0pt.\\
+Measured figure box: width \the\wd\figbox, height
+\the\dimexpr\ht\figbox+\dp\figbox\relax\ (must be
+$\le$ \the\columnwidth\ and $\le$ 135.0pt).
+Overfull warnings in the log mean the tikzpicture exceeds
+\verb|\columnwidth|.
+
+\begin{figure}[h]
+  \centering
+  \usebox{\figbox}
+  \caption{Collective service disparity emerges from the aggregation of
+  local trajectories (left). FATE edits a small set of influential
+  trajectories to improve corpus-level fairness (right).}
+\end{figure}
+
+\end{document}

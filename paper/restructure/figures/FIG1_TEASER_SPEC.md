@@ -1,5 +1,31 @@
 # FIGURE 1 SPEC — teaser (Dr. Zhang's PNG; optional TikZ remake)
 
+> **PHASE 2 EXECUTED (2026-07-25).** The TikZ remake is BUILT at
+> `paper/figures/figure-1/figure-1-teaser.tex` (harness:
+> `figure-1-teaser-test.tex`; previews + email-ready `fig1-for-zhang.png`
+> beside it). Measured 239.50 × 115.54 pt — under `\columnwidth` and under
+> the 135.0 pt hard cap that SUPERSEDES this spec's stale
+> `0.45\textheight` allowance (the PNG renders at 241.15 × 135.0 pt and
+> the paper is over the page budget, so taller is not allowed). It is a
+> drop-in: `01_introduction.tex` still ships the PNG until Robert rules.
+> Full build/deviation/decision record: `figure-1/FIG1_TIKZ_REPORT.md`.
+> Spec deviations, macro-reversible (report §5 has the full table):
+> - SEMANTIC FIX for FINAL_REVIEW_FINDINGS #1: disadvantaged passengers
+>   4/4 in both panels (the PNG drops one), the orange passenger is a
+>   recolored in-place disadvantaged passenger (per this spec's own
+>   placement, which the PNG deviated from), and the edit is an explicit
+>   rerouted polyline (vacated advantaged position → boundary → arriving
+>   amber taxi, arrowhead) in fig-2's edit vocabulary.
+> - Tints default to fig-2's amber/cobalt (⚖ Conflict A, Robert to rule;
+>   `\tzTintScheme{greenpink}` restores Zhang's pair), taxis default
+>   neutral charcoal (⚖ Conflict B; `\tzTaxiMode{blue}` restores), outer
+>   card tints dropped (`\showCardTintstrue` restores), trim overlay
+>   built but OFF (`\showTrimEdittrue`).
+> - In-panel label sizes: titles/side names 7/6 pt, Service-Demand and
+>   legend 5 pt — the last two are below this spec's ≥`\scriptsize`
+>   check, matching the PNG's own effective ~5.5 pt (trade-off stated in
+>   the report §2, not silently accepted).
+
 MEETING UPDATE (analysis_B §2, [10:42–11:21], [56:27]): Zhang's version is COMMITTED
 with **no modifications requested**, and she ranked TikZ re-implementation "least
 priority — after all content is final". So the plan is two-phase:

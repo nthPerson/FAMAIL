@@ -1,0 +1,406 @@
+% =====================================================================
+% Figure 1 (fig:teaser) -- TikZ re-implementation of Dr. Zhang's Keynote
+% teaser PNG (teaser.png, 2750x1540, the shipping fallback -- byte-identical,
+% untouched). NEW 2026-07-25. Drop-in alternative: the PNG \includegraphics
+% in sections/01_introduction.tex keeps working until the swap is applied.
+%
+% This file is the figure BODY only: one tikzpicture sized for \columnwidth,
+% meant to be \input inside a figure environment in the manuscript (caption
+% and \label{fig:teaser} live there, not here).
+% Standalone harness: figure-1-teaser-test.tex (compile in THIS directory:
+%   pdflatex -interaction=nonstopmode figure-1-teaser-test.tex ).
+%
+% SPEC: paper/restructure/figures/FIG1_TEASER_SPEC.md (Phase-2 visual spec).
+% Conversion reference: teaser.png; every icon position below is a
+% panel-fraction pair measured from that PNG with PIL (blob centroids).
+% Visual sibling of figures/figure-2/framework.tex: same palette, same
+% edit vocabulary (amber = the edit; faint open circle = vacated original;
+% dashed amber + Stealth arrowhead = the rerouted tail).
+%
+% GEOMETRY (cm; y grows DOWNWARD as negative): canvas 8.40 wide; vertical
+% stack = title band + map panels + label band + legend band (heights are
+% the \tz*H macros below; total ~4.10 cm ~= 117 pt). Gates: width <=
+% \columnwidth = 241.15pt, height <= 135.0pt HARD (the PNG renders at
+% 241.15 x 135.0pt today; taller makes the page-budget crisis worse).
+% The harness prints the measured box. Keep the last line of this file
+% ending in a comment character (a bare newline would leak an interword
+% space when the file is \input mid-paragraph).
+% Layout rule that keeps this tunable: the two side labels under each
+% panel own the label band exclusively (nothing else may enter it), and
+% each panel's content lives in a scope shifted to the panel's top-left
+% corner, all positions being fractions of \tzPW x \tzPH via \pxy.
+%
+% COLOR SEMANTICS (inherited from framework.tex; grayscale-safe: counts,
+% labels, dash patterns and the arrowhead carry every distinction, color
+% is reinforcement only):
+%   tzsel  amber  #D97706 = the edit (edited pair + rerouted trajectory);
+%   tzlow  cobalt #2563EB = under-served AREA tint family (tzlow!12);
+%   tzsel!14              = over-served AREA tint (pale fills mark AREAS,
+%                           never objects -- fig-2 convention);
+%   tzink  #4B5563 = neutral ink: untouched taxis, passengers, titles;
+%   tzgray #6B7280 = existing trajectories; tzfaint #D1D5DB = street grid.
+%
+% SEMANTIC FIX vs the PNG (FINAL_REVIEW_FINDINGS #1, the perverse edit):
+% the PNG drops a disadvantaged passenger (4 -> 3) and places the orange
+% passenger on the ADVANTAGED side of the boundary -- read as a pickup
+% relocated OUT of the disadvantaged district, which S3.3 rules out. Here
+% the disadvantaged side keeps 4 passengers in BOTH panels (her own label
+% says "Demand: Similar"); the orange passenger is one of them RECOLORED
+% (the passenger who now gets served, not a passenger who moved); the
+% edited trajectory starts at the vacated advantaged taxi position,
+% crosses the boundary, and ends at the orange taxi with an arrowhead --
+% presence added under conservation, demand untouched.
+%
+% VOCABULARY GUARDS (binding): no "attack"/"perturbation"/"adversarial"/
+% "z-score"; no era numbers (schematic only -- nothing may look like
+% data); trim never crosses the boundary (the optional trim overlay keeps
+% both endpoints inside the advantaged tint); fairness is collective --
+% no per-trajectory fairness labels.
+%
+% DEVIATIONS from the PNG, each reversible below (full rationale in
+% FIG1_TIKZ_REPORT.md): D1 semantic fix (above); D2 area tints amber/blue
+% (\tzTintScheme{greenpink} restores hers); D3 neutral charcoal taxis
+% (\tzTaxiMode{blue} restores hers); D4 outer card tints dropped
+% (\showCardTintstrue restores); D5 side-label colors follow the tint
+% scheme; D6 edit color amber not her #F7BB07 (swap \tzEdit alias);
+% D7 drawn streets, not a raster map (\useRasterBackgroundtrue swaps in
+% corpus_background_raw.png).
+% =====================================================================
+% ---------------------------------------------------------------------
+% CONFIGURATION BLOCK -- everything a human would tinker with.
+% ---------------------------------------------------------------------
+% ---- palette (fig-2 hexes + Zhang's own measured hexes; no invented
+% ---- colors). Re-theme via the semantic \colorlet aliases, not the draws.
+\definecolor{tzink}{HTML}{4B5563}%    neutral ink (text, untouched taxis)
+\definecolor{tzgray}{HTML}{6B7280}%   existing trajectories, subtitles
+\definecolor{tzrule}{HTML}{9CA3AF}%   frames, separators, block arrow
+\definecolor{tzsel}{HTML}{D97706}%    amber: the edit (fig-2 color A)
+\definecolor{tzlow}{HTML}{2563EB}%    cobalt: under-served family (fig-2 B)
+\definecolor{tzfaint}{HTML}{D1D5DB}%  street lattice
+\definecolor{tzband}{HTML}{FAFAFB}%   legend band fill (fig-2 fwbox)
+\definecolor{tzZgreen}{HTML}{F0F8F1}% Zhang tint: advantaged (measured)
+\definecolor{tzZpink}{HTML}{FBEFEF}%  Zhang tint: disadvantaged (measured)
+\definecolor{tzZcardL}{HTML}{FEF5F2}% Zhang left outer card (measured)
+\definecolor{tzZcardR}{HTML}{F7F9F6}% Zhang right outer card (measured)
+\definecolor{tzZadv}{HTML}{065006}%   Zhang "Advantaged" green (measured)
+\definecolor{tzZdis}{HTML}{C4373E}%   Zhang "Disadvantaged" red (measured)
+\definecolor{tzZtaxi}{HTML}{639CE2}%  Zhang taxi blue (measured)
+\definecolor{tzZedit}{HTML}{F7BB07}%  Zhang edit orange (measured)
+% ---- toggles ---------------------------------------------------------
+\newif\ifshowTrimEdit\showTrimEditfalse%     advantaged-side trim overlay
+\newif\ifshowVacatedGhost\showVacatedGhosttrue% open circle at vacated taxi
+\newif\ifshowAddedMark\showAddedMarktrue%    small + beside the orange taxi
+\newif\ifshowCardTints\showCardTintsfalse%   Zhang's pink/green outer cards
+\newif\ifuseRasterBackground\useRasterBackgroundfalse% PNG map instead of
+%                                            drawn streets (escape hatch)
+\providecommand{\figonedir}{figures/figure-1/}% raster path from main.tex;
+%                                            the harness predefines it empty
+% ---- scheme selectors (compare with \ifx against the tzOpt* tokens) ---
+\def\tzTintScheme{amberblue}%  amberblue | greenpink   (Conflict A)
+\def\tzTaxiMode{neutral}%      neutral   | blue        (Conflict B)
+\def\tzOptAmberblue{amberblue}\def\tzOptNeutral{neutral}%
+\ifx\tzTintScheme\tzOptAmberblue
+  \colorlet{tzAdvTint}{tzsel!14}\colorlet{tzDisTint}{tzlow!12}%
+  \colorlet{tzAdvLabel}{tzsel!75!black}\colorlet{tzDisLabel}{tzlow!75!black}%
+\else
+  \colorlet{tzAdvTint}{tzZgreen}\colorlet{tzDisTint}{tzZpink}%
+  \colorlet{tzAdvLabel}{tzZadv}\colorlet{tzDisLabel}{tzZdis}%
+\fi
+\ifx\tzTaxiMode\tzOptNeutral
+  \colorlet{tzTaxiInk}{tzink}%
+\else
+  \colorlet{tzTaxiInk}{tzZtaxi}%
+\fi
+\colorlet{tzEdit}{tzsel}%      the edited pair + trajectory; swap to
+%                              tzZedit to restore the PNG's orange
+% ---- geometry (cm) ---------------------------------------------------
+\def\tzW{8.40}%      canvas width (8.40 cm = 239.0 pt <= \columnwidth)
+\def\tzPW{3.60}%     panel width  (two panels; center zone = W - 2*PW)
+\def\tzPH{2.60}%     panel height
+\def\tzTitleH{0.30}% title band height (titles sit inside it)
+\def\tzLabelH{0.72}% label band height (side labels only -- keep clear)
+\def\tzLegGap{0.06}% gap between label band and legend band
+\def\tzLegH{0.42}%   legend band height
+\def\tzInPad{0.10}%  inner panel margin the icons respect (documentation;
+%                    the position lists below already honor it)
+\def\tzBx{0.517}%    district boundary x as a FRACTION of panel width
+%                    (same fraction in both panels, so they stay in sync)
+% derived band edges (edit the heights above, not these):
+\pgfmathsetmacro\tzPanelTop{-\tzTitleH}%
+\pgfmathsetmacro\tzPanelBot{\tzPanelTop-\tzPH}%
+\pgfmathsetmacro\tzLegTop{\tzPanelBot-\tzLabelH-\tzLegGap}%
+\pgfmathsetmacro\tzLegBot{\tzLegTop-\tzLegH}%
+\pgfmathsetmacro\tzRPx{\tzW-\tzPW}%    right panel left edge (= 4.80)
+\pgfmathsetmacro\tzCx{\tzW/2}%         center-zone axis (= 4.20)
+\pgfmathsetmacro\tzLcx{\tzPW/2}%       left panel center
+\pgfmathsetmacro\tzRcx{\tzRPx+\tzPW/2}% right panel center
+\pgfmathsetmacro\tzArrY{\tzPanelTop-0.45*\tzPH}% block-arrow center y
+% ---- fonts (exact sizes; report legibility in FIG1_TIKZ_REPORT.md) ---
+\def\tzTitleFont{\scriptsize}%                     panel titles (7 pt)
+\def\tzSideFont{\fontsize{6}{7}\selectfont\bfseries}% Advantaged/Disadv.
+\def\tzInfoFont{\tiny}%                            Service/Demand (5 pt)
+\def\tzLegendFont{\tiny}%                          legend entries (5 pt)
+\def\tzFateFont{\scriptsize\bfseries}%             center FATE label
+% ---- icon geometry ---------------------------------------------------
+\def\tzTaxiScale{1.55}%  taxi pic base is 0.248 cm wide -> ~0.38 cm
+\def\tzPickScale{1.25}%  passenger pic base is 0.234 cm tall -> ~0.29 cm
+\def\tzTaxiDy{0.0}%      vertical centering nudge for taxis (cm)
+\def\tzPickDy{0.0}%      vertical centering nudge for passengers (cm)
+% ---- boundary + line register (fig-2 weights) ------------------------
+\def\tzBoundW{0.9pt}\def\tzBoundDash{on 3pt off 1.6pt}%
+\def\tzTrajW{0.5pt}%     existing trajectories (fig-2 tnone)
+\def\tzGridW{0.35pt}%    street lattice
+\def\tzEditW{0.9pt}\def\tzEditDash{on 1.7pt off 1.1pt}% edited trajectory
+% ---- label strings (PI's wording -- do not improve) ------------------
+\def\tzTitleL{Biased Service in HSTD}%
+\def\tzTitleR{FATE for Fairer Service}%
+\def\tzFateLabel{FATE}%
+\def\tzAdvName{Advantaged}\def\tzDisName{Disadvantaged}%
+\def\tzAdvInfoL{Service: High\\Demand: Low}%
+\def\tzDisInfoL{Service: Low\\Demand: High}%
+\def\tzAdvInfoR{Service: Moderate\\Demand: Similar}%
+\def\tzDisInfoR{Service: Increased\\Demand: Similar}%
+\def\tzLegTaxi{Taxi}\def\tzLegPick{Passenger}%
+\def\tzLegExist{Existing trajectory}\def\tzLegEdit{Edited trajectory}%
+% ---- icon positions: panel-fraction pairs x/y, measured from the PNG --
+% Conservation is visible here: right adv taxis = left adv taxis MINUS
+% the vacated one (\tzVacated); right dis gains exactly the orange taxi.
+\def\tzAdvTaxis{0.086/0.150, 0.228/0.203, 0.442/0.287, 0.086/0.470,
+                0.360/0.729}%                       left panel: 5
+\def\tzAdvTaxisR{0.086/0.150, 0.228/0.203, 0.086/0.470,
+                 0.360/0.729}%                      right panel: 4
+\def\tzVacatedX{0.442}\def\tzVacatedY{0.287}%       the taxi that left
+\def\tzDisTaxis{0.886/0.182, 0.934/0.639}%          both panels: 2
+\def\tzOrangeTaxiX{0.630}\def\tzOrangeTaxiY{0.550}% right panel: +1 (PNG
+%            had the pair at ~(0.61,0.39); moved to the open lower-middle
+%            so the rerouted path and the pair sit clear of other icons)
+\def\tzAdvPicks{0.119/0.269, 0.047/0.615, 0.098/0.615}% both panels: 3
+\def\tzDisPicks{0.655/0.266, 0.920/0.409, 0.861/0.860}% both panels: 3 dark
+\def\tzServedX{0.740}\def\tzServedY{0.590}%  4th dis passenger: dark on the
+%            left, RECOLORED tzEdit on the right (served, not moved); PNG
+%            position (0.669,0.409) moved with the pair (same spot in BOTH
+%            panels, so demand visibly does not move)
+% edited trajectory (fraction waypoints THROUGH \pxy; vacated position ->
+% down -> east across the boundary -> arrowhead at the taxi's west edge
+% (0.574 = \tzOrangeTaxiX - half the scaled taxi width, in fractions)):
+\def\tzEditPath{\pxy{\tzVacatedX}{\tzOrangeTaxiY}
+                -- \pxy{0.574}{\tzOrangeTaxiY}}%
+% optional trim overlay (both endpoints INSIDE the advantaged tint):
+\def\tzTrimFromX{0.200}\def\tzTrimFromY{0.500}%
+\def\tzTrimToX{0.310}\def\tzTrimToY{0.560}%
+% ---------------------------------------------------------------------
+% helper: panel-fraction pair -> local cm coordinate
+\providecommand{\pxy}[2]{({#1*\tzPW},{-#2*\tzPH})}%
+% shared base map: streets (or raster), tints, boundary, frame. Drawn
+% identically in both panels so the only differences are the icons.
+\providecommand{\tzBaseMap}{%
+  \fill[tzAdvTint] (0,0) rectangle ({\tzBx*\tzPW},-\tzPH);
+  \fill[tzDisTint] ({\tzBx*\tzPW},0) rectangle (\tzPW,-\tzPH);
+  \ifuseRasterBackground
+    \begin{scope}
+      \clip (0,0) rectangle (\tzPW,-\tzPH);
+      \node[inner sep=0pt, opacity=0.55] at ({0.5*\tzPW},{-0.5*\tzPH})
+        {\includegraphics[width=\tzPW cm]{\figonedir corpus_background_raw.png}};
+    \end{scope}
+  \else
+    % street lattice (faint)
+    \begin{scope}[tzstreet]
+      \draw \pxy{0.09}{0.05} -- \pxy{0.09}{0.95};
+      \draw \pxy{0.21}{0.00} -- \pxy{0.21}{0.75};
+      \draw \pxy{0.33}{0.10} -- \pxy{0.33}{1.00};
+      \draw \pxy{0.45}{0.00} -- \pxy{0.45}{0.90};
+      \draw \pxy{0.57}{0.05} -- \pxy{0.57}{1.00};
+      \draw \pxy{0.69}{0.00} -- \pxy{0.69}{0.85};
+      \draw \pxy{0.81}{0.15} -- \pxy{0.81}{1.00};
+      \draw \pxy{0.93}{0.00} -- \pxy{0.93}{0.90};
+      \draw \pxy{0.03}{0.10} -- \pxy{0.95}{0.10};
+      \draw \pxy{0.00}{0.26} -- \pxy{1.00}{0.26};
+      \draw \pxy{0.05}{0.42} -- \pxy{0.90}{0.42};
+      \draw \pxy{0.00}{0.58} -- \pxy{1.00}{0.58};
+      \draw \pxy{0.08}{0.74} -- \pxy{0.95}{0.74};
+      \draw \pxy{0.00}{0.88} -- \pxy{0.92}{0.88};
+    \end{scope}
+    % existing trajectories (darker, orthogonal-ish polylines; the
+    % legend's "Existing trajectory" refers to these)
+    \begin{scope}[tztraj]
+      \draw \pxy{0.03}{0.14} -- \pxy{0.15}{0.14} -- \pxy{0.15}{0.30}
+            -- \pxy{0.28}{0.30};
+      \draw \pxy{0.09}{0.48} -- \pxy{0.24}{0.48} -- \pxy{0.24}{0.62}
+            -- \pxy{0.38}{0.64};
+      \draw \pxy{0.30}{0.08} -- \pxy{0.30}{0.24} -- \pxy{0.42}{0.26}
+            -- \pxy{0.42}{0.42};
+      \draw \pxy{0.05}{0.78} -- \pxy{0.18}{0.78} -- \pxy{0.20}{0.92}
+            -- \pxy{0.34}{0.92};
+      \draw \pxy{0.38}{0.55} -- \pxy{0.50}{0.55} -- \pxy{0.50}{0.70}
+            -- \pxy{0.62}{0.72};
+      \draw \pxy{0.45}{0.05} -- \pxy{0.57}{0.08} -- \pxy{0.57}{0.22}
+            -- \pxy{0.66}{0.22};
+      \draw \pxy{0.52}{0.86} -- \pxy{0.64}{0.86} -- \pxy{0.66}{0.74}
+            -- \pxy{0.78}{0.74};
+      \draw \pxy{0.60}{0.32} -- \pxy{0.72}{0.32} -- \pxy{0.72}{0.48}
+            -- \pxy{0.85}{0.48};
+      \draw \pxy{0.70}{0.06} -- \pxy{0.70}{0.18} -- \pxy{0.82}{0.20}
+            -- \pxy{0.82}{0.34};
+      \draw \pxy{0.75}{0.60} -- \pxy{0.88}{0.60} -- \pxy{0.88}{0.76}
+            -- \pxy{0.97}{0.76};
+      \draw \pxy{0.86}{0.10} -- \pxy{0.95}{0.12} -- \pxy{0.95}{0.28};
+      \draw \pxy{0.28}{0.72} -- \pxy{0.28}{0.84} -- \pxy{0.44}{0.84};
+      \draw \pxy{0.62}{0.92} -- \pxy{0.78}{0.92} -- \pxy{0.78}{0.82};
+      \draw \pxy{0.48}{0.36} -- \pxy{0.48}{0.48} -- \pxy{0.60}{0.50};
+    \end{scope}
+  \fi
+  \draw[tzboundary] ({\tzBx*\tzPW},0) -- ({\tzBx*\tzPW},-\tzPH);
+  \draw[tzframe] (0,0) rectangle (\tzPW,-\tzPH);
+}%
+% dash-pattern values must be pre-expanded (TikZ's dash scanner reads the
+% "on .. off .." tokens literally), so these two styles are set via \edef:
+\edef\tzexpandstyles{\noexpand\tikzset{
+  tzboundary/.style={tzink!65, line width=\tzBoundW,
+                     dash pattern=\tzBoundDash},
+  tzedit/.style={tzEdit, line width=\tzEditW,
+                 dash pattern=\tzEditDash}}}\tzexpandstyles
+\begin{tikzpicture}[x=1cm, y=1cm, line cap=round, line join=round,
+  font=\tzInfoFont, text=tzink, inner sep=1.2pt,
+  % ---- glyphs lifted from the retired figure-1.tex (color comes from
+  % ---- the \pic options so the same pic serves neutral/blue/edited) ---
+  pick/.pic={\draw[line width=0.6pt] (0,0.075) circle[radius=0.042];
+             \draw[line width=0.6pt] (0,0.033) -- (0,-0.046);
+             \draw[line width=0.6pt] (-0.065,0.0) -- (0.065,0.0);
+             \draw[line width=0.6pt] (0,-0.046) -- (-0.055,-0.117)
+                                     (0,-0.046) -- (0.055,-0.117);},
+  taxi/.pic={\draw[fill=white, line width=0.6pt]
+             (-0.124,-0.046) -- (-0.124,0.015) -- (-0.062,0.015)
+             -- (-0.036,0.073) -- (0.055,0.073) -- (0.082,0.015)
+             -- (0.124,0.015) -- (0.124,-0.046) -- cycle;
+             \draw[fill=white, line width=0.45pt]
+             (-0.068,-0.046) circle[radius=0.027]
+             (0.068,-0.046) circle[radius=0.027];},
+  % ---- styles ---------------------------------------------------------
+  tzframe/.style={tzgray, line width=0.5pt},
+  tzstreet/.style={tzfaint, line width=\tzGridW},
+  tztraj/.style={tzgray, line width=\tzTrajW},
+  tzghost/.style={tzEdit!45, line width=0.6pt},
+  tzarrhead/.style={-{Stealth[length=3.2pt, width=2.8pt]}}]
+
+  % ================= titles =================
+  \node[anchor=south, font=\tzTitleFont, inner sep=1pt]
+    at (\tzLcx,{\tzPanelTop+0.03}) {\tzTitleL};
+  \node[anchor=south, font=\tzTitleFont, inner sep=1pt]
+    at (\tzRcx,{\tzPanelTop+0.03}) {\tzTitleR};
+
+  % ================= optional outer cards (Zhang's pink/green) ========
+  \ifshowCardTints
+    \fill[tzZcardL, rounded corners=2pt]
+      (0,0.02) rectangle ({\tzPW+0.06},{\tzPanelBot-\tzLabelH});
+    \fill[tzZcardR, rounded corners=2pt]
+      ({\tzRPx-0.06},0.02) rectangle (\tzW,{\tzPanelBot-\tzLabelH});
+  \fi
+
+  % ================= LEFT panel: Biased Service in HSTD ================
+  \begin{scope}[shift={(0,\tzPanelTop)}]
+    \tzBaseMap
+    \foreach \fx/\fy in \tzAdvTaxis
+      \pic[tzTaxiInk] at ({\fx*\tzPW},{-\fy*\tzPH+\tzTaxiDy})
+        [scale=\tzTaxiScale] {taxi};
+    \foreach \fx/\fy in \tzDisTaxis
+      \pic[tzTaxiInk] at ({\fx*\tzPW},{-\fy*\tzPH+\tzTaxiDy})
+        [scale=\tzTaxiScale] {taxi};
+    \foreach \fx/\fy in \tzAdvPicks
+      \pic[tzink] at ({\fx*\tzPW},{-\fy*\tzPH+\tzPickDy})
+        [scale=\tzPickScale] {pick};
+    \foreach \fx/\fy in \tzDisPicks
+      \pic[tzink] at ({\fx*\tzPW},{-\fy*\tzPH+\tzPickDy})
+        [scale=\tzPickScale] {pick};
+    % the passenger who will be served after the edit: still dark here
+    \pic[tzink] at ({\tzServedX*\tzPW},{-\tzServedY*\tzPH+\tzPickDy})
+      [scale=\tzPickScale] {pick};
+  \end{scope}
+
+  % ================= center: FATE + block arrow ========================
+  \node[anchor=south, font=\tzFateFont, inner sep=1.5pt]
+    at (\tzCx,{\tzArrY+0.12}) {\tzFateLabel};
+  \shade[left color=tzrule!35, right color=tzrule]
+    ({\tzCx-0.50},{\tzArrY+0.09}) -- ({\tzCx+0.24},{\tzArrY+0.09})
+    -- ({\tzCx+0.24},{\tzArrY+0.17}) -- ({\tzCx+0.50},\tzArrY)
+    -- ({\tzCx+0.24},{\tzArrY-0.17}) -- ({\tzCx+0.24},{\tzArrY-0.09})
+    -- ({\tzCx-0.50},{\tzArrY-0.09}) -- cycle;
+
+  % ================= RIGHT panel: FATE for Fairer Service ==============
+  \begin{scope}[shift={(\tzRPx,\tzPanelTop)}]
+    \tzBaseMap
+    \foreach \fx/\fy in \tzAdvTaxisR
+      \pic[tzTaxiInk] at ({\fx*\tzPW},{-\fy*\tzPH+\tzTaxiDy})
+        [scale=\tzTaxiScale] {taxi};
+    \foreach \fx/\fy in \tzDisTaxis
+      \pic[tzTaxiInk] at ({\fx*\tzPW},{-\fy*\tzPH+\tzTaxiDy})
+        [scale=\tzTaxiScale] {taxi};
+    \foreach \fx/\fy in \tzAdvPicks
+      \pic[tzink] at ({\fx*\tzPW},{-\fy*\tzPH+\tzPickDy})
+        [scale=\tzPickScale] {pick};
+    \foreach \fx/\fy in \tzDisPicks
+      \pic[tzink] at ({\fx*\tzPW},{-\fy*\tzPH+\tzPickDy})
+        [scale=\tzPickScale] {pick};
+    % ---- the ONE edit (lift): presence moved under conservation ------
+    \ifshowVacatedGhost % open circle where the departing taxi was
+      \draw[tzghost] ({\tzVacatedX*\tzPW},{-\tzVacatedY*\tzPH})
+        circle[radius=0.07];
+    \fi
+    % rerouted trajectory: vacated position -> across the boundary ->
+    % arrowhead into the orange taxi (THE focal element)
+    \draw[tzedit, tzarrhead]
+      ({\tzVacatedX*\tzPW},{-\tzVacatedY*\tzPH}) -- \tzEditPath;
+    \pic[tzEdit] at ({\tzOrangeTaxiX*\tzPW},{-\tzOrangeTaxiY*\tzPH+\tzTaxiDy})
+      [scale=\tzTaxiScale] {taxi};
+    \ifshowAddedMark % small + = added presence (grayscale carrier),
+      % placed above-left of the taxi cabin, clear of the passenger
+      \draw[tzEdit, line width=0.8pt]
+        ({\tzOrangeTaxiX*\tzPW-0.18},{-\tzOrangeTaxiY*\tzPH+0.26})
+        -- ++(0.16,0)
+        ({\tzOrangeTaxiX*\tzPW-0.10},{-\tzOrangeTaxiY*\tzPH+0.18})
+        -- ++(0,0.16);
+    \fi
+    % the served passenger: same position as the left panel, recolored
+    \pic[tzEdit] at ({\tzServedX*\tzPW},{-\tzServedY*\tzPH+\tzPickDy})
+      [scale=\tzPickScale] {pick};
+    \ifshowTrimEdit % optional second channel: trim, advantaged side only
+      \draw[tzghost] ({\tzTrimFromX*\tzPW},{-\tzTrimFromY*\tzPH})
+        circle[radius=0.055];
+      \draw[tzedit, tzarrhead]
+        ({\tzTrimFromX*\tzPW},{-\tzTrimFromY*\tzPH})
+        -- ({\tzTrimToX*\tzPW},{-\tzTrimToY*\tzPH});
+      \pic[tzEdit] at ({\tzTrimToX*\tzPW},{-\tzTrimToY*\tzPH+\tzPickDy})
+        [scale=\tzPickScale] {pick};
+    \fi
+  \end{scope}
+
+  % ================= label band (side labels ONLY) =====================
+  \pgfmathsetmacro\tzAdvLx{\tzBx*\tzPW/2}%          adv half center
+  \pgfmathsetmacro\tzDisLx{(\tzBx+1)*\tzPW/2}%      dis half center
+  \foreach \dx in {0,\tzRPx} {
+    \node[anchor=north, font=\tzSideFont, text=tzAdvLabel, inner sep=1pt]
+      at ({\dx+\tzAdvLx},{\tzPanelBot-0.04}) {\tzAdvName};
+    \node[anchor=north, font=\tzSideFont, text=tzDisLabel, inner sep=1pt]
+      at ({\dx+\tzDisLx},{\tzPanelBot-0.04}) {\tzDisName};
+  }
+  \node[anchor=north, font=\tzInfoFont, align=center, inner sep=1pt]
+    at (\tzAdvLx,{\tzPanelBot-0.28}) {\tzAdvInfoL};
+  \node[anchor=north, font=\tzInfoFont, align=center, inner sep=1pt]
+    at (\tzDisLx,{\tzPanelBot-0.28}) {\tzDisInfoL};
+  \node[anchor=north, font=\tzInfoFont, align=center, inner sep=1pt]
+    at ({\tzRPx+\tzAdvLx},{\tzPanelBot-0.28}) {\tzAdvInfoR};
+  \node[anchor=north, font=\tzInfoFont, align=center, inner sep=1pt]
+    at ({\tzRPx+\tzDisLx},{\tzPanelBot-0.28}) {\tzDisInfoR};
+
+  % ================= legend band =======================================
+  \fill[tzband] (0,\tzLegTop) rectangle (\tzW,\tzLegBot);
+  \draw[tzrule, line width=0.35pt] (0,\tzLegTop) rectangle (\tzW,\tzLegBot);
+  \pgfmathsetmacro\tzLegY{(\tzLegTop+\tzLegBot)/2}%
+  \pic[tzTaxiInk] at (0.45,\tzLegY) [scale=\tzTaxiScale] {taxi};
+  \node[anchor=west, font=\tzLegendFont] at (0.72,\tzLegY) {\tzLegTaxi};
+  \pic[tzink] at (1.62,\tzLegY) [scale=\tzPickScale] {pick};
+  \node[anchor=west, font=\tzLegendFont] at (1.76,\tzLegY) {\tzLegPick};
+  \draw[tztraj] (3.05,\tzLegY) -- (3.45,\tzLegY);
+  \node[anchor=west, font=\tzLegendFont] at (3.53,\tzLegY) {\tzLegExist};
+  \draw[tzedit] (5.75,\tzLegY) -- (6.15,\tzLegY);
+  \node[anchor=west, font=\tzLegendFont] at (6.23,\tzLegY) {\tzLegEdit};
+\end{tikzpicture}%
