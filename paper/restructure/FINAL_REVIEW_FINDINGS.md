@@ -440,3 +440,39 @@ editor applies to whatever attribution selects). It now reads "while only a smal
 not only human decision-making strategies" but two sentences later "When such data
 **is** used". Both treatments of *data* are defensible; the abstract should pick one.
 §1 uses the singular ("HSTD **is** not a neutral record").
+
+---
+
+# PART 6 — three swallowed-sentence defects I introduced, found and fixed (2026-07-25)
+
+Robert caught §3.1 rendering as "…with nothing trained inside the editing loop. **form,**
+its exact per-unit attribution…". Cause was mine and it was systematic: when I inserted
+multi-line `%` provenance comments immediately above existing prose, the last comment
+line absorbed the opening words of the sentence that followed. Three instances, all from
+this session's edits:
+
+| Where | Swallowed | Rendered as |
+|---|---|---|
+| §3.1, the g_0 accuracy repair | "The closed" | "…editing loop. form, its exact…" |
+| §3.3, the zietlow2022 citation repair | "The analogy is inexact in one" | "…pulling others down [45]. instructive way: trim…" |
+| §6, the D3 property/intervention repair | "It has two" | "…service allocation. stages: a budgeted…" |
+
+Only the first was visible to a reader as obvious nonsense; the other two produced
+sentences that still parsed and would likely have survived a read-aloud.
+
+**Reusable detector** (this is what found the other two — worth running before any
+hand-off, since it also catches dropped words generally):
+
+```
+pdftotext main.pdf - | tr '\n' ' ' \
+  | grep -oE "\. [a-z][a-z]+[^.]{0,55}" \
+  | grep -vE "\. (vs|cf|e\.g|i\.e|et al|pp|https|arXiv)"
+```
+
+It flags every sentence that begins with a lowercase word. Remaining hits after the fix
+are all genuine abbreviations ("n.s.\ at w20", "iFGSM (rand.\ restart)") — a candidate
+for a lint.sh rule with an abbreviation allowlist, which I did not add this close to the
+deadline. §3.1's pointer was restored in active voice ("Appendix A gives the closed form,
+the exact per-unit attribution, and the $O(N)$ evaluation identity"), which fixes the
+sentence, removes a dangling "its", and occupies the space the broken text did. The other
+two were restored verbatim; §3.3's is protected register.

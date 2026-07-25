@@ -129,9 +129,15 @@ demographic regression exactly, with nothing trained inside the editing loop.
 % [1, 1/(D+1), 1/sqrt(D+1), sqrt(D+1)], "Fitted once during preprocessing");
 % famail_temporal/preprocess.py:192-198 (single fit, saved as artifact
 % g0_power_basis); famail_temporal/algorithm/objective.py:39 ("Computes
-% g0(D_clamped) with no_grad (frozen function)") The closed
-form, its exact per-unit attribution, and the $O(N)$ evaluation identity are
-in Appendix~\ref{app:derivations}.
+% g0(D_clamped) with no_grad (frozen function)").
+% 2026-07-25 (Robert caught this in the rendered PDF): the comment block above
+% had swallowed the opening words "The closed" of the sentence below, so the
+% paragraph rendered as "... inside the editing loop. form, its exact per-unit
+% attribution ...". Restored as an active-voice pointer with the appendix as the
+% subject, which fixes the sentence, drops the dangling "its", and occupies the
+% same space as the broken text did.
+Appendix~\ref{app:derivations} gives the closed form, the exact per-unit
+attribution, and the $O(N)$ evaluation identity.
 % src: PAPER/objective-motivation/MOTIVATION.md; PAPER/argument/03_fairness_theory.md
 % (closed form/H-matrix construction moved to app:derivations 2026-07-24 per
 % Meeting-44 [1:23:32]-[1:24:14]: keep 1-r^2 + meaning + bare hat-matrix cite here)
@@ -292,7 +298,11 @@ the disadvantaged group rather than pulling others down \cite{zietlow2022}.
 % literature. It is a finding of ONE study, which the refs.bib note records
 % ("adaptive augmentation was the one strategy that helped the disadvantaged
 % group", verified 2026-07-16) — the domain and the attribution are now stated.
-% Robert: worth one look during the citation pass; nothing else in the analogy moved. The analogy is inexact in one
+% Robert: worth one look during the citation pass; nothing else in the analogy
+% moved. (2026-07-25: this comment had swallowed the opening words "The analogy
+% is inexact in one" of the sentence below — same defect as the g_0 comment
+% above. The sentence is restored verbatim; it is protected register.)
+The analogy is inexact in one
 instructive way: trim \emph{relocates} pickups under conservation rather than
 removing service, so nothing is destroyed; yet the under-served group is
 not helped at all.
