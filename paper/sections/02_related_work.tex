@@ -3,13 +3,31 @@
 % approaches + differences only. The full five-theme survey (drafted 2026-07-12,
 % incl. Dr. Zhang's per-theme FATE-contrast closers) moved VERBATIM to
 % Appendix~\ref{app:related} — restore-at-camera-ready candidate.
+%
+% 2026-07-24 (restructure task T6): this file now renders as §5, AFTER the method
+% and the experiments (main.tex order; the FILENAME is deliberately unchanged).
+% Position re-check done sentence by sentence: nothing promised an upcoming
+% definition and nothing said "below", so the single position fix is the
+% backward pointer to \S\ref{sec:method} on first mention of FATE. Two vocabulary
+% touches, both on sentences that state what FATE does (MEETING_DIGEST decision
+% #1; analysis_C_claims.md C-3): the Zheng contrast now names the collective
+% fairness of the corpus's service allocation — a different LEVEL at which
+% fairness is measured and repaired, never a new fairness definition — and the
+% FairGAN/DECAF contrast names the budgeted slice. Also "frozen fidelity gate"
+% -> "frozen fidelity signal" (D15 / do-not-claim item 7: fidelity is a weighted
+% term at every iteration plus an evaluation-time corpus gate, never a per-edit
+% accept/reject threshold; \S\ref{sec:phys-validity} says so explicitly, and this
+% was the last "gate" phrasing left in the body). The leveling-down closer is
+% otherwise untouched; its (\S\ref{sec:leveling}) pointer resolves post-T4 to
+% §3.3 Outcome-Side and Resource-Aware Editing, which is where the "under-served
+% must actually improve" material now lives.
 
 Fairness interventions are conventionally grouped by where they act: on the
 training data before training (pre-processing), inside the training
 objective (in-processing), or on a trained model's outputs
-(post-processing) \cite{barocas2023}. FATE is pre-processing for
-demonstrations: it adapts two ideas from classification fairness to the
-trajectory setting. From instance reweighing \cite{kamirancalders2012} it
+(post-processing) \cite{barocas2023}. FATE (\S\ref{sec:method}) is
+pre-processing for demonstrations: it adapts two ideas from classification
+fairness to the trajectory setting. From instance reweighing \cite{kamirancalders2012} it
 takes the practice of changing how much weight each demonstration carries
 during training; from conditional statistical parity \cite{corbettdavies2017} it
 takes the principle that a disparity counts only after permitted factors,
@@ -17,16 +35,17 @@ here demand, are adjusted for. The closest transportation
 neighbor adds a fairness penalty inside one ride-hailing demand predictor's
 training loss \cite{zheng2023}; that correction lives and dies with the one
 model, while the demonstrations stay biased for every other consumer, which
-is the gap FATE closes one stage earlier by addressing the problem at the data 
-level. Fair data generation synthesizes
-fair datasets outright \cite{xu2018fairgan,vanbreugel2021decaf}; FATE
-generates nothing and edits real trajectories under a fidelity-protecting bound. Imitation
+is the gap FATE closes one stage earlier, by repairing the collective
+fairness of the corpus's service allocation. Fair
+data generation synthesizes fair datasets outright
+\cite{xu2018fairgan,vanbreugel2021decaf}; FATE generates nothing and edits a
+budgeted slice of real trajectories under a fidelity-protecting bound. Imitation
 learning for mobility recovers driver policies faithfully (conditional GAIL
 and its explainable variants \cite{zhang2019cgail,zhang2022cgail,pan2020xgail}),
 but this lineage optimizes how faithfully behavior is reproduced and does not
 audit the fairness of the reproduced allocation; FATE edits the
 demonstrations such models consume, and reuses the driver-identity
-verification line \cite{ren2020stsiamese} as its frozen fidelity gate. The
+verification line \cite{ren2020stsiamese} as its frozen fidelity signal. The
 editing machinery descends from bounded adversarial perturbation
 \cite{goodfellow2015fgsm,kurakin2017ifgsm,hu2023stifgsm}, read
 constructively as in algorithmic recourse
