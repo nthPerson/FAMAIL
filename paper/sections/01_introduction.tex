@@ -85,32 +85,49 @@ HSTD to downstream applications \cite{ensign2018,lumisaac2016}.
 
 \begin{figure}[t]
   \centering
-  % Teaser (fig:teaser) — the PI's own figure, adopted as a raster image
-  % (restructure/figures/FIG1_TEASER_SPEC.md Phase 1). It is a SCHEMATIC: the
-  % icons and street network are stylized, no real trajectory or measured value
-  % is plotted, and the prose therefore says "sketched in" rather than "shows".
-  % A Fig-1(raster)/Fig-2(TikZ) style mismatch is accepted for this submission.
-  % This figure is the WHY; fig:overview in Section 3 is the HOW.
-  \includegraphics[width=\columnwidth]{figures/figure-1/teaser.png}
+  % Teaser (fig:teaser) — TikZ re-implementation of the PI's own Keynote figure
+  % (FIG1_TEASER_SPEC.md Phase 2, built 2026-07-25; source
+  % figures/figure-1/figure-1-teaser.tex — ITERATE THERE, its configuration block
+  % drives every position, color and toggle; harness figure-1-teaser-test.tex;
+  % rationale + reversal macros in figures/figure-1/FIG1_TIKZ_REPORT.md).
+  % Her raster stays on disk untouched at figures/figure-1/teaser.png as the
+  % fallback; swapping back is one \includegraphics line, but note the raster
+  % carries the perverse-edit defect of review finding #1, which this version
+  % repairs: demand is identical in both panels (4 disadvantaged passengers on
+  % each side), the amber passenger is one of them RECOLORED in place (served,
+  % not moved), and the edit is drawn as what lift does — a trajectory rerouted
+  % from the vacated advantaged taxi position across the boundary into the
+  % arriving amber taxi, i.e. presence added under conservation (5->4 advantaged
+  % taxis, 2->3 disadvantaged).
+  % It is a SCHEMATIC: icons, street lattice and trajectories are stylized, no
+  % real trajectory or measured value is plotted, and the prose therefore says
+  % "sketched in" rather than "shows". Fig-1 and Fig-2 now share one palette and
+  % one edit vocabulary (amber = the edit, faint open circle = vacated original,
+  % dashed amber + arrowhead = the rerouted tail); the raster/TikZ style mismatch
+  % the meeting tolerated is gone. This figure is the WHY; fig:overview is the HOW.
+  \input{figures/figure-1/figure-1-teaser}
   \caption{Collective service disparity emerges from the aggregation of local
   trajectories (left). FATE edits a small set of influential trajectories to
   improve corpus-level fairness (right).}
-  \Description{Two stylized city maps side by side, each split by a dashed
-  vertical district boundary into a pale green advantaged half and a pale red
-  disadvantaged half, with a thin gray street network standing in for existing
-  trajectories. In the left map, titled Biased Service in HSTD, the advantaged
-  half carries more taxi icons than passenger icons and is labeled Service:
-  High, Demand: Low, while the disadvantaged half carries more passenger icons
-  than taxi icons and is labeled Service: Low, Demand: High. A thick arrow
-  labeled FATE leads to the right map, titled FATE for Fairer Service, where
-  the advantaged half holds fewer taxis and is labeled Service: Moderate,
-  Demand: Similar, and the disadvantaged half holds more taxis and is labeled
-  Service: Increased, Demand: Similar. One taxi and one passenger are drawn in
-  orange and joined by a dashed orange line that crosses the district
-  boundary, marking a single edited trajectory that now brings taxi presence
-  to the disadvantaged side; a legend below identifies the taxi and passenger
-  icons, the solid gray existing trajectories, and the dashed orange edited
-  trajectory.}
+  \Description{Two stylized city maps side by side, each split by a vertical
+  dashed district boundary into an advantaged half and a disadvantaged half,
+  drawn over a faint street map and cell grid with dark gray polylines
+  standing in for existing trajectories. In the left map, titled Biased
+  Service in HSTD, the advantaged half holds five taxis and three passengers
+  and is labeled Service: High, Demand: Low, while the disadvantaged half
+  holds two taxis and four passengers and is labeled Service: Low, Demand:
+  High. A thick arrow labeled FATE leads to the right map, titled FATE for
+  Fairer Service. There the advantaged half holds four taxis and the same
+  three passengers, and the disadvantaged half holds three taxis and the same
+  four passengers: a dashed amber line starts at the vacated position of the
+  taxi that left the advantaged half, crosses the district boundary, and ends
+  with an arrowhead at the arriving amber taxi, beside a small plus sign
+  marking added service presence. The passenger nearest that taxi is drawn in
+  amber to mark the passenger who now gets served, and passenger counts are
+  unchanged on both sides. The two halves are labeled Service: Moderate,
+  Demand: Similar and Service: Increased, Demand: Similar. A legend below
+  identifies the taxi and passenger icons, the solid gray existing
+  trajectories, and the dashed amber edited trajectory.}
   \label{fig:teaser}
 \end{figure}
 

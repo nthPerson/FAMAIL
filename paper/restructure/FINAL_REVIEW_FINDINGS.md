@@ -369,3 +369,40 @@ precision, not overclaim.
   upweighting paragraph: same claim, same appendix pointer, one fewer paragraph break.
 - §4.1's stuck-GPS cleanup sentence (106,677 pickups) moved to Appendix B's grid
   block with its `% src`; §4.1 now points there.
+
+---
+
+# PART 4 — Figure 1 swapped to TikZ (2026-07-25)
+
+`01_introduction.tex` now does `\input{figures/figure-1/figure-1-teaser}` instead of
+`\includegraphics{...teaser.png}`, and the `\Description` was replaced (the old one
+described the PNG, and described it wrongly). **Finding #1 is closed by construction:**
+the depiction defect is gone rather than nudged.
+
+Verified independently of the other session's report, from the coordinate lists in the
+figure's config block (`\tzBx` = 0.517 is the boundary fraction, shared by both panels):
+
+- Advantaged taxis `0.086, 0.228, 0.442, 0.086, 0.360` → 5, all left of the boundary;
+  right panel drops `0.442/0.287` → 4. Disadvantaged taxis `0.886, 0.934` → 2 in both
+  panels, plus the amber taxi at 0.630 → 3. **One leaves, one arrives; 7 both panels.**
+- Advantaged passengers `0.119, 0.047, 0.098` → 3, drawn in both panels.
+- Disadvantaged passengers `0.655, 0.920, 0.861` plus the served one at 0.740 → **4 in
+  both panels, same coordinates**, the served one recolored rather than moved. This is
+  the fix: demand does not move, which is what her own "Demand: Similar" label claims.
+- Edit path runs from the vacated taxi position (0.442, 0.287) down and east to 0.560,
+  crossing 0.517, ending with the only arrowhead in the figure at the arriving taxi.
+- Label strings are her wording verbatim; no era numbers; no forbidden vocabulary.
+- Box re-measured from the harness myself: **239.50 × 116.83pt** (cap 241.15 × 135.0).
+- Grayscale render inspected: counts, boundary dash, edit dash and arrowhead all survive.
+
+**Page budget: no net gain, contrary to what the 18.2pt looked like it would buy.** The
+figure is 18.2pt shorter than the PNG, but LaTeX absorbed that into float separation on
+page 1 rather than converting it into a text line: p1 still holds 116 lines, §6 still
+ends at line 927, p8 is still full to the same baseline as p7. 13pp, p9 = REFERENCES,
+Fig-1 still on p1. The one real gain is elasticity — page 1 now carries ~18pt of
+compressible glue that can absorb a line if the close read adds one.
+
+**Still awaiting Robert (from the other session's report, unchanged by the swap):**
+Conflict A (area tints: amber/cobalt default vs her green/pink, `\tzTintScheme`),
+Conflict B (taxi color: neutral default vs her blue, `\tzTaxiMode`), and D11 (the trim
+overlay exists, verified correct, and is OFF). Each flips with one macro.
