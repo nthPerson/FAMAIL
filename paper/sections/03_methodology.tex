@@ -266,19 +266,17 @@ instructive way: trim \emph{relocates} pickups under conservation rather than
 removing service, so nothing is destroyed; yet the under-served group is
 not helped at all.
 
-Three structural reasons make this the constrained optimum of the demand-only
-problem rather than an optimizer artifact. The deficit attribution that
-selects trim's edits (\S\ref{sec:attribution}) concentrates in over-served,
-high-residual cells, so under-served cells are never edit candidates. With
-supply frozen, $\partial Y_i / \partial D_i = -S_i / D_i^{2}$ makes padding
-demand into high-supply advantaged cells more consequential than removing it
-from starved ones, and 93\% of disadvantaged units sit at the
-demand floor $d_0$, where removing demand changes nothing. And median taxi
-presence is 1.8 in disadvantaged cells versus 17.6 in advantaged cells, which
-no demand edit can touch; a greedy unconstrained search, an upper bound on any
-editor, leaves only the perverse option of deleting the under-served group's
-recorded pickups.
-% src: PAPER/external-metrics/LEVELING_DOWN_MECHANISM.md; LIFT_ALGORITHM_REFERENCE.md §1 (32x; 93%; median presence 1.8 vs 17.6; oracle perversity)
+Three structural facts make this the constrained optimum of the demand-only
+problem rather than an optimizer artifact: selection, leverage at the demand
+floor, and a supply-side inequity no demand edit can touch
+(Appendix~\ref{app:editor}).
+% 2026-07-24 (T10, page-budget lever 4): the three reasons and the greedy-search
+% bound RELOCATED verbatim-in-substance to Appendix~\ref{app:editor} ("Why
+% demand-only editing has no lever in under-served units"), which keeps every
+% number (dY/dD, the 93% at the demand floor, median presence 1.8 vs 17.6, the
+% oracle perversity) and the % src: comment. Untouched in this subsection: the
+% 2,455 empirical finding, the leveling-down analogy with its conservation
+% caveat, the demand-endogeneity paragraph, and the one-non-perverse-lever close.
 
 Recorded demand is also not exogenous, which unifies the editor's limitation
 with the metric's: where service has been thin, demand is suppressed and

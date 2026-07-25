@@ -89,29 +89,37 @@ concrete reasons; each dictates one component of the method
 % restructure/MEETING_DIGEST.md ADJ-3. Numbering keeps the old intro list's
 % C2-C5 identities and rewrites C1 from "the data is scarce" to the budget
 % challenge (the meeting's "unique challenge", [06:02]).
+% 2026-07-24 (T10, page-budget lever 3): each challenge compressed to two tight
+% sentences. Every load-bearing clause survives: C1's budget $k \ll |T|$ and the
+% whole-corpus difficulty; C2's read-as-its-driver requirement, the bound, and
+% the discriminator scoring INSIDE the objective (never a gate); C3's
+% demand-unexplained variation; C4's empirical "a demand-only editor does exactly
+% that on our data" plus the adds-real-presence remedy; C5's averaged-away
+% mechanism plus tracing the recovery to the edits rather than the reweighting.
+% Dropped as recoverable elsewhere: C1's "discarding the biased slice or
+% regenerating the corpus discards the asset" (the data-augmentation framing of
+% the problem definition above), C2's "no longer resembles real driving" gloss on
+% the sentence that follows it, C4's "redistributing service among better-served
+% areas" (stated in full in \S\ref{sec:leveling}), C5's "never reaches the
+% policy" (the same fact as being averaged away). Stacked format and the lead-in
+% sentence kept.
 \textbf{C1 (budget).} Real demonstrations are expensive and irreplaceable, so
-discarding the biased slice or regenerating the corpus discards the asset: the
-repair must edit the data we already have, and only a small share of it. The
-difficulty is then where to spend a budget of $k \ll |\mathcal{T}|$ edits so
-that a small portion of the trajectories moves the fairness of the whole
-corpus (\S\ref{sec:editor}).
+only a small share of the corpus may change. The difficulty is where to spend
+a budget of $k \ll |\mathcal{T}|$ edits so that a few trajectories move the
+fairness of the whole corpus (\S\ref{sec:editor}).
 \textbf{C2 (fidelity).} A fairness edit is worthless if the result no longer
-resembles real driving: an edited trajectory must still read as its original
-driver. The budget is therefore spent under constraints rather than freely,
-with every edit bounded to a small neighborhood of the recorded trajectory
-and scored by a frozen driver-identity discriminator inside the editing
-objective (\S\ref{sec:objective}).
+reads as its original driver. Each edit is therefore bounded to a small
+neighborhood of the recorded trajectory and scored by a frozen driver-identity
+discriminator inside the editing objective (\S\ref{sec:objective}).
 \textbf{C3 (the wrong target).} Equal service is the wrong target: a business
 district should receive more service than a quiet residential block. The
-objective must therefore score only the service variation that demand does
-not explain (\S\ref{sec:objective}).
+objective must score only the service variation demand leaves unexplained
+(\S\ref{sec:objective}).
 \textbf{C4 (level up, not down).} Measured fairness can improve while the
-under-served gain nothing, and a demand-only editor does exactly this on our
-data, redistributing service among better-served areas
-(\S\ref{sec:leveling}). Leveling up instead needs a second channel that adds
-real taxi presence where it is missing.
+under-served gain nothing, and a demand-only editor does exactly that on our
+data (\S\ref{sec:leveling}). Leveling up needs a second channel that adds real
+taxi presence where it is missing.
 \textbf{C5 (surviving training).} Sparse edits are averaged away by training
-that weights every demonstration equally, and the recovered fairness never
-reaches the policy. The influence of the edited demonstrations must be
-preserved during training, and the recovered fairness traced to the edits
-rather than to the reweighting itself (\S\ref{sec:downstream}).
+that weights every demonstration equally. Their influence must be preserved
+during training, and the recovered fairness traced to the edits rather than to
+the reweighting itself (\S\ref{sec:downstream}).

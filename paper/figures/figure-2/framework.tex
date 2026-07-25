@@ -102,10 +102,10 @@
   % Band edges (edit these to retune vertical rhythm)
   % =====================================================================
   \def\Wc{8.40}          % canvas width
-  \def\Hc{10.54}         % canvas height
-  \def\bTwo{-1.59}       % input band bottom  = stage-1 band top
-  \def\bThree{-3.71}     % stage-1 bottom     = stage-2 band top
-  \def\bFour{-7.71}      % stage-2 bottom     = stage-3 band top
+  \def\Hc{10.16}         % canvas height
+  \def\bTwo{-1.53}       % input band bottom  = stage-1 band top
+  \def\bThree{-3.57}     % stage-1 bottom     = stage-2 band top
+  \def\bFour{-7.39}      % stage-2 bottom     = stage-3 band top
   \def\xL{0.45}          % inner left  margin for full-width boxes
   \def\xR{7.95}          % inner right margin for full-width boxes
   \def\spine{4.20}       % centre flow spine
@@ -144,66 +144,66 @@
   % =====================================================================
   % STAGE 1 -- Attribute: score every trajectory, select the budgeted few
   % =====================================================================
-  \node[ttl] at (0.20,-1.65)
+  \node[ttl] at (0.20,-1.59)
     {\textbf{Stage 1: Attribute}\\\textcolor{fwgray}{select what to edit}};
-  \draw[flow] (\spine,-1.47) -- (\spine,-1.69);
-  \draw[opbox] (2.53,-1.69) rectangle (5.88,-2.24);
-  \node[align=center] at (\spine,-1.965)
+  \draw[flow] (\spine,-1.47) -- (\spine,-1.63);
+  \draw[opbox] (2.53,-1.63) rectangle (5.88,-2.18);
+  \node[align=center] at (\spine,-1.905)
     {score each trajectory's contribution\\to the corpus's collective fairness};
-  \draw[flow] (\spine,-2.24) -- (\spine,-2.38);
-  \draw[data] (\xL,-2.38) rectangle (\xR,-3.59);
+  \draw[flow] (\spine,-2.18) -- (\spine,-2.3);
+  \draw[data] (\xL,-2.3) rectangle (\xR,-3.51);
   % --- three groups, coloured by attribution outcome (left to right =
   % --- increasing fairness impact; the selected group sits on the branch
   % --- that continues into Stage 2)
   \draw[fwgray, line width=0.5pt, dash pattern=on 1.6pt off 1.2pt]
-    (0.60,-2.49) rectangle (2.88,-3.48);
-  \pic[tnone] at (0.66,-2.77) {traja};
-  \pic[tnone] at (1.44,-2.77) {trajb};
-  \pic[tnone] at (2.22,-2.77) {trajc};
-  \node[anchor=north, align=center] at (1.74,-2.85)
+    (0.60,-2.41) rectangle (2.88,-3.4);
+  \pic[tnone] at (0.66,-2.69) {traja};
+  \pic[tnone] at (1.44,-2.69) {trajb};
+  \pic[tnone] at (2.22,-2.69) {trajc};
+  \node[anchor=north, align=center] at (1.74,-2.77)
     {\textbf{not selected}\\left unchanged};
-  \draw[fwlow, line width=0.5pt] (3.03,-2.49) rectangle (5.31,-3.48);
-  \pic[tlow] at (3.09,-2.77) {trajb};
-  \pic[tlow] at (3.87,-2.77) {trajc};
-  \pic[tlow] at (4.65,-2.77) {traja};
-  \node[anchor=north, align=center] at (4.17,-2.85)
+  \draw[fwlow, line width=0.5pt] (3.03,-2.41) rectangle (5.31,-3.4);
+  \pic[tlow] at (3.09,-2.69) {trajb};
+  \pic[tlow] at (3.87,-2.69) {trajc};
+  \pic[tlow] at (4.65,-2.69) {traja};
+  \node[anchor=north, align=center] at (4.17,-2.77)
     {\textbf{low fairness impact}\\scored, unchanged};
-  \draw[fwsel, line width=1.0pt] (5.46,-2.49) rectangle (7.74,-3.48);
-  \pic[tsel] at (5.52,-2.77) {trajc};
-  \pic[tsel] at (6.30,-2.77) {traja};
-  \pic[tsel] at (7.08,-2.77) {trajb};
-  \node[anchor=north, align=center] at (6.60,-2.85)
+  \draw[fwsel, line width=1.0pt] (5.46,-2.41) rectangle (7.74,-3.4);
+  \pic[tsel] at (5.52,-2.69) {trajc};
+  \pic[tsel] at (6.30,-2.69) {traja};
+  \pic[tsel] at (7.08,-2.69) {trajb};
+  \node[anchor=north, align=center] at (6.60,-2.77)
     {\textbf{high fairness impact}\\selected, $k \ll |\mathcal{T}|$};
 
   % =====================================================================
   % STAGE 2 -- Trim + Lift: bounded edits to the selected trajectories
   % =====================================================================
-  \node[ttl] at (0.20,-3.77)
+  \node[ttl] at (0.20,-3.63)
     {\textbf{Stage 2: Trim + Lift}\\\textcolor{fwgray}{bounded fairness edits}};
   % the selected (colour-A) slice is what flows on: amber arrow
-  \draw[flowsel] (6.60,-3.48) -- (6.60,-3.83);
-  \draw[opbox] (2.88,-3.83) rectangle (7.83,-4.83);
-  \node[anchor=north] at (5.355,-3.86)
+  \draw[flowsel] (6.60,-3.4) -- (6.60,-3.69);
+  \draw[opbox] (2.88,-3.69) rectangle (7.83,-4.69);
+  \node[anchor=north] at (5.355,-3.72)
     {gradient ascent on the fairness objective $\mathcal{L}$};
-  \draw[fwrule, line width=0.35pt] (2.88,-4.19) -- (7.83,-4.19);
-  \node[anchor=north, align=center, text=fwgray] at (5.355,-4.22)
+  \draw[fwrule, line width=0.35pt] (2.88,-4.05) -- (7.83,-4.05);
+  \node[anchor=north, align=center, text=fwgray] at (5.355,-4.08)
     {every edit within $\varepsilon$ cells $\cdot$ continuity repaired\\
      frozen driver-identity discriminator in the objective};
-  \draw[flow] (5.355,-4.83) -- (\bL,-5.07);
-  \draw[flow] (5.355,-4.83) -- (\bR,-5.07);
+  \draw[flow] (5.355,-4.69) -- (\bL,-4.87);
+  \draw[flow] (5.355,-4.69) -- (\bR,-4.87);
 
   % --- trim panel: pickup relocated inside the over-served area ---------
   % the WHOLE chip is the over-served area (pale amber fill): both the
   % vacated pickup and its new position stay inside it.
-  \draw[panel] (\xL,-5.07) rectangle (3.95,-6.55);
-  \fill[fwsel!14, rounded corners=1.5pt] (0.60,-5.17) rectangle (3.80,-5.87);
-  \draw[tsel] (0.85,-5.62) -- (1.50,-5.36) -- (2.10,-5.58) -- (2.55,-5.38);
-  \draw[tfaint] (2.55,-5.38) circle[radius=0.055];
-  \draw[tedit] (2.10,-5.58) -- (3.00,-5.66);
-  \fill[fwsel] (3.00,-5.66) circle[radius=0.06];
-  \draw[edit] (2.63,-5.45) -- (2.90,-5.59);
-  \node[anchor=west] at (3.14,-5.40) {$\le \varepsilon$};
-  \node[anchor=north, align=center] at (\bL,-5.93)
+  \draw[panel] (\xL,-4.87) rectangle (3.95,-6.35);
+  \fill[fwsel!14, rounded corners=1.5pt] (0.60,-4.97) rectangle (3.80,-5.67);
+  \draw[tsel] (0.85,-5.42) -- (1.50,-5.16) -- (2.10,-5.38) -- (2.55,-5.18);
+  \draw[tfaint] (2.55,-5.18) circle[radius=0.055];
+  \draw[tedit] (2.10,-5.38) -- (3.00,-5.46);
+  \fill[fwsel] (3.00,-5.46) circle[radius=0.06];
+  \draw[edit] (2.63,-5.25) -- (2.90,-5.39);
+  \node[anchor=west] at (3.14,-5.2) {$\le \varepsilon$};
+  \node[anchor=north, align=center] at (\bL,-5.73)
     {\textbf{trim:} recorded pickup relocated\\inside the over-served area};
 
   % --- lift panel: final seeking tail rerouted into the under-served area
@@ -211,65 +211,65 @@
   % recorded tail (faint, open dot) stops short of it and only the edited
   % dashed tail enters, i.e. lift touches the under-served side by ADDING
   % presence (the amber + mark).
-  \draw[panel] (4.45,-5.07) rectangle (\xR,-6.55);
-  \fill[fwbox, rounded corners=1.5pt] (4.60,-5.17) rectangle (7.80,-5.87);
-  \fill[fwlow!12, rounded corners=1.5pt] (6.55,-5.17) rectangle (7.80,-5.87);
-  \draw[tsel] (4.78,-5.62) -- (5.35,-5.36) -- (5.90,-5.58) -- (6.25,-5.40);
-  \draw[tfaint] (6.25,-5.40) -- (6.50,-5.68);
-  \draw[tfaint] (6.50,-5.68) circle[radius=0.055];
+  \draw[panel] (4.45,-4.87) rectangle (\xR,-6.35);
+  \fill[fwbox, rounded corners=1.5pt] (4.60,-4.97) rectangle (7.80,-5.67);
+  \fill[fwlow!12, rounded corners=1.5pt] (6.55,-4.97) rectangle (7.80,-5.67);
+  \draw[tsel] (4.78,-5.42) -- (5.35,-5.16) -- (5.90,-5.38) -- (6.25,-5.2);
+  \draw[tfaint] (6.25,-5.2) -- (6.50,-5.48);
+  \draw[tfaint] (6.50,-5.48) circle[radius=0.055];
   \draw[tedit, -{Stealth[length=3.2pt, width=2.8pt]}]
-    (6.25,-5.40) -- (6.90,-5.28) -- (7.35,-5.38);
+    (6.25,-5.2) -- (6.90,-5.08) -- (7.35,-5.18);
   \draw[fwsel, line width=0.7pt]
-    (7.44,-5.34) -- (7.60,-5.34) (7.52,-5.26) -- (7.52,-5.42);
-  \node[anchor=west] at (6.88,-5.70) {$\le \varepsilon$};
-  \node[anchor=north, align=center] at (\bR,-5.93)
+    (7.44,-5.14) -- (7.60,-5.14) (7.52,-5.06) -- (7.52,-5.22);
+  \node[anchor=west] at (6.88,-5.5) {$\le \varepsilon$};
+  \node[anchor=north, align=center] at (\bR,-5.73)
     {\textbf{lift:} final seeking tail rerouted\\into the under-served area};
 
   % --- output of Stage 2: the edited corpus ----------------------------
-  \draw[flow] (\bL,-6.55) -- (\spine,-6.79);
-  \draw[flow] (\bR,-6.55) -- (\spine,-6.79);
-  \draw[data] (\xL,-6.79) rectangle (\xR,-7.59);
-  \node[anchor=north west] at (0.60,-6.83) {\textbf{edited corpus}};
-  \pic[tedit] at (0.70,-7.41) {traja};
-  \pic[tedit] at (1.40,-7.41) {trajc};
-  \node[anchor=west] at (2.20,-7.32) {$k$ edited (dashed)};
-  \pic[tnone] at (4.10,-7.41) {trajb};
-  \pic[tnone] at (4.80,-7.41) {traja};
-  \node[anchor=west] at (5.60,-7.32) {$|\mathcal{T}|{-}k$ unchanged};
+  \draw[flow] (\bL,-6.35) -- (\spine,-6.53);
+  \draw[flow] (\bR,-6.35) -- (\spine,-6.53);
+  \draw[data] (\xL,-6.53) rectangle (\xR,-7.33);
+  \node[anchor=north west] at (0.60,-6.57) {\textbf{edited corpus}};
+  \pic[tedit] at (0.70,-7.15) {traja};
+  \pic[tedit] at (1.40,-7.15) {trajc};
+  \node[anchor=west] at (2.20,-7.06) {$k$ edited (dashed)};
+  \pic[tnone] at (4.10,-7.15) {trajb};
+  \pic[tnone] at (4.80,-7.15) {traja};
+  \node[anchor=west] at (5.60,-7.06) {$|\mathcal{T}|{-}k$ unchanged};
 
   % =====================================================================
   % STAGE 3 -- Upweight: the sparse edits must survive training
   % =====================================================================
-  \node[ttl] at (0.20,-7.77)
+  \node[ttl] at (0.20,-7.45)
     {\textbf{Stage 3: Upweight}\\
      \textcolor{fwgray}{edit-aware imitation training}};
-  \draw[flow] (\spine,-7.59) -- (\spine,-8.35);
-  \draw[flow] (\spine,-8.35) -- (\bL,-8.51);
-  \draw[flow] (\spine,-8.35) -- (\bR,-8.51);
+  \draw[flow] (\spine,-7.33) -- (\spine,-8.03);
+  \draw[flow] (\spine,-8.03) -- (\bL,-8.19);
+  \draw[flow] (\spine,-8.03) -- (\bR,-8.19);
   % weighting regimes (the only difference between the two branches)
-  \draw[opbox] (1.35,-8.51) rectangle (3.05,-8.84);
-  \node at (\bL,-8.675) {uniform weights};
-  \draw[opbox, draw=fwsel, line width=0.7pt] (5.05,-8.51) rectangle (7.35,-9.08);
-  \node[align=center] at (\bR,-8.795)
+  \draw[opbox] (1.35,-8.19) rectangle (3.05,-8.52);
+  \node at (\bL,-8.355) {uniform weights};
+  \draw[opbox, draw=fwsel, line width=0.7pt] (5.05,-8.19) rectangle (7.35,-8.76);
+  \node[align=center] at (\bR,-8.475)
     {upweight the $k$\\edited demonstrations};
-  \draw[flow] (\bL,-8.84) -- (\bL,-9.21);
-  \draw[flow] (\bR,-9.08) -- (\bR,-9.21);
-  \draw[data] (0.55,-9.21) rectangle (3.85,-9.58);
-  \node at (\bL,-9.395) {\textbf{trained policy}};
-  \draw[data] (4.55,-9.21) rectangle (7.85,-9.58);
-  \node at (\bR,-9.395) {\textbf{trained policy}};
-  \draw[flow] (\bL,-9.58) -- (\bL,-9.78);
-  \draw[flow] (\bR,-9.58) -- (\bR,-9.78);
+  \draw[flow] (\bL,-8.52) -- (\bL,-8.89);
+  \draw[flow] (\bR,-8.76) -- (\bR,-8.89);
+  \draw[data] (0.55,-8.89) rectangle (3.85,-9.26);
+  \node at (\bL,-9.075) {\textbf{trained policy}};
+  \draw[data] (4.55,-8.89) rectangle (7.85,-9.26);
+  \node at (\bR,-9.075) {\textbf{trained policy}};
+  \draw[flow] (\bL,-9.26) -- (\bL,-9.46);
+  \draw[flow] (\bR,-9.26) -- (\bR,-9.46);
   % terminal contrast pair (mirrors the exemplar's wrong/correct boxes;
   % dashed vs solid border keeps the contrast in grayscale)
   \draw[fill=white, draw=fwneg, line width=0.6pt,
-        dash pattern=on 1.8pt off 1.3pt] (0.55,-9.78) rectangle (3.85,-10.42);
-  \pic[fwneg] at (0.80,-10.10) {xmark};
-  \node[anchor=west, align=left, text=fwneg] at (0.98,-10.10)
+        dash pattern=on 1.8pt off 1.3pt] (0.55,-9.46) rectangle (3.85,-10.1);
+  \pic[fwneg] at (0.80,-9.78) {xmark};
+  \node[anchor=west, align=left, text=fwneg] at (0.98,-9.78)
     {\textbf{bias reproduced}\\edits averaged away};
   \draw[fill=white, draw=fwpos, line width=0.8pt]
-    (4.55,-9.78) rectangle (7.85,-10.42);
-  \pic[fwpos] at (4.80,-10.10) {ckmark};
-  \node[anchor=west, align=left, text=fwpos] at (4.98,-10.10)
+    (4.55,-9.46) rectangle (7.85,-10.1);
+  \pic[fwpos] at (4.80,-9.78) {ckmark};
+  \node[anchor=west, align=left, text=fwpos] at (4.98,-9.78)
     {\textbf{fairer service allocation}\\the fairness gain survives};
 \end{tikzpicture}%

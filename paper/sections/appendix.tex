@@ -132,6 +132,23 @@ weighted by the presence mass it carries and the map summed over the same
 $5{\times}5$ window through which presence spreads (\S\ref{sec:problem}). A
 trajectory's score is its best offset.
 
+\textbf{Why demand-only editing has no lever in under-served units.} The three
+structural facts behind \S\ref{sec:leveling}, in detail. \emph{Selection}: the
+demand deficit attribution that picks trim's edits (\S\ref{sec:attribution})
+concentrates in over-served, high-residual cells, so under-served cells are
+never edit candidates. \emph{Leverage}: with supply frozen,
+$\partial Y_i / \partial D_i = -S_i / D_i^{2}$ makes padding demand into
+high-supply advantaged cells more consequential than removing it from starved
+ones, and 93\% of disadvantaged units sit at the demand floor $d_0$, where
+removing demand changes nothing. \emph{Supply-side inequity}: median taxi
+presence is 1.8 in disadvantaged cells versus 17.6 in advantaged cells, which
+no demand edit can touch, and a greedy unconstrained search, an upper bound on
+any editor, leaves only the perverse option of deleting the under-served
+group's recorded pickups.
+% (2026-07-24, T10 page-budget lever 4: moved here from \S\ref{sec:leveling},
+% which now names the three facts in one sentence and points at this block.)
+% src: PAPER/external-metrics/LEVELING_DOWN_MECHANISM.md; LIFT_ALGORITHM_REFERENCE.md §1 (32x; 93%; median presence 1.8 vs 17.6; oracle perversity)
+
 \textbf{Perturbation-arm stationarity.} Detail for the
 baselines of \S\ref{sec:exp-baselines}. We pre-registered
 $\delta = 0$-initialized ablation arms expecting a no-op --- a
@@ -186,8 +203,15 @@ not constant --- on the primary set the demand channel is n.s., while under
 both alternate sets it is significant and carries most of the larger totals ---
 so the added-presence mechanism replicates while the demand-side share varies
 with the feature set, and we report the decomposition rather than the total
-alone. Table~\ref{tab:featsets} gives every layer of the argument under the two
+alone. On the transfer controls, the most-fair selection control reaches
+$+0.0054$ and $+0.0072$ at w30 under the two alternate sets, and vanilla
+transfer reaches sign-unanimity only under the housing--GDP--compensation set
+($+0.0022$, a tenth of its w30 gain there).
+Table~\ref{tab:featsets} gives every layer of the argument under the two
 alternate sets.
+% (2026-07-24, T10 page-budget lever 2: the two control readings moved here from
+% \S\ref{sec:exp-robustness}, whose paragraph now states their size in words and
+% points at Table~\ref{tab:featsets} for the per-set values.)
 
 \begin{table}[t]
 \caption{Feature-set robustness under trim+lift (Shenzhen; $\Delta$ rows are
@@ -299,10 +323,21 @@ both controls significantly degrade it. Fidelity-A is unchanged at every weight
 from $0.020$ to $0.027$ absolute, against raw $0.013$.
 % src: famail_temporal/results/weighted_bc_sweep/alpha_sweep_s10_c80_f10_filtered_6seed/paired_stats.json + dose_response.json
 
-\textbf{Oversampling re-duplication (Shenzhen).} Supporting
-\S\ref{sec:exp-baselines}. Only 8{,}241 distinct disadvantaged-origin
-trajectories exist, so meeting the matched dose $d = 10{,}000$ requires
-1{,}759 draws that repeat earlier ones.
+\textbf{Demographic oversampling in detail (Shenzhen).} Supporting
+\S\ref{sec:exp-baselines}. The arm duplicates real trajectories originating in
+demographically disadvantaged regions
+\cite{kamirancalders2012,zietlow2022} across all three equity axes, under
+phantom driver IDs and a rigid $\pm 1$-cell jitter, additively rebuilding both
+demand and supply at doses matched to FATE's budget. The targeted gain is
+dose-monotone over the three doses ($+0.0059$, $+0.0097$, $+0.0153$), and the
+untargeted placebo's degradation is what makes the gain targeting-specific.
+Two disclosures. First, only 8{,}241 distinct trajectories of disadvantaged
+origin exist, so meeting the matched dose $d = 10{,}000$ requires 1{,}759
+draws that repeat earlier ones. Second, fidelity is not scored for this arm,
+since duplicates of real trajectories pass any fidelity check by construction.
+% (2026-07-24, T10 page-budget lever 1: construction, dose ladder and the two
+% disclosures moved here from \S\ref{sec:exp-baselines}; the block's original
+% re-duplication sentence is the first disclosure, unchanged.)
 % src: PAPER/baselines/demographic-oversampling/FINDINGS.md §2-5
 
 \textbf{Model-level variance ($n = 5$ versus $n = 10$).} Supporting
@@ -316,8 +351,21 @@ suite ($+0.0031$) and now clears conventional significance outright
 ($t$-test $p = .0019$).
 % src: famail_temporal/results/variance_suite/supply_lift_shz_10seed/aggregate.json (paired_delta.f_causal; B2-VAR-SZ 2026-07-16; n=5 suite retained at variance_suite/supply_lift_shz_5seed)
 
+\textbf{Instance reweighing in detail.} Detail for the training-side
+baselines of \S\ref{sec:exp-baselines}. Reweighing uses inverse group-service
+weights favoring disadvantaged-origin demonstrations, scored by the full
+paired protocol. While moving demand-adjusted fairness the wrong way it pays
+the same distributional cost as w30 upweighting (Fidelity-B $+0.0144$), and % lint-allow: coincidental value (fair_reweigh paired Fid-B delta, not the trim-only F_demo headline)
+its rolled-out policies still tilt allocation away from the disadvantaged
+group ($-0.0010$, negative on all six seeds, $p = .031$).
+% (2026-07-24, T10 page-budget lever 1: moved here from \S\ref{sec:exp-baselines}
+% with its % lint-allow: comment on the same source line as the number.)
+% src: famail_temporal/baselines/external_fairness/results/option_a_rollout_fb/summary.json (rollout: R5 arm-prefix regression gate passed, edited_w30 -0.00329 vs committed -0.0033)
+
 \textbf{Fairness-penalty $\lambda$ grid.} Detail for the in-processing
-penalty baseline of \S\ref{sec:exp-baselines}. The penalty was tested in
+penalty baseline of \S\ref{sec:exp-baselines}. The penalty adds $\lambda$
+times the demo\-graph\-ic-parity gap in predicted next-cell mass to the
+imitation loss, and was tested in
 both a signed formulation (advantaged minus disadvantaged, the direction the
 data over-serves) and an absolute-value formulation. It is inert at every
 dose that trains stably (six-seed suites:
@@ -339,16 +387,32 @@ every $\lambda$.
 % src: famail_temporal/results/weighted_bc_sweep/fairness_penalty_6seed/paired_stats.json + fairness_penalty_probe/ (lambda 100/1000 single-seed probes)
 % src: famail_temporal/results/weighted_bc_sweep/fairness_penalty_abs_{pilot,6seed}/ (FB-PENALTY-ABS 2026-07-18: l10 +0.0008 n.s.; l1000 -0.1293 6/6, Fid-B 0.363)
 
-\textbf{Perturbation-arm per-arm figures.} Supporting
-\S\ref{sec:exp-baselines}. On San Francisco the three perturbation arms
-violate king-move adjacency wholesale (72.0/87.0/97.5\%) and pay
-$2$--$4\times$ the edited corpus's distributional divergence (0.198--0.418
-against 0.098).
-% src: famail_temporal/results/2026-07-16T16-08-{05_baseline_ifgsm,16_baseline_fgsm,23_baseline_random}_sf12/metrics.json (B1 runs 2026-07-16; SF Fid-B from level1 sf12 edited row = 0.098)
+\textbf{Perturbation-arm constructions and per-arm figures.} Supporting
+\S\ref{sec:exp-baselines}. The two gradient arms are \emph{iFGSM\slash FGSM
+with random restart} \cite{kurakin2017ifgsm,goodfellow2015fgsm} against the
+frozen identity discriminator in its spatio-temporal instantiation
+\cite{hu2023stifgsm}, with PGD-style random initialization inside the
+$\varepsilon$ ball \cite{madry2018pgd}; the random-start arms are the reported
+ones (the pre-registered $\delta = 0$ ablation:
+Appendix~\ref{app:editor}). Identity fidelity survives every arm
+($\approx 0.846$): the perturbation is too small to break driver identity, so
+the adjacency and distributional axes carry the comparison. Random jitter
+raises $F_{\mathrm{demo}}$ because indiscriminately diffusing the selected
+trajectories diffuses their over-service too, and that surprise does not recur
+on San Francisco, where random is the weakest mover.
+% (2026-07-24, T10 page-budget lever 1: arm constructions, the identity-fidelity
+% reading, the diffusion mechanism and the San Francisco replication moved here
+% from \S\ref{sec:exp-baselines}; all four perturbation cites travelled with them.)
+% src: famail_temporal/baselines/baseline_table/baseline_table.json (Fid-A ~0.846 across arms)
 On Shenzhen the gradient arms violate king-move adjacency (54.4\% iFGSM,
 91.4\% FGSM) with distributional divergence 0.143 and 0.339 respectively,
 against the edited corpus's 0.187.
 % src: famail_temporal/baselines/baseline_table/baseline_table.json (Shenzhen Fid-B(JS)/adjacency-violation columns)
+On San Francisco all three arms land well below the editor's $+0.0316$,
+violate king-move adjacency wholesale (72.0/87.0/97.5\%), and pay
+$2$--$4\times$ the edited corpus's distributional divergence there,
+0.198--0.418 against 0.098.
+% src: famail_temporal/results/2026-07-16T16-08-{05_baseline_ifgsm,16_baseline_fgsm,23_baseline_random}_sf12/metrics.json (B1 runs 2026-07-16; SF Fid-B from level1 sf12 edited row = 0.098)
 
 \textbf{San Francisco downstream detail.} Supporting \S\ref{sec:exp-sf}.
 At $n = 12$ the controls sharpen the contrast rather than soften it: the

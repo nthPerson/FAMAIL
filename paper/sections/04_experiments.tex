@@ -74,21 +74,23 @@ $k = 2{,}000$ (1{,}330 trim + 629 lift).
 
 \textbf{Protocol and statistics.} Every model-based comparison uses paired
 seeds (identical seeding before each arm), so per-seed differences cancel
-shared seed noise. With $n = 6$ paired seeds we read effects from the mean
-$\Delta$, its $t$-interval, and dose-response monotonicity, and treat
-$p = 0.031$ only as a sign-unanimity certificate. Sign counts are written
-$k/n$: the delta was positive on $k$ of the $n$ seed pairs. The flagship
-comparison (the edited demonstrations upweighted $30\times$, written w30;
-\S\ref{sec:exp-downstream}) is additionally run at $n = 12$ paired seeds in
-both cities, where an exact Wilcoxon $p$ can survive multiple-comparison
-correction.
-External fairness metrics are compared before versus after editing on the data alone,
-with no model in the loop: one bootstrap resample of the active grid units
-is applied to both sides ($B = 1{,}000$, percentile), so the interval
-isolates the edit. Units are spatially correlated and demographics are
-district-constant, so these intervals understate true uncertainty. 
-Appendix~\ref{app:protocol} gives the exact-Wilcoxon floor arithmetic and
-why no driver-level bootstrap is available.
+shared seed noise; sign counts are written $k/n$, the delta being positive on
+$k$ of the $n$ seed pairs. At $n = 6$ we read effects from the mean $\Delta$,
+its $t$-interval and dose-response monotonicity, and treat $p = 0.031$ only as
+a sign-unanimity certificate; the flagship comparison (the edited
+demonstrations upweighted $30\times$, written w30; \S\ref{sec:exp-downstream})
+is additionally run at $n = 12$ paired seeds in both cities. External metrics
+are compared before versus after editing with no model in the loop, one
+bootstrap resample of the active grid units applied to both sides
+($B = 1{,}000$, percentile); units are spatially correlated and demographics
+district-constant, so these intervals understate true uncertainty
+(Appendix~\ref{app:protocol}).
+% 2026-07-24 (T10, page-budget lever 2): each surviving clause above is the
+% one-clause form of a fuller explanation that Appendix~\ref{app:protocol}
+% already carries verbatim — the exact-Wilcoxon floor arithmetic (why n=6 reads
+% as sign-unanimity, why the n=12 floor survives multiple-comparison correction)
+% and why no driver-level bootstrap is available. Nothing was deleted outright:
+% the dropped sentences were the expanded versions of these clauses.
 % src: PAPER/argument/04_evaluation.md §3; PAPER/external-metrics/FINDINGS.md §1, §5
 
 \textbf{Metrics and claim discipline.} We separate three metric classes and
@@ -275,80 +277,59 @@ of magnitude below the upweighting effect (Appendix~\ref{app:results}).
 % §5's future-work clause anchors it. Main text claims metric propagation only.)
 
 \subsection{Data-Augmentation Baselines}\label{sec:exp-baselines}
+% 2026-07-24 (T10, page-budget lever 1): this subsection is compressed to its
+% framing opener, Table~\ref{tab:baselines} (untouched), and a three-paragraph
+% RQ4 summary. RELOCATED to Appendix~\ref{app:results}, not deleted: the
+% perturbation-arm constructions (with their four cites), the per-arm
+% identity-fidelity reading (~0.846), the random-jitter diffusion mechanism, the
+% San Francisco arm replication, the oversampling construction + dose ladder +
+% both disclosures, and the training-side detail (reweighing's Fidelity-B cost
+% and rollout tilt, the penalty's definition). Every number and every
+% % src:/% lint-allow: comment travelled with its sentence. Kept in main per the
+% task brief: the pre-registered-expectation disclosure, the placebo's DP-gap
+% explosion as the \S\ref{sec:leveling} endogeneity concern made concrete, and
+% both training-side directions with their headline numbers.
 None of the baselines below optimizes a fairness objective; they are
 \emph{editing-quality} baselines that test whether FATE's gains come from
 its objective or merely from bounded perturbation (or corpus resampling)
 per se. Fairness is accordingly \emph{expected not to improve} under the
-perturbation arms.
+perturbation arms. Table~\ref{tab:baselines} compares every arm at matched
+budgets; per-arm detail is in Appendix~\ref{app:results}.
 % src: PAPER/baselines/README.md (Meeting-41 framing)
 
-\textbf{Perturbation arms.} Three arms attack the same trajectories the
-headline edit selected, at the same $\varepsilon = 2$: iterative and
-single-step signed-gradient attacks on the frozen identity discriminator
-\cite{hu2023stifgsm}, and
-a seeded random-jitter placebo. The gradient arms are \emph{iFGSM\slash
-FGSM with random restart} \cite{kurakin2017ifgsm,goodfellow2015fgsm}
-(PGD-style random initialization within the
-$\varepsilon$ ball \cite{madry2018pgd}); the random-start arms are the
-reported ones (the pre-registered $\delta = 0$ ablation:
-Appendix~\ref{app:editor}). Results: Table~\ref{tab:baselines}.
+\textbf{Perturbation arms.} Three arms move the same trajectories the headline
+edit selected, at the same $\varepsilon = 2$: iterative and single-step
+signed-gradient attacks on the frozen identity discriminator, and a seeded
+random-jitter placebo. None of the three reaches the editor's $+0.0226$, and
+all three break king-move adjacency on a large share of the trajectories they
+touch, in both cities. One result lands against the
+pre-registered expectation: random jitter \emph{does} raise
+$F_{\mathrm{demo}}$, by $+0.0135$, but it buys that with broken trajectories,
+98.8\% of them violating adjacency at a distributional divergence of 0.447
+against the edited corpus's disclosed 0.187, where FATE edits are
+king-compliant by construction.
+% src: famail_temporal/baselines/baseline_table/baseline_table.json (random Fid-B(JS)/adjacency)
 
-One result lands against the pre-registered expectation: random jitter
-\emph{does} raise $F_{\mathrm{demo}}$, by $+0.0135$ (indiscriminately
-diffusing the selected trajectories diffuses their over-service too), but it
-does so by breaking the trajectories: 98.8\% of its perturbed trajectories
-violate king-move adjacency and its distributional divergence reaches 0.447,
-against the edited corpus's disclosed 0.187, while FATE edits are
-king-compliant by construction (per-arm figures in
-Appendix~\ref{app:results}). Identity fidelity survives every arm
-($\approx 0.846$): the perturbation is too small to break driver identity, so
-adjacency and distributional axes carry the comparison. The three perturbation arms replicate on San
-Francisco (all well below the editor's $+0.0316$, all violating adjacency
-wholesale), and the random-jitter fairness surprise does not recur there;
-random is the weakest mover.
-% src: famail_temporal/baselines/baseline_table/baseline_table.json (random Fid-B(JS)/adjacency; Fid-A ~0.846)
-
-\textbf{Demographic oversampling.} The naive lift-up baseline: duplicate
-real trajectories originating in demographically disadvantaged regions
-\cite{kamirancalders2012,zietlow2022} (all
-three equity axes, phantom driver IDs, rigid $\pm 1$-cell jitter), additively
-rebuilding both demand and supply at doses matched to FATE's budget. At
-the matched duplication dose $d = 10{,}000$, targeted oversampling improves
-$F_{\mathrm{demo}}$ by $+0.0153$ (dose-monotone:
-$+0.0059$, $+0.0097$, $+0.0153$), but it fabricates 10.5\% of the corpus
-to get there, where FATE redistributes observed behavior at zero inflation
-and reaches $+0.0226$. The untargeted placebo (same fabrication without targeting)
-\emph{degrades} fairness, $-0.0172$, so the gain is targeting-specific; and
-the placebo's DP gap explodes ($+2.8$) because fabricated supply lands
-mostly in already-advantaged cells: a measured demonstration that
-ratio metrics can be gamed by fabrication, the demand-endo\-ge\-ne\-ity concern of
-\S\ref{sec:leveling} made concrete. Two disclosures: the matched dose needs
-re-duplication (Appendix~\ref{app:results}), and fidelity is not
-scored, since duplicates of real trajectories pass any fidelity check by
-construction.
+\textbf{Demographic oversampling.} The naive lift-up baseline captures part of
+the gain, $+0.0153$ at the duplication dose matched to FATE's budget, but
+fabricates 10.5\% of the corpus to get there, where FATE redistributes
+observed behavior at zero inflation and reaches $+0.0226$. Its untargeted
+placebo (the same fabrication without targeting) \emph{degrades} fairness,
+$-0.0172$, and its DP gap explodes ($+2.8$) because fabricated supply lands
+mostly in already-advantaged cells: a measured demonstration that ratio
+metrics can be gamed by fabrication, the demand-endo\-ge\-ne\-ity concern of
+\S\ref{sec:leveling} made concrete.
 % src: PAPER/baselines/demographic-oversampling/FINDINGS.md §2-5
 
-\textbf{Fairness-method baselines (training-side).} The remaining comparison
-is against fairness methods proper, applied where they usually live: at
-training time, on the raw corpus, scored by the full paired protocol.
-Instance reweighing in the Kamiran--Calders style
-\cite{kamirancalders2012} (inverse group-service weights favoring
-disadvantaged-origin demonstrations) moves demand-adjusted fairness the
-\emph{wrong} way ($-0.0227$, all six seeds negative, $p = .031$) while
-paying the same distributional cost as w30 upweighting (Fidelity-B
-$+0.0144$), and its rolled-out policies still tilt allocation away from the % lint-allow: coincidental value (fair_reweigh paired Fid-B delta, not the trim-only F_demo headline)
-disadvantaged group ($-0.0010$, negative on all six, $p = .031$). An
-in-processing penalty
-in the spirit of \cite{zheng2023} (the imitation loss plus $\lambda$
-times the demo\-graph\-ic-parity gap in predicted next-cell mass) is inert at
-every trainable dose, destructive only where it dominates, identically
-under its signed and absolute-value formulations. The full $\lambda$ grid,
-collapse magnitudes, and the $10^{-5}$ loss-share derivation are in
-Appendix~\ref{app:results}.
-Neither training-side intervention reproduces any part of the recovery
-that editing the demonstrations provides.
+\textbf{Fairness-method baselines (training-side).} Fairness methods proper,
+applied where they usually live at training time on the raw corpus, reproduce
+no part of the recovery that editing provides: instance reweighing in the
+Kamiran--Calders style \cite{kamirancalders2012} moves demand-adjusted
+fairness the \emph{wrong} way ($-0.0227$, all six seeds negative,
+$p = .031$), and an in-processing demo\-graph\-ic-parity penalty in the spirit
+of \cite{zheng2023} is inert at every trainable dose, destructive only where
+it dominates.
 % src: famail_temporal/results/weighted_bc_sweep/fairness_baseline_6seed/paired_stats.json (fair_reweigh; edited_w30 +0.0302 replicated internally)
-% src: famail_temporal/baselines/external_fairness/results/option_a_rollout_fb/summary.json (rollout: R5 arm-prefix regression gate passed, edited_w30 -0.00329 vs committed -0.0033)
 
 \begin{table}[t]
 \centering
@@ -376,20 +357,22 @@ demog.\ oversampling (targeted) & $+0.0153$ & $+0.0052$ & 10.5\% \\
 \subsection{Robustness and Sensitivity}\label{sec:exp-robustness}
 
 Under the two alternate demographic feature sets introduced below, the
-transfer controls of \S\ref{sec:exp-downstream} are re-measured
-deliberately: the random placebo is
-null-to-negative under every feature set, and the most-fair selection
-control, null on the primary set, is significantly \emph{positive}
-under both alternate sets ($+0.0054$ and $+0.0072$ at w30, a fifth to a
-quarter of the edited arm's gain). We report the strongest controls we
-found rather than average them away: even where selection captures a
-minority share, the edited arm's gain is at least $3\times$ larger at
-every dose, which is the edit-specificity claim under its hardest test.
-Vanilla transfer likewise stays an order of magnitude below the upweighted
-gain under every set, reaching sign-unanimity only under the
-housing--GDP--compensation set ($+0.0022$, a tenth of its w30 gain).
-% src: PAPER/supply-lift/data/a10/shz_hgc_a10_weighted_bc_paired_stats.json (most_fair w30 +0.0054; vanilla +0.0022 — the two hgc-set values quoted above)
-% src: PAPER/supply-lift/data/a10/shz_4feat_a10_weighted_bc_paired_stats.json (4feat most_fair doses +0.0059/+0.0059/+0.0072 incl. the w30 +0.0072 quoted above, all p=.031; edited/most_fair min ratio 3.05 at w10)
+transfer controls of \S\ref{sec:exp-downstream} are re-measured deliberately,
+and we report the strongest controls we found rather than average them away:
+the random placebo stays null-to-negative under every set, while the most-fair
+selection control, null on the primary set, turns significantly \emph{positive}
+under both alternate sets, a fifth to a quarter of the edited arm's gain. Even
+under that hardest test of edit specificity the edited arm's gain is at least
+$3\times$ larger at every dose, and vanilla transfer stays an order of
+magnitude below it under every set (per-set values:
+Table~\ref{tab:featsets}).
+% 2026-07-24 (T10, page-budget lever 2): the per-set control values ($+0.0054$
+% and $+0.0072$ at w30) and the vanilla sign-unanimity clause ($+0.0022$ under
+% the housing--GDP--compensation set) are carried by Table~\ref{tab:featsets} and
+% by the Feature-set robustness block of Appendix~\ref{app:results}, where the
+% sign-unanimity reading now reads in prose. No number left the paper.
+% src: PAPER/supply-lift/data/a10/shz_hgc_a10_weighted_bc_paired_stats.json (most_fair w30 +0.0054; vanilla +0.0022 — the two hgc-set values)
+% src: PAPER/supply-lift/data/a10/shz_4feat_a10_weighted_bc_paired_stats.json (4feat most_fair doses +0.0059/+0.0059/+0.0072 incl. the w30 +0.0072, all p=.031; edited/most_fair min ratio 3.05 at w10)
 
 \textbf{Weight sensitivity.} A weight sweep of six full editing runs, 
 each scored on all three metric classes, shows the optimized
