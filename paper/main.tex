@@ -7,8 +7,16 @@
 \documentclass[sigconf,review,anonymous]{acmart}
 % KDD is double-blind: `anonymous` hides the author block; `review` adds line numbers.
 % Remove `review` for the PI-facing PDF if line numbers distract.
-\settopmatter{printacmref=false}
-\setcopyright{none}
+% Template completeness: the `\settopmatter{printacmref=false}` +
+% `\setcopyright{none}` pair that used to sit here suppressed BOTH the
+% "ACM Reference Format:" block and the permissions/copyright block. Suppression
+% retired 2026-07-24 per the PI's template-completeness instruction (meeting
+% 2026-07-24): the compiled PDF must show both blocks, and the boilerplate is
+% left exactly as the class emits it. `acmlicensed` is the option that prints
+% "Copyright held by the owner/author(s). Publication rights licensed to ACM",
+% matching her template PDF. The suppressing pair may legitimately return at
+% camera-ready if the venue's final instructions differ.
+\setcopyright{acmlicensed}
 % Local-build font shim: this machine lacks the Libertine/newtxmath Type-1 fonts
 % acmart prefers, and pdfTeX's microtype font expansion fails on the bitmap
 % fallbacks once math appears. Disabling expansion keeps the local compile gate
@@ -101,6 +109,9 @@
 % acmart.cls line ~1491. Real venue: KDD 2027, San Jose McEnery Convention
 % Center, August 1--5, 2027 (https://kdd2027.kdd.org/).
 % ISBN/DOI are assigned at camera-ready; blank them rather than print fakes.
+% These lines now feed the visible permissions and ACM-Reference-Format blocks
+% (see the \setcopyright note at the top): both render with the real KDD '27
+% venue line and simply omit the ISBN/DOI while these are empty.
 \acmConference[KDD '27]{ACM SIGKDD Conference on Knowledge Discovery and Data
   Mining}{August 1--5, 2027}{San Jose, CA, USA}
 \acmYear{2027}

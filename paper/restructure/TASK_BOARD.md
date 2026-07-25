@@ -106,12 +106,14 @@ into T5's first commit.
 
 ## Lane 3 — mechanics (independent; can run anytime)
 
-- [ ] T-M1 `main.tex` template blocks: remove `\settopmatter{printacmref=false}` +
-      `\setcopyright{none}` so the ACM Reference Format + permission blocks render
-      (meeting A25–A26: make them appear, do not edit boilerplate); verify the
-      anonymous+review options still hide authors; check rendered p1 footer.
-      KEEP our real venue metadata lines (more correct than template placeholders).
-      — STATUS: todo
+- [x] T-M1 `main.tex` template blocks — DONE 07-24 (wave 1): `acmlicensed` renders
+      both blocks with real KDD '27 venue line, no fake ISBN/DOI; gates green; 13pp
+      unchanged; anonymity intact. ⚠ HANDOFF NOTE for T2/T9: the ACM block took
+      Fig-1's page-1 col-2-top slot — the teaser now floats to p2. T2's intro
+      rewrite + PNG swap re-decides page-1 layout; T9 verifies the teaser is back on
+      p1 (or Robert accepts p2). Pre-existing acmart warning "ACM keywords are
+      mandatory" (keywords retired for CCS 07-24) — benign under review class,
+      re-check at camera-ready. — STATUS: DONE
 - [ ] T-M2 Robert-owned, post-restructure: port to Overleaf main.tex + final-compile
       check there (different engine possible, [50:33]); email/ping Zhang on
       review-ready (A3). — STATUS: waits on T9
