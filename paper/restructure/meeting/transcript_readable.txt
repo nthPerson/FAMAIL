@@ -1,0 +1,386 @@
+[00:05] Speaker 1: Nice.
+[02:11] Speaker 1: Okay.
+[02:43] Speaker 1: You've got mail.
+[03:36] Speaker 1: Hi Robert. Hey,
+[03:38] Dr. Xin Zhang: What's up Yeah, hi. Yeah, so how are we renting it. So the thing is for. So I read over your writing, which is kind of uh, it's aligned with
+    what we have discussed. And one thing I have noticed is uh, them. For the current story, uh, It's kind of a little bit difficult to
+    justify to justify that. Um we are only proposing trajectory planning because it's a combination combined strategy in terms of the.
+[04:12] Dr. Xin Zhang: Editing and upweighting, So we kind of need kind of a more complete and more tailored story for in that case. So, What I have changed in
+    terms of story is that we are doing a budgeted like um, or budget aware trajectory editing, where the claim is that we don't want to.
+    Modifies too many data. Instead, We want to modify a portion of the data. And even though those portion of data won't have make a great
+    impact on the raw data fairness itself, it is going to be impactful for the downstream models. And in a sense like only modifying or.
+[05:09] Dr. Xin Zhang: Correcting a small portion of data won't have that like a like an impact. We just need to update it so that it's gonna make sense. And I
+    read through your writing. And the reason why and your original novelty claim is kind of the trade off between um editing and the
+    fidelity. I think that is a good point, but I think a more important problem that we want to solve is that, And that problem is
+    distinguishing our pro our problem from other approaches, like the fair GAN or or other related works, is that we are looking at a
+    systematic thing like um collective um fairness.
+[06:02] Dr. Xin Zhang: When, we are looking the whole dataset, instead of like designing a more kind of fair model that won't discriminate, like for example, CV
+    model that is gonna discriminate people of color, that type of thing. So we are kind of a different fairness perspective or metrics. I
+    don't looks like what it What the global fairness looks like when we are editing those trajectories. And that naturally create the
+    unique challenge that we have been trying to solve, Which is how can we modify a small portion of the trajectories to affect the global
+    fairness. So I think that is the most.
+[06:55] Dr. Xin Zhang: Distinctive part that would differentiate our approach with others.
+[07:01] Speaker 3: Okay, okay, yeah, and that'sum very much in line with the intent that we have there. So, um, that's cool. Um I can definitely make sure that
+    that's emphasized. Ah and the challenge with the current workflow I have is I'm. I am drafting the or working on the paper in my in a
+    separate environment from Overleaf, Which doesn't give you access to the most up to date version that I am working on. Which and the
+    trade off there is that I and the reasoning for that is because I have the context of the project, So I can make sure that things stay
+    consistent with the implementation um and our results. Because I don't want to right kind of been.
+[07:48] Speaker 3: Trying to avoid the situation where we kind of get into like an argumentative gymnastics where, the way we want to tell the story conflicts
+    with what actually happened. Um. So I don't think I see anything uh here that that's gonna do that and I see in in the uh draft. Let me
+    get it up here. So I have some specific stuff. Um, that's a little too big. I see some very helpful language that you Are highlighting,
+    um, and I think I am looking at the yep wrong PDF. Oh, it got very small. That's why okay. So and what I kind of because I figured you
+    were going to be working on the introduction like we talked about. So I didn't really spend much time in there. And there were some some
+    difficulties or like some big holes that that I later came back and cleaned up that you haven't got a chance to see.
+[08:47] Speaker 3: But one thing that I want to not do is, Is I want to work towards the finish line. Because at this point, we're on complete revision number
+    three and I've drastically neglected other uh responsibilities that I have. So, I really want to get this done. Um, so, I am laser
+    focused on uh making sure that the the requests that you uh outlined in your email are going to be fulfilled. So Um and I'll be noting
+    the the emphasis that you've described here in our conversation, um so that will also be included, and. As far as like. The content what
+    was the other thing I just forgot it um. So okay um yeah uh, as far as like the general like uh tone of the of the writing.
+[09:46] Speaker 3: I I think this, the second version, which we're going to revise, is much easier to read. Um, so is that in line with what you're looking for
+    And then follow up, We'll be talking about Figure One and and that because I see you have another Figure One.
+[10:04] Dr. Xin Zhang: Uh, which version So the version two you mentioned, the one that you sent me like today, right Yeah,
+[10:10] Speaker 3: Which and that one that I sent you today is. I mean, at this point, about twelve hours old. So it's been heavily revised since then,
+    Especially through actually the all through introduction related work methodology and about ninety percent of the experiments. But one
+    thing I want to avoid is because we're going to be restructuring it. I am basically just going to be ditching that. So, we don't
+    necessarily need to I guess work on it because we're changing direction.
+[10:42] Speaker 3: And I think we it's Friday, mid Friday right now or late Friday. We are going to be very close to the deadline by the time I am finished
+    with it. So, um, I kind of would rather spend my time working towards that. Um, And I guess to give you something more concrete as far
+    as decisions figure, one of your edit introduces a new like. Collective service disparity emerges from the aggregation. Do you want this
+    figure one to be used in the new version?
+[11:19] Dr. Xin Zhang: I think that is more clear.
+[11:21] Speaker 3: Me too. Cool. Yeah, and it's very like obvious, I'll say. And the update that I sent you earlier, I think, I think it contains the figure,
+    but actually it doesn't matter actually anymore so, U m. And just to be clear, what about figure two, because now we have two
+    conflicting styles of figures.
+[11:48] Speaker 1: So oh,
+[11:56] Speaker 3: Yeah, you mentioned another figure in the thing. So maybe that's your answer. Let me check.
+[12:04] Dr. Xin Zhang: So wait a sec. Let me look closely.
+[12:55] Dr. Xin Zhang: So for the figure two, I'm looking into or looking at kind of a more framework or or procedure like thing.
+[13:10] Speaker 3: Yeah, and the it might not be clear, but as far as like procedurally, This is the algorithm or the editing part of the algorithm, separating
+    it from any kind of model evaluation or pass through to a model. Um, it works in three steps, Which the first step is it runs an
+    attribution phase that basically selects the trajectories. Second phase is trim and third phase is lift. But we can still kind of merge
+    those together. You know what I mean? Cause I see you have the two things.
+[13:43] Dr. Xin Zhang: I think I think I think so major thing is that um yeah.
+[13:56] Dr. Xin Zhang: I cannot see the.
+[14:01] Speaker 3: The sequence.
+[14:02] Dr. Xin Zhang: I can see, I cannot see what you want to convey from the figure itself. Okay, and I'll hear that. Yeah. The attribute locate the deficit,
+    like what what makes the location happen? Where is a where is a locate?
+[14:20] Speaker 3: Visually it's not really all that well described so, Locating the deficit is basically, and I guess it, the idea is that attribute locate
+    the deficit. The what I would be hoping the audience would see is looking at the grid. We see advantaged district overserved,
+    disadvantaged district underserved. So that locating who's overserved, who's underserved. And then in the second phase trim relocate
+    excess picks up CC August.
+[14:53] Dr. Xin Zhang: So in that sense, The first figure should be kind of original distribution without the cars and person and and without the cars. And the
+    people in the map, without any color, and you color it. Right.
+[15:10] Speaker 3: So okay. So you want like a I see okay.
+[15:14] Dr. Xin Zhang: The uh where so is you know where's are the advantage? Where are the disadvantage part, right.
+[15:20] Speaker 3: Well, and okay, And let's actually like I'm gonna get the figure up here, so we can be referring to the same thing. Grab that thing. Hold on
+    a second. Got so many things going on. Okay, so, and I think if I'm hearing you right, you would prefer to see it like a non colored
+    version first. Um, Because, the idea with locate is kind of like to show that there's an advantage district and there's a disadvantaged
+    district. But it's not very clear that it's like a step, I guess. If I'm, I might be misunderstanding your suggestion.
+[16:03] Dr. Xin Zhang: The thing is, you want to see attribution. You don't want to only show the attribution result and you say you attributed.
+[16:11] Speaker 3: Okay, how do you think we could show that?
+[16:13] Dr. Xin Zhang: We show, The difference, the procedure. We show that we have done attribution. We show what is its input or what is the original, what is
+    the main difference that we have made.
+[16:28] Speaker 3: Okay, I see.
+[16:30] Dr. Xin Zhang: So so so yeah so so the thing is.
+[16:36] Dr. Xin Zhang: So the attribution you mentioned is actually that we are able to identify that this region is orange. And this region is blue. Is that the
+    attribution you want to mention?
+[16:50] Speaker 3: Or specifically these over and underserved. That's the attribution because the attribution itself takes takes the fairness metric, and then
+    it determines. What each trajectory's influence is on that fairness metric. And then we basically normalize that or z-score normalize
+    that, uh, those individual scores and we get a positive and negative. And positive are considered overserved, negative are considered
+    underserved. So if if the sign might make that helpful or more helpful or like some hard number.
+[17:28] Dr. Xin Zhang: So essentially what are you attributing? So you are scoring, is attribution essentially scoring each trajectory? Yes. So in that sense, what
+    you should show is that you have a bunch of trajectories. And from this bunch of trajectories, you are able to tell, okay, this
+    trajectory is contributing to unfairness. This is contributing less to unfairness.
+[17:57] Speaker 3: Cool. Yeah and my like, The the tension that I was kind of uh playing with there was um consistency in the visual because on the left side
+    here, I think it's it's much clearer to have like some kind of image of a trajectory over here, right? Um so we could I don't indicate
+    in some fashion trajectories over here. These ones are fair. These ones are not fair, right? Um but and what I was trying to go for was
+    like a consistency between here. So the.
+[18:30] Speaker 3: Message would go across, but I think if the message isn't getting across as it's not, um, And if it's not getting across in this small
+    sample size of of you and me, it's probably not going to get across others too. Um. So, just to make sure that we get this right because
+    time is of the essence right now. Um. I could potentially instead of using the little cars and the little stick figures Instead, replace
+    these with just some kind of stylized version of a trajectory. And then have would you want the districts still to remain? Because one
+    kind of important concept in the method is that the districts really play a big role in what makes a trajectory fair or not. So.
+[19:27] Speaker 3: I think having.
+[19:28] Dr. Xin Zhang: I think I think I think you are. You are like thinking it in it like, in a very complicated way. So the the thing is we want to. So it's
+    kind of like a trade off so. One way is that we stick to what our implementation looks like and reflect our implementation. Like what
+    you are trying to do or here. And, but when it's kind of we are explaining to people what we have done step by step, it's gonna be
+    complicated to understand for the people. Instead, We want to abstract our approach in a way that we can put it into a more simple
+    story.
+[20:24] Dr. Xin Zhang: And in that sense, Some very complicated implementation details can be some tricks that we have used to make this approach work better. And
+    that part could be put into the appendix. So I think the major skeleton of this approach is that what we do is we do attribution, right?
+    We so from let's say 1000 trajectories, we are selecting Like 10 out of them or 100 out of them. 100 trajectories we have selected out
+    of them. And with these 100 trajectories, we are doing the editing, right? And we are in terms of doing the editing, we are using the
+    trim and the lift to to edit the trajectories. Okay. And did I miss anything?
+[21:22] Speaker 3: No, I think that yeah, I hear you. Um, and just one kind of ambiguity there. I want to clear up. Mm hmm. Um so I get the abstraction thing,
+    uh that's totally cool. We don't necessarily need to perfectly replicate the algorithm in in visuals. Uh that seems pretty hard,
+    obviously, cause I mean, I might see it but who else is going to right? Um but the so in that abstraction, Do, we keep the same or do we
+    even try to display it in the grid? Or.
+[21:58] Dr. Xin Zhang: Because I No, necessarily. Okay. So. So when it comes, so as I have mentioned, likeum the framework picture Can, you go to the framework
+    picture from what was that? Uh that's ST-iFGSM or the cGAIL, which our would work.
+[22:19] Speaker 1: Uh okay yeah I think I have get to my code here. Of course, open in the other window. Oh, here we go.
+[22:45] Dr. Xin Zhang: Yes, it's not a figure two is figure three. Oh, Yeah, as you can see. So from this figure, we know how they have what the solution framework
+    looks like. So the input is a training data, training data from k drivers, right? And then and they give for their stage one, which is
+    adversarial attacks to human models. So given the raw data, they are putting on attacks which are perturbations.
+[23:18] Dr. Xin Zhang: To generate a perturbed dataset.
+[23:21] Speaker 3: Yeah, so and I see your point. So instead of trying to, I guess visually represent the algorithm, just perform a sequence diagram exactly
+    because this is essentially a sequence diagram.
+[23:36] Dr. Xin Zhang: Is is kind of telling people, What is the input of this algorithm? What are the different stages of this algorithm and what is the output?
+    So that is a framework figure.
+[23:50] Speaker 3: Yes, exactly. Yeah, framework sequence. I think semantic is or semantics are all the same there. So we have like S one, We have an arrow
+    coming down here to S two. And then you know basically or like this is T one, maybe a terminal or something. So we can do exactly that
+    same thing and, Considering the reduction in complexity, there will probably even save a bunch of space or space too, which always comes
+    in handy. Um. Okay, so. I.
+[24:23] Dr. Xin Zhang: Think what you can do because so you can just ask Claude or GPT to generate a solution framework figure for you and try to like draw one
+    based on that. Based on the the results from the large language models, and you can modify it accordingly. I think those those models
+    are good at drawing kind of solution framework.
+[24:54] Speaker 3: Yes, I agree. Um, and then additionally, so let me get this out of the way here. Okay. So where's the other one?
+[25:09] Speaker 3: Oops. Okay. So this isn't the best view of this thing. Hope I'm in the drawing tool. Hang on a second here. Oh, wrong way, that'll work.
+    Okay. Um. So I'm kind of a nitpicker as far as consistency goes, um, I think I definitely uh. I'm okay with jumping on board with this
+    uh type of style. I think it works, Um, Do you have or do you know what kind of stack you used to create this visualization? Because I
+    notice it's saved as a PNG file.
+[25:45] Dr. Xin Zhang: So there's just a screenshot. It's just a keynote. I just use keynote to draw it and.
+[25:53] Dr. Xin Zhang: Take Take a screenshot. So it doesn't matter like what tool you're using,
+[25:57] Speaker 3: It does because if I, if I try to just screenshot this and throw it into Claude, it'll get close, But it'll have that uncanny ring (no
+    change - "uncanny ring" is likely a mishearing of "uncanny valley" but keeping as is per instructions) where the styles don't exactly
+    match up. So if you use the same tool, I can guarantee that it it arrives at the same style.
+[26:14] Speaker 1: Oh yeah.
+[26:17] Speaker 3: Cause I mean, I I definitely will be using AI to uh help me design this. Uh, but, it has a a tendency to be very very close.
+[26:28] Dr. Xin Zhang: Uh i i think i think.
+[26:32] Dr. Xin Zhang: The major point is that we need to make sure the figures are able to convey what we mean.
+[26:44] Dr. Xin Zhang: In like easily understandable way. Because reviewers and other people, they have no idea what we are trying to do. So they may not be even
+    domain experts, But they need to know what we we were trying to do. So that way, yeah, they can appreciate like what we have done.
+[27:04] Speaker 3: My idea is just if I am going to spend time building a visualization, I might as well build the one that is going to end up looking correct.
+    So that's the entire purpose of this. And I think that's as far as like creating quality work. I think it's important that consistency
+    matters. Or I think it's clear that consistency does matter, and as a reviewer, I would not that it like matters as far as delivering
+    the priority of the message because that's clearly what they're the purpose of the visual. But, it's one of those things that like
+    changes how somebody thinks of a work. At least it does for me. Like if you know things are clearly AI generated and has that uncanny
+    ring.
+[27:49] Speaker 3: I think it leads to more scrutiny of other parts that we don't necessarily want to invite. You know, so but I'll uh, I'll see if I can
+    replicate the stack. Depending on how that goes, I may find a tool that, I can just copy this design, Including icons, the whole thing
+    and and just make it look look straight because it's basically.
+[28:19] Speaker 3: I mean, maybe fifteen thirty minutes extra of my time, figuring out the, how that would work and then. Making sure everything works out
+    great. Just wanna do a good job.
+[28:36] Dr. Xin Zhang: Okay, I I think I think the the the okay. Okay.
+[28:49] Speaker 3: So, on the. Oh, actually, I might have a better. You'll recognize this. Okay. So. The, this part definitely cool. I will be kind of packing
+    everything and you're just packaging everything a little bit differently. Um, The one part that I I might foresee kind of some
+    challenges is fitting this the exact section names.
+[29:26] Dr. Xin Zhang: It doesn't have to be exact section name, But that's just trying to give you kind of idea about what each section is focusing on. Uh, yeah,
+    you can you can like name it in like or different.
+[29:39] Speaker 3: I mean like not necessarily section names, because names are. I mean that's that's all right. But as far as like the the fitting the, The
+    work into these, uh, I guess logical blocks. Um, But I I think I I we can extend your or i. I think it's what you mean is it doesn't
+    necessarily have to be exactly like this, but itemized? Or do you do you want them to be in this logical shape?
+[30:07] Dr. Xin Zhang: Uh, Doesn't have to be to be because there is one one thing as what i'm thinking it should be written. And there is another thing about the
+    input. When you are writing it, it will become dependencies. So you kind of adjust accordingly. The major idea is trying to align it
+    with the challenges we have. So kind of each challenge is, matching one um one bullet point or one subsection or subsubsection.
+[30:37] Speaker 3: Sweet, No problem I can do that. And just to get your vote on this, this most recent version.
+[30:46] Speaker 3: This one to make it more explicit, what kind of challenges I like kind of went out and did this. Um, Do you want it to be that explicit as
+    in we've actually defined specific challenges and then refer back to them?
+[31:00] Dr. Xin Zhang: Uh, we don't we so that relates to kind of the overview writing. So one style if you, Go to the SIGL paper or the ST-iFGSM paper.
+[31:23] Speaker 3: Oh, I lost it. Oh, that's not what I was looking for. It's hiding behind the Zoom. There we go.
+[31:30] Dr. Xin Zhang: Yeah, let me see. Could you scroll down for the overview? Scroll yeah, scroll down a little bit. Uh uh wait uh scroll up a little bit? So
+    yeah at around the overview so, As an overview, as you can see that they are having the definitions and following problem. Problem that
+    those definitions of necessary items has been used and then the problem definition. Then follows the challenges. We can define that C
+    one, C two, C three over here by listing or re-listing.
+[32:12] Dr. Xin Zhang: The challenges we have mentioned in the introduction. So in the introduction, we can like briefly tell what are the challenges without kind
+    of itemizing them, and we can itemize them over here. Perfect. Yeah, and due to limited space, we don't need to kind of put them in this
+    itemized like LaTeX environment. We can just stack them all together.
+[32:41] Speaker 3: Perfect. Yep. All right, and let's see what other questions I had. One thing because it just popped out into my head. So as far as the oh,
+    that's not the one shaped similarly. Okay, summarizing the pipeline again, I think I'm hearing a theme. This is just like you want it in
+    this general shape, not necessarily these specific steps.
+[33:12] Speaker 3: Exactly. Okay, cool. And.
+[33:20] Dr. Xin Zhang: Those are all kinds of suggestions. A major thing is that when you are writing the methodology, You want to make sure that each methodology
+    kind of have a same of solving one challenge. And at the same time, it's kind of in a logical order so people can follow along. Yes.
+[33:41] Speaker 3: Yeah, and I the updated version um. That I just uh finished for, this methodology I think delivers that, um. But I'll make sure that the new
+    structure. Uh, let me see it has that kind of logical kind of framework. Um. Now let me see actually introduce methods yeah.
+[34:13] Dr. Xin Zhang: Okay. And also.
+[34:16] Speaker 3: Yeah, So I think that sort of like because the problem definition, obviously is going to move out to the overview, yes, But it's I think the
+    other aspects of it that sequential. Uh like yes, demonstration I think it's here. And the I did some recent updates or uh changes to
+    this that. Make it drastically more, uh, easy to understand. I think so.
+[34:45] Dr. Xin Zhang: Yes. So so let me see. So basically this section three point one is gonna move to overview. So if you scroll down a little bit, And then for
+    over here, you're gonna start your section three, which is the methodology right? So before talking about each like be, for example,
+    before talking about the fairness objective, you want to start with kind of leading. Paragraph telling people that we introduce this um
+    fade approach, where um giving people kind of overview of what the framework looks like and refer people to this framework. Figure two,
+    so people know what you are proposing, what you are trying to do. And then um introduce each each parts, each design part uh for within
+    each subsections.
+[35:35] Dr. Xin Zhang: So that way people will first know what you are trying to do, and then would be able to follow along.
+[35:42] Speaker 3: Yes, I think we might be looking at a different version than I expected or something got reverted. But yes, I hear you loud and clear. Um,
+    introduce overview first, Not necessarily overview, but introduce the high level uh view of the the approach and then go into specifics
+    in sequential fashion. Mhm. Um, And naturally referencing the figure, And I could probably structure the figure similar to the argument,
+    so it'll make sense. Okay, all right, let me see here. That's what you are just talking about here. Oh, surrogate that as far as the.
+[36:28] Speaker 3: Fairness surrogate, just to make sure we're on the same page about that.
+[36:31] Dr. Xin Zhang: It's a fairness objective that one you you're referring to. I'm just using my language. Good.
+[36:37] Speaker 3: Yeah, do you want that language included?
+[36:40] Dr. Xin Zhang: Not necessarily like you can just use whatever language that makes sense.
+[36:45] Speaker 3: Okay, Because I want to like, do you have experience with KDD and I want to leverage that as much as possible. So Oh,
+[36:50] Dr. Xin Zhang: I think in terms, I think it's mainly aboutum, It's mainly about the introduction, the style of the introduction. And when it comes to
+    methodology, it's gonna be whatever makes sense for us. But when it's introduction, you don't want to lose audience because they don't
+    understand the language. Right.
+[37:09] Speaker 3: Yeah, And first version was definitely lose everybody like right from the beginning kind of thing. So and the introduction or uh uh with
+    cause I don't, I just thought, as I was saying that maybe I don't need to bring up any specifics because it's going to change. So, so
+    I'll try to, I'll try to have you a copy of this obviously as soon as possible. But considering the scope, it's probably going to be
+    tomorrow night.
+[37:48] Dr. Xin Zhang: Yeah, no worries. Don't don't don't guess. Too too stressed out, So we can just submit whatever we have for now to the conference because
+    it's usually the reviews. But even though it's a very good high quality work, it's gonna get bad reviews. So it's okay that we the
+    current version is not perfect. We can like iterate through, so that is kind of a very high quality work. And finally like rec or.
+[38:19] Dr. Xin Zhang: Being able to being able to be accepted somewhere, so don't feel so stressed out. Um, so it's okay that is is not perfect for this time. And
+    uh. And yes and uh so, you can feel free to adjust some languages and um. Writing kind of reasonable. Way andum I think the deadline is
+    on Sunday, On Sunday night, I'm gonna reach through, give it a final pass of the paper andum added where I feel correct, and then we can
+    submit it on Sunday night, and we don't need to care worry too much about it anyways. Okay.
+[39:11] Speaker 3: Alright, I think that's all I need from you. Okay.
+[39:14] Dr. Xin Zhang: And for the experiment part, so let me see if it's good example. If you see ST or it doesn't, STF just. So when we are writing kind of
+    experiments part, we usually start with kind of. In the experiment, What we want to show kind of having a leading paragraph telling
+    people with what we want to show. Um. What is the experiment? Andum, we can organize it in that way and uh. Then following related work
+    and then the conclusion.
+[40:03] Speaker 3: Okay. Yeah, and the experiments are kind of, uh. I guess the the shape of them uh. It's a little hard to, I guess explain succinctly, But we
+    generally have the Shenzhen experiments and then partial reproduction of all of those experiments on San Francisco.
+[40:30] Dr. Xin Zhang: It is okay. So, we don't need to worry too much about the reproducibility for now because we still have time to modify the code. What, we
+    want to do is we want to make sure that in the appendix, we have enough detail about this implementation. And for experiment, what we
+    can do is we can focus on, we can use the Shenzhen data. So two strategies actually. I think you are following one which is like
+    answering all the experiments questions.
+[41:10] Dr. Xin Zhang: With the two or providing analysis based on the two different data sets. So one way that we do is for each question or for each evaluation
+    question, we want to provide experiment results with the two data sets. Or can you share screen with our latest version of the
+    experiment part? That might make the point more clear. So, yeah, just scroll down for section 4.2. Let me see. Yeah, so as you can see,
+    the data level fairness and Shenzhen, if you scroll down further.
+[42:07] Dr. Xin Zhang: For the San Francisco, if you scroll down for do you have results for San Francisco?
+[42:16] Speaker 3: Yes. Um. I hope I blew by them. So oops, it's here. Oh, this is a different version than I was expecting. Yes, I oh okayum.
+[42:36] Dr. Xin Zhang: You. So you have created okay, a distinct section for for.
+[42:40] Speaker 3: Yeah I'm not seeing the title. I was looking for, thoughum the first version did have a uh completely separateum but I know this I've kind
+    of worked it in there or worked uh, the San Francisco stuff, uh kind of where it's contextually like relevant. But the.
+[43:05] Dr. Xin Zhang: So yeah, so the point I want to make is that, for example, um you are we're having several questions we want to answer within evaluation
+    section. The first one may be um the fairness. Whether our approach is able to improve fairness. So for this and for this to answer this
+    question, we can directly put The experiment results for Shenzhen and San Francisco side by side, And we can just use one paragraph
+    summarizing what we have observed in Shenzhen and San Francisco in terms of the fairness change. This is one, And for each questions,
+    kind of we are having the Shenzhen and San Francisco results side by side. That is one strategy. And the other strategy would be.
+[44:03] Dr. Xin Zhang: Yeah. For fairness, still we want to answer these questions. For fairness question, we just show the Shenzhen. Yes, I think the second way
+    is what you are using right now. And for other questions, you also want to use only the Shenzhen data. And finally, You are saying
+    making the claim that this approach is also transferable to San Francisco. For other or or to taxi data in other cities, and then you
+    are listing the San Francisco result. And for in the in this way of represent. Oh, in this way of writing, I so me.
+[44:52] Dr. Xin Zhang: I personally would prefer this way of writing because it's gonna save us some space.
+[44:58] Speaker 3: So, we definitely will be able to report the fairness improvements. But, we also have baselines that we have to report results for or
+    experiment results, or else we lose the motivating, you know, or the isolating factors. And then we also have, The uh uh generative
+    results or like propagation.
+[45:27] Dr. Xin Zhang: Yeah, so we have the results for both cities, right?
+[45:31] Speaker 3: Uh in some of it. So, the theum in the fairness and the propagation that we have uh basically parity between San, Francisco and Shenzhen.
+    But when it comes to the baselines, uh much of the baselines are, Have only been implemented or like, um, juxtaposed against uh
+    Shenzhen, because computational yeah issues because it's these things take. It was an undertaking to okay yeah. Been too far.
+[46:08] Dr. Xin Zhang: Okay so.
+[46:10] Speaker 3: But I think I I hear what your your your general idea, Because without like a full or like a a deep understanding of like where the. Or, I
+    guess that's collections of results that we have. But I'll try to oppose them or like have it more visually striking between Shenzhen
+    and San Francisco.
+[46:31] Dr. Xin Zhang: Yeah, I think the main point is we don't need kind of So if we observe, we have the same observation in Shenzhen and San Francisco, we can
+    either combine it, Say that we have the same observation for Shenzhen and San Francisco, and illustrate the observation in one
+    paragraph, in the same paragraph or paragraphs. Yeah. And we don't need to kind of say the same thing for two times. So that is what I
+    want to.
+[47:09] Speaker 3: And yeah, I think in general that the approach is very similar to that. There were some like, uh, slight differences between how uh Shenzhen
+    and San Francisco behaved, that I think as far as like, defensibility um kind of need to be like at least recognized and that's why, Um
+    we have like a separate section, instead of just uh reporting the results, all in one where instead of breaking it out into this
+    section, we just kind of report them side by side as you are, or as you're you're saying. Um so.
+[47:46] Speaker 3: The general purpose of this is to kind of highlight those those differences because, A very astute reviewer might look at some of the tables
+    and see some numbers that lead to questions that without, this might kind of, I don't know. My the approach is just to like get ahead of
+    of the easy reviewer, um complaints, so or comments. So, uh we can get to the good ones when we get feedback back. Because, I think like
+    if we're if we're gonna put the effort into it, we might as well like do the the best job we can. Uh no matter if we're I mean cause
+    obviously we're getting feedback anyways, but like give us the best chance we can.
+[48:31] Dr. Xin Zhang: Mhm Okay. So I think that's pretty much what I have. And uh the others uh, the the most important thing is uh We want to follow KDD. For mat
+    so I no matter which version you want to, yeah, yeah, have this part. And uh, yes, yes, you're doing it. Correct.
+[48:54] Speaker 3: Yeah. And I was a a bug that prevented it from showing I think.
+[48:58] Dr. Xin Zhang: There is also additional information over here. And it doesn't the correct format doesn't looks like this. Let me see if youum open the
+    overlay.
+[49:13] Dr. Xin Zhang: Repository. I think it also houses SC, um, reference format part. Yeah. And also permissions to make digital whatever source parts should be
+    there.
+[49:27] Speaker 3: Let me see if I can If,
+[49:28] Dr. Xin Zhang: You compile it.
+[49:33] Speaker 3: And you're working in main .tex, right? Not backup Okay So.
+[49:44] Speaker 3: And this is the the format or the template, right, that you're talking about.
+[49:48] Dr. Xin Zhang: Compile it to PDF.
+[49:50] Speaker 3: Right, but I mean as far as like what selects the the template, it's this line. Right.
+[49:56] Dr. Xin Zhang: Yeah, that is correct,
+[49:58] Speaker 3: But uh Are there any other formatting or like templates That is a format,
+[50:02] Dr. Xin Zhang: But there are missing information on your version. Right So so what I'm asking is, you can just yes Open this one, if you scroll over here.
+    The version you showed me only has the CSS. If you scroll down a little bit, but doesn't have this ACM reference format, this part. So
+    that is what I am referring to.
+[50:25] Speaker 3: Okay. Oh, this looks like probably the code.
+[50:29] Dr. Xin Zhang: You don't need to modify this part. You can just leave it as is what you do Oh,
+[50:33] Speaker 3: I don't plan on modifying it, But I just want to make sure it's if it's a if I'm missing code and I can just copy the code in there to solve
+    the problem, I'd rather do that, It just. So it and it, LaTeX is kind of weird with compilers and stuff. So there may be a different
+    compiler running between the two things. So, what I'll do is just make sure that final compilation runs, and we have these little
+    details. So up until the deadline, it might not look exactly perfect, but once it once we get there, it will.
+[51:03] Dr. Xin Zhang: Mhm, I can. And you can just let me know whenever you have finished the last version. I can start working on it and let you know. When is
+    for our data to submit.
+[51:13] Speaker 3: Yeah, yeah, I'll try to get it as soon as possible. Um. And who knows It might it might take less time than than I'm thinking. I think the
+    things that are probably going to be the most challenging are visualization related because I'm I'm like kind of a nitpicker, But the
+    the new style of those will be much more straightforward than actually trying to like this. So should be a lot easier. Um. But yeah, I
+    like. I'll try to have it as soon as I or have it to you as soon as possible. Um.
+[51:46] Dr. Xin Zhang: Yeah, think I think it would be nicer if we are kind of having, like uh the the figures too. Oh,
+[51:55] Speaker 3: That was another great like the kind of a case studyy. Yeah, yeah You mentioned an additional study or addition additional uh figure in this
+    email. Uh.
+[52:07] Dr. Xin Zhang: Yeah, the additional figure is a framework too because I cannot. It's a framework. It's a framework figure.
+[52:14] Speaker 3: Figure two is oh okay okay that's what it was. Framework figure. Okay, yes. And it's just replacing our standard figure or the current
+    figure you know from yes.
+[52:23] Dr. Xin Zhang: So looking at this this figure, so initially, I was thinking that this is a figure for case study,
+[52:33] Dr. Xin Zhang: Oh, From whose study case study. So in experiment, We usually what we usually do is to give people a more concrete idea about the editing
+    results. We show a case study of what a real editing looks like. So in this way, I thought this one is a case study.
+[52:54] Speaker 3: It kind of is in that regard because Yes,
+[52:57] Dr. Xin Zhang: Yes. Yeah. So so I think if we have time, if you have time, it's good to have a case study telling people, What a successful editing looks
+    like if we, no time is totally okay to, um, have like to put in the paper whatever we already have and reorganize it.
+[53:20] Dr. Xin Zhang: Yes. So it's up to you, but still don't be too stressful. Just once it is, is is necessary that we put.
+[53:29] Dr. Xin Zhang: The most effort possible in this work, but it's another thing that we don't want to burn. Burn especially you don't want to bring yourself
+    out. It's yeah, especially when you are having multiple projects. Um, in parallel and it's kind of a stressful process, Especially
+    towards the deadlines because my experience is I was never able to kind of, even though I start early, I was never able to. Kind of um.
+    Sleep well towards the deadline. So, So it's it's it's okay that there are certain things. We uh don't have enough time to do. The thing
+    is that we want a sustainable way of working instead of just work for this submission.
+[54:19] Speaker 3: I think because, I don't know if I'll be doing this as a like a lifetime job, you know, so for me, it might be a. Just a little different
+    because I don't know if I'll be doing this for the next ten years of my life. And if I was, I definitely wouldn't be working like this.
+    And but okay, yeah, so next couple of years just work really hard. I figure i'll be I'll be fine. Um, so yeah, mhm. So try not to have a
+    heart attack and not making any promises but doing okay. Uh and I think my first shot because like the as far as like.
+[54:57] Speaker 3: What I've done, Or the this little research that I've done as far as like uh publication like or like camera ready visualizations, it's the
+    consensus that they're done in the TikZ TikZ format. So what I think I'll do is to make sure that everything's going to be okie dokie.
+    Um, I might take a shot at at uh, I am re-implementing this in the TikZ, and I'll send it over to you. Because if we can do them both in
+    TikZ, everything's awesome. And, the cool thing that you get with TikZ is that the all the fonts is the word I was looking for. All the
+    fonts are consistent; everything looks like awesome. And I don't know if it's not for everybody, but that's I am like.
+[55:54] Speaker 3: If those details line up, It adds a layer of trust because if if not that I judge everybody around me based on their level of detail, But I
+    think it sticks out uh, sorely when I am when we're in a position where we're trying to ask somebody to accept our work. If I am not
+    going to do my due diligence and make sure the the figures are, you know consistent. So, I want to i'll try that first and then
+    alternative. Uh, I'll see if I can. Uh, replicated in another way.
+[56:27] Dr. Xin Zhang: My suggestion is put it into the least priority. And um, Like I think I think organizing the content in a reasonable way would be important
+    because those are the details. And uh, what is really important is the content. We want to make sure that the content makes sense and
+    easy to read in a logical way. So dish. Yeah, and those are kind of the. After that, after we have finalized all the content for sure,
+    if we have time, we can do that. I understand.
+[57:01] Speaker 3: I got two windows here and they can both be doing something independent. So one of them will be working content, and then I'll just make
+    another one, and it'll be working a figure for me. My my intention there wasn't to say I'm gonna gonna like just focus on the figure,
+    but rather get you the figure as soon as you can. So you get feedback. If you, if you don't happen to like it um and then I could you
+    know revert?
+[57:24] Dr. Xin Zhang: So I I think I think it's okay, as long as the information in that figure are are preserved. So uh as if yeah, so it's okay. So you can just
+    let me know when when one version is a is is oh okay for review and just looking look through through it and make edits if it works. If
+    you can just submit it, Yep.
+[57:50] Speaker 3: Get you see it in your email.
+[57:52] Dr. Xin Zhang: Yeah, so yeah, uh, okay. I think. I think still okay. I think that relates to another problem, which isum kind of your pay is gonna be end
+    towards the end of this month. So um this research will be done till then, but we are still gonna like meet with Doctor. Cash is okay,
+    whether you want to uh kind of still. Join the bi weekly meeting or not is is it's okay It's up to your time, but uh yeah. So about we I
+    think we are gonna cancel this Thursday's meeting because Dr. Xin Zhang will be away, um. But, and we will be scheduling kind of for
+    another kind of meeting time. Hopefully when this and uh when especially when this master starts, but like you can just, uh.
+[58:47] Dr. Xin Zhang: Feel free to join or not. And um, yes.
+[58:51] Speaker 3: If I don't have any conflicting things, I'll be there. Um, sounds good. I have a another job lined up that I'm actually currently uh working
+    on or kind of partially not not putting a whole lot of time into it. But um, I have one already lined up, so as long as I don't like
+    have any conflicting times, I got to be happy to join the meeting that'd be great.
+[59:11] Dr. Xin Zhang: Okay sounds good. And I think the next thing is don't work too hard. Yeah,
+[59:19] Speaker 3: Only a couple days, man. It's all right. And yeah, I'm not I don't have like I don't really not that I don't have anything else to do
+    because I have like a lot of work and other projects and stuff to do, but like mm, hmm, I i'm dedicating this part of my life to this,
+    and i'm totally okay with it. And i like doing good work, so i'm going to put everything i got into it. So thank you. Appreciate that.
+[59:42] Dr. Xin Zhang: Yeah, and because, because it's gonna be related with kind of the revision of the papers. Because when we hear the reviews, the feedback
+    might be not good, so we may be refining and. Doing the rebuttal, KDD comes with rebuttal where reviewers you are given reviewer
+    feedback, and you have a chance to talk and communicate. And if with the reviewers hopefully they can improve the score or not so. Um, I
+    I think I have, talked to you about that point before. So for the rebuttals part also kind of we need to work on that depending on your
+    availability. You can decide whether you want to, kind of um.
+[60:31] Dr. Xin Zhang: Like Participate in the rebuttal or not. And uh, yeah,
+[60:35] Speaker 3: Oh yeah. Well, last thing I'm gonna do is leave you hanging on this big old paper that would be crazy man, um. But like the way I figure, I
+    am going to work as hard as I can now, while I am getting paid for it and do as good a job as possible to give the reviewers as little
+    foothold as we can in argument because they're going to come back with something. And I would rather they came back with small little
+    nitpicks than things that require us to structurally revise the paper. So, Not that I am not getting good at it because I am every every
+    iteration. I am like okay, got a workflow now, but.
+[61:09] Speaker 3: That I think it's not that I mean it's unlikely that we're going to submit and they're going to have no no comments. I understand they're
+    going to have comments, but if we're not careful now, We give them options or if if we're not thorough at this point or if I'm not
+    thorough, um the comments that they come back with are going to be potentially devastating. So, I'll do whatever it can to make sure
+    that we're motivating things properly and provide evidence. Things make sense, especially so.
+[61:42] Dr. Xin Zhang: Okay, okay, sounds good. Yep. That will be oh okay thank you Robert.
+[61:48] Speaker 3: Yep, all right. You have a good rest of your night.
+[61:50] Dr. Xin Zhang: Thank you, too. Bye, Yep.
