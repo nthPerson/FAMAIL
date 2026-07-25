@@ -28,11 +28,20 @@ into T5's first commit.
 
 ## Lane 1 — prose restructure (sequential; one implementer at a time; each task = gates-green commit)
 
-- [ ] T1 `00_abstract.tex` — adopt Zhang's abstract (ZHANG_DRAFT_DELTA §Authoritative)
-      with repairs: fix the fidelity-gate wording ("verifies" → guardrail phrasing,
-      C D15); verify every claim against ALGORITHM_FACTS; keep "distinct-taxi
-      presence" tier language; no em-dash violations. Also check
-      `kdd27-abstract-only.tex` still compiles (shares this file). — STATUS: todo
+- [x] T1 `00_abstract.tex` — DONE 07-24 (f7b34df): her abstract near-verbatim; repair
+      1 = "All edits satisfy spatial and continuity constraints, and a frozen
+      driver-identity discriminator scores behavioral fidelity in the editing
+      objective"; repair 2 = "greatest estimated aggregate fairness impact"; all
+      claims verified; both builds green (standalone build had a pre-existing
+      clock-skew latexmk artifact — delete its aux state if it recurs).
+      ⚠ WATCH ITEMS for downstream tasks: (a) "attributes corpus-level disparity to
+      influential trajectories" is abstract-level compression — §2/§3 keep the exact
+      partition at ACTIVE-UNIT level, never a per-trajectory fairness score (D3);
+      (b) "direct additional resources toward under-served areas" holds only as
+      redirection under conservation — body keeps that explicit (T4); (c) her
+      abstract says "real-world HSTD", dropping the explicit two-city naming —
+      3-word add available if Robert wants n=2 visible in the abstract.
+      — STATUS: DONE
 - [ ] T2 `01_introduction.tex` — rebuild on her intro's logic (accessible register,
       [36:50]): hook ¶s; brief PROSE mention of challenges (no itemize; forward-ref
       §2); spine wording per C-1 proposal (NOT her literal spoken claim); FairGAN/
@@ -44,12 +53,13 @@ into T5's first commit.
       it is accurate and sourced); Fig-1 swap per T-F2. New cites → checklist rows.
       — STATUS: todo (after T3 lands labels)
 - [ ] T3 NEW `02_overview.tex` — move current §3.1 content here (label `sec:overview`;
-      keep sub-labels working): definitions with cGAIL-style **boldfaced terms** →
-      problem definition (Task ¶) → challenge list per Q2 (stacked bold lead-ins in
-      running text, NO itemize env, labels C1… referenced from §3 blocks). Strip/
-      retarget the old forward refs (the §3.2/§3.4 pointers). Renumber section files:
-      02_related_work.tex → 05_related_work.tex; new file order in main.tex
-      (01, 02_overview, 03, 04, 05_related_work, 06_conclusion). — STATUS: todo
+      moved labels travel with content): definitions with cGAIL-style **boldfaced
+      terms** → problem definition → five-challenge block (stacked bold lead-ins, NO
+      itemize env; C1 budget / C2 fidelity / C3 target / C4 level-up / C5 training).
+      main.tex: insert 02_overview input; move 02_related_work input after 04.
+      SCOPE CHANGE 07-24: NO file renames this sprint (02_related_work.tex and
+      05_conclusion.tex keep their names; filenames lag section order — post-deadline
+      cleanup item). Brief: `briefs/T3-overview.md`. — STATUS: brief ready
 - [ ] T4 `03_methodology.tex` — leading ¶ (names FATE, two stages, refs
       Figure~\ref{fig:overview}, maps components → challenge labels); then five blocks
       per ADJ-3 mapping, each opening with its challenge: (1) collective fairness
@@ -72,13 +82,14 @@ into T5's first commit.
       prose (differences stay, made "more visually striking" [46:10] — e.g., the
       SZ-vs-SF contrast sentences juxtaposed); budget framing sentences (k as
       CONFIGURED budget; no k-sweep implication, C D16). — STATUS: todo
-- [ ] T6 `05_related_work.tex` (renamed from 02) — position after Experiments; adjust
-      any "below/§3.3" style pointers; opening line may need a tense/position touch;
-      content otherwise stands (already M44-compressed). — STATUS: todo (mostly done
-      inside T3's rename; this task is the content re-check)
-- [ ] T7 `06_conclusion.tex` (renamed from 05_conclusion) — spine vocabulary update
-      (budgeted intervention, collective fairness); future-work gains the k-sweep
-      sentence (D16); bounds ¶ SURVIVES verbatim. — STATUS: todo
+- [ ] T6 `02_related_work.tex` (file keeps its name; now inputted as §5) — position
+      handled by T3's main.tex reorder; this task = content re-check: adjust any
+      pointers whose prose assumed Related Work preceded the method; opening line
+      tense/position touch; content otherwise stands (already M44-compressed).
+      — STATUS: todo
+- [ ] T7 `05_conclusion.tex` (file keeps its name; renders as §6) — spine vocabulary
+      update (budgeted intervention, collective fairness); future-work gains the
+      k-sweep sentence (D16); bounds ¶ SURVIVES verbatim. — STATUS: todo
 - [ ] T8 `appendix.tex` — absorb any detail displaced from T4 (the "tricks" →
       appendix rule, C-12: correctness conditions keep one main-text clause each);
       verify all \ref targets after renumbering; App E related-work survey pointer
@@ -96,10 +107,9 @@ into T5's first commit.
       harness in `paper/figures/figure-2/`; integrate as `fig:overview`; retired
       3-panel source stays in the dir, leaves main.tex. DELIVERABLE ALSO: standalone
       PDF for Robert to email Zhang EARLY (meeting A5 cheap-veto). — STATUS: ready
-- [ ] T-F2 Fig-1 swap per `figures/FIG1_TEASER_SPEC.md` Phase 1: copy
-      `restructure/zhang/teasing.png` → `figures/figure-1/teaser.png`;
-      \includegraphics + her caption + new \Description; old TikZ teaser retired in
-      place. — STATUS: ready (PNG delivered)
+- [~] T-F2 Fig-1 swap — FOLDED INTO T2 (one writer per file: the intro rewrite owns
+      the figure environment). Spec reference stands: `figures/FIG1_TEASER_SPEC.md`
+      Phase 1. — STATUS: merged into T2
 - [ ] T-F3 STRETCH (default SKIP per ADJ-1): real-data case-study figure for §4 from
       existing artifacts; only if T1–T9 + T-F1/F2 are done with time left; never
       relabel the schematic. — STATUS: parked
