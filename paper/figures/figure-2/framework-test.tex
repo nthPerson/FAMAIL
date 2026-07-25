@@ -1,0 +1,48 @@
+% Standalone test harness for the NEW Figure-2 framework schematic
+% (fig:overview). Compile IN THIS DIRECTORY -- never against paper/main.tex:
+%   cd paper/figures/figure-2 && pdflatex -interaction=nonstopmode framework-test.tex
+%   pdftoppm -png -r 150 framework-test.pdf framework-preview
+% Uses acmart so fonts, \columnwidth and \textheight are manuscript-true.
+% The caption below is a WORKING copy (draft from
+% paper/restructure/figures/FIG2_FRAMEWORK_SPEC.md, Implementation plan #4);
+% the manuscript caption + \label{fig:overview} live in sections/03_methodology.tex.
+\documentclass[sigconf,review,anonymous]{acmart}
+\settopmatter{printacmref=false}
+\setcopyright{none}
+\microtypesetup{expansion=false} % same local-font shim as main.tex
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta}
+\begin{document}
+\title{Figure-2 framework test harness --- not the manuscript}
+\maketitle
+
+% Hard measurement of the figure box, so the two size gates are checked by
+% the compiler rather than by eye.
+\newsavebox{\figbox}
+\sbox{\figbox}{\input{framework}}
+
+\noindent Column width: \the\columnwidth. Height budget (half of
+\verb|\textheight|): \the\dimexpr0.5\textheight\relax.\\
+Measured figure box: width \the\wd\figbox, height
+\the\dimexpr\ht\figbox+\dp\figbox\relax\ (must be
+$\le$ \the\columnwidth\ and $\le$ \the\dimexpr0.5\textheight\relax).
+Overfull warnings in the log mean the tikzpicture exceeds
+\verb|\columnwidth|.
+
+\begin{figure}[h]
+  \centering
+  \usebox{\figbox}
+  \caption{FATE framework. (1) Attribution scores every trajectory's
+  contribution to the corpus's collective fairness and selects the
+  $k \ll |\mathcal{T}|$ whose bounded edits would improve it most (the attribution
+  mechanisms are detailed in \S3.2). (2) The selected trajectories receive
+  bounded gradient edits under the fairness objective: trim relocates
+  recorded pickups within over-served areas, and lift reroutes final seeking
+  states into under-served cells; every edit stays within $\varepsilon$
+  cells, is repaired for continuity, and is scored by a frozen
+  driver-identity discriminator inside the objective. (3) The $k$ edited
+  demonstrations are upweighted during imitation so the corpus-level fairness
+  gain survives training; at uniform weights it is averaged away.}
+\end{figure}
+
+\end{document}
