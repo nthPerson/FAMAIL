@@ -42,16 +42,14 @@ into T5's first commit.
       abstract says "real-world HSTD", dropping the explicit two-city naming —
       ⚖ RULED 07-24: Robert wants both cities named; T9 folds in the add (see T9).
       — STATUS: DONE
-- [ ] T2 `01_introduction.tex` — rebuild on her intro's logic (accessible register,
-      [36:50]): hook ¶s; brief PROSE mention of challenges (no itemize; forward-ref
-      §2); spine wording per C-1 proposal (NOT her literal spoken claim); FairGAN/
-      model-side differentiation per C-3; contributions list rebuilt (collective-
-      fairness contribution leads, C-refs point to §2 labels, C D15 "enforced by" →
-      constraint wording); repair her broken cites ([35?] → zhang2019cgail+zhang2022cgail
-      or +feng2020, implementer judges context; [?] anon link → existing footnote,
-      CODE + DATA wording per Q4 ruling); decide fate of the 3.0× hook sentence (keep if it fits her flow —
-      it is accurate and sourced); Fig-1 swap per T-F2. New cites → checklist rows.
-      — STATUS: todo (after T3 lands labels)
+- [x] T2 `01_introduction.tex` — DONE 07-24 (44e4956): PI's intro logic near-verbatim
+      (HSTD ¶1 + her cite map repaired incl. feng2020simulate; 3-challenge prose ¶ +
+      C1–C5 forward pointer; contributions rebuilt, code+data anon-link footnote per
+      Q4); 3.0× hook kept with fig-pointer moved off the number; PI teaser PNG in as
+      Fig 1 (p1 top-right); 5 orphaned bib keys rescued into her cite groups; two
+      Overfull-driven rewords flagged for Robert's read-aloud ("We address these
+      challenges with FATE"; "the resources the disadvantaged group receives");
+      §2 HSTD parenthetical deduped at commit. — STATUS: DONE
 - [x] T3 NEW `02_overview.tex` — DONE 07-24 (c699369): definitions boldfaced,
       problem definition, five-challenge stacked block (C1 budget / C2 fidelity /
       C3 target / C4 level-up / C5 training; C1 uses k ≪ |T|, notation catch);
