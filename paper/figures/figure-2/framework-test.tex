@@ -32,17 +32,20 @@ Overfull warnings in the log mean the tikzpicture exceeds
 \begin{figure}[h]
   \centering
   \usebox{\figbox}
-  \caption{FATE framework. (1) Attribution scores every trajectory's
-  contribution to the corpus's collective fairness and selects the
-  $k \ll |\mathcal{T}|$ whose bounded edits would improve it most (the attribution
-  mechanisms are detailed in \S3.2). (2) The selected trajectories receive
-  bounded gradient edits under the fairness objective: trim relocates
-  recorded pickups within over-served areas, and lift reroutes final seeking
-  states into under-served cells; every edit stays within $\varepsilon$
-  cells, is repaired for continuity, and is scored by a frozen
-  driver-identity discriminator inside the objective. (3) The $k$ edited
+  % KEPT IN SYNC with the manuscript caption in sections/03_methodology.tex
+  % (2026-07-25). Two fixes landed there and are mirrored here: review finding #2
+  % (attribution scores the improvement a bounded edit WOULD BUY, never a
+  % per-trajectory fairness contribution — D3), and the Stage 1a/1b/2 renaming.
+  \caption{FATE framework (schematic). (1a) Attribution scores how much a
+  bounded, admissible edit to each trajectory would improve the corpus's
+  collective fairness, and selects the $k \ll |\mathcal{T}|$ best (\S3.2).
+  (1b) The selected trajectories receive bounded
+  gradient edits under the fairness objective through its two channels, trim
+  (outcome-side) and lift (resource-aware); every edit stays within
+  $\varepsilon$ cells, is repaired for continuity, and is scored by a frozen
+  driver-identity discriminator inside the objective. (2) The $k$ edited
   demonstrations are upweighted during imitation so the corpus-level fairness
-  gain survives training; at uniform weights it is averaged away.}
+  gain survives training.}
 \end{figure}
 
 \end{document}

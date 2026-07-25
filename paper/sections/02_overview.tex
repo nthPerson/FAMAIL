@@ -110,17 +110,21 @@ concrete reasons; each dictates one component of the method
 % policy" (the same fact as being averaged away). Stacked format and the lead-in
 % sentence kept.
 \textbf{C1 (budget).} Real demonstrations are expensive and irreplaceable, so
-only a small share of the corpus may change. The difficulty is where to spend
+only a small share of the corpus may change. The difficulty lies in choosing where to spend
 a budget of $k \ll |\mathcal{T}|$ edits so that a few trajectories move the
 fairness of the whole corpus (\S\ref{sec:editor}).
 \textbf{C2 (fidelity).} A fairness edit is worthless if the result no longer
 reads as its original driver. Each edit is therefore bounded to a small
 neighborhood of the recorded trajectory and scored by a frozen driver-identity
 discriminator inside the editing objective (\S\ref{sec:phys-validity}).
-\textbf{C3 (the wrong target).} Equal service is the wrong target: a business
-district should receive more service than a quiet residential block. The
-objective must score only the service variation demand leaves unexplained
-(\S\ref{sec:objective}).
+\textbf{C3 (de\-mand-ad\-just\-ed fairness).}%
+% 2026-07-25: discretionary hyphens added to the bold compound. Without them
+% "demand-adjusted" is unbreakable and the challenge block overran the column by
+% 6.57pt (lint gate is >5pt). Same house pattern as "demo\-graph\-ic-parity" and
+% "dis\-pa\-rate-impact" elsewhere; the rendered word is unchanged. Equal service is not the target: a 
+business district should receive more service than a quiet residential block. 
+The objective must score only the service variation demand leaves
+unexplained (\S\ref{sec:objective}).
 \textbf{C4 (level up, not down).} Measured fairness can improve while the
 under-served gain nothing, and a demand-only editor does exactly that on our
 data (\S\ref{sec:leveling}). Leveling up needs a second channel that adds real

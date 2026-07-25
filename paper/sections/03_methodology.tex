@@ -43,29 +43,41 @@ challenge of \S\ref{sec:overview}, named in its opening sentence.
   % own two edit-glyph labels already carry verbatim; and the closing "at uniform
   % weights it is averaged away", which the figure's terminal contrast box states
   % ("bias reproduced / edits averaged away"). No claim removed.
-  \caption{FATE framework (schematic). (1) Attribution scores how much a
+  \caption{FATE framework (schematic). (1a) Attribution scores how much a
   bounded, admissible edit to each trajectory would improve the corpus's
   collective fairness, and selects the $k \ll |\mathcal{T}|$ best
-  (\S\ref{sec:attribution}). (2) The selected trajectories receive bounded
+  (\S\ref{sec:attribution}). (1b) The selected trajectories receive bounded
   gradient edits under the fairness objective through its two channels, trim
   (outcome-side) and lift (resource-aware); every edit stays within
   $\varepsilon$ cells, is repaired for
   continuity, and is scored by a frozen driver-identity discriminator inside
-  the objective. (3) The $k$ edited demonstrations are upweighted during
+  the objective. (2) The $k$ edited demonstrations are upweighted during
   imitation so the corpus-level fairness gain survives training.}
-  \Description{A three-stage framework diagram read from top to bottom. The
-  first stage takes the raw trajectory corpus, scores each trajectory's
-  contribution to the corpus's collective fairness, and selects k of the
+  % 2026-07-25 (Robert): the figure's band labels became "Stage 1a / 1b / 2"
+  % because the opening sentence of this section says FATE has TWO stages while
+  % the figure said three. Attribution is not a third stage — \S\ref{sec:editor}
+  % calls it the mechanism that decides which trajectories receive the budget.
+  % The caption's enumerators track the band labels exactly.
+  \Description{A framework diagram read from top to bottom, showing a two-stage
+  method in which the first stage is drawn as two sub-steps. Stage 1a takes the
+  raw trajectory corpus, scores how much a bounded edit to each trajectory
+  would improve the corpus's collective fairness, and selects k of the
   trajectories, k being much smaller than the corpus size, leaving the rest
-  unchanged. The second stage passes the selected trajectories through bounded
+  unchanged. Stage 1b passes the selected trajectories through bounded
   gradient edits under the fairness objective, drawn as two edit glyphs: a
   trim that relocates a recorded pickup within an over-served area, and a lift
   that reroutes a trajectory's final seeking states into an under-served area,
-  each edit bounded to epsilon cells and repaired for continuity. The third
-  stage trains a policy on the edited corpus by imitation with the edited
+  each edit bounded to epsilon cells and repaired for continuity. Stage 2
+  trains a policy on the edited corpus by imitation with the edited
   demonstrations upweighted, and ends in a contrast pair: under uniform
   weights the bias is reproduced, and under upweighting the fairer service
   allocation survives training.}
+  % 2026-07-25: while renaming the stages here, the \Description was also found
+  % still carrying the D3 phrasing that review finding #2 repaired in the caption
+  % and the figure's op-box — "scores each trajectory's CONTRIBUTION to the
+  % corpus's collective fairness" is the per-trajectory fairness score the
+  % do-not-claim list forbids. It now matches the caption: it scores how much a
+  % bounded edit to each trajectory WOULD IMPROVE collective fairness.
   \label{fig:overview}
 \end{figure}
 

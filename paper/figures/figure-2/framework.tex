@@ -24,6 +24,16 @@
 %   file ending in a comment character (a bare newline would leak an
 %   interword space when the file is \input mid-paragraph).
 %   Every band edge is a \def below; move a band by editing ONE number.
+%   BAND LABELS (2026-07-25, Robert): the three drawn bands are labelled
+%   "Stage 1a: Attribute", "Stage 1b: Trim + Lift", "Stage 2: Upweight" —
+%   NOT 1/2/3. FATE has TWO stages (\S3's opening sentence, \S6, and the
+%   two-stage claim \S4 tests): a budgeted constrained EDIT, then edit-aware
+%   WEIGHTING. Attribution is not a third stage; \S3.2 calls it "the mechanism
+%   that decides which trajectories receive the budget", i.e. part of the edit.
+%   The a/b split keeps attribute and edit visually distinct (they answer
+%   different challenges, C1 and C2/C4) while showing the nesting. The geometry
+%   comments below still say "stage-1/2/3 band" for the three BANDS; read those
+%   as band indices, not stage names.
 %   Layout rule that keeps this tunable: each band's 2-line title block sits
 %   top-LEFT and is kept narrow (< 2.9cm); all flow boxes live at x > 2.9 in
 %   that y-range, so only thin arrow lines ever pass beside a title.
@@ -142,19 +152,26 @@
   \node[anchor=north] at (7.36,-1.08) {$\tau_{|\mathcal{T}|}$};
 
   % =====================================================================
-  % STAGE 1 -- Attribute: score every trajectory, select the budgeted few
+  % STAGE 1a -- Attribute: score every trajectory, select the budgeted few
   % =====================================================================
   \node[ttl] at (0.20,-1.59)
-    {\textbf{Stage 1: Attribute}\\\textcolor{fwgray}{select what to edit}};
+    {\textbf{Stage 1a: Attribute}\\\textcolor{fwgray}{select what to edit}};
   \draw[flow] (\spine,-1.47) -- (\spine,-1.63);
-  \draw[opbox] (2.53,-1.63) rectangle (5.88,-2.18);
-  \node[align=center] at (\spine,-1.905)
+  % 2026-07-25: box widened to the right (5.88 -> 6.45) and its text re-centred on
+  % the box (4.49) instead of the spine. The two-line label is ~3.67cm wide but the
+  % box was 3.35cm, so the left border struck through the "c" of "score" and the
+  % text ran back toward the band title. Height is unchanged, so the figure's
+  % vertical rhythm and both size gates are untouched; the flow arrows still enter
+  % and leave on the spine, which lies inside the wider box. An off-spine op-box is
+  % already this figure's convention (Stage 1b's sits at 2.88-7.83, centred 5.355).
+  \draw[opbox] (2.53,-1.63) rectangle (6.45,-2.18);
+  \node[align=center] at (4.49,-1.905)
     {score the fairness improvement a bounded\\edit to each trajectory would buy};
   \draw[flow] (\spine,-2.18) -- (\spine,-2.3);
   \draw[data] (\xL,-2.3) rectangle (\xR,-3.51);
   % --- three groups, coloured by attribution outcome (left to right =
   % --- increasing fairness impact; the selected group sits on the branch
-  % --- that continues into Stage 2)
+  % --- that continues into Stage 1b)
   \draw[fwgray, line width=0.5pt, dash pattern=on 1.6pt off 1.2pt]
     (0.60,-2.41) rectangle (2.88,-3.4);
   \pic[tnone] at (0.66,-2.69) {traja};
@@ -176,10 +193,10 @@
     {\textbf{high fairness impact}\\selected, $k \ll |\mathcal{T}|$};
 
   % =====================================================================
-  % STAGE 2 -- Trim + Lift: bounded edits to the selected trajectories
+  % STAGE 1b -- Trim + Lift: bounded edits to the selected trajectories
   % =====================================================================
   \node[ttl] at (0.20,-3.63)
-    {\textbf{Stage 2: Trim + Lift}\\\textcolor{fwgray}{bounded fairness edits}};
+    {\textbf{Stage 1b: Trim + Lift}\\\textcolor{fwgray}{bounded fairness edits}};
   % the selected (colour-A) slice is what flows on: amber arrow
   \draw[flowsel] (6.60,-3.4) -- (6.60,-3.69);
   \draw[opbox] (2.88,-3.69) rectangle (7.83,-4.69);
@@ -225,7 +242,7 @@
   \node[anchor=north, align=center] at (\bR,-5.73)
     {\textbf{lift:} final seeking tail rerouted\\into the under-served area};
 
-  % --- output of Stage 2: the edited corpus ----------------------------
+  % --- output of Stage 1b: the edited corpus ----------------------------
   \draw[flow] (\bL,-6.35) -- (\spine,-6.53);
   \draw[flow] (\bR,-6.35) -- (\spine,-6.53);
   \draw[data] (\xL,-6.53) rectangle (\xR,-7.33);
@@ -238,10 +255,10 @@
   \node[anchor=west] at (5.60,-7.06) {$|\mathcal{T}|{-}k$ unchanged};
 
   % =====================================================================
-  % STAGE 3 -- Upweight: the sparse edits must survive training
+  % STAGE 2 -- Upweight: the sparse edits must survive training
   % =====================================================================
   \node[ttl] at (0.20,-7.45)
-    {\textbf{Stage 3: Upweight}\\
+    {\textbf{Stage 2: Upweight}\\
      \textcolor{fwgray}{edit-aware imitation training}};
   \draw[flow] (\spine,-7.33) -- (\spine,-8.03);
   \draw[flow] (\spine,-8.03) -- (\bL,-8.19);
