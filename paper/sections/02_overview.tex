@@ -1,0 +1,111 @@
+\section{Overview}\label{sec:overview}
+% NEW SECTION 2 (restructure task T3, 2026-07-24) per the PI's restructuring email
+% + the 2026-07-24 restructure meeting [31:30]: definitions -> problem definition -> challenges.
+% The definitions and the problem paragraph MOVED here verbatim-in-substance from
+% 03_methodology.tex's retired \subsection{Problem Formulation}; every formula,
+% number, and % src: comment travelled with them. Two content-level changes only:
+% (1) the beats are re-ordered into "data and representation" then "the service
+% allocation the data induces" (the email's shape), which splits the original's
+% single-sentence pairing of the grid + active-unit definitions and moves the
+% "D and S are deterministic aggregations" clause next to where D and S are
+% defined (its duplicate gloss "(demand counts a unit's recorded pickups, ...)"
+% dropped as an immediate repeat); (2) \emph{} on defined terms upgraded to
+% \textbf{} at first definition (cGAIL style), plus one added sentence defining
+% \textbf{collective} fairness, the endorsed term the challenges below lean on
+% (ALGORITHM_FACTS: "fairness is collective (corpus-level)"). A commented-out
+% earlier variant of the corpus paragraph was not carried over (it is in git
+% history at d88f1a9:paper/sections/03_methodology.tex, lines 38-50).
+% The label sec:problem MOVED here with the content so the appendix's three
+% "\S\ref{sec:problem}" pointers keep resolving; they now read as this section.
+\label{sec:problem}
+
+\textbf{Data and representation.} FATE edits human-generated spatial-temporal
+data (HSTD): here, a \textbf{corpus} $\mathcal{T} = \{\tau\}$ of real
+per-driver taxi trajectories, recorded on a city discretized into grid cells
+$g$ and hourly time blocks $t$ (see Appendix~\ref{app:editor} for cell
+resolution and per-city grid dimensions). A \textbf{trajectory}
+$\tau = (s_1, \dots, s_T)$ is a time-ordered sequence of states: each
+\textbf{state} $s_j = (g_j, t_j)$ records the cell and time block its driver
+occupied while seeking a passenger, and the final state $s_T$ is the
+\textbf{pickup}.
+% src: PAPER/argument/02_datasets.md (0.01° grid, hourly blocks)
+The imitation we demonstrate on this corpus (\S\ref{sec:downstream}) is
+supervised: there is no reward function, and the recorded state transitions
+are the only training signal. A policy $\pi$ is trained by behavior cloning to
+predict a driver's next state from their recent states, so the policy can only
+be as fair as the corpus it imitates. The trajectories are the editable
+objects.
+
+\textbf{The service allocation the data induces.} A pair $i=(g,t)$ with
+recorded activity is an \textbf{active unit}, and $N$ denotes their count
+($N \approx 34{,}500$ on the primary city). Each active unit carries a
+\textbf{demand} $D_i$ and a \textbf{supply} $S_i$: demand is its recorded
+pickups, and supply is active-taxi presence aggregated over the
+$5{\times}5$ cell neighborhood, matching how a cruising taxi is visible to
+nearby demand. The \textbf{service ratio}
+$Y_i = S_i / \max(D_i, d_0)$ is service received relative to demand, where
+the demand floor $d_0 = 0.5$ prevents near-empty cells from producing
+unbounded ratios. Both $D$ and $S$
+are deterministic aggregations of $\mathcal{T}$, so moving where a driver
+seeks and picks up moves demand and supply with it.
+% src: PAPER/supply-lift/LIFT_ALGORITHM_REFERENCE.md §3 (floors, 5×5 presence); §4.1 (N = 34,524 active units, Shenzhen)
+
+Each cell additionally carries demographic covariates $x_i$ describing its
+neighborhood: housing price, per-capita compensation, and migrant population
+share. These covariates resolve at district granularity, which bounds the
+resolution of any demographic analysis built on them (\S\ref{sec:objective}).
+Fairness throughout this paper is \textbf{collective}: a property of the
+service allocation the whole corpus induces over units and demographic
+groups, never a property of one trajectory.
+% src: PAPER/argument/02_datasets.md
+
+\textbf{Problem definition.} Given a corpus $\mathcal{T}$ whose service
+allocation is demographically inequitable, produce an edited corpus
+$\mathcal{T}'$ that (i) is measurably fairer; (ii) preserves fidelity at the
+level of individual trajectories: an edited trajectory must remain
+recognizable to a frozen driver-identity discriminator as its original
+driver; and (iii) transfers its fairness into a policy trained on it by
+imitation. FATE is a \textbf{data-augmentation} method: it edits a small,
+attribution-targeted slice of the real trajectories and generates nothing. At
+most $k$ trajectories are edited ($k = 10{,}000$ on the primary city), each
+perturbed within an $L_\infty$ ball of radius $\varepsilon = 2$ grid cells.
+% src: LIFT_ALGORITHM_REFERENCE.md §3 (EPSILON_BALL, budget)
+The edited slice is then upweighted during downstream training so that its
+fairness is not averaged away (\S\ref{sec:downstream}).
+
+\textbf{Challenges.} Editing such a corpus into a fairer one is hard for five
+concrete reasons; each dictates one component of the method
+(\S\ref{sec:method}), and we refer back to them by label throughout.
+% Stacked in running text, deliberately NOT an itemize environment
+% (the 2026-07-24 restructure meeting [32:12]: "we don't need to kind of put them in this itemized
+% LaTeX environment. We can just stack them all together"). Five challenges,
+% 1:1 with the methodology blocks, per the adjudicated mapping in
+% restructure/MEETING_DIGEST.md ADJ-3. Numbering keeps the old intro list's
+% C2-C5 identities and rewrites C1 from "the data is scarce" to the budget
+% challenge (the meeting's "unique challenge", [06:02]).
+\textbf{C1 (budget).} Real demonstrations are expensive and irreplaceable, so
+discarding the biased slice or regenerating the corpus discards the asset: the
+repair must edit the data we already have, and only a small share of it. The
+difficulty is then where to spend a budget of $k \ll |\mathcal{T}|$ edits so
+that a small portion of the trajectories moves the fairness of the whole
+corpus (\S\ref{sec:editor}).
+\textbf{C2 (fidelity).} A fairness edit is worthless if the result no longer
+resembles real driving: an edited trajectory must still read as its original
+driver. The budget is therefore spent under constraints rather than freely,
+with every edit bounded to a small neighborhood of the recorded trajectory
+and scored by a frozen driver-identity discriminator inside the editing
+objective (\S\ref{sec:objective}).
+\textbf{C3 (the wrong target).} Equal service is the wrong target: a business
+district should receive more service than a quiet residential block. The
+objective must therefore score only the service variation that demand does
+not explain (\S\ref{sec:objective}).
+\textbf{C4 (level up, not down).} Measured fairness can improve while the
+under-served gain nothing, and a demand-only editor does exactly this on our
+data, redistributing service among better-served areas
+(\S\ref{sec:leveling}). Leveling up instead needs a second channel that adds
+real taxi presence where it is missing.
+\textbf{C5 (surviving training).} Sparse edits are averaged away by training
+that weights every demonstration equally, and the recovered fairness never
+reaches the policy. The influence of the edited demonstrations must be
+preserved during training, and the recovered fairness traced to the edits
+rather than to the reweighting itself (\S\ref{sec:downstream}).
