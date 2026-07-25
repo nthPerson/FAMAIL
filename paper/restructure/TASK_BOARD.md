@@ -73,21 +73,17 @@ into T5's first commit.
       editor \S\ref{sec:editor} anticipates" now points one block early — fix the
       ref/wording to match where the future-work sentence lives (end of 3.3).
       — STATUS: DONE
-- [ ] T5 `04_experiments.tex` — leading ¶ (aims + research questions mapped to
-      subsections; count Robert-approved in review); fold Robert's pending wording
-      tweak; SF subsection re-framed as consolidated transferability block
-      ("reproduces on a second city", never "generalizes"); trim duplicated cross-city
-      prose (differences stay, made "more visually striking" [46:10] — e.g., the
-      SZ-vs-SF contrast sentences juxtaposed); budget framing sentences (k as
-      CONFIGURED budget; no k-sweep implication, C D16). — STATUS: todo
-- [ ] T6 `02_related_work.tex` (file keeps its name; now inputted as §5) — position
-      handled by T3's main.tex reorder; this task = content re-check: adjust any
-      pointers whose prose assumed Related Work preceded the method; opening line
-      tense/position touch; content otherwise stands (already M44-compressed).
-      — STATUS: todo
-- [ ] T7 `05_conclusion.tex` (file keeps its name; renders as §6) — spine vocabulary
-      update (budgeted intervention, collective fairness); future-work gains the
-      k-sweep sentence (D16); bounds ¶ SURVIVES verbatim. — STATUS: todo
+- [x] T5 `04_experiments.tex` — DONE 07-24 (585de04, ships Robert's editor-config
+      tweak): RQ1–RQ5 leading ¶; SF → "Transferability: San Francisco"
+      (reproduces + magnitude caveat); dedup −35 words with sharpened SZ/SF inline
+      contrasts; budget stated as configured (no sweep implied); §4 refs repaired
+      post-T4 (sec:editor→sec:method for "the trim+lift editor of §3"); frozen
+      blocks byte-identical; 40/40 src comments intact. — STATUS: DONE
+- [x] T6+T7 — DONE 07-24 (945b9e7): §5 position-checked (1 ref fix, 2 vocab
+      touches, fidelity gate→signal per D15); §6 reframed on the two-stage
+      collective spine with the C-1 chain sentence; bounds ¶ byte-identical;
+      single-pass pointer fixed to §3.3; "Three directions" adds the k-sweep
+      future-work sentence (plainly unmeasured here). — STATUS: DONE
 - [~] T8 — FOLDED INTO T9 (T4 displaced nothing new into the appendix; what remains
       is a coherence/ref check, which is T9 item 1). — STATUS: merged into T9
 - [ ] T9 Integration pass — full gates; strict page check (`pdftotext -f 9 -l 9` —
