@@ -109,11 +109,15 @@ into T5's first commit.
 
 ## Lane 2 — figures (parallel with Lane 1 from the start)
 
-- [ ] T-F1 Fig-2 framework diagram per `figures/FIG2_FRAMEWORK_SPEC.md` ADOPTED
-      LAYOUT (Robert's three-phase design, ruled 07-25): standalone TikZ + test
-      harness in `paper/figures/figure-2/`; integrate as `fig:overview`; retired
-      3-panel source stays in the dir, leaves main.tex. DELIVERABLE ALSO: standalone
-      PDF for Robert to email Zhang EARLY (meeting A5 cheap-veto). — STATUS: ready
+- [x] T-F1 Fig-2 framework diagram — DONE 07-24 (09f1fed): three-phase per Robert's
+      design; 239.8×300.7pt (inside both gates); grayscale-verified; weighting fork
+      encodes the vanilla-null honestly; |T| notation (N stays the active-unit
+      count). EMAIL ASSETS for the Zhang early-veto (meeting A5):
+      `figures/figure-2/fig2-for-zhang.png` (300dpi crop w/ draft caption) or
+      `framework-test.pdf`. INTEGRATION (in T4): wrap `framework.tex` in the figure
+      env as `fig:overview`, caption per FIG2_FRAMEWORK_SPEC Implementation §4 with
+      k ≪ |T| notation; retire the 3-panel `figure-2.tex` from 03. — STATUS: DONE
+      (integration pending in T4)
 - [~] T-F2 Fig-1 swap — FOLDED INTO T2 (one writer per file: the intro rewrite owns
       the figure environment). Spec reference stands: `figures/FIG1_TEASER_SPEC.md`
       Phase 1. — STATUS: merged into T2
