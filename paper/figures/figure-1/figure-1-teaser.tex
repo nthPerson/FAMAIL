@@ -91,7 +91,9 @@
 \definecolor{tzZtaxi}{HTML}{639CE2}%  Zhang taxi blue (measured)
 \definecolor{tzZedit}{HTML}{F7BB07}%  Zhang edit orange (measured)
 % ---- toggles ---------------------------------------------------------
-\newif\ifshowTrimEdit\showTrimEditfalse%     advantaged-side trim overlay
+\newif\ifshowTrimEdit\showTrimEdittrue%      advantaged-side trim overlay
+%                          (ON, Robert 2026-07-25 v3: both edit channels
+%                          shown; false = lift-only teaser)
 \newif\ifshowVacatedGhost\showVacatedGhosttrue% open circle at vacated taxi
 \newif\ifshowAddedMark\showAddedMarktrue%    small + beside the orange taxi
 \newif\ifshowCardTints\showCardTintstrue%    Zhang's pink/green outer cards
@@ -127,12 +129,17 @@
 %                              tzZedit to restore the PNG's orange
 % ---- geometry (cm) ---------------------------------------------------
 \def\tzW{8.40}%      canvas width (8.40 cm = 239.0 pt <= \columnwidth)
-\def\tzPW{3.60}%     panel width  (two panels; center zone = W - 2*PW)
+\def\tzGap{0.24}%    gap between the panels: slightly larger than ONE
+%                    grid cell (Zhang's overlay-arrow approach, Robert
+%                    2026-07-25 v3; the FATE arrow+label overlay the
+%                    panels' inner edges instead of living in the gap)
+\pgfmathsetmacro\tzPW{(\tzW-\tzGap)/2}% panel width (= 4.08, grew from
+%                    3.60 when the center zone was surrendered)
 \def\tzPH{2.60}%     panel height
-\def\tzTitleH{0.30}% title band height (titles sit inside it)
-\def\tzLabelH{0.72}% label band height (side labels only -- keep clear)
+\def\tzTitleH{0.36}% title band height (titles sit inside it)
+\def\tzLabelH{0.88}% label band height (side labels only -- keep clear)
 \def\tzLegGap{0.06}% gap between label band and legend band
-\def\tzLegH{0.42}%   legend band height
+\def\tzLegH{0.44}%   legend band height
 \def\tzInPad{0.10}%  inner panel margin the icons respect (documentation;
 %                    the position lists below already honor it)
 \def\tzBx{0.517}%    district boundary x as a FRACTION of panel width
@@ -147,15 +154,16 @@
 \pgfmathsetmacro\tzLcx{\tzPW/2}%       left panel center
 \pgfmathsetmacro\tzRcx{\tzRPx+\tzPW/2}% right panel center
 \pgfmathsetmacro\tzArrY{\tzPanelTop-0.45*\tzPH}% block-arrow center y
-% ---- fonts (exact sizes; report legibility in FIG1_TIKZ_REPORT.md) ---
-\def\tzTitleFont{\scriptsize}%                     panel titles (7 pt)
-\def\tzSideFont{\fontsize{6}{7}\selectfont\bfseries}% Advantaged/Disadv.
-\def\tzInfoFont{\tiny}%                            Service/Demand (5 pt)
-\def\tzLegendFont{\tiny}%                          legend entries (5 pt)
-\def\tzFateFont{\scriptsize\bfseries}%             center FATE label
-% ---- icon geometry ---------------------------------------------------
-\def\tzTaxiW{0.46}%      Zhang taxi icon width in cm (aspect 181:82)
-\def\tzPickH{0.30}%      Zhang passenger icon height in cm (aspect 62:148)
+% ---- fonts (one level up per Robert 2026-07-25 v3; exact sizes and
+% ---- legibility in FIG1_TIKZ_REPORT.md) ------------------------------
+\def\tzTitleFont{\footnotesize}%                   panel titles (8 pt)
+\def\tzSideFont{\scriptsize\bfseries}%             Advantaged/Disadv. (7 pt)
+\def\tzInfoFont{\scriptsize}%                      Service/Demand (7 pt)
+\def\tzLegendFont{\scriptsize}%                    legend entries (7 pt)
+\def\tzFateFont{\footnotesize\bfseries}%           center FATE label (8 pt)
+% ---- icon geometry (bumped v3 to keep Zhang's icon:panel ratio) ------
+\def\tzTaxiW{0.50}%      Zhang taxi icon width in cm (aspect 181:82)
+\def\tzPickH{0.33}%      Zhang passenger icon height in cm (aspect 62:148)
 \def\tzTaxiScale{1.55}%  drawn-fallback taxi scale (base 0.248 cm wide)
 \def\tzPickScale{1.25}%  drawn-fallback passenger scale (base 0.234 cm)
 \def\tzTaxiDy{0.0}%      vertical centering nudge for taxis (cm)
@@ -182,16 +190,22 @@
 % ---- icon positions: panel-fraction pairs x/y, measured from the PNG --
 % Conservation is visible here: right adv taxis = left adv taxis MINUS
 % the vacated one (\tzVacated); right dis gains exactly the orange taxi.
-\def\tzAdvTaxis{0.086/0.150, 0.228/0.203, 0.442/0.287, 0.086/0.470,
+% (the mid-left taxi sits at x=0.145, not the PNG's 0.086, so the FATE
+% arrowhead overlaying the right panel's left edge lands clear of it)
+\def\tzAdvTaxis{0.086/0.150, 0.228/0.203, 0.442/0.287, 0.145/0.470,
                 0.360/0.729}%                       left panel: 5
-\def\tzAdvTaxisR{0.086/0.150, 0.228/0.203, 0.086/0.470,
+\def\tzAdvTaxisR{0.086/0.150, 0.228/0.203, 0.145/0.470,
                  0.360/0.729}%                      right panel: 4
 \def\tzVacatedX{0.442}\def\tzVacatedY{0.287}%       the taxi that left
 \def\tzDisTaxis{0.886/0.182, 0.934/0.639}%          both panels: 2
 \def\tzOrangeTaxiX{0.630}\def\tzOrangeTaxiY{0.550}% right panel: +1 (PNG
 %            had the pair at ~(0.61,0.39); moved to the open lower-middle
 %            so the rerouted path and the pair sit clear of other icons)
-\def\tzAdvPicks{0.119/0.269, 0.047/0.615, 0.098/0.615}% both panels: 3
+% advantaged passengers: 3 in BOTH panels. The list holds the two that
+% trim never touches; the third is \tzTrimFrom* (drawn dark in the left
+% panel; in the right panel it is the trim edit's subject when
+% \showTrimEdit is on, else drawn dark unchanged there too).
+\def\tzAdvPicksKept{0.119/0.269, 0.047/0.615}%
 \def\tzDisPicks{0.655/0.266, 0.920/0.409, 0.861/0.860}% both panels: 3 dark
 \def\tzServedX{0.740}\def\tzServedY{0.590}%  4th dis passenger: dark on the
 %            left, RECOLORED tzEdit on the right (served, not moved); PNG
@@ -199,12 +213,17 @@
 %            panels, so demand visibly does not move)
 % edited trajectory (fraction waypoints THROUGH \pxy; vacated position ->
 % down -> east across the boundary -> arrowhead at the taxi's west edge
-% (0.560 = \tzOrangeTaxiX - half of \tzTaxiW/\tzPW, minus a small gap)):
+% (0.562 = \tzOrangeTaxiX - half of \tzTaxiW/\tzPW, minus a small gap)):
 \def\tzEditPath{\pxy{\tzVacatedX}{\tzOrangeTaxiY}
-                -- \pxy{0.560}{\tzOrangeTaxiY}}%
-% optional trim overlay (both endpoints INSIDE the advantaged tint):
-\def\tzTrimFromX{0.200}\def\tzTrimFromY{0.500}%
-\def\tzTrimToX{0.310}\def\tzTrimToY{0.560}%
+                -- \pxy{0.562}{\tzOrangeTaxiY}}%
+% trim overlay (the second edit channel; ON per Robert 2026-07-25 v3):
+% relocates the recorded pickup \tzTrimFrom* (the right member of the
+% passenger pair) to \tzTrimTo* -- BOTH endpoints inside the advantaged
+% tint (boundary fraction \tzBx), which is the ALGORITHM_FACTS guard.
+\def\tzTrimFromX{0.098}\def\tzTrimFromY{0.615}%
+\def\tzTrimToX{0.245}\def\tzTrimToY{0.775}%
+\def\tzTrimArrX{0.222}\def\tzTrimArrY{0.750}% arrowhead stops here, just
+%                    short of the relocated passenger icon
 % ---------------------------------------------------------------------
 % helper: panel-fraction pair -> local cm coordinate
 \providecommand{\pxy}[2]{({#1*\tzPW},{-#2*\tzPH})}%
@@ -372,9 +391,12 @@
     \foreach \fx/\fy in \tzDisTaxis
       \pic[tzTaxiInk] at ({\fx*\tzPW},{-\fy*\tzPH+\tzTaxiDy})
         [scale=\tzTaxiScale] {taxi};
-    \foreach \fx/\fy in \tzAdvPicks
+    \foreach \fx/\fy in \tzAdvPicksKept
       \pic[tzink] at ({\fx*\tzPW},{-\fy*\tzPH+\tzPickDy})
         [scale=\tzPickScale] {pick};
+    % the pickup trim will relocate: recorded (dark, unmoved) here
+    \pic[tzink] at ({\tzTrimFromX*\tzPW},{-\tzTrimFromY*\tzPH+\tzPickDy})
+      [scale=\tzPickScale] {pick};
     \foreach \fx/\fy in \tzDisPicks
       \pic[tzink] at ({\fx*\tzPW},{-\fy*\tzPH+\tzPickDy})
         [scale=\tzPickScale] {pick};
@@ -382,15 +404,6 @@
     \pic[tzink] at ({\tzServedX*\tzPW},{-\tzServedY*\tzPH+\tzPickDy})
       [scale=\tzPickScale] {pick};
   \end{scope}
-
-  % ================= center: FATE + block arrow ========================
-  \node[anchor=south, font=\tzFateFont, inner sep=1.5pt]
-    at (\tzCx,{\tzArrY+0.12}) {\tzFateLabel};
-  \shade[left color=tzrule!35, right color=tzrule]
-    ({\tzCx-0.50},{\tzArrY+0.09}) -- ({\tzCx+0.24},{\tzArrY+0.09})
-    -- ({\tzCx+0.24},{\tzArrY+0.17}) -- ({\tzCx+0.50},\tzArrY)
-    -- ({\tzCx+0.24},{\tzArrY-0.17}) -- ({\tzCx+0.24},{\tzArrY-0.09})
-    -- ({\tzCx-0.50},{\tzArrY-0.09}) -- cycle;
 
   % ================= RIGHT panel: FATE for Fairer Service ==============
   \begin{scope}[shift={(\tzRPx,\tzPanelTop)}]
@@ -401,13 +414,30 @@
     \foreach \fx/\fy in \tzDisTaxis
       \pic[tzTaxiInk] at ({\fx*\tzPW},{-\fy*\tzPH+\tzTaxiDy})
         [scale=\tzTaxiScale] {taxi};
-    \foreach \fx/\fy in \tzAdvPicks
+    \foreach \fx/\fy in \tzAdvPicksKept
       \pic[tzink] at ({\fx*\tzPW},{-\fy*\tzPH+\tzPickDy})
         [scale=\tzPickScale] {pick};
+    % ---- trim (outcome-side edit): the recorded pickup relocated
+    % ---- WITHIN the advantaged area -- ghost at the recorded position,
+    % ---- dashed edit arrow, amber passenger at the new position. Count
+    % ---- unchanged: this is the SAME third passenger the left panel
+    % ---- draws dark at \tzTrimFrom*.
+    \ifshowTrimEdit
+      \draw[tzghost] ({\tzTrimFromX*\tzPW},{-\tzTrimFromY*\tzPH})
+        circle[radius=0.055];
+      \draw[tzedit, tzarrhead]
+        ({\tzTrimFromX*\tzPW},{-\tzTrimFromY*\tzPH})
+        -- ({\tzTrimArrX*\tzPW},{-\tzTrimArrY*\tzPH});
+      \pic[tzEdit] at ({\tzTrimToX*\tzPW},{-\tzTrimToY*\tzPH+\tzPickDy})
+        [scale=\tzPickScale] {pickedit};
+    \else % trim hidden: the third passenger sits unmoved, dark
+      \pic[tzink] at ({\tzTrimFromX*\tzPW},{-\tzTrimFromY*\tzPH+\tzPickDy})
+        [scale=\tzPickScale] {pick};
+    \fi
     \foreach \fx/\fy in \tzDisPicks
       \pic[tzink] at ({\fx*\tzPW},{-\fy*\tzPH+\tzPickDy})
         [scale=\tzPickScale] {pick};
-    % ---- the ONE edit (lift): presence moved under conservation ------
+    % ---- lift (resource-aware edit): presence moved under conservation
     \ifshowVacatedGhost % open circle where the departing taxi was
       \draw[tzghost] ({\tzVacatedX*\tzPW},{-\tzVacatedY*\tzPH})
         circle[radius=0.08];
@@ -429,16 +459,18 @@
     % the served passenger: same position as the left panel, recolored
     \pic[tzEdit] at ({\tzServedX*\tzPW},{-\tzServedY*\tzPH+\tzPickDy})
       [scale=\tzPickScale] {pickedit};
-    \ifshowTrimEdit % optional second channel: trim, advantaged side only
-      \draw[tzghost] ({\tzTrimFromX*\tzPW},{-\tzTrimFromY*\tzPH})
-        circle[radius=0.055];
-      \draw[tzedit, tzarrhead]
-        ({\tzTrimFromX*\tzPW},{-\tzTrimFromY*\tzPH})
-        -- ({\tzTrimToX*\tzPW},{-\tzTrimToY*\tzPH});
-      \pic[tzEdit] at ({\tzTrimToX*\tzPW},{-\tzTrimToY*\tzPH+\tzPickDy})
-        [scale=\tzPickScale] {pickedit};
-    \fi
   \end{scope}
+
+  % ================= center: FATE + block arrow (drawn AFTER the panels
+  % ================= so it overlays their inner edges -- Zhang's
+  % ================= composition; the gap itself is only ~one grid cell)
+  \node[anchor=south, font=\tzFateFont, inner sep=1.5pt]
+    at (\tzCx,{\tzArrY+0.15}) {\tzFateLabel};
+  \shade[left color=tzrule!35, right color=tzrule]
+    ({\tzCx-0.55},{\tzArrY+0.11}) -- ({\tzCx+0.26},{\tzArrY+0.11})
+    -- ({\tzCx+0.26},{\tzArrY+0.20}) -- ({\tzCx+0.55},\tzArrY)
+    -- ({\tzCx+0.26},{\tzArrY-0.20}) -- ({\tzCx+0.26},{\tzArrY-0.11})
+    -- ({\tzCx-0.55},{\tzArrY-0.11}) -- cycle;
 
   % ================= label band (side labels ONLY) =====================
   \pgfmathsetmacro\tzAdvLx{\tzBx*\tzPW/2}%          adv half center
@@ -450,24 +482,24 @@
       at ({\dx+\tzDisLx},{\tzPanelBot-0.04}) {\tzDisName};
   }
   \node[anchor=north, font=\tzInfoFont, align=center, inner sep=1pt]
-    at (\tzAdvLx,{\tzPanelBot-0.28}) {\tzAdvInfoL};
+    at (\tzAdvLx,{\tzPanelBot-0.33}) {\tzAdvInfoL};
   \node[anchor=north, font=\tzInfoFont, align=center, inner sep=1pt]
-    at (\tzDisLx,{\tzPanelBot-0.28}) {\tzDisInfoL};
+    at (\tzDisLx,{\tzPanelBot-0.33}) {\tzDisInfoL};
   \node[anchor=north, font=\tzInfoFont, align=center, inner sep=1pt]
-    at ({\tzRPx+\tzAdvLx},{\tzPanelBot-0.28}) {\tzAdvInfoR};
+    at ({\tzRPx+\tzAdvLx},{\tzPanelBot-0.33}) {\tzAdvInfoR};
   \node[anchor=north, font=\tzInfoFont, align=center, inner sep=1pt]
-    at ({\tzRPx+\tzDisLx},{\tzPanelBot-0.28}) {\tzDisInfoR};
+    at ({\tzRPx+\tzDisLx},{\tzPanelBot-0.33}) {\tzDisInfoR};
 
   % ================= legend band =======================================
   \fill[tzband] (0,\tzLegTop) rectangle (\tzW,\tzLegBot);
   \draw[tzrule, line width=0.35pt] (0,\tzLegTop) rectangle (\tzW,\tzLegBot);
   \pgfmathsetmacro\tzLegY{(\tzLegTop+\tzLegBot)/2}%
-  \pic[tzTaxiInk] at (0.45,\tzLegY) [scale=\tzTaxiScale] {taxi};
-  \node[anchor=west, font=\tzLegendFont] at (0.72,\tzLegY) {\tzLegTaxi};
-  \pic[tzink] at (1.62,\tzLegY) [scale=\tzPickScale] {pick};
-  \node[anchor=west, font=\tzLegendFont] at (1.76,\tzLegY) {\tzLegPick};
-  \draw[tztraj] (3.05,\tzLegY) -- (3.45,\tzLegY);
-  \node[anchor=west, font=\tzLegendFont] at (3.53,\tzLegY) {\tzLegExist};
-  \draw[tzedit] (5.75,\tzLegY) -- (6.15,\tzLegY);
-  \node[anchor=west, font=\tzLegendFont] at (6.23,\tzLegY) {\tzLegEdit};
+  \pic[tzTaxiInk] at (0.42,\tzLegY) [scale=\tzTaxiScale] {taxi};
+  \node[anchor=west, font=\tzLegendFont] at (0.70,\tzLegY) {\tzLegTaxi};
+  \pic[tzink] at (1.58,\tzLegY) [scale=\tzPickScale] {pick};
+  \node[anchor=west, font=\tzLegendFont] at (1.70,\tzLegY) {\tzLegPick};
+  \draw[tztraj] (2.98,\tzLegY) -- (3.30,\tzLegY);
+  \node[anchor=west, font=\tzLegendFont] at (3.38,\tzLegY) {\tzLegExist};
+  \draw[tzedit] (5.86,\tzLegY) -- (6.18,\tzLegY);
+  \node[anchor=west, font=\tzLegendFont] at (6.26,\tzLegY) {\tzLegEdit};
 \end{tikzpicture}%

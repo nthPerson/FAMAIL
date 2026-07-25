@@ -1,5 +1,15 @@
 # FIGURE 1 SPEC — teaser (Dr. Zhang's PNG; optional TikZ remake)
 
+> **v3 (Robert, 2026-07-25, post-integration):** trim channel ON (drawn as
+> a relocation of one existing advantaged passenger, counts conserved,
+> both endpoints inside the advantaged tint; `\showTrimEditfalse` = back
+> to lift-only); Zhang's overlay-arrow composition (panels 0.24 cm apart
+> ≈ 1.2 grid cells, FATE label+arrow drawn over the panels' inner edges,
+> panels 3.60→4.08 cm; mid-left taxi nudged x 0.086→0.145 clear of the
+> arrowhead); ALL fonts one level up (titles/FATE 8 pt, everything else
+> 7 pt — the ≥\scriptsize acceptance check now passes everywhere); icons
+> 0.50/0.33 cm keep her icon:panel ratio. Measured 239.50 × 123.66 pt.
+>
 > **v2 REFINEMENTS (Robert, 2026-07-25, same day):** Zhang's own taxi/
 > passenger icons adopted (extracted from teaser.png's legend + PIL
 > recolor variants, `icon-*.png`); grid ~2.4x finer (19x13); SZ street

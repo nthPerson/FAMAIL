@@ -1,4 +1,33 @@
-# FIG-1 TikZ RE-IMPLEMENTATION — report (2026-07-25, v2 same day)
+# FIG-1 TikZ RE-IMPLEMENTATION — report (2026-07-25, v3)
+
+**v3 (Robert's three post-integration changes, 2026-07-25):**
+1. **Trim channel shown** (`\showTrimEdittrue`, now the default). Drawn so
+   the invariants survive: trim takes the RIGHT MEMBER of the advantaged
+   passenger pair (`\tzTrimFrom` = the PNG's (0.098,0.615) passenger, dark
+   and unmoved in the left panel) and relocates it to `\tzTrimTo`
+   (0.245,0.775) — ghost circle at the recorded position, dashed amber
+   arrow, amber passenger at the new position, BOTH endpoints inside the
+   advantaged tint. Advantaged passenger count stays 3 in both panels
+   (moved, not added). Confusion judgment: low — the two channels use the
+   same ghost→dashed→amber vocabulary and each stays in its lane (trim
+   entirely inside the advantaged half, lift crossing into the
+   disadvantaged half); the lift path remains the dominant element.
+   `\showTrimEditfalse` returns to the lift-only teaser.
+2. **Zhang's overlay-arrow composition**: the panels now sit `\tzGap` =
+   0.24 cm apart (≈1.2 grid cells) and the FATE label + block arrow are
+   drawn AFTER the panels, overlaying their inner edges as in her PNG.
+   Panels grew 3.60 → 4.08 cm wide (+13%); all icon positions are
+   panel-fractions, so the layout rescaled automatically. The one manual
+   consequence: the mid-left advantaged taxi moved from the PNG's
+   x=0.086 to x=0.145 in BOTH panels so the arrowhead lands clear of it.
+3. **Fonts one level up**: titles `\footnotesize` (8 pt), side names
+   `\scriptsize` bold (7 pt), Service/Demand + legend `\scriptsize`
+   (7 pt), FATE `\footnotesize` bold (8 pt). The spec's ≥`\scriptsize`
+   acceptance check is now met by EVERY text element (v1/v2's 5-6 pt
+   shortfall is gone). Icons bumped to `\tzTaxiW`=0.50 / `\tzPickH`=0.33
+   to hold Zhang's icon:panel ratio. Bands grew to fit (title 0.36,
+   label 0.88, legend 0.44 cm): measured box now
+   **239.50 × 123.66 pt** — still 11.3 pt under the 135 pt cap.
 
 Deliverable: `figure-1-teaser.tex` (body) + `figure-1-teaser-test.tex` (harness),
 a drop-in TikZ alternative to Dr. Zhang's `teaser.png` (untouched, still the
@@ -39,9 +68,9 @@ From the harness (`\newsavebox` measurement, printed by the compiler):
 
 - **Width 239.50285 pt** vs `\columnwidth` = 241.14749 pt (1.64 pt to spare;
   Figure 2 is 239.80 pt, so the two figures are visually the same width).
-- **Height 116.83142 pt** (v2) vs the 135.0 pt hard cap → **18.17 pt of
-  headroom** (the PNG renders at 135.0 pt, so the TikZ version is ~1.6 text
-  lines SHORTER — a small page-budget gain if swapped in).
+- **Height 123.66023 pt** (v3) vs the 135.0 pt hard cap → **11.34 pt of
+  headroom** (the PNG renders at 135.0 pt, so the TikZ version is still ~1
+  text line SHORTER than the PNG despite the one-level font bump).
 - Harness log: 0 errors, 0 Overfull.
 
 Full manuscript gates (PNG still in place), all green:
@@ -55,25 +84,20 @@ fig1-on-p1: 1        (pdftotext p1 finds "Collective service disparity")
 
 ## 2. Font sizes and legibility call
 
+v3 sizes (one level up from v1/v2 per Robert):
+
 | Element | Macro | Size |
 |---|---|---|
-| Panel titles | `\tzTitleFont` | `\scriptsize` (7 pt) |
-| Advantaged / Disadvantaged | `\tzSideFont` | `\fontsize{6}{7}` bold (6 pt) |
-| Service/Demand lines | `\tzInfoFont` | `\tiny` (5 pt) |
-| Legend entries | `\tzLegendFont` | `\tiny` (5 pt) |
-| FATE center label | `\tzFateFont` | `\scriptsize` bold (7 pt) |
+| Panel titles | `\tzTitleFont` | `\footnotesize` (8 pt) |
+| Advantaged / Disadvantaged | `\tzSideFont` | `\scriptsize` bold (7 pt) |
+| Service/Demand lines | `\tzInfoFont` | `\scriptsize` (7 pt) |
+| Legend entries | `\tzLegendFont` | `\scriptsize` (7 pt) |
+| FATE center label | `\tzFateFont` | `\footnotesize` bold (8 pt) |
 
-Legibility at 100 % zoom of the compiled PDF: titles and side labels are
-comfortably legible; the 5 pt Service/Demand and legend lines are legible but
-small — **the same effective size the PNG itself renders at** (its in-panel
-text is ~5.5 pt at column width), so the conversion does not lose ground.
-The spec's "labels ≥ `\scriptsize`" acceptance check is met for titles and
-side names but **not** for the Service/Demand and legend lines; meeting it
-there would require either a taller figure (against the 135 pt cap) or
-shorter label text (the PI's wording, not to be improved). Stated trade-off,
-not silently shrunk: bump `\tzInfoFont`/`\tzLegendFont` to `\scriptsize` and
-the figure still fits the width, but the label band and legend grow ~6 pt
-combined — still under 135 pt if Robert prefers that trade.
+Legibility at 100 % zoom: everything is comfortably legible; every text
+element now meets the spec's ≥`\scriptsize` acceptance check (the v1/v2
+5–6 pt shortfall is resolved). "Service: Increased", the longest info
+line, still sits fully inside its half-panel column at 7 pt.
 
 ## 3. §5 invariant checklist (all checked)
 
@@ -83,7 +107,10 @@ drive every icon) and by count on the 300 dpi render.
 1. ✅ Disadvantaged passengers identical in both panels: `\tzDisPicks` (3) +
    the served passenger (1) are drawn in BOTH panels → 4/4. (The PNG had
    4→3; this is the semantic fix.)
-2. ✅ Advantaged passengers identical: `\tzAdvPicks` (3) drawn in both → 3/3.
+2. ✅ Advantaged passengers identical (v3, trim shown): left panel =
+   `\tzAdvPicksKept` (2) + the trim subject dark at `\tzTrimFrom` = 3;
+   right panel = 2 kept dark + the SAME passenger relocated in amber = 3.
+   Moved, not added.
 3. ✅ Conservation: advantaged taxis 5→4 (`\tzAdvTaxisR` = `\tzAdvTaxis`
    minus the vacated entry), disadvantaged 2→3 (+1 amber taxi). One leaves,
    one arrives; corpus total 7 in both panels.
@@ -92,15 +119,17 @@ drive every icon) and by count on the 300 dpi render.
    dashed rerouted trajectory, and the amber passenger — which is one of the
    four disadvantaged passengers RECOLORED in place (same coordinates in
    both panels), i.e. "the passenger who now gets served", not moved demand.
-5. ✅ Trim overlay (OFF by default): both endpoints at x-fractions
-   0.200/0.310, boundary at 0.517 — both inside the advantaged tint.
-   Verified in the toggle smoke test render.
+   (The trim channel's amber passenger sits on the ADVANTAGED side.)
+5. ✅ Trim edit (v3: ON by default): recorded position x=0.098, relocated
+   position x=0.245, arrowhead x=0.222 — all left of the 0.517 boundary,
+   inside the advantaged tint. Verified in source and render.
 6. ✅ Grayscale: `figure-1-teaser-preview-gray.png`. The 5-vs-2 / 4-vs-3
-   taxi asymmetry, bold side labels, boundary dash, edit dash + arrowhead
-   and "+" mark all survive with the tints gone.
-7. ✅ The edited trajectory is the right panel's most salient element: the
-   only dashed amber stroke (0.9 pt vs 0.5 pt gray solids), with the only
-   arrowhead in either panel, ending at the only amber taxi.
+   taxi asymmetry, bold side labels, boundary dash, both edit dashes +
+   arrowheads, ghosts and the "+" mark all survive with the tints gone.
+7. ✅ The edit vocabulary is the right panel's most salient element class;
+   within it the lift path dominates (longest dashed stroke, crosses the
+   boundary, ends at the amber taxi + "+"). The trim arrow is a shorter
+   parallel statement fully inside the advantaged half.
 
 ## 4. The semantic fix (FINAL_REVIEW_FINDINGS #1)
 
@@ -132,7 +161,8 @@ Decisions **awaiting Robert** are marked ⚖.
 | D8 | Orange pair moved from ~(0.61,0.39) to (0.63,0.55)/(0.74,0.59) | The PNG position collides with a dark passenger once the pair is enlarged for print; open lower-middle keeps the focal edit clean; served passenger sits at the SAME spot in both panels | `\tzOrangeTaxiX/Y`, `\tzServedX/Y` |
 | D9 | "+" added-presence mark beside the amber taxi (not in the PNG) | Figure-2's grayscale carrier for "added presence"; kills any residual "moved demand" reading | `\showAddedMarkfalse` |
 | D10 | FATE label bold (PNG regular) | Salience of the one named actor in the figure | `\tzFateFont` |
-| D11 | Trim-channel overlay exists but is OFF | One clean channel beats two crowded ones; overlay verified correct (both endpoints advantaged) | `\showTrimEdittrue` |
+| D11 | v3 (Robert 2026-07-25): trim-channel overlay ON — both edit channels shown, method depicted in full | drawn as a relocation of an existing advantaged passenger (counts conserved); low confusion risk (see v3 note 1) | `\showTrimEditfalse` returns to lift-only |
+| D12 | v3: mid-left advantaged taxi at x=0.145 (PNG: 0.086), both panels | keeps the overlaid FATE arrowhead from landing on it | `\tzAdvTaxis`/`\tzAdvTaxisR` lists |
 
 All toggle paths compile-tested (Zhang look = D2+D3+D4 flipped together;
 trim overlay; raster background): 0 errors each, renders inspected.
