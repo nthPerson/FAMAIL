@@ -40,7 +40,7 @@ into T5's first commit.
       (b) "direct additional resources toward under-served areas" holds only as
       redirection under conservation — body keeps that explicit (T4); (c) her
       abstract says "real-world HSTD", dropping the explicit two-city naming —
-      3-word add available if Robert wants n=2 visible in the abstract.
+      ⚖ RULED 07-24: Robert wants both cities named; T9 folds in the add (see T9).
       — STATUS: DONE
 - [ ] T2 `01_introduction.tex` — rebuild on her intro's logic (accessible register,
       [36:50]): hook ¶s; brief PROSE mention of challenges (no itemize; forward-ref
@@ -98,7 +98,13 @@ into T5's first commit.
       p9 should open with REFERENCES; if not, apply the meeting's space levers:
       stacked challenges, SZ/SF dedup, appendix overflow); render QA read of every
       changed page (the swallowed-sentence class); cross-ref sweep (no ?? in log);
-      CITATION_PRIORITY_CHECKLIST coverage green. — STATUS: todo
+      CITATION_PRIORITY_CHECKLIST coverage green.
+      ⚖ RULED 07-24 (Robert): fold in the abstract's two-city add — name Shenzhen
+      and San Francisco in the evaluation sentence of 00_abstract.tex (e.g.
+      "…evaluate it on real-world HSTD from Shenzhen and San Francisco."); smallest
+      change that names both cities; re-check the standalone abstract build too.
+      Also verify Fig-1 page placement (T-M1 note) and Fig-1/Fig-2 render QA.
+      — STATUS: todo
 
 ## Lane 2 — figures (parallel with Lane 1 from the start)
 
