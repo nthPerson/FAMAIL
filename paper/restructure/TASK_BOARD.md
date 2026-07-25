@@ -61,21 +61,18 @@ into T5's first commit.
       ⚠ HANDOFF: §2 opens by defining HSTD — T2's intro ¶1 also defines it (hers,
       authoritative); orchestrator dedups §2's parenthetical AT T2 COMMIT TIME.
       NO file renames this sprint (02_related_work.tex renders as §5). — STATUS: DONE
-- [ ] T4 `03_methodology.tex` — leading ¶ (names FATE, two stages, refs
-      Figure~\ref{fig:overview}, maps components → challenge labels); then five blocks
-      per ADJ-3 mapping, each opening with its challenge: (1) collective fairness
-      objective [current §3.2 reorganized: design requirements → why raw parity is
-      wrong → residual → F_demo → why-useful → scalarization; caveats ¶ SURVIVES],
-      (2) attribution under a budget [both mechanisms; k split described faithfully,
-      C-6 wording; "not post-hoc" emphasis], (3) outcome-side vs resource-aware
-      editing [trim mechanics; §3.3's limitation argument COMPRESSED here with the
-      2,455-pickup fact + leveling-down analogy + endogeneity (protected register;
-      overflow detail → appendix); lift with the 7 named elements; closing key
-      distinction], (4) validity- and fidelity-constrained editing [K vs ε; constraint
-      list; corrected 6-step pipeline per ALGORITHM_FACTS §Validity — NO fidelity
-      gate], (5) edit-aware weighting [dilution problem; upweighting; controls
-      forward-ref]. Keep labels sec:objective/sec:leveling/sec:editor/sec:downstream
-      alive (aliases fine) — §4, §5, appendix reference them. — STATUS: todo
+- [x] T4 `03_methodology.tex` — DONE 07-24 (d60491b): leading ¶ + five blocks (3.1
+      objective C3 / 3.2 attribution+budget C1 [sec:editor+sec:attribution] / 3.3
+      outcome-vs-resource C4 [sec:leveling on the limitation beat] / 3.4
+      validity+fidelity C2 [sec:phys-validity] / 3.5 weighting C5 [sec:downstream]);
+      framework figure integrated as Fig 2 p3 (schematic caption, k ≪ |T|); §3.3(b)
+      compressed ~1/3 with full protected register (orchestrator render-verified:
+      2,455 ×3, analogy, endogeneity ×3, 93%, 1.8/17.6, control sentence). Gates
+      green; 0 undefined refs. COST: §3 ≈ +14 rendered lines; §6 heading moved to
+      p9 (T9 page-budget input). ⚠ HANDOFF to T6/T7: conclusion's "single-pass
+      editor \S\ref{sec:editor} anticipates" now points one block early — fix the
+      ref/wording to match where the future-work sentence lives (end of 3.3).
+      — STATUS: DONE
 - [ ] T5 `04_experiments.tex` — leading ¶ (aims + research questions mapped to
       subsections; count Robert-approved in review); fold Robert's pending wording
       tweak; SF subsection re-framed as consolidated transferability block
@@ -91,10 +88,8 @@ into T5's first commit.
 - [ ] T7 `05_conclusion.tex` (file keeps its name; renders as §6) — spine vocabulary
       update (budgeted intervention, collective fairness); future-work gains the
       k-sweep sentence (D16); bounds ¶ SURVIVES verbatim. — STATUS: todo
-- [ ] T8 `appendix.tex` — absorb any detail displaced from T4 (the "tricks" →
-      appendix rule, C-12: correctness conditions keep one main-text clause each);
-      verify all \ref targets after renumbering; App E related-work survey pointer
-      still correct from new §5. — STATUS: todo
+- [~] T8 — FOLDED INTO T9 (T4 displaced nothing new into the appendix; what remains
+      is a coherence/ref check, which is T9 item 1). — STATUS: merged into T9
 - [ ] T9 Integration pass — full gates; strict page check (`pdftotext -f 9 -l 9` —
       p9 should open with REFERENCES; if not, apply the meeting's space levers:
       stacked challenges, SZ/SF dedup, appendix overflow); render QA read of every
