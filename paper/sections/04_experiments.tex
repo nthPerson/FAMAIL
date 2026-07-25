@@ -34,7 +34,7 @@ other demographic feature sets and other objective weights
 (\S\ref{sec:exp-robustness}), and do they reproduce on a second city
 (\S\ref{sec:exp-sf})? Shenzhen answers every question. The trade-off among
 fairness, fidelity, validity, and what a fixed edit budget can reach is
-reported throughout, each cost stated where its gain is claimed.
+reported where each gain is claimed.
 % 2026-07-24 (T9, page-budget lever a): the closing "San Francisco then tests
 % whether the conclusions reproduce" is dropped — RQ5's own second clause above
 % asks exactly that, and \S\ref{sec:exp-sf} opens by stating it. "Shenzhen answers
@@ -58,8 +58,8 @@ no editable fairness gradient.
 \textbf{Editor configuration.} All edits are made using the trim+lift editor of
 \S\ref{sec:method}, with $\alpha = (0.1, 0.8, 0.1)$ weights selected using the 
 three-class criterion of \S\ref{sec:exp-robustness}, $\varepsilon = 2$, and the 
-skip-on-infeasible rule of \S\ref{sec:phys-validity}. The edit budget is the
-paper's configured value in each city: Shenzhen $k = 10{,}000$, about a tenth
+skip-on-infeasible rule of \S\ref{sec:phys-validity}. The edit budget is fixed
+per city: Shenzhen $k = 10{,}000$, about a tenth
 of the corpus (2{,}337 trim + 7{,}545 lift after filtering); San Francisco
 $k = 2{,}000$ (1{,}330 trim + 629 lift).
 % (derived: 10,000 / 95,297 trajectories = 10.5%, the same share the
@@ -109,8 +109,8 @@ DP \emph{is} the supply/demand-ratio gap: one number, reported once),
 \emph{disparate impact} (DI), and the between-region \emph{Theil} index,
 alongside the two group \emph{levels} $\mathrm{mean}(Y \mid \mathrm{disadv.})$
 and $\mathrm{mean}(Y \mid \mathrm{adv.})$, which are class (ii) context, not
-external instruments. The strict count of distinct external instruments is
-therefore \{DI, DP/gap, Theil\}.
+external instruments. The distinct external instruments are therefore DI,
+DP/gap, and Theil.
 Grouping conventions and instrument definitions are in
 Appendix~\ref{app:protocol}.
 % src: PAPER/supply-lift/LIFT_ALGORITHM_REFERENCE.md §13
@@ -154,10 +154,10 @@ $\mathrm{mean}(Y \mid \mathrm{adv.})$ & 21.272 & 20.435 & $-0.837$ \\
 % src: famail_temporal/baselines/external_fairness/results/shenzhen-primary-supplylift-s10/external_fairness.json
 % (before-edit values are alpha-independent; identical cleaned base data)
 
-\textbf{The lift-up claim rides the supply channel.} The
+\textbf{The lift-up claim rests on the supply channel.} The
 $\mathrm{mean}(Y \mid \mathrm{disadv.})$ rise is a
 \emph{design-targeted} (class (ii)) quantity (the lift mechanism was aimed
-at it), so we decompose it rather than celebrate it. Evaluating $Y$ at
+at it), so we decompose it rather than take it at face value. Evaluating $Y$ at
 $(S,D) \to (S,D') \to (S',D')$ splits the delta exactly into a demand move and
 a supply move ($B{=}2{,}000$). The demand channel (pickup relocation) carries
 large variance and is not significant, $+0.0352$ [$-0.0095$, $+0.0814$]. The
@@ -231,9 +231,8 @@ and migrant DP gap $-0.052$ versus $-0.073$ (both CIs excluding zero). % lint-al
 \textbf{Data quality (four sources).} We score four corpora (raw, edited,
 BC-generated, and GAN-generated) on fairness and both fidelity axes, with
 generators trained from scratch for this comparison and Fidelity-A gated using
-the fidelity guardrail of \S\ref{sec:objective}; the claim under test is
-that the edited corpus is the fairest source that remains faithful on both
-fidelity axes. The claim holds: the edited corpus is the fairest source
+the fidelity guardrail of \S\ref{sec:objective}. The edited corpus is the
+fairest source that stays
 faithful to driver identity (Fidelity-A gate passed, matched 0.848 vs.\ mismatched
 0.193), with Fidelity-B 0.187 the disclosed divergence of the bounded edits
 (Table~\ref{tab:l1}, Appendix~\ref{app:results}). One instability we surface
@@ -257,8 +256,8 @@ Wilcoxon $p = .00049$, $t$-interval $[+0.0278,$ $+0.0315]$, while both % lint-al
 controls stay null at the same $n = 12$ (random $-0.0017$, most-fair
 $+0.0012$, mixed signs, n.s.).
 % src: PAPER/supply-lift/data/a10/shz_a10_wbc_n12_pooled_stats.json (pooled seeds 0-5 + 6-11; 12/12 floor = 2/4096 = .000488; t_p 1.2e-12; WBC-N12 2026-07-18)
-Extending the dose saturates, with w30 at the knee, not a tuned endpoint
-(w40/w50 in Appendix~\ref{app:results}). Neither
+The gain saturates as the dose rises, with w30 at the knee rather than a tuned
+endpoint (w40/w50 in Appendix~\ref{app:results}). Neither
 control reproduces it at any dose: the random-subset placebo is
 null-to-negative throughout, and the most-fair selection control reaches
 $+0.0033$ at w10 (significant, but under a sixth of the edited arm's
@@ -321,9 +320,9 @@ metrics can be gamed by fabrication, the demand-endo\-ge\-ne\-ity concern of
 \S\ref{sec:leveling} made concrete.
 % src: PAPER/baselines/demographic-oversampling/FINDINGS.md §2-5
 
-\textbf{Fairness-method baselines (training-side).} Fairness methods proper,
-applied where they usually live at training time on the raw corpus, reproduce
-no part of the recovery that editing provides: instance reweighing in the
+\textbf{Fairness-method baselines (training-side).} Two established fairness
+methods, applied at training time on the raw corpus where they usually live,
+reproduce no part of the recovery that editing provides: instance reweighing in the
 Kamiran--Calders style \cite{kamirancalders2012} moves demand-adjusted
 fairness the \emph{wrong} way ($-0.0227$, all six seeds negative,
 $p = .031$), and an in-processing demo\-graph\-ic-parity penalty in the spirit
@@ -356,9 +355,9 @@ demog.\ oversampling (targeted) & $+0.0153$ & $+0.0052$ & 10.5\% \\
 
 \subsection{Robustness and Sensitivity}\label{sec:exp-robustness}
 
-Under the two alternate demographic feature sets introduced below, the
-transfer controls of \S\ref{sec:exp-downstream} are re-measured deliberately,
-and we report the strongest controls we found rather than average them away:
+Under the two alternate demographic feature sets defined below, we re-measure
+the transfer controls of \S\ref{sec:exp-downstream} and report the strongest
+controls we found rather than averaging them away:
 the random placebo stays null-to-negative under every set, while the most-fair
 selection control, null on the primary set, turns significantly \emph{positive}
 under both alternate sets, a fifth to a quarter of the edited arm's gain. Even
@@ -381,9 +380,8 @@ $\alpha_{\mathrm{sp}} \in [0, 0.55]$, while the class (ii) supply-channel
 lift-up declines monotonically with $\alpha_{\mathrm{sp}}$ and is significant
 under both accounting conventions only for $\alpha_{\mathrm{sp}} \le 0.2$.
 The adopted
-$(0.1, 0.8, 0.1)$ is the three-class criterion's selection: any weighting in
-the flat range delivers the same $\Delta F_{\mathrm{demo}}$, and the low
-$\alpha_{\mathrm{sp}}$ is what keeps the supply-channel lift-up
+$(0.1, 0.8, 0.1)$ is the three-class criterion's selection: within the flat
+range, the low $\alpha_{\mathrm{sp}}$ is what keeps the supply-channel lift-up
 significant. The full sweep and
 figure are deferred to Appendix~\ref{app:results}
 (Fig.~\ref{fig:alpha-pareto}).
@@ -457,8 +455,8 @@ total $\mathrm{mean}(Y \mid \mathrm{disadv.})$ moves net-negative
 ($-0.0324$, CI excludes 0). We read this net-negative as a
 demand-endogeneity finding, not a failed replication: recorded demand in
 under-served areas was suppressed, and serving it raises the ratio's
-denominator: the mechanism \S\ref{sec:leveling} predicts, observed in
-the wild. The distinct-taxi recount resolves the tension: the \emph{total}
+denominator. This is the mechanism \S\ref{sec:leveling} predicts, now observed
+in data. The distinct-taxi recount resolves the tension: the \emph{total}
 turns
 significantly \emph{positive} ($+0.0493$, CI $[+0.0185,$ $+0.0790]$),
 so the real supply improvement outweighs the demand-side denominator

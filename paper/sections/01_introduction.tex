@@ -42,6 +42,17 @@
 % caption. The retired TikZ teaser sources (figures/figure-1/figure-1.tex, its
 % -bc/-test harnesses and design-archive/) stay on disk, unused; a Phase-2 TikZ
 % remake is optional and lowest priority (restructure/figures/FIG1_TEASER_SPEC.md).
+% 2026-07-25 (Robert's systematic re-read, prose pass) — three trims in her text, no
+% claim changed: (1) end of the prior-work paragraph, "attributes collective service
+% disparity to individual demonstrations and modifies their local decisions" was the
+% THIRD statement of that clause inside one paragraph (the two preceding sentences
+% already say prior work cannot attribute disparity to trajectories), so it now states
+% the intervention itself; (2) challenge 1 lost "As the left panel of Figure 1 shows,
+% disparity emerges from the aggregation of many trajectories, not from any single
+% demonstration" — the emergence claim is made in paragraph 1 AND verbatim in the
+% Figure-1 caption ("emerges from the aggregation of local trajectories"), and the
+% difficulty survives in the sentences around it; (3) challenge 3's first two sentences
+% joined, dropping a restatement of the budget requirement.
 % Numbers formerly in this section (+0.0226, +0.0316, the external-metric intervals)
 % live in Section~\ref{sec:experiments}; the leveling-down analogy and the
 % 2,455-pickup disclosure live in \S\ref{sec:leveling}. The 3.0x sentence below
@@ -115,24 +126,22 @@ including training-time reweighting and fairness-aware objectives
 \cite{kamirancalders2012,zheng2023,lamalfa2026fairppo,zhao2025fairdrlst},
 mitigate bias for a particular model without identifying which demonstrations
 generate the observed collective disparity or repairing their contribution to
-it. This motivates a data-centric intervention that attributes collective
-service disparity to individual demonstrations and modifies their local
-decisions according to their aggregate effects.
+it. This motivates a data-centric intervention: repair the individual
+demonstrations that generate the collective disparity, targeting them by their
+aggregate effect.
 
 Realizing such an intervention is challenging. First, collective fairness is
-global, but edits are local. As the left panel of Figure~\ref{fig:teaser}
-shows, disparity emerges from the aggregation of many trajectories, not from
-any single demonstration. An editor must therefore trace this global disparity
-to influential trajectories and identify the local edits with the largest
-corpus-level effect. Second, reducing disparity does not necessarily improve
+global, but edits are local. An editor must therefore trace this global
+disparity to influential trajectories and identify the local edits with the
+largest corpus-level effect. Second, reducing disparity does not necessarily improve
 disadvantaged-group welfare. An intervention may narrow a group gap by
 decreasing the measured outcome of the advantaged group rather than increasing
 the resources received by the disadvantaged group. In taxi mobility, for
 example, reducing the contribution of trips from heavily served areas can
 narrow the measured service gap without directing additional taxi presence to
 under-served neighborhoods. Third, fairness intervention must be effective
-under a limited edit budget. Modifying a large portion of HSTD can be costly
-and may distort the human behaviors that make the data valuable. The editor
+under a limited edit budget: modifying a large portion of HSTD is costly and
+may distort the human behaviors that make the data valuable. The editor
 must therefore achieve substantial collective fairness improvement by
 modifying only a small subset of trajectories, while preserving the validity
 and downstream influence of these sparse edits.

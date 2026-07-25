@@ -34,16 +34,16 @@ takes the principle that a disparity counts only after permitted factors,
 here demand, are adjusted for. The closest transportation
 neighbor adds a fairness penalty inside one ride-hailing demand predictor's
 training loss \cite{zheng2023}; that correction lives and dies with the one
-model, while the demonstrations stay biased for every other consumer, which
-is the gap FATE closes one stage earlier, by repairing the collective
+model, while the demonstrations stay biased for every other consumer. FATE
+closes that gap one stage earlier, by repairing the collective
 fairness of the corpus's service allocation. Fair
 data generation synthesizes fair datasets outright
 \cite{xu2018fairgan,vanbreugel2021decaf}; FATE generates nothing and edits a
 budgeted slice of real trajectories under a fidelity-protecting bound. Imitation
-learning for mobility recovers driver policies faithfully (conditional GAIL
-and its explainable variants \cite{zhang2019cgail,zhang2022cgail,pan2020xgail}),
-but this lineage optimizes how faithfully behavior is reproduced and does not
-audit the fairness of the reproduced allocation; FATE edits the
+learning for mobility recovers driver policies with high fidelity (conditional
+GAIL and its explainable variants \cite{zhang2019cgail,zhang2022cgail,pan2020xgail}),
+but this lineage optimizes how faithfully behavior is reproduced and never
+audits the fairness of the reproduced allocation; FATE edits the
 demonstrations such models consume, and reuses the driver-identity
 verification line \cite{ren2020stsiamese} as its frozen fidelity signal. The
 editing machinery descends from bounded adversarial perturbation
@@ -53,5 +53,5 @@ constructively as in algorithmic recourse
 prescribed for benefit rather than attack. Finally, the leveling-down
 critique of fairness constraints \cite{parfit1997,mittelstadt2024,zietlow2022}
 sets the standard we hold a fairness gain to: service outcomes of the under-served must actually
-improve (\S\ref{sec:leveling}). Appendix~\ref{app:related} surveys these five
+improve (\S\ref{sec:leveling}). Appendix~\ref{app:related} surveys these
 lines in full.

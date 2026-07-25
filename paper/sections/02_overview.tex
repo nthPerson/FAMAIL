@@ -30,16 +30,16 @@ $\tau = (s_1, \dots, s_T)$ is a time-ordered sequence of states: each
 occupied while seeking a passenger, and the final state $s_T$ is the
 \textbf{pickup}.
 % src: PAPER/argument/02_datasets.md (0.01° grid, hourly blocks)
-The imitation we demonstrate on this corpus (\S\ref{sec:downstream}) is
-supervised: there is no reward function, and the recorded state transitions
-are the only training signal. A policy $\pi$ is trained by behavior cloning to
+The imitation setting is supervised (\S\ref{sec:downstream}): there is no
+reward function, and the recorded state transitions are the only training
+signal. A policy $\pi$ is trained by behavior cloning to
 predict a driver's next state from their recent states, so the policy can only
 be as fair as the corpus it imitates. The trajectories are the editable
 objects.
 
 \textbf{The service allocation the data induces.} A pair $i=(g,t)$ with
 recorded activity is an \textbf{active unit}, and $N$ denotes their count
-($N \approx 34{,}500$ on the primary city). Each active unit carries a
+($N \approx 34{,}500$ on Shenzhen, the primary city). Each active unit carries a
 \textbf{demand} $D_i$ and a \textbf{supply} $S_i$: demand is its recorded
 pickups, and supply is active-taxi presence aggregated over the
 $5{\times}5$ cell neighborhood, matching how a cruising taxi is visible to
@@ -63,9 +63,9 @@ groups, never a property of one trajectory.
 \textbf{Problem definition.} Given a corpus $\mathcal{T}$ whose service
 allocation is demographically inequitable, produce an edited corpus
 $\mathcal{T}'$ that (i) is measurably fairer; (ii) preserves fidelity at the
-level of individual trajectories: an edited trajectory must remain
-recognizable to a frozen driver-identity discriminator as its original
-driver; and (iii) transfers its fairness into a policy trained on it by
+level of individual trajectories: an edited trajectory must still be
+recognized as its original driver by a frozen driver-identity
+discriminator; and (iii) transfers its fairness into a policy trained on it by
 imitation. FATE is a \textbf{data-augmentation} method: it edits a small,
 attribution-targeted slice of the real trajectories and generates nothing. At
 most $k$ trajectories are edited ($k = 10{,}000$ on the primary city), each

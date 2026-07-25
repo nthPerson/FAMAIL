@@ -22,9 +22,15 @@
 % must state plainly that NO k-sweep was run, since the "budget-aware" spine
 % invites a reviewer to look for a budget-fairness curve that does not exist.
 
-FATE makes fairness a property of the demonstrations rather than of a
+FATE places the fairness intervention in the demonstrations rather than in a
 constrained model or a synthetic corpus; the fairness it repairs is
-collective, a property of the whole corpus's service allocation. It has two
+collective, a property of the whole corpus's service allocation.
+% 2026-07-25 (Robert's re-read): "makes fairness a property of the demonstrations
+% ... the fairness it repairs is collective, a property of the whole corpus's
+% service allocation" used "property" for two different levels in one sentence,
+% the exact ambiguity the D3 guard exists for (fairness is NEVER a property of a
+% trajectory; \S\ref{sec:problem} says so). The intervention level is what the
+% first clause is about, so it now says that; the collective definition is intact. It has two
 stages: a budgeted, attribution-directed edit of a small slice of real
 trajectories under one bounded, fidelity-guarded objective, then an
 edit-aware weighting of the edited demonstrations so the fairness survives
@@ -34,7 +40,7 @@ optimizes, and, unlike the demand-only editor whose gains never reached the
 under-served group, the supply channel adds statistically significant taxi
 presence to that group. Because the edited slice is small, uniform weighting
 averages it away. Upweighted behavior cloning carries those gains into
-trained policies, and the control arms confirm the edit itself is what carries them.
+trained policies, and the control arms confirm the edit itself is responsible.
 
 The claims come with stated bounds. The optimized fairness term is
 associational: a partial $R^2$ over roughly ten district-level demographic
@@ -55,7 +61,7 @@ edited trajectories still read as their drivers: identity preservation,
 not fine-grained trajectory-shape realism.
 % src: PAPER/supply-lift/data/a10/{shz,sf12}_a10_wbc_n12_pooled_stats.json (WBC-N12 + SF-WBC-N12 2026-07-18; .00049 x 20 tests = .0098 < .05, survives Holm at any plausible family size)
 
-Three directions follow naturally. The first is the unified single-pass editor
+Three directions follow. The first is the unified single-pass editor
 \S\ref{sec:leveling} anticipates, in which supply is endogenous for every edit
 and the gradient decides each edit's character. The second is transfer:
 whether other imitation objectives and adversarially trained generators

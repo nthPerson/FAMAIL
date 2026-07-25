@@ -435,3 +435,17 @@ Metadata upgrades for these are already in the 2026-07-16 report diff, ready if 
      row added or removed; 02_overview.tex carries no cites; lint coverage green
      at d874d8d. The pre-restructure Coverage paragraph above describes the old
      file layout. -->
+
+<!-- Coverage note (2026-07-25, Robert's systematic re-read / prose pass): two body
+     citations were DROPPED from §3.5 (Edit-Aware Weighting) as part of removing two
+     related-work asides from the method section. Neither key is orphaned and no row
+     changes: feldman2015 remains cited in Appendix A (Derivations) and Appendix E
+     (full related-work survey); zheng2023 remains cited in §1, §5 (Related Work),
+     §4.4 (Fairness-method baselines) and Appendix E. KEY SET UNCHANGED.
+     One claim-attachment item DOES need a human look during the P0 pass:
+     zietlow2022 in §3.3 previously read "data augmentation is THE ONE intervention
+     observed to help the disadvantaged group" (a claim about the literature); it now
+     reads "in a study of fair image classifiers, data augmentation was the one
+     strategy that helped ...", matching this file's own verified refs.bib note
+     ("adaptive augmentation was the one strategy that helped the disadvantaged
+     group", verified 2026-07-16). Verify the domain qualifier is how you want it. -->

@@ -93,3 +93,164 @@ All added-line numerals vs ALGORITHM_FACTS; the new SZ-demand-channel comparativ
 in all three prior locations; D16 discharged; protected register intact; all E-items
 and digest decisions land incl. 1:1 challenge↔block mapping, no-itemize rules, ACM
 blocks, both figure rulings; no src/lint-allow losses; Fig-2 inside geometry gates.
+
+---
+
+# PART 2 — systematic prose re-read (2026-07-25, Robert's directive; base 6edbf0c)
+
+Scope: every line of prose in the abstract and §§1–6, read in order, by the
+orchestrator (not delegated). Criteria: sentence flow, fidelity to the argument,
+specificity (explicit over implicit), repetition, wordiness. Smaller repairs were
+applied; anything needing Robert's sign-off is #15–#21 below. Gates green at every
+step: `latexmk` clean, `lint.sh` silent, 0 undefined refs/citations, no Overfull > 5pt.
+
+**Page effect.** 14pp → 13pp, and the §6 spill onto p9 went from **29 rendered lines
+to 20** (p9 now carries lines 929–948: the bounds-¶ tail plus "Three directions").
+Nine lines recovered without touching the protected bounds paragraph, without an
+appendix relocation, and without cutting a claim, a number, or a disclosure.
+**Still 20 lines over the hard 8-page limit** — see #16 for the menu.
+
+## Applied (no sign-off needed, but three changed meaning — marked ⚑)
+
+**Abstract** — "applies bounded local edits WITH the greatest impact" → "TO THOSE
+with" (selection ranks trajectories, not edits; matches §1). "service-provision" →
+"resource-provision process" (the term §1 and contribution 2 use). ⚑ The dilution
+pair was de-hedged: "their fairness signal can be diluted" → "training that weights
+every demonstration equally averages their fairness signal away" — the mechanism we
+actually measure (the §4.3 vanilla null), and it drops a third statement of the
+budget. Closing sentence "further preserves" → "carries these gains into", matching
+§6's verb.
+
+**§1** — the prior-work paragraph's closing sentence was the third consecutive
+statement of "prior work cannot attribute disparity to trajectories"; it now states
+the intervention instead. Challenge 1 lost "As the left panel of Figure 1 shows,
+disparity emerges from the aggregation of many trajectories, not from any single
+demonstration" — ¶1 says it and the Figure-1 caption says it almost verbatim
+("emerges from the aggregation of local trajectories"). Challenge 3's first two
+sentences joined (a restatement of the budget requirement dropped).
+
+**§2** — "The imitation we demonstrate on this corpus is supervised" → "The imitation
+setting is supervised". "(N ≈ 34,500 on the primary city)" → "on Shenzhen, the
+primary city" (first use of the term). Problem-definition (ii) reworded so the
+discriminator is the agent of the sentence.
+
+**§3** — ⚑ **accuracy repair, the substantive one:** §3.1 said "Both stages are
+evaluated in closed form through the regression's projection (hat) matrix … every
+edit step re-fits the regression exactly". That is wrong for stage one and vague
+about stage two. Only the stage-two demographic regression re-fits implicitly via
+the hat matrix (Appendix A already states it correctly); g_0 is fitted **once**
+during preprocessing and then frozen, and it is evaluated under `no_grad` — which is
+why the gradient clause correctly says "through Y". The body now says so, and
+"a flexible curve g_0(D)" became "a four-term power-basis curve" (the estimator it
+actually is: `g0_power_basis.py`, basis [1, 1/(D+1), 1/√(D+1), √(D+1)]).
+⚑ zietlow2022's claim was narrowed from "data augmentation is **the one**
+intervention observed to help the disadvantaged group" (reads as a claim about the
+literature) to "in a study of fair image classifiers, data augmentation was the one
+strategy that helped …", matching the verified refs.bib note — **flagged for your
+citation pass** (see the checklist's new coverage note).
+Also: C3 opener "falls on the objective" → "is a requirement on the objective" and
+its duplicate business-district example dropped (kept in §2, where the reader meets
+C3 first); "spatial smoothness regularizer" → "regularizes toward spatial equality"
+(Gini measures equality, not smoothness); "Trim retains its selection" → "Trim
+selects"; one double-colon sentence split (the non-perverse-lever sentence); §3.4's
+"(about 5%) … before computing fairness metric effects" now points to §4.2, which
+states the fraction and the timing precisely (the disclosure is unchanged, stated
+once); C5's opener "is why editing alone is necessary but not sufficient" → "is why
+editing alone is not sufficient" (nothing there argues necessity); "an artifact of
+oversampling" → "of upweighting any subset", which is what the random-subset control
+tests (RQ3's own wording); two related-work asides removed from §3.5 (feldman2015
+taxonomy, the zheng2023 model-level contrast — both keys still cited elsewhere,
+coverage note appended to the checklist).
+
+**§4** — "The lift-up claim rides the supply channel" → "rests on"; "rather than
+celebrate it" → "rather than take it at face value"; "The strict count of distinct
+external instruments is therefore {DI, DP/gap, Theil}" → "The distinct external
+instruments are therefore DI, DP/gap, and Theil" (a count is not a set); "the
+paper's configured value in each city" → "fixed per city"; the four-source paragraph
+stated its claim twice ("the claim under test is that X. The claim holds: X") and
+now states it once; "Extending the dose saturates" → "The gain saturates as the dose
+rises" (the dose does not saturate); "Fairness methods proper, applied where they
+usually live at training time" → "Two established fairness methods, applied at
+training time … where they usually live"; §4.5's opener no longer leans on feature
+sets "introduced below" in the passive voice; the weight-sensitivity paragraph's
+second sentence stopped restating the first; one more double colon split in §4.6,
+and "observed in the wild" → "now observed in data".
+
+**§5** — the Zheng sentence split in two (the "which is the gap FATE closes" tail was
+tangled); "recovers driver policies faithfully … optimizes how faithfully" echo
+fixed; "surveys these five lines" → "these lines" (the paragraph does not present
+five countable lines).
+
+**§6** — ⚑ "FATE makes fairness **a property of** the demonstrations … the fairness it
+repairs is collective, **a property of** the whole corpus's service allocation" used
+one word for two levels in one sentence, the exact ambiguity the D3 guard exists for.
+It now reads "places the fairness intervention in the demonstrations", with the
+collective definition intact. "confirm the edit itself is what carries them" →
+"is responsible" (carries/carries); "Three directions follow naturally" → "follow".
+**The bounds paragraph was not touched** (byte-identical protected register).
+
+## New findings for Robert
+
+15. **[Important] ⚖ District-vs-tract granularity: §2 states a Shenzhen fact as a
+    global one.** §2 says "These covariates resolve at district granularity, which
+    bounds the resolution of any demographic analysis built on them", but §4.1 says
+    San Francisco's features are "filled from ACS tract values", and
+    `PAPER/argument/02_datasets.md` confirms the asymmetry (SZ = 10 district
+    profiles; SF = ACS 2006–2010 tracts → cells). Knock-on: §3.1's caveat "With
+    about ten district profiles the association is ecological" and the **protected**
+    §6 bounds sentence "a partial R² over roughly ten district-level demographic
+    profiles" are both stated globally. For SF the caveat is conservative in the safe
+    direction (it claims a coarser resolution than SF has), so this is a precision
+    problem, not an overclaim — but a reviewer reading §2 then §4.1 sees the tension.
+    Proposed §2 wording (yours to approve, since it touches the caveat register that
+    the protected ¶ shares): "These covariates resolve at administrative granularity
+    (ten districts on Shenzhen; census tracts mapped to cells on San Francisco,
+    \S\ref{sec:exp-setup}), which bounds the resolution …". I did not change §3.1 or
+    §6.
+16. **[Page budget] 20 rendered lines still over.** Menu, cheapest-first, with
+    estimates. Nothing here is done; all of it is your call.
+    - **Figure 2 height** (currently ~290pt ≈ 25 text lines): trimming it to ~250pt
+      costs no prose at all. **~3–4 lines.** Cheapest real lever in the paper.
+    - **§6 "Three directions" ¶** (11 lines): each direction can be one clause
+      instead of two. **~4–5 lines**, no claim lost, bounds ¶ untouched.
+    - **§1 ¶4 vs contribution 2** state the outcome-side/resource-aware distinction
+      near-verbatim (see #18). **~3–4 lines.**
+    - **Table 2 (cross-arm baselines) → appendix**, leaving RQ4 to prose. **~10
+      lines**, but it is the table that answers "is it the objective or just
+      perturbation?" — I would not do this before the other four.
+    - §3.4 ↔ §5 both spell out the recourse framing (#20): **~2 lines.**
+    - Fidelity-B 0.187 appears in §4.2, §4.3, §4.4; §4.3's is droppable: **~1 line.**
+    - §4.1's 106,677-pickup cleanup detail → appendix: **~1–2 lines.**
+17. **⚖ §1 ¶3 (her prose): difficulties 1 and 3 both cover the budget.** Difficulty 1
+    ends "trace this global disparity to influential trajectories and identify the
+    local edits with the largest corpus-level effect"; difficulty 3 opens "fairness
+    intervention must be effective under a limited edit budget" and closes "achieve
+    substantial collective fairness improvement by modifying only a small subset".
+    The reader meets the same challenge twice, and the closing five-label list
+    (C1…C5) runs in a different order than the three prose difficulties. Defensible
+    as-is (the closing sentence says the five labels make the difficulties
+    *precise*, not that they map 1:1) — but if you want ¶3 restructured to three
+    difficulties that map cleanly onto C1/C4 + the C2/C3/C5 trio, that is a rewrite
+    of her paragraph and I did not attempt it.
+18. **⚖ optional — §1 ¶4 and contribution 2 duplicate the trim/lift distinction.**
+    ¶4: "distinguishes outcome-side edits, which change the measured allocation
+    statistic, from resource-aware edits, which alter the underlying
+    resource-provision process. The former may reduce disparity without benefiting
+    disadvantaged groups …". Contribution 2 says the same in different words. Some
+    repetition between narrative and contributions is conventional; this is close to
+    verbatim. ~3–4 lines if you want ¶4's version shortened (keep contribution 2 —
+    it carries the C4 insight).
+19. **⚖ Abstract carries no number.** Zhang's text states no quantitative result. The
+    headline (+0.0226 F_demo, or the 3.0× disparity, or "12/12 seeds, p = .00049")
+    would give a reviewer something to anchor on, at a cost of half a line. Your
+    call — it is her abstract, and she may have dropped numbers deliberately.
+20. **(note) Duplications I deliberately left.** §2's C4 and §3.3's opener state the
+    same finding — by design (decision #6: each block names its challenge in its
+    opening sentence). §3.4 and §5 both spell out the constructive-recourse framing
+    with the same five citations — the §5 version belongs in related work and the
+    §3.4 version is the methodological justification. "Small fraction of the corpus"
+    twice in the abstract reads as a deliberate bookend for the budget claim.
+21. **(scope) Appendix prose was not re-read line by line** in this pass — main
+    content only, since the 8-page pressure and your close read are both there. I did
+    read Appendix A's derivations (that is where the g_0 repair was verified) and the
+    SF results block. Say the word and I will do A–E next.

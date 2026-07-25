@@ -17,7 +17,7 @@ an edit-aware weighting of the edited demonstrations during imitation. Neither
 is sufficient alone: the edit makes the corpus fairer, and the weighting keeps
 that fairness from being averaged away in training. Figure~\ref{fig:overview}
 sketches the pipeline; its three coarse steps (attribute, edit, upweight)
-are the order the five blocks below follow, and each block answers one
+give the order of the five blocks below, each of which answers one
 challenge of \S\ref{sec:overview}, named in its opening sentence.
 % src: restructure/meeting/analysis_C_claims.md C-2 (the two-stage wording,
 % adopted as proposed); MEETING_DIGEST.md decision #6 (leading paragraph).
@@ -70,25 +70,24 @@ challenge of \S\ref{sec:overview}, named in its opening sentence.
 
 \subsection{The Collective Fairness Objective}\label{sec:objective}
 
-Challenge C3 falls on the objective itself: what the editor ascends must be
-collective rather than per-trajectory, must credit demand for the service it
-explains, and must be differentiable and exactly decomposable into local
-units, so a corpus-level disparity can be attributed to the trajectories that
-carry it (\S\ref{sec:attribution}). FATE edits trajectories by gradient ascent
-on a single differentiable objective combining demographic fairness, spatial
-equity, and driver fidelity.
+Challenge C3 is a requirement on the objective itself: what the editor ascends
+must be collective rather than per-trajectory, must credit demand for the
+service it explains, and must be differentiable and exactly decomposable into
+local units, so a corpus-level disparity can be attributed to the trajectories
+that carry it (\S\ref{sec:attribution}). FATE edits trajectories by gradient
+ascent on one objective combining demographic fairness, spatial equity, and
+driver fidelity.
 % (T9 lever a: "differentiable in the coordinates an edit moves" folded into
 % "differentiable" — the coordinates clause is restated verbatim three lines
 % below, "exact gradients flow through Y to the coordinates being edited".)
 
 \textbf{Demand-adjusted demographic fairness ($F_{\mathrm{demo}}$, primary).}
 Fairness here cannot mean equal service everywhere: taxi service legitimately
-tracks demand, and a business district \emph{should} see more pickups than a
-quiet residential block. We therefore measure fairness only in the component of
+tracks demand (C3). We therefore measure fairness only in the component of
 service that demand does not explain (the logic of conditional statistical
 parity \cite{corbettdavies2017}, which restricts disparities to those not
-explained by permitted factors). Stage one fits a flexible curve $g_0(D)$
-from per-unit demand to the service ratio and takes the residual
+explained by permitted factors). Stage one fits a four-term power-basis curve
+$g_0(D)$ from per-unit demand to the service ratio and takes the residual
 $R_i = Y_i - g_0(D_i)$: the part of each unit's service that demand does not
 account for. Stage two asks how much of that residual the demographics
 explain, as the coefficient of determination $r^{2}_{\mathrm{demo}}$ of a
@@ -100,11 +99,24 @@ F_{\mathrm{demo}} \;=\; 1 - r^{2}_{\mathrm{demo}} ,
 the fraction of demand-adjusted service variation that demographics cannot
 predict: $F_{\mathrm{demo}} = 0$ means demographics fully explain who is
 over- and under-served (fully unfair), and $F_{\mathrm{demo}} = 1$ means
-they explain none of it (fully fair). Both stages are evaluated in closed
-form through the regression's projection (hat) matrix
+they explain none of it (fully fair). The curve $g_0$ is fitted once on the
+recorded corpus and then held fixed, and stage two is evaluated in closed
+form through its projection (hat) matrix
 \cite{hoaglinwelsch1978}, so the measure is smooth, exact gradients flow
 through $Y$ to the coordinates being edited, and every edit step re-fits the
-regression exactly, with nothing trained inside the editing loop. The closed
+demographic regression exactly, with nothing trained inside the editing loop.
+% 2026-07-25 (Robert's re-read, accuracy repair): "Both stages are evaluated in
+% closed form through the regression's projection (hat) matrix ... every edit step
+% re-fits THE regression" was wrong for stage one and vague about stage two. Only
+% the stage-two demographic regression is the hat-matrix projection that re-fits
+% implicitly at every step (Appendix~\ref{app:derivations} states it correctly);
+% g_0 is fitted ONCE during preprocessing and then frozen, and it is evaluated
+% under no_grad, which is why the gradient sentence says "through $Y$".
+% src: famail_temporal/fairness/g0_power_basis.py (docstring: power basis
+% [1, 1/(D+1), 1/sqrt(D+1), sqrt(D+1)], "Fitted once during preprocessing");
+% famail_temporal/preprocess.py:192-198 (single fit, saved as artifact
+% g0_power_basis); famail_temporal/algorithm/objective.py:39 ("Computes
+% g0(D_clamped) with no_grad (frozen function)") The closed
 form, its exact per-unit attribution, and the $O(N)$ evaluation identity are
 in Appendix~\ref{app:derivations}.
 % src: PAPER/objective-motivation/MOTIVATION.md; PAPER/argument/03_fairness_theory.md
@@ -133,7 +145,7 @@ unit of taxi presence) and the \emph{arrival-service ratio}
 $\mathrm{ASR}_i = A_i / S_i$ (dropoffs per unit). $F_{\mathrm{spatial}}$
 is one minus the mean of their two Gini indices; the closed form is in
 Appendix~\ref{app:derivations}. Being
-demographic-independent, the term acts as a spatial smoothness regularizer
+demographic-independent, the term regularizes toward spatial equality,
 complementing $F_{\mathrm{demo}}$.
 % src (lineage): su2018taxigini (Su, Fang, Xu & Huang, IJGI 7(6):230, 2018)
 % §4.1-4.2 — per-TAZ arrival/departure service rates + a Gini coefficient per
@@ -205,8 +217,8 @@ recorded pickups land in the highest-deficit units.
 
 \textbf{Supply-gradient attribution (lift's selection).} The second mechanism
 asks of every active unit: \emph{how much fairer would the city's service be
-with marginally more taxi presence here, at this hour?} The quantity that
-answers it is the gradient of the objective with respect to supply. We
+with marginally more taxi presence here, at this hour?} That quantity is the
+gradient of the objective with respect to supply. We
 evaluate the objective at hypothetically augmented supply $S + \Delta S$ and
 read $\partial \mathcal{L} / \partial S_i$ by automatic differentiation at
 $\Delta S = 0$: the marginal fairness effect of added presence at each of the
@@ -227,7 +239,7 @@ translated under the full objective.
 % LIFT_ALGORITHM_REFERENCE.md §3 (tail = last min(TAIL_LEN=4, len-2) seeking states + the pickup, states[-1]);
 % §4.2 (the screen only nominates; full screen detail in app:editor)
 
-\textbf{Spending the budget.} Trim retains its selection by demand
+\textbf{Spending the budget.} Trim selects by demand
 deficit attribution; lift fills the remaining budget with positive-score
 nominees
 (on the primary city, $k = 10{,}000$ splits into 2{,}455 trim and 7{,}545 lift
@@ -259,9 +271,15 @@ cells, and not one landed in a disadvantaged cell.
 % src: PAPER/external-metrics/LEVELING_DOWN_MECHANISM.md (2,455/2,455 flow analysis; pre-supply-lift doc) — corroborated at alpha*: PAPER/supply-lift/data/a10/shz_trimonly_a10_external_fairness.json (mean(Y|disadv) 7.0734 -> 7.0734 exactly)
 The pattern is analogous to the classic leveling-down objection to
 equalization \cite{parfit1997}, formalized for machine-learning fairness with
-a prescription to level \emph{up} instead \cite{mittelstadt2024}; data
-augmentation is the one intervention observed to help the disadvantaged group
-rather than pull others down \cite{zietlow2022}. The analogy is inexact in one
+a prescription to level \emph{up} instead \cite{mittelstadt2024}; in a study
+of fair image classifiers, data augmentation was the one strategy that helped
+the disadvantaged group rather than pulling others down \cite{zietlow2022}.
+% 2026-07-25 (Robert's re-read, citation-claim precision): "data augmentation is
+% the one intervention observed to help ..." read as a claim about the whole
+% literature. It is a finding of ONE study, which the refs.bib note records
+% ("adaptive augmentation was the one strategy that helped the disadvantaged
+% group", verified 2026-07-16) — the domain and the attribution are now stated.
+% Robert: worth one look during the citation pass; nothing else in the analogy moved. The analogy is inexact in one
 instructive way: trim \emph{relocates} pickups under conservation rather than
 removing service, so nothing is destroyed; yet the under-served group is
 not helped at all.
@@ -285,9 +303,9 @@ systems \cite{ensign2018,lumisaac2016}), so the same censoring that hides
 inequity from a demand-adjusted metric leaves a demand-only editor nothing to
 move in under-served areas. The one non-perverse lever is the numerator:
 $\partial Y_i / \partial S_i = 1 / \max(D_i, d_0)$ is positive everywhere, and
-$\Delta Y = 2\,\Delta S$ at the demand floor, so raising under-served service
-requires adding taxi \emph{presence}: rerouting real seeking behavior into
-under-served cells.
+$\Delta Y = 2\,\Delta S$ at the demand floor. Raising under-served service
+therefore requires adding taxi \emph{presence} by rerouting real seeking
+behavior into under-served cells.
 % src: LIFT_ALGORITHM_REFERENCE.md §1-2 (dY/dS; oracle gate G0 covered in §4.4 + App. C)
 
 \textbf{Resource-aware editing (the \emph{lift} operation).} Lift changes the
@@ -364,9 +382,9 @@ objective back to the coordinates being edited (Appendix~\ref{app:editor}).
 source trajectories are filtered on (consecutive states move at most one
 cell per axis), enforced by an exact backward-reachability repair
 (Appendix~\ref{app:editor}). Infeasible edits are not applied: lift skips
-them in-loop, and the small fraction of trim edits with no compliant repair
-(about 5\%) are reverted to the originals post hoc under the same rule,
-before computing fairness metric effects (\S\ref{sec:experiments}).
+them in-loop, and the trim edits with no compliant repair are reverted to the
+originals post hoc under the same rule
+(\S\ref{sec:exp-data-level} reports the fraction and when it was applied).
 % src: PAPER/supply-lift/data/a10/shz_a10_metrics.json (n_reverted_infeasible_trim 118/2,455 ≈ 4.8%);
 % PAPER/supply-lift/FINDINGS.md §8 (rule-first disclosure)
 
@@ -386,21 +404,30 @@ full trajectory realism, with the remaining distributional cost disclosed as
 
 \subsection{Edit-Aware Weighting}\label{sec:downstream}
 
-Challenge C5 is why editing alone is necessary but not sufficient. By design,
-the edited slice is roughly a tenth of the corpus, and a vanilla
+Challenge C5 is why editing alone is not sufficient: the edited slice is by
+design roughly a tenth of the corpus, and a vanilla
 behavior-cloning objective that weights every demonstration equally averages
-it away and relearns the original bias; we verify this null empirically
+it away and relearns the original bias. We verify this null empirically
 (\S\ref{sec:experiments}).
 % (derived: 10,000 / 95,297 ≈ 10.5%; src: PAPER/baselines/demographic-oversampling/FINDINGS.md corpus count)
 FATE therefore \emph{upweights} the edited
 demonstrations in the imitation loss: instance reweighing for fairness
-\cite{kamirancalders2012}, a member of the pre-processing family alongside
-dis\-pa\-rate-impact repair \cite{feldman2015}, transplanted to imitation
+\cite{kamirancalders2012}, transplanted to imitation
 learning. Whether the recovery is specific to the \emph{edit}, rather than an
-artifact of oversampling or of selecting fair data, is tested against two
-controls (upweighting a size-matched random subset and upweighting the
+artifact of upweighting any subset or of selecting fair data, is tested against
+two controls (upweighting a size-matched random subset and upweighting the
 corpus's fairest trajectories), with outcomes reported in
-\S\ref{sec:experiments}. The same demonstration bias has been addressed at the
-model level by in-processing regularization \cite{zheng2023}; FATE moves the
-intervention to the demonstrations themselves.
+\S\ref{sec:experiments}.
+% 2026-07-25 (Robert's re-read, prose pass): two related-work asides removed from
+% the method block, neither orphaning a key. (1) "a member of the pre-processing
+% family alongside disparate-impact repair \cite{feldman2015}" — the taxonomy is
+% \S\ref{sec:related}'s opening sentence, and feldman2015 is still cited in
+% Appendix~\ref{app:derivations} and \S\ref{app:related}. (2) "The same
+% demonstration bias has been addressed at the model level by in-processing
+% regularization \cite{zheng2023}; FATE moves the intervention to the
+% demonstrations themselves" — the THIRD statement of that contrast (\S1 paragraph 2
+% and \S\ref{sec:related}'s Zheng sentence, which is longer and sharper); zheng2023
+% is still cited in \S1, \S\ref{sec:related}, \S\ref{sec:exp-baselines} and the
+% appendix. Also "an artifact of oversampling" -> "of upweighting any subset", which
+% is what the random-subset control actually tests (RQ3's own wording).
 % src: PAPER/objective-motivation/MOTIVATION.md (downstream pairing); PAPER/argument/04_evaluation.md §1 (controls)
