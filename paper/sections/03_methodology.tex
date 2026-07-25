@@ -16,9 +16,9 @@ FATE has two stages: a budgeted, constrained edit of the recorded corpus, and
 an edit-aware weighting of the edited demonstrations during imitation. Neither
 is sufficient alone: the edit makes the corpus fairer, and the weighting keeps
 that fairness from being averaged away in training. Figure~\ref{fig:overview}
-sketches the pipeline, whose three coarse steps (attribute, edit, upweight)
-follow the five blocks below; each block answers one challenge of
-\S\ref{sec:overview}, named in its opening sentence.
+sketches the pipeline; its three coarse steps (attribute, edit, upweight)
+are the order the five blocks below follow, and each block answers one
+challenge of \S\ref{sec:overview}, named in its opening sentence.
 % src: restructure/meeting/analysis_C_claims.md C-2 (the two-stage wording,
 % adopted as proposed); MEETING_DIGEST.md decision #6 (leading paragraph).
 % 2026-07-24 (T9, page-budget lever a): the explicit C-map enumeration ("the
@@ -43,9 +43,9 @@ follow the five blocks below; each block answers one challenge of
   % own two edit-glyph labels already carry verbatim; and the closing "at uniform
   % weights it is averaged away", which the figure's terminal contrast box states
   % ("bias reproduced / edits averaged away"). No claim removed.
-  \caption{FATE framework (schematic). (1) Attribution scores every
-  trajectory's contribution to the corpus's collective fairness and selects
-  the $k \ll |\mathcal{T}|$ whose bounded edits would improve it most
+  \caption{FATE framework (schematic). (1) Attribution scores how much a
+  bounded, admissible edit to each trajectory would improve the corpus's
+  collective fairness, and selects the $k \ll |\mathcal{T}|$ best
   (\S\ref{sec:attribution}). (2) The selected trajectories receive bounded
   gradient edits under the fairness objective through the two channels trim
   and lift; every edit stays within $\varepsilon$ cells, is repaired for

@@ -426,3 +426,12 @@ Metadata upgrades for these are already in the 2026-07-16 report diff, ready if 
   §3.5 prose around `zhang2022cgail` gets rewritten.
 - [ ] The two in-flight terminology decisions (leveling-down → analogy-only; F_causal rename)
   will rewrite prose around ⚑-marked entries — re-read those claim attachments after the rewrite.
+
+<!-- Coverage note (2026-07-24 late, restructure review fix #9): the restructure
+     rebuilt §1's cite groups (9 -> 5 groups; five keys re-homed into the PI's new
+     intro paragraphs: zhao2017menshopping, wang2021directional,
+     hastingsblow2025diffaug, lamalfa2026fairppo, zhao2025fairdrlst) and moved
+     related work to render as §5 (file name unchanged). KEY SET UNCHANGED — no
+     row added or removed; 02_overview.tex carries no cites; lint coverage green
+     at d874d8d. The pre-restructure Coverage paragraph above describes the old
+     file layout. -->
