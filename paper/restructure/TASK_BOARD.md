@@ -25,6 +25,9 @@ into T5's first commit.
       unblocked). The two PDFs remain nice-to-have (digests in this hub cover them).
       — STATUS: DONE (PNG)
 - [ ] A1 Robert↔Zhang: confirm who clicks submit Sunday ([57:24] ambiguity) — STATUS: open
+- [x] A5 early figure veto — ⚖ RETIRED by Robert 07-24 late: he reviewed
+      fig2-for-zhang.png ("looks great") and will send Dr. Zhang the DRAFT AND the
+      figure together when the draft is ready, not the figure alone. — STATUS: closed
 
 ## Lane 1 — prose restructure (sequential; one implementer at a time; each task = gates-green commit)
 
@@ -84,17 +87,17 @@ into T5's first commit.
       future-work sentence (plainly unmeasured here). — STATUS: DONE
 - [~] T8 — FOLDED INTO T9 (T4 displaced nothing new into the appendix; what remains
       is a coherence/ref check, which is T9 item 1). — STATUS: merged into T9
-- [ ] T9 Integration pass — full gates; strict page check (`pdftotext -f 9 -l 9` —
-      p9 should open with REFERENCES; if not, apply the meeting's space levers:
-      stacked challenges, SZ/SF dedup, appendix overflow); render QA read of every
-      changed page (the swallowed-sentence class); cross-ref sweep (no ?? in log);
-      CITATION_PRIORITY_CHECKLIST coverage green.
-      ⚖ RULED 07-24 (Robert): fold in the abstract's two-city add — name Shenzhen
-      and San Francisco in the evaluation sentence of 00_abstract.tex (e.g.
-      "…evaluate it on real-world HSTD from Shenzhen and San Francisco."); smallest
-      change that names both cities; re-check the standalone abstract build too.
-      Also verify Fig-1 page placement (T-M1 note) and Fig-1/Fig-2 render QA.
-      — STATUS: todo
+- [x] T9 Integration pass — DONE 07-24 (ea6dd25): appendix 27-referrer check clean;
+      two-city abstract add landed; consistency sweep (perturbed→edit bounded, bare
+      K retired); render QA clean (Fig-1 back on p1); 10 lines recovered. Spill
+      measured honestly at 81 lines → escalated. — STATUS: DONE
+- [x] T10 page-budget cut round — DONE 07-24 (d874d8d, all 4 Robert-authorized
+      levers + Fig-2 spacing): 52/81 lines closed; relocations to App B/C prose-
+      voiced, numbers+src+lint-allow intact. RESIDUAL 29 lines = §6 on p9 (bounds
+      ¶ 22 + future-work 7; outside authorization) — ⚖ ROBERT RULES SATURDAY.
+- [x] T-R final whole-branch review — DONE 07-24: FIX-FIRST; mechanical findings
+      applied at c921518; open items in FINAL_REVIEW_FINDINGS.md (#1 Fig-1 PNG ⚖,
+      #5 T10-diff focused read, #8/#10/#11/#13 ⚖ optional). — STATUS: DONE
 
 ## Lane 2 — figures (parallel with Lane 1 from the start)
 

@@ -6,8 +6,13 @@ era-checked, all 17 E-items + 10 digest decisions implemented, D15/D16 fully
 discharged, protected register intact, no hunk-boundary regressions, zero ??/dangling
 refs, lint silent.
 
-Status legend: ⚖ = needs Robert's ruling · 🔧 = mechanical fix (orchestrator applies)
-· ✅ = applied (fill in as fixes land).
+Status legend: ⚖ = needs Robert's ruling · 🔧 = mechanical fix · ✅ = applied.
+APPLIED at c921518 (2026-07-24 late): #2 #3 #4 #6 #7 #9 #14 ✅ (incl. framework.tex
+op-box + regenerated fig2-for-zhang.png/preview). #5: T10 committed at d874d8d;
+reviewer spot-checked its in-flight diff CLEAN; one focused claim-read of the
+committed diff remains recommended. STILL OPEN: #1 ⚖ (Fig-1 PNG ruling +
+\Description repair after it), #8 ⚖ (her ¶3 'global' wording — PI text, Robert's
+call), #10 #11 #13 ⚖ optional, #12 note-for-PI.
 
 ## Blockers
 
