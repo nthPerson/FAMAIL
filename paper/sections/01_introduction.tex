@@ -187,29 +187,20 @@ learned policies. Our contributions are summarized as follows:
 \item We formulate fairness mitigation in HSTD as a budgeted
 local-to-collective problem: disparity emerges from the aggregate effects of
 many sequential decisions, while only a small subset is edited by design.
-% 2026-07-25 (Robert, read-aloud round 1): "while only a small subset of
-% individual trajectories CAN BE MODIFIED" was wrong — nothing prevents editing
-% any trajectory, and the editor can in fact be applied to any trajectory
-% attribution selects. The budget is a deliberate constraint (C1: real
-% demonstrations are expensive and irreplaceable), not a capability limit, so the
-% claim now states the choice. Robert picked this phrasing from four; it also
-% saves 2 words, which recovers a rendered line in the contributions list.
-This formulation connects a bounded edit budget
-on local demonstrations to corpus-level fairness.
-\item We develop FATE, which attributes collective disparity to individual
-trajectories and distinguishes edits that change a measured allocation
-statistic from those that alter the underlying resource-provision process. We
-characterize why outcome-side editing can reduce disparity without
-improving the resources the disadvantaged group receives, and introduce a
-differentiable resource-aware intervention to address this limitation.
-\item We instantiate FATE for taxi mobility and evaluate it on real-world HSTD
-from Shenzhen and San Francisco. The results show consistent reductions in
-demographic service disparity, increased taxi presence in under-served areas,
-and transfer of metric-level fairness improvements to downstream
-imitation-learned policies under edit-aware weighting, with random-subset and
-most-fair controls isolating the edit. We make our code and
-dataset available to the research community via an anonymous
-link.\footnote{\url{https://anonymous.4open.science/r/FATE-review}.
+This formulation connects a bounded edit budget on local demonstrations to 
+corpus-level fairness.
+\item We develop FATE, which attributes collective disparity to individual 
+trajectories and edits them through two channels. We show why outcome-side 
+editing alone can reduce measured disparity without improving the 
+disadvantaged group's service, and introduce a differentiable resource-aware 
+channel that adds it.
+\item We instantiate FATE for taxi mobility and evaluate it on real-world HSTD 
+from Shenzhen and San Francisco. Editing consistently reduces demographic 
+service disparity on measures the objective never optimizes, and increases 
+taxi presence in under-served areas. Under edit-aware weighting those 
+improvements reach downstream imitation-learned policies at the metric level, 
+with random-subset and most-fair controls isolating the edit. We release our 
+code and dataset via an anonymous link.\footnote{\url{https://anonymous.4open.science/r/FATE-review}
 % TODO(Robert, before submission): create the anonymous repository and
 % replace this placeholder URL; an empty repository at submission is
 % acceptable per the PI (Meeting 44). Q4 ruling: the CODE + DATASET wording is
