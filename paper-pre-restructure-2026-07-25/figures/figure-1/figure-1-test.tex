@@ -1,0 +1,41 @@
+% Standalone test wrapper for the Figure-1 teaser (fig:teaser). Compile OUTSIDE
+% paper/ (never against main.tex):
+%   latexmk -pdf -outdir=<scratch> figure-1-test.tex
+% Uses acmart so fonts, \columnwidth, and caption styling are manuscript-true.
+% The caption here is a working copy; the manuscript caption lives in
+% sections/01_introduction.tex.
+\documentclass[sigconf,review,anonymous]{acmart}
+\settopmatter{printacmref=false}
+\setcopyright{none}
+\microtypesetup{expansion=false} % same local-font shim as main.tex
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta}
+% figure-1.tex resolves its corpus images via \figonedir; from this
+% directory the images sit alongside, so the prefix is empty
+\newcommand{\figonedir}{}
+\begin{document}
+\title{Teaser test harness --- not the manuscript}
+\maketitle
+
+\noindent Column width: \the\columnwidth. The figure below is at natural
+size; overfull warnings in the log mean the tikzpicture exceeds
+\verb|\columnwidth|.
+
+\begin{figure}[h]
+  \centering
+  \input{figure-1}
+  \caption{Why FATE edits trajectory data: two corpora, two futures.
+  A real fleet's service demonstrates bias: on Shenzhen the advantaged
+  district receives $3.0\times$ the taxi service per unit demand.
+  The recorded trajectories are human-generated and therefore valuable
+  --- filtering them would discard useful expertise, so FATE performs
+  bounded edits on an attributed slice of the corpus containing the
+  most-biased demonstrations (the \emph{edited corpus}, right).
+  A policy imitating the raw corpus learns the service gap
+  and sends supply to over-served areas; trained
+  on the upweighted edited demonstrations, the fairness survives training
+  and results in the model learning a fairer policy. The $+$ marks flag
+  what the edit changed. Figure~2 shows how the editor works.}
+\end{figure}
+
+\end{document}

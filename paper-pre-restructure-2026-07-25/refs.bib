@@ -1,0 +1,469 @@
+% FAMAIL manuscript bibliography.
+% Source of truth: PAPER/objective-motivation/REFERENCES.md (metadata verified
+% 2026-07-08 against arXiv/DOI/ACM DL/IEEE Xplore/DBLP/Crossref).
+% NOTE: Robert's own human citation pass (Meeting-42 T3) is still pending — these
+% entries are machine-verified only.
+% NOTE: publisher/address fields are intentionally absent on conference entries —
+% REFERENCES.md (the source of truth) does not carry them; ACM-Reference-Format
+% emits "empty publisher/address" warnings for these. Fill during the T3 human pass.
+
+%% ---------- Fairness metrics & definitions ----------
+
+@inproceedings{corbettdavies2017,
+  author    = {Corbett-Davies, Sam and Pierson, Emma and Feller, Avi and Goel, Sharad and Huq, Aziz},
+  title     = {Algorithmic Decision Making and the Cost of Fairness},
+  booktitle = {Proceedings of the 23rd ACM SIGKDD International Conference on Knowledge Discovery and Data Mining},
+  year      = {2017},
+  pages     = {797--806}
+} % conditional statistical parity FORMALIZED here (not originated) — building on Kamiran 2013 / Dwork 2012
+
+@inproceedings{feldman2015,
+  author    = {Feldman, Michael and Friedler, Sorelle A. and Moeller, John and Scheidegger, Carlos and Venkatasubramanian, Suresh},
+  title     = {Certifying and Removing Disparate Impact},
+  booktitle = {Proceedings of the 21st ACM SIGKDD International Conference on Knowledge Discovery and Data Mining},
+  year      = {2015},
+  pages     = {259--268}
+} % links disparate impact to the balanced-error-rate predictability of the protected attribute
+
+@article{kamirancalders2012,
+  author  = {Kamiran, Faisal and Calders, Toon},
+  title   = {Data Preprocessing Techniques for Classification without Discrimination},
+  journal = {Knowledge and Information Systems},
+  volume  = {33},
+  number  = {1},
+  pages   = {1--33},
+  year    = {2012}
+} % suppression, massaging, and reweighing
+
+@inproceedings{vermarubin2018,
+  author    = {Verma, Sahil and Rubin, Julia},
+  title     = {Fairness Definitions Explained},
+  booktitle = {Proceedings of the International Workshop on Software Fairness (FairWare@ICSE)},
+  year      = {2018},
+  pages     = {1--7}
+}
+
+@misc{barocas2023,
+  author       = {Barocas, Solon and Hardt, Moritz and Narayanan, Arvind},
+  title        = {Fairness and Machine Learning: Limitations and Opportunities},
+  howpublished = {MIT Press; free web edition at fairmlbook.org},
+  year         = {2023}
+} % cite the edition used — this key pins the MIT Press (2023) edition; the free web edition (fairmlbook.org) is 2019
+
+@article{frischwaugh1933,
+  author  = {Frisch, Ragnar and Waugh, Frederick V.},
+  title   = {Partial Time Regressions as Compared with Individual Trends},
+  journal = {Econometrica},
+  volume  = {1},
+  number  = {4},
+  pages   = {387--401},
+  year    = {1933},
+  doi     = {10.2307/1907330}
+} % the FWL partial-regression identity (with Lovell 1963)
+
+@article{lovell1963,
+  author  = {Lovell, Michael C.},
+  title   = {Seasonal Adjustment of Economic Time Series and Multiple Regression Analysis},
+  journal = {Journal of the American Statistical Association},
+  volume  = {58},
+  number  = {304},
+  pages   = {993--1010},
+  year    = {1963},
+  doi     = {10.1080/01621459.1963.10480682}
+}
+
+@article{hoaglinwelsch1978,
+  author  = {Hoaglin, David C. and Welsch, Roy E.},
+  title   = {The Hat Matrix in Regression and {ANOVA}},
+  journal = {The American Statistician},
+  volume  = {32},
+  number  = {1},
+  pages   = {17--22},
+  year    = {1978},
+  doi     = {10.1080/00031305.1978.10479237}
+} % canonical hat-matrix reference (verified 2026-07-11)
+
+%% ---------- Transportation & spatial equity ----------
+
+@article{horchergraham2021,
+  author  = {H{\"o}rcher, Daniel and Graham, Daniel J.},
+  title   = {The {Gini} index of demand imbalances in public transport},
+  journal = {Transportation},
+  volume  = {48},
+  pages   = {2521--2544},
+  year    = {2021}
+} % no issue number in REFERENCES.md (volume-paginated citation)
+
+@article{karner2024,
+  author  = {Karner, Alex and Pereira, Rafael H. M. and Farber, Steven},
+  title   = {Advances and pitfalls in measuring transportation equity},
+  journal = {Transportation},
+  volume  = {52},
+  pages   = {1399--1427},
+  year    = {2025},
+  doi     = {10.1007/s11116-023-10460-7}
+} % vol 52(4) pp 1399-1427 = Aug 2025 print issue; year must match the vol/pages cited (audit 2026-07-12)
+
+@article{su2018taxigini,
+  author  = {Su, Rongxiang and Fang, Zhixiang and Xu, Hong and Huang, Lian},
+  title   = {Uncovering Spatial Inequality in Taxi Services in the Context of a Subsidy War among E-Hailing Apps},
+  journal = {ISPRS International Journal of Geo-Information},
+  volume  = {7},
+  number  = {6},
+  pages   = {230},
+  year    = {2018},
+  doi     = {10.3390/ijgi7060230}
+} % SOURCE of the ASR/DSR service-rate pair + Gini-per-rate taxi-service inequality measurement (F_spatial lineage; their DSR = DEPARTURE service rate). Metadata read from the author PDF Robert supplied 2026-07-24 (MDPI, article no. 230); Shenzhen taxi trajectories, same primary city as ours.
+
+@article{atkinson1970,
+  author  = {Atkinson, Anthony B.},
+  title   = {On the Measurement of Inequality},
+  journal = {Journal of Economic Theory},
+  volume  = {2},
+  number  = {3},
+  pages   = {244--263},
+  year    = {1970}
+} % the Atkinson index (tunable inequality aversion)
+
+@book{theil1967,
+  author    = {Theil, Henri},
+  title     = {Economics and Information Theory},
+  publisher = {North-Holland},
+  address   = {Amsterdam},
+  year      = {1967}
+} % the Theil index (between/within-group decomposable)
+
+@article{demaio2007,
+  author  = {De Maio, Fernando G.},
+  title   = {Income inequality measures},
+  journal = {Journal of Epidemiology \& Community Health},
+  volume  = {61},
+  number  = {10},
+  pages   = {849--852},
+  year    = {2007}
+} % when Gini vs. Theil vs. Atkinson is preferred
+
+@article{zheng2023,
+  author  = {Zheng, Yunhan and Wang, Qingyi and Zhuang, Dingyi and Wang, Shenhao and Zhao, Jinhua},
+  title   = {Fairness-Enhancing Deep Learning for Ride-Hailing Demand Prediction},
+  journal = {IEEE Open Journal of Intelligent Transportation Systems},
+  volume  = {4},
+  pages   = {551--569},
+  year    = {2023},
+  doi     = {10.1109/OJITS.2023.3297517}
+} % cite the absolute MPE-gap reduction (0.361 -> 0.084), NOT the percentage headlines circulating in secondary summaries — they do not appear in the source
+
+%% ---------- Imitation learning, trajectory-user linking & fidelity ----------
+
+@inproceedings{hoermon2016,
+  author    = {Ho, Jonathan and Ermon, Stefano},
+  title     = {Generative Adversarial Imitation Learning},
+  booktitle = {Advances in Neural Information Processing Systems 29},
+  year      = {2016},
+  pages     = {4565--4573}
+} % arXiv:1606.03476
+
+@inproceedings{zhang2019cgail,
+  author    = {Zhang, Xin and Li, Yanhua and Zhou, Xun and Luo, Jun},
+  title     = {Unveiling Taxi Drivers' Strategies via {cGAIL}: Conditional Generative Adversarial Imitation Learning},
+  booktitle = {Proceedings of the 2019 IEEE International Conference on Data Mining (ICDM)},
+  year      = {2019},
+  pages     = {1480--1485}
+} % cGAIL conference version; journal version = zhang2022cgail
+
+@article{zhang2022cgail,
+  author  = {Zhang, Xin and Li, Yanhua and Zhou, Xun and Luo, Jun},
+  title   = {{cGAIL}: Conditional Generative Adversarial Imitation Learning --- An Application in Taxi Drivers' Strategy Learning},
+  journal = {IEEE Transactions on Big Data},
+  volume  = {8},
+  number  = {5},
+  pages   = {1288--1300},
+  year    = {2022},
+  doi     = {10.1109/TBDATA.2020.3039810}
+} % venue is IEEE Trans. Big Data, NOT TKDE (citation-audit correction 2026-07-08)
+
+@inproceedings{pan2020xgail,
+  author    = {Pan, Menghai and Huang, Weixiao and Li, Yanhua and Zhou, Xun and Luo, Jun},
+  title     = {{xGAIL}: Explainable Generative Adversarial Imitation Learning for Explainable Human Decision Analysis},
+  booktitle = {Proceedings of the 26th ACM SIGKDD International Conference on Knowledge Discovery and Data Mining},
+  year      = {2020},
+  pages     = {1334--1343}
+}
+
+@inproceedings{ren2020stsiamese,
+  author    = {Ren, Huimin and Pan, Menghai and Li, Yanhua and Zhou, Xun and Luo, Jun},
+  title     = {{ST-SiameseNet}: Spatio-Temporal Siamese Networks for Human Mobility Signature Identification},
+  booktitle = {Proceedings of the 26th ACM SIGKDD International Conference on Knowledge Discovery and Data Mining},
+  year      = {2020},
+  pages     = {1306--1315}
+} % the HuMID driver-identity discriminator the fidelity model follows
+
+@inproceedings{gao2017tuler,
+  author    = {Gao, Qiang and Zhou, Fan and Zhang, Kunpeng and Trajcevski, Goce and Luo, Xucheng and Zhang, Fengli},
+  title     = {Identifying Human Mobility via Trajectory Embeddings},
+  booktitle = {Proceedings of the 26th International Joint Conference on Artificial Intelligence (IJCAI)},
+  year      = {2017},
+  pages     = {1689--1695}
+} % TULER
+
+@inproceedings{zhou2018tulvae,
+  author    = {Zhou, Fan and Gao, Qiang and Trajcevski, Goce and Zhang, Kunpeng and Zhong, Ting and Zhang, Fengli},
+  title     = {Trajectory-User Linking via Variational {AutoEncoder}},
+  booktitle = {Proceedings of the 27th International Joint Conference on Artificial Intelligence (IJCAI)},
+  year      = {2018},
+  pages     = {3212--3218}
+} % TULVAE
+
+@inproceedings{miao2020deeptul,
+  author    = {Miao, Congcong and Wang, Jilong and Yu, Heng and Zhang, Weichen and Qi, Yinyao},
+  title     = {Trajectory-User Linking with Attentive Recurrent Network},
+  booktitle = {Proceedings of the 19th International Conference on Autonomous Agents and MultiAgent Systems (AAMAS)},
+  year      = {2020},
+  pages     = {878--886}
+} % DeepTUL
+
+@inproceedings{feng2020simulate,
+  author    = {Feng, Jie and Yang, Zeyu and Xu, Fengli and Yu, Haisu and Wang, Mudan and Li, Yong},
+  title     = {Learning to Simulate Human Mobility},
+  booktitle = {Proceedings of the 26th ACM SIGKDD International Conference on Knowledge Discovery and Data Mining},
+  year      = {2020},
+  pages     = {3426--3433}
+} % JS-divergence over mobility statistics as the realism check
+
+%% ---------- Adversarial perturbation, algorithmic recourse & discretization ----------
+
+@inproceedings{goodfellow2015fgsm,
+  author    = {Goodfellow, Ian J. and Shlens, Jonathon and Szegedy, Christian},
+  title     = {Explaining and Harnessing Adversarial Examples},
+  booktitle = {International Conference on Learning Representations (ICLR)},
+  year      = {2015}
+} % FGSM; arXiv:1412.6572; ICLR proceedings have no page numbers
+
+@inproceedings{kurakin2017ifgsm,
+  author    = {Kurakin, Alexey and Goodfellow, Ian and Bengio, Samy},
+  title     = {Adversarial Examples in the Physical World},
+  booktitle = {International Conference on Learning Representations (ICLR), Workshop Track},
+  year      = {2017}
+} % iterative / basic-iterative FGSM; arXiv:1607.02533; ICLR workshop — no page numbers
+
+@inproceedings{madry2018pgd,
+  author    = {Madry, Aleksander and Makelov, Aleksandar and Schmidt, Ludwig and Tsipras, Dimitris and Vladu, Adrian},
+  title     = {Towards Deep Learning Models Resistant to Adversarial Attacks},
+  booktitle = {International Conference on Learning Representations (ICLR)},
+  year      = {2018}
+} % PGD / random-start within the epsilon ball; DBLP-verified 2026-07-22 (ICLR 2018 poster); arXiv:1706.06083; ICLR proceedings have no page numbers
+
+@inproceedings{hu2023stifgsm,
+  author    = {Hu, Mingzhi and Zhang, Xin and Li, Yanhua and Zhou, Xun and Luo, Jun},
+  title     = {{ST-iFGSM}: Enhancing Robustness of Human Mobility Signature Identification Model via Spatial-Temporal Iterative {FGSM}},
+  booktitle = {Proceedings of the 29th ACM SIGKDD Conference on Knowledge Discovery and Data Mining},
+  year      = {2023},
+  pages     = {764--774},
+  doi       = {10.1145/3580305.3599513}
+} % the spatio-temporal iterative-FGSM the editor adapts
+
+@inproceedings{ustun2019recourse,
+  author    = {Ustun, Berk and Spangher, Alexander and Liu, Yang},
+  title     = {Actionable Recourse in Linear Classification},
+  booktitle = {Proceedings of the Conference on Fairness, Accountability, and Transparency (FAT*)},
+  year      = {2019},
+  pages     = {10--19}
+} % constructive reuse of counterfactual-perturbation tooling
+
+@article{wachter2018counterfactual,
+  author  = {Wachter, Sandra and Mittelstadt, Brent and Russell, Chris},
+  title   = {Counterfactual Explanations without Opening the Black Box: Automated Decisions and the {GDPR}},
+  journal = {Harvard Journal of Law \& Technology},
+  volume  = {31},
+  number  = {2},
+  pages   = {841--887},
+  year    = {2018}
+} % SSRN preprint is 2017; this entry cites the 2018 journal version
+
+@inproceedings{karimi2020recourse,
+  author    = {Karimi, Amir-Hossein and von K{\"u}gelgen, Julius and Sch{\"o}lkopf, Bernhard and Valera, Isabel},
+  title     = {Algorithmic Recourse under Imperfect Causal Knowledge: A Probabilistic Approach},
+  booktitle = {Advances in Neural Information Processing Systems 33},
+  pages     = {265--277},
+  year      = {2020}
+} % NeurIPS 2020 official proceedings + BibTeX (proceedings.neurips.cc), verified 2026-07-16
+
+@inproceedings{karimi2021recourse,
+  author    = {Karimi, Amir-Hossein and Sch{\"o}lkopf, Bernhard and Valera, Isabel},
+  title     = {Algorithmic Recourse: from Counterfactual Explanations to Interventions},
+  booktitle = {Proceedings of the 2021 ACM Conference on Fairness, Accountability, and Transparency (FAccT)},
+  pages     = {353--362},
+  year      = {2021}
+} % ACM-deposited DOI metadata, verified 2026-07-16
+
+@inproceedings{jang2017gumbel,
+  author    = {Jang, Eric and Gu, Shixiang and Poole, Ben},
+  title     = {Categorical Reparameterization with {Gumbel-Softmax}},
+  booktitle = {International Conference on Learning Representations (ICLR)},
+  year      = {2017}
+} % arXiv:1611.01144; ICLR proceedings have no page numbers
+
+@inproceedings{maddison2017concrete,
+  author    = {Maddison, Chris J. and Mnih, Andriy and Teh, Yee Whye},
+  title     = {The Concrete Distribution: A Continuous Relaxation of Discrete Random Variables},
+  booktitle = {International Conference on Learning Representations (ICLR)},
+  year      = {2017}
+} % arXiv:1611.00712; ICLR proceedings have no page numbers
+
+@misc{bengio2013ste,
+  author       = {Bengio, Yoshua and L{\'e}onard, Nicholas and Courville, Aaron},
+  title        = {Estimating or Propagating Gradients Through Stochastic Neurons for Conditional Computation},
+  howpublished = {arXiv:1308.3432},
+  year         = {2013}
+} % straight-through estimator (arXiv-only)
+
+%% ---------- Egalitarian ethics & leveling-down ----------
+
+@article{parfit1997,
+  author  = {Parfit, Derek},
+  title   = {Equality and Priority},
+  journal = {Ratio},
+  volume  = {10},
+  number  = {3},
+  pages   = {202--221},
+  year    = {1997}
+} % the leveling-down objection; the 1991 Lindley Lecture version is titled "Equality or Priority?" — title must match the cited edition (this entry cites the 1997 Ratio article)
+
+@book{temkin1993,
+  author    = {Temkin, Larry S.},
+  title     = {Inequality},
+  publisher = {Oxford University Press},
+  year      = {1993}
+} % publisher city not listed in REFERENCES.md — leave for the T3 human citation pass
+
+@incollection{temkin2000,
+  author    = {Temkin, Larry S.},
+  title     = {Equality, Priority, and the Levelling Down Objection},
+  booktitle = {The Ideal of Equality},
+  publisher = {Palgrave Macmillan},
+  editor    = {Clayton, Matthew and Williams, Andrew},
+  pages     = {126--161},
+  year      = {2000}
+} % chapter pages rest on chapter PDF scans + PhilPapers, Springer hosts no chapter record; Palgrave softcover copyright 2002 / published 26 May 2000, original 2000 hardcover was Macmillan Press — year 2000 retained as defensible
+
+@article{mittelstadt2024,
+  author  = {Mittelstadt, Brent and Wachter, Sandra and Russell, Chris},
+  title   = {The Unfairness of Fair Machine Learning: Leveling Down and Strict Egalitarianism by Default},
+  journal = {Michigan Technology Law Review},
+  volume  = {30},
+  number  = {1},
+  year    = {2024},
+  doi     = {10.36645/mtlr.30.1.unfairness}
+} % year matches the cited version: journal 2024 / arXiv:2302.02404 preprint 2023; title matches the published MTLR edition (repository.law.umich.edu/mtlr/vol30/iss1/3/, US spelling "Leveling"); publisher's recommended citation lists no page numbers — do not add
+
+@inproceedings{zietlow2022,
+  author    = {Zietlow, Dominik and Lohaus, Michael and Balakrishnan, Guha and Kleindessner, Matth{\"a}us and Locatello, Francesco and Sch{\"o}lkopf, Bernhard and Russell, Chris},
+  title     = {Leveling Down in Computer Vision: {Pareto} Inefficiencies in Fair Deep Classifiers},
+  booktitle = {Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},
+  year      = {2022},
+  pages     = {10410--10421}
+} % arXiv:2203.04913; adaptive augmentation was the one strategy that helped the disadvantaged group; pages per CVF Open Access (publisher of record), verified 2026-07-16
+
+@inproceedings{pinzon2022,
+  author    = {Pinz{\'o}n, Carlos and Palamidessi, Catuscia and Piantanida, Pablo and Valencia, Frank},
+  title     = {On the Impossibility of Non-trivial Accuracy in Presence of Fairness Constraints},
+  booktitle = {Proceedings of the AAAI Conference on Artificial Intelligence},
+  volume    = {36},
+  pages     = {7993--8000},
+  year      = {2022},
+  doi       = {10.1609/aaai.v36i7.20770}
+} % AAAI 36(7):7993–8000 — issue number 7 omitted as a field (ACM-Reference-Format cannot render both volume and number on inproceedings entries)
+% leveling-down can be constraint-forced — use as ANALOGY only; FAMAIL's own oracle bound is the load-bearing formal claim
+
+%% ---------- Feedback loops & demand endogeneity ----------
+
+@inproceedings{ensign2018,
+  author    = {Ensign, Danielle and Friedler, Sorelle A. and Neville, Scott and Scheidegger, Carlos and Venkatasubramanian, Suresh},
+  title     = {Runaway Feedback Loops in Predictive Policing},
+  booktitle = {Proceedings of the 1st Conference on Fairness, Accountability and Transparency (FAT*)},
+  series    = {Proceedings of Machine Learning Research},
+  volume    = {81},
+  pages     = {160--171},
+  year      = {2018}
+} % verified 2026-07-08; recorded discovered-incident data understates true rates where enforcement was historically concentrated
+
+@article{lumisaac2016,
+  author  = {Lum, Kristian and Isaac, William},
+  title   = {To Predict and Serve?},
+  journal = {Significance},
+  volume  = {13},
+  number  = {5},
+  pages   = {14--19},
+  year    = {2016},
+  doi     = {10.1111/j.1740-9713.2016.00960.x}
+} % verified 2026-07-08; biased historical records as a suppressed/censored signal of true demand
+
+@inproceedings{xu2018fairgan,
+  author    = {Xu, Depeng and Yuan, Shuhan and Zhang, Lu and Wu, Xintao},
+  title     = {{FairGAN}: Fairness-aware Generative Adversarial Networks},
+  booktitle = {2018 IEEE International Conference on Big Data (Big Data)},
+  year      = {2018},
+  pages     = {570--575},
+  doi       = {10.1109/BigData.2018.8622525},
+  publisher = {IEEE}
+} % DBLP + IEEE DOI metadata verified 2026-07-21 (pages/DOI added); claim-fit vs abstract: fair synthetic data generation via GAN — matches §1 "synthesizing fair data"
+
+@inproceedings{vanbreugel2021decaf,
+  author    = {van Breugel, Boris and Kyono, Trent and Berrevoets, Jeroen and van der Schaar, Mihaela},
+  title     = {{DECAF}: Generating Fair Synthetic Data Using Causally-Aware Generative Networks},
+  booktitle = {Advances in Neural Information Processing Systems},
+  volume    = {34},
+  year      = {2021},
+  pages     = {22221--22233}
+} % proceedings.neurips.cc + DBLP verified 2026-07-21 (pages added); claim-fit vs abstract: fair synthetic tabular data via causal-DAG GAN, inference-time edge removal — matches §1 "synthesizing fair data"
+
+%% ---------- Meeting-44 additions (2026-07-24) — intro ≥2-per-class + recency mandate ----------
+%% All five independently re-verified by controller against primary sources on top of the
+%% hunter subagent's pass; evidence: docs/presentations/meeting_44_update/debrief/analysis/CITATION_CANDIDATES.md
+
+@inproceedings{lamalfa2026fairppo,
+  author    = {La Malfa, Gabriele and Zhang, Jie M. and Luck, Michael and Black, Elizabeth},
+  title     = {Fairness Aware Reinforcement Learning via Proximal Policy Optimization},
+  booktitle = {Proceedings of the AAAI Conference on Artificial Intelligence},
+  year      = {2026},
+  pages     = {22725--22733},
+  doi       = {10.1609/aaai.v40i27.39434}
+} % Fair-PPO: fairness penalty (demographic-parity / counterfactual / conditional-parity variants) inside PPO's objective
+
+@inproceedings{zhao2025fairdrlst,
+  author    = {Zhao, Sichen and Shao, Wei and Chan, Jeffrey and Xu, Ziqi and Salim, Flora},
+  title     = {{FairDRL-ST}: Disentangled Representation Learning for Fair Spatio-Temporal Mobility Prediction},
+  booktitle = {Proceedings of the 33rd ACM International Conference on Advances in Geographic Information Systems (SIGSPATIAL)},
+  year      = {2025},
+  pages     = {103--106},
+  doi       = {10.1145/3748636.3762713}
+} % adversarial/disentangled fair mobility-demand prediction — tightest zheng2023 companion
+
+@article{hastingsblow2025diffaug,
+  author  = {Hastings Blow, Christina and Qian, Lijun and Gibson, Camille and Obiomon, Pamela and Dong, Xishuang},
+  title   = {Data Augmentation via Diffusion Model to Enhance {AI} Fairness},
+  journal = {Frontiers in Artificial Intelligence},
+  volume  = {8},
+  pages   = {1530397},
+  year    = {2025},
+  doi     = {10.3389/frai.2025.1530397}
+} % Tab-DDPM synthetic samples improve downstream classification fairness (live-fetched venue page)
+
+@inproceedings{zhao2017menshopping,
+  author    = {Zhao, Jieyu and Wang, Tianlu and Yatskar, Mark and Ordonez, Vicente and Chang, Kai-Wei},
+  title     = {Men Also Like Shopping: Reducing Gender Bias Amplification using Corpus-level Constraints},
+  booktitle = {Proceedings of the 2017 Conference on Empirical Methods in Natural Language Processing},
+  year      = {2017},
+  pages     = {2979--2989},
+  doi       = {10.18653/v1/D17-1323}
+} % canonical bias-AMPLIFICATION evidence — supervised learning; §1 cites it with explicit supervised scope
+
+@inproceedings{wang2021directional,
+  author    = {Wang, Angelina and Russakovsky, Olga},
+  title     = {Directional Bias Amplification},
+  booktitle = {Proceedings of the 38th International Conference on Machine Learning},
+  series    = {Proceedings of Machine Learning Research},
+  volume    = {139},
+  pages     = {10882--10893},
+  year      = {2021}
+} % decoupled bias-amplification metric; supervised scope (pairs with zhao2017menshopping)

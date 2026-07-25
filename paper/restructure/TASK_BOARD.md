@@ -13,10 +13,14 @@ into T5's first commit.
 
 ## Lane 0 — gate decisions (Robert; everything else keys off these)
 
-- [ ] Q1 workspace mechanics (archive dir / branch / both) — STATUS: asked 07-25
-- [ ] Q2 challenge set (five 1:1 vs three-merged; ADJ-3 mapping) — STATUS: asked 07-25
-- [ ] Q3 Fig-2 layout (Option A hybrid two-stage vs Option B three-band) — STATUS: asked 07-25
-- [ ] Q4 anonymous-link sentence scope (code-only vs code+data) — STATUS: asked 07-25
+- [x] Q1 workspace — RULED 07-25: archive dir + main. Archive created:
+      `paper-pre-restructure-2026-07-25/` (+ README_ARCHIVE.md) — STATUS: DONE
+- [x] Q2 challenge set — RULED 07-25: FIVE, 1:1 per ADJ-3 mapping — STATUS: DONE
+- [x] Q3 Fig-2 layout — RULED 07-25: Robert's three-phase design (Attribute w/ three
+      colored trajectory groups / Trim+Lift / Upweight); spec updated — STATUS: DONE
+- [x] Q4 anon-link scope — RULED 07-25: CODE + DATA wording (her full claim); the
+      Sunday anonymity pass is now load-bearing; dataset (or pointer) must be in the
+      anon repo by submission — STATUS: DONE
 - [ ] A0 Robert drops source assets into `paper/restructure/zhang/`:
       `Zhang_restructuring_email.pdf`, `Zhang_paper_revision.pdf`, `teasing.png`
       (the teaser PNG is REQUIRED for T-F2; the PDFs are nice-to-have since digests
@@ -37,7 +41,7 @@ into T5's first commit.
       fairness contribution leads, C-refs point to §2 labels, C D15 "enforced by" →
       constraint wording); repair her broken cites ([35?] → zhang2019cgail+zhang2022cgail
       or +feng2020, implementer judges context; [?] anon link → existing footnote,
-      scope per Q4); decide fate of the 3.0× hook sentence (keep if it fits her flow —
+      CODE + DATA wording per Q4 ruling); decide fate of the 3.0× hook sentence (keep if it fits her flow —
       it is accurate and sourced); Fig-1 swap per T-F2. New cites → checklist rows.
       — STATUS: todo (after T3 lands labels)
 - [ ] T3 NEW `02_overview.tex` — move current §3.1 content here (label `sec:overview`;
@@ -88,11 +92,11 @@ into T5's first commit.
 
 ## Lane 2 — figures (parallel with Lane 1 from the start)
 
-- [ ] T-F1 Fig-2 framework diagram per `figures/FIG2_FRAMEWORK_SPEC.md` (layout per
-      Q3): standalone TikZ + test harness in `paper/figures/figure-2/`; integrate as
-      `fig:overview`; retired 3-panel source stays in the dir, leaves main.tex.
-      DELIVERABLE ALSO: standalone PDF for Robert to email Zhang EARLY (meeting A5
-      cheap-veto). — STATUS: todo (Q3 gates layout; drafting can start on Option A)
+- [ ] T-F1 Fig-2 framework diagram per `figures/FIG2_FRAMEWORK_SPEC.md` ADOPTED
+      LAYOUT (Robert's three-phase design, ruled 07-25): standalone TikZ + test
+      harness in `paper/figures/figure-2/`; integrate as `fig:overview`; retired
+      3-panel source stays in the dir, leaves main.tex. DELIVERABLE ALSO: standalone
+      PDF for Robert to email Zhang EARLY (meeting A5 cheap-veto). — STATUS: ready
 - [ ] T-F2 Fig-1 swap per `figures/FIG1_TEASER_SPEC.md` Phase 1 (needs A0 PNG):
       \includegraphics + her caption + new \Description; old TikZ teaser retired in
       place. — STATUS: blocked(A0)
@@ -116,7 +120,8 @@ into T5's first commit.
 
 - [ ] 9-row P0 citation pass in CITATION_PRIORITY_CHECKLIST.md (+ any rows added by
       T1/T2) — human ticks only
-- [ ] Anonymous repo live + §1 footnote URL swap (scope per Q4)
+- [ ] Anonymous repo live + §1 footnote URL swap — Q4 ruling: repo must hold CODE and
+      DATASET (or a pointer) by Sunday; the PII/anonymity pass gates the data half
 - [ ] CCS concept_ids regenerated at dl.acm.org/ccs (main.tex TODO comment)
 - [ ] Sunday PII/data-leak pass before submission
 

@@ -94,7 +94,8 @@ email's own block set:
     fidelity-constrained editing (where the demoted trade-off now lives).
   - C-training (old C5): sparse edits must survive training → block: edit-aware
     weighting.
-  ⚖ PENDING — Robert decides the final count/wording.
+  ⚖ RULED (2026-07-25): FIVE challenges, this mapping. Final wording drafted in T3,
+  Robert adjusts in review.
   Note: her revision PDF's intro has three italicized challenges — the INTRO PROSE can
   gesture at them without count commitment; the labeled list lives in the Overview.
 
@@ -124,12 +125,23 @@ abstract/intro/Fig-1 + this meeting.
 
 ## 4. Open items that survived to the Robert-question round
 
-1. Workspace mechanics (archive dir vs branch) — his standing pattern is an archive
-   copy. ⚖ PENDING.
-2. Challenge count/wording (ADJ-3). ⚖ PENDING.
-3. Fig-2 layout choice (spec offers the hybrid two-stage and a three-band variant).
-   ⚖ PENDING.
-4. Anonymous-link sentence scope (code-only vs code+data). ⚖ PENDING.
+1. Workspace mechanics — ⚖ RULED (2026-07-25): archive dir + main, his M44 pattern.
+   Archive created at `paper-pre-restructure-2026-07-25/` (frozen at bf64eee +
+   his pending 04 tweak) before any restructure commit.
+2. Challenge count/wording (ADJ-3) — ⚖ RULED: FIVE, 1:1 mapped as listed above.
+3. Fig-2 layout — ⚖ RULED: Robert's own THREE-PHASE design supersedes both spec
+   options: (1) Attribute (trajectories scored by contribution to global fairness;
+   k ≪ N; three colored trajectory groups ≈ selected/low-impact/not-selected, names
+   flexible), (2) Trim+Lift (one editing phase: gradient ascent on the objective),
+   (3) Upweight (edited demonstrations upweighted in training). Colors consistent
+   across all three phases; keep it simple — the goal is an abstracted framework,
+   not an exact algorithm rendering. Full spec: figures/FIG2_FRAMEWORK_SPEC.md
+   (updated). Robert has APPROVED the visual merge of trim+lift (C D9 permits it for
+   figures); prose still never merges the phases, and the caption defers mechanism
+   detail to §3.
+4. Anonymous-link sentence scope — ⚖ RULED: CODE + DATA wording (her full claim).
+   Consequence: the anon repo must hold the dataset (or a pointer to it) by Sunday,
+   and the Sunday PII/anonymity pass becomes load-bearing for this sentence.
 5. Who physically clicks submit ([57:24] ambiguity) — Robert clarifies with Zhang
    directly; plan assumes Zhang submits per [38:19].
 6. Source assets into `zhang/` (2 PDFs + teaser PNG) — requested from Robert.

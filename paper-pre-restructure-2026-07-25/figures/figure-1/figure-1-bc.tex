@@ -1,0 +1,223 @@
+% Figure-1 COUNTER-PROPOSAL (Robert, 2026-07-20): (b)+(c) — the 3-strip
+% design minus strip (a) only. NOT \input by the manuscript; the live
+% default is figure-1.tex ((c)-only per Dr. Zhang 2026-07-20). Robert's
+% argument for this variant: with (c)-only, Figure-1 + Figure-2 can no
+% longer tell the whole project's story — the "human data is valuable ->
+% edit, don't regenerate" beat loses its only visual home. Adopting it =
+% swap the \input in sections/01_introduction.tex to
+% figures/figure-1/figure-1-bc and paste the proposed caption below.
+% Standalone harness: figure-1-bc-test.tex (latexmk -outdir=<scratch>).
+% Derived verbatim from design-archive/teaser-3strip-final.tex with strip
+% (a) removed, strips relabeled (b)->(a) and (c)->(b), all y shifted up by
+% 3.18, the glyph legend re-homed to a bottom row, and the 3.0x number
+% re-homed to the proposed caption.
+% Column-width. Same palette/mark vocabulary as figure-2 (car glyph = taxi
+% presence, passenger stick figure = service pickup, dashed boundary +
+% tint = disadvantaged district). This figure is the WHY; fig:overview is
+% the HOW.
+% DECISION (Robert, 2026-07-16): all "~10%" bias-extent language REMOVED —
+% k=10,000 is an edit BUDGET (~10% of the corpus), not a measured extent of
+% the bias; the defensible phrasing is "most-biased slice, chosen by
+% attribution". Do not reintroduce a quantified bias share here or in the
+% caption. Accent "+" marks flag edited cells in the fair future — on BOTH
+% sides of the boundary (trim touches the advantaged district too).
+%
+% PROPOSED manuscript caption if this variant is adopted (paste into
+% sections/01_introduction.tex, replacing the (c)-only caption; keep the
+% src/NOTE comments):
+% \caption{Why FATE edits trajectory data. (a)~The recorded trajectories
+% are human-generated and therefore valuable --- filtering them would
+% discard useful expertise, so FATE performs bounded edits on an
+% attributed slice of the corpus containing the most-biased
+% demonstrations. (b)~The stakes: a policy imitating the raw corpus
+% learns the service gap the fleet demonstrated --- on Shenzhen the
+% advantaged district receives $3.0\times$ the taxi service per unit
+% demand --- and sends supply to over-served areas; trained on the
+% upweighted edited demonstrations, the fairness survives training and
+% results in the model learning a fairer policy. The $+$ marks flag what
+% the edit changed. Figure~\ref{fig:overview} shows how the editor works.}
+% % src (3.0x): PAPER/supply-lift/data/a10/shz_a10_external_fairness.json
+% %   (MigrantRatio district_extremes disparate_impact.before 0.33252 ->
+% %   advantaged/disadvantaged service ratio 1/0.33252 = 3.0x)
+% \Description{Two panels. Top: a stack of recorded human driver
+% trajectories faces two doors --- a rejected, struck-through option
+% reading "regenerate the corpus? realism lost" and a chosen option
+% reading "edit the most-biased slice". Bottom: two pipelines --- the raw
+% corpus trains a standard imitation model whose rolled-out city map
+% keeps taxis in the advantaged district, and the edited corpus trains an
+% upweighted imitation model whose rolled-out map moves taxi presence and
+% pickups, marked with plus signs, into the disadvantaged district.}
+% COLOR SYSTEM (2026-07-20): tracks the live figure-1.tex — charcoal =
+% observed/unchanged, muted cobalt = added/edited, pale amber/blue fills =
+% over-/under-served regions (see the color block in figure-1.tex for the
+% full rationale + CVD/grayscale checks). Kept in sync so the meeting
+% comparison differs only in the disputed panels.
+\definecolor{figink}{HTML}{4B5563}
+\definecolor{figgray}{HTML}{6B7280}
+\definecolor{figfaint}{HTML}{D1D5DB}
+\definecolor{figaccent}{HTML}{2563EB}
+\definecolor{figtrim}{HTML}{D97706}
+\definecolor{figtintblue}{HTML}{E8F1FC}
+\definecolor{figtintamber}{HTML}{FFF3D6}
+\definecolor{figchipfill}{HTML}{F4F8FE}
+\begin{tikzpicture}[x=1cm, y=1cm, line cap=round, line join=round,
+  % service pickup: passenger stick figure (per Dr. Zhang 2026-07-18; was an x)
+  % Sized to match fig:overview's cell-fill ratio (Robert 2026-07-18): ~0.234cm
+  % tall on 0.45cm cells, vertically centered (bounds symmetric at ±0.117).
+  pick/.pic={\draw[line width=0.6pt] (0,0.075) circle[radius=0.042];
+             \draw[line width=0.6pt] (0,0.033) -- (0,-0.046);
+             \draw[line width=0.6pt] (-0.065,0.0) -- (0.065,0.0);
+             \draw[line width=0.6pt] (0,-0.046) -- (-0.055,-0.117)
+                                     (0,-0.046) -- (0.055,-0.117);},
+  % taxi presence: car glyph, body + cabin + wheels (was an open square)
+  taxi/.pic={\draw[figink, fill=white, line width=0.6pt]
+             (-0.124,-0.046) -- (-0.124,0.015) -- (-0.062,0.015)
+             -- (-0.036,0.073) -- (0.055,0.073) -- (0.082,0.015)
+             -- (0.124,0.015) -- (0.124,-0.046) -- cycle;
+             \draw[figink, fill=white, line width=0.45pt]
+             (-0.068,-0.046) circle[radius=0.027]
+             (0.068,-0.046) circle[radius=0.027];},
+  % added presence: accent car + small plus (plus carries it in grayscale)
+  taxinew/.pic={\draw[figaccent, fill=white, line width=0.8pt]
+                (-0.124,-0.046) -- (-0.124,0.015) -- (-0.062,0.015)
+                -- (-0.036,0.073) -- (0.055,0.073) -- (0.082,0.015)
+                -- (0.124,0.015) -- (0.124,-0.046) -- cycle;
+                \draw[figaccent, fill=white, line width=0.5pt]
+                (-0.068,-0.046) circle[radius=0.027]
+                (0.068,-0.046) circle[radius=0.027];
+                \draw[figaccent, line width=0.8pt]
+                (0.10,0.10) -- (0.20,0.10) (0.15,0.05) -- (0.15,0.15);},
+                % (0.15,0.15) -- (0.25,0.15) (0.20,0.10) -- (0.20,0.20);},
+  % edited pickup: accent passenger + the same plus tag
+  picknew/.pic={\draw[figaccent, line width=0.7pt] (0,0.075) circle[radius=0.042];
+                \draw[figaccent, line width=0.7pt] (0,0.033) -- (0,-0.046);
+                \draw[figaccent, line width=0.7pt] (-0.065,0.0) -- (0.065,0.0);
+                \draw[figaccent, line width=0.7pt] (0,-0.046) -- (-0.055,-0.117)
+                                                  (0,-0.046) -- (0.055,-0.117);
+                \draw[figaccent, line width=0.8pt]
+                (0.08,0.12) -- (0.18,0.12) (0.13,0.07) -- (0.13,0.17);},
+                % (0.15,0.15) -- (0.25,0.15) (0.20,0.10) -- (0.20,0.20);},
+  boundary/.style={figink!65, line width=0.9pt, dash pattern=on 3pt off 1.6pt},
+  panelframe/.style={figgray, line width=0.6pt},
+  citygrid/.style={figfaint, line width=0.35pt},
+  flow/.style={-{Stealth[length=5pt, width=4pt]}, figink, line width=0.9pt},
+  flowacc/.style={-{Stealth[length=5pt, width=4pt]}, figaccent,
+                  line width=0.9pt},
+  lbl/.style={fill=white, fill opacity=0.85, text opacity=1,
+              inner sep=1.2pt, rounded corners=1pt}]
+
+  % =========================================================================
+  % Strip (a): the data is worth keeping — edit its most-biased slice
+  % =========================================================================
+  \node[anchor=west, font=\footnotesize, text=figink] at (0.7,0)
+    {(a) The data encode valuable human expertise, which must be preserved};
+%   \node[anchor=west, font=\footnotesize, text=figink] at (0.7,0)
+%     {(a) The data is human expertise, worth keeping};
+  % corpus: stack of real trajectories (wavy polylines)
+  \draw[panelframe, rounded corners=2pt] (0.9,-2.12) rectangle (3.9,-0.32);
+  \foreach \yy/\sgn in {-0.54/1, -0.77/-1, -1.0/1, -1.23/-1, -1.46/1,
+                        -1.75/-1}
+    \draw[figink!70, line width=0.5pt] (1.05,\yy)
+      .. controls (1.95,\yy+\sgn*0.07) and (2.85,\yy-\sgn*0.07) .. (3.75,\yy);
+  \node[anchor=center, font=\tiny, text=figgray] at (2.4,-1.98)
+    {real human driver trajectories};
+  % door 1 (rejected): regenerate
+  \draw[figgray, dashed, line width=0.6pt] (4.55,-0.94) rectangle (8.35,-0.37);
+  \draw[figgray, line width=0.6pt] (4.55,-0.94) -- (8.35,-0.37);
+  \node[lbl, font=\tiny, text=figgray] at (6.45,-0.66)
+    {regenerate the corpus? --- realism lost};
+  % door 2 (ours): edit in place
+  \draw[figaccent, line width=0.9pt, fill=figchipfill]
+    (4.55,-2.12) rectangle (8.35,-1.27);
+  \node[font=\tiny, text=figink, align=center] at (6.45,-1.69)
+    {\textbf{edit the most-biased slice}\\
+     chosen by attribution --- in place, bounded\\
+     realism retained, $0$ generated trajectories};
+  % corpus -> doors
+  \draw[flow, figgray] (3.9,-0.66) -- (4.55,-0.66);
+  \draw[flowacc] (3.9,-1.69) -- (4.55,-1.69);
+
+  % =========================================================================
+  % Strip (b): two corpora, two futures for the city
+  % =========================================================================
+  % title aligned with (a) at x=0.7 — the as-is arrow now drops at the
+  % corpus's right corner (x=3.9), clear of the title (which ends ~x=3.2)
+  \node[anchor=west, font=\footnotesize, text=figink] at (0.7,-2.77)
+    {(b) Two corpora, two futures};
+  % as-is path (left): corpus lower-right corner -> right side of the model
+  \draw[flow] (3.9,-1.92) -- (4.2,-1.92) -- (4.2,-3.295) -- (3.65,-3.295);
+  \node[anchor=west, font=\tiny, text=figgray] at (4.17,-2.62)
+    {imitate as-is};
+  \draw[panelframe, rounded corners=2pt] (1.35,-3.57) rectangle (3.65,-3.02);
+  \node[font=\tiny, text=figink] at (2.5,-3.295) {standard imitation model};
+  \draw[flow] (2.5,-3.57) -- (2.5,-3.87);
+  \node[anchor=west, font=\tiny, text=figgray] at (2.53,-3.72)
+    {rolls out trajectories};
+  % edited path (right): edit box -> model -> city where fairness survives
+  \draw[flowacc] (6.45,-2.12) -- (6.45,-3.02);
+  \node[anchor=west, font=\tiny, text=figgray] at (6.43,-2.62)
+    {imitate, upweight edited};
+  \draw[panelframe, fill=figchipfill, rounded corners=2pt]
+    (5.3,-3.57) rectangle (7.6,-3.02);
+  \node[font=\tiny, text=figink] at (6.45,-3.295)
+    {upweighted imitation model};
+  \draw[flowacc] (6.45,-3.57) -- (6.45,-3.87);
+  \node[anchor=west, font=\tiny, text=figgray] at (6.48,-3.72)
+    {rolls out trajectories};
+
+  % left future: the gap learned as competence (and recycled by dispatch)
+  \fill[figtintamber!70] (0.9,-3.87) -- (2.475,-3.87) -- (2.475,-4.77)
+    -- (2.925,-4.77) -- (2.925,-5.67) -- (0.9,-5.67) -- cycle;
+  \fill[figtintblue!80] (2.475,-3.87) -- (2.475,-4.77) -- (2.925,-4.77)
+    -- (2.925,-5.67) -- (4.05,-5.67) -- (4.05,-3.87) -- cycle;
+  \draw[citygrid, xstep=0.45, ystep=0.45, shift={(0.9,-5.67)}]
+    (0,0) grid (3.15,1.8);
+  \draw[boundary] (2.475,-3.87) -- (2.475,-4.77) -- (2.925,-4.77)
+    -- (2.925,-5.67);
+  \draw[panelframe] (0.9,-5.67) rectangle (4.05,-3.87);
+  \foreach \x/\y in {1.125/-4.095, 1.575/-4.095, 2.025/-4.095,
+                     1.125/-4.545, 1.575/-4.545, 2.025/-4.995,
+                     1.125/-5.445}
+    \pic at (\x,\y) {taxi};
+  \foreach \x/\y in {3.375/-4.095, 3.825/-4.095, 2.925/-4.545,
+                     3.375/-4.995, 3.825/-5.445}
+    \pic[figgray] at (\x,\y) {pick};
+  % right future: fairness survives training; presence reaches under-served
+  \fill[figtintamber!40] (5.0,-3.87) -- (6.575,-3.87) -- (6.575,-4.77)
+    -- (7.025,-4.77) -- (7.025,-5.67) -- (5.0,-5.67) -- cycle;
+  \fill[figtintblue!60] (6.575,-3.87) -- (6.575,-4.77) -- (7.025,-4.77)
+    -- (7.025,-5.67) -- (8.15,-5.67) -- (8.15,-3.87) -- cycle;
+  \draw[citygrid, xstep=0.45, ystep=0.45, shift={(5.0,-5.67)}]
+    (0,0) grid (3.15,1.8);
+  \draw[boundary] (6.575,-3.87) -- (6.575,-4.77) -- (7.025,-4.77)
+    -- (7.025,-5.67);
+  \draw[panelframe] (5.0,-5.67) rectangle (8.15,-3.87);
+  \foreach \x/\y in {5.225/-4.095, 5.675/-4.095, 6.125/-4.545,
+                     5.225/-4.995}
+    \pic at (\x,\y) {taxi};
+  % trim touched the advantaged district too: its lowest pickup is edit-marked
+  \pic at (5.675,-5.445) {picknew};
+  \foreach \x/\y in {7.475/-4.095, 7.925/-4.545, 7.475/-5.445}
+    \pic[figgray] at (\x,\y) {pick};
+  \pic at (7.025,-4.095) {taxinew};
+  \pic at (7.925,-4.995) {taxinew};
+  % future labels
+  \node[font=\tiny, text=figink, align=center] at (2.475,-6.04)
+    {the fairness gap, learned and re-enacted ---\\bias propagates to rolled out
+     corpus};
+  \node[font=\tiny, text=figink, align=center] at (6.575,-6.04)
+    {fairness gains survive training ---\\less human bias in rolled out corpus};
+  % glyph legend (re-homed from the removed strip (a)) — boxed (dotted = a
+  % key, not a pipeline stage), centered on the figure width, third entry
+  % glossing the accent "+" marks (2026-07-20, matching the live (c)-only
+  % figure so the meeting comparison differs only in the disputed panels)
+  \draw[figgray!80, line width=0.4pt, dash pattern=on 0.5pt off 1.3pt,
+        rounded corners=2pt] (1.63,-6.83) rectangle (7.37,-6.37);
+  \pic at (1.93,-6.6) {taxi};
+  \node[anchor=west, font=\tiny, text=figgray] at (2.09,-6.6) {taxi presence};
+  \pic[figgray] at (3.69,-6.6) {pick};
+  \node[anchor=west, font=\tiny, text=figgray] at (3.80,-6.6) {service pickup};
+  \draw[figaccent, line width=0.8pt]
+    (5.41,-6.6) -- (5.51,-6.6) (5.46,-6.65) -- (5.46,-6.55);
+  \node[anchor=west, font=\tiny, text=figgray] at (5.61,-6.6) {changed by the edit};
+\end{tikzpicture}

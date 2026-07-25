@@ -1,0 +1,47 @@
+% Side-by-side comparison of the three Figure-1 variants, for the design
+% meeting with Dr. Zhang (week of 2026-07-20). Compile from THIS directory:
+%   latexmk -pdf -outdir=<scratch> comparison-2026-07-20.tex
+% Committed render: comparison-2026-07-20.png (200 dpi).
+% Uses Linux Libertine to match acmart's text metrics (article-class CM is
+% ~15% wider and makes the figures' box labels overflow); sizes quoted in
+% the headers are measured on the real acmart harness renders (see
+% zhang-meeting-talking-points.md).
+\documentclass[10pt]{article}
+% landscape LETTER (geometry default): usable width 27.94cm - margins
+\usepackage[landscape, margin=0.6cm]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage{libertine}
+\usepackage{graphicx}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta}
+% figure-1.tex resolves its corpus images via \figonedir; from this
+% directory they sit one level up
+\newcommand{\figonedir}{../}
+\pagestyle{empty}
+\setlength{\parindent}{0pt}
+\begin{document}
+\begin{minipage}[t]{8.55cm}
+  \textbf{A --- current 3-strip (archived)}\\[1pt]
+  {\footnotesize the full story: problem $\to$ asset $\to$ stakes\\
+   figure + caption: 15.4\,cm}\\[8pt]
+  \input{teaser-3strip-final}
+\end{minipage}\hfill
+\begin{minipage}[t]{8.55cm}
+  \textbf{B --- counter-proposal: (b)+(c)}\\[1pt]
+  {\footnotesize drop the city panel only; keep asset $\to$ stakes\\
+   figure + caption: 12.0\,cm --- saves ${\sim}9$ lines}\\[8pt]
+  \input{../figure-1-bc}
+\end{minipage}\hfill
+\begin{minipage}[t]{8.55cm}
+  \textbf{C --- Dr.\ Zhang's request: (c)-only (now live)}\\[1pt]
+  {\footnotesize stakes only\\
+   figure + caption: 11.4\,cm --- saves ${\sim}11$ lines}\\[8pt]
+  \input{../figure-1}
+\end{minipage}
+
+\vspace{10pt}
+{\footnotesize B costs only ${\sim}0.6$\,cm $\approx$ 1--2 text lines more
+than C: both variants get almost all of their savings from dropping panel
+(a), and C must re-introduce labeled corpus chips as arrow sources ---
+objects panel (b) already provides.}
+\end{document}

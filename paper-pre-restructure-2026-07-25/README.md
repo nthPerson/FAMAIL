@@ -1,0 +1,53 @@
+# FAMAIL — KDD manuscript
+
+**This repo is the writing source of truth.** Robert ports completed sections to the
+shared Overleaf for Dr. Zhang's review (old Overleaf content is out of scope). Each
+`sections/*.tex` file is self-contained plain LaTeX (no custom macros) so it pastes
+cleanly.
+
+## Build
+
+    latexmk -pdf -interaction=nonstopmode -halt-on-error main.tex   # compile gate
+    bash lint.sh                                                    # convention lint
+
+Both must pass before every commit. Warnings are tolerated during drafting; errors are not.
+
+## Writing conventions (locked decisions — do not relitigate in prose)
+
+1. **Trim+lift centers ALL reporting.** Trim-only numbers appear ONLY in the
+   trim-vs-trim+lift ablation (mark the line `% lint-allow: ablation`).
+2. **F_demo label (renamed from F_causal, Zhang-approved 2026-07-20) + associational caveat.** No causality-claim language.
+   Paper symbol is F_demo; code/artifact keys remain `f_causal` (historical) — the README of
+   record for that mapping is this line plus `PAPER/REPRODUCIBILITY.md` §2 (landed 2026-07-21).
+3. **The spoken "54%" figure is banned** until grounded. Absolute deltas only
+   (+0.0226 SZ / +0.0316 SF, the α\*-era headline; the 0.2-era +0.0222/+0.0328
+   are superseded — do not quote as current).
+4. **p = 0.031 never appears without** mean Δ + t-CI + monotone dose-response — it is
+   the n=6 Wilcoxon sign-unanimity floor, not an effect size.
+5. **SF *reproduces* Shenzhen, never "beats" it** (F_demo is city-specific and
+   associational; absolute baselines are not cross-city comparable).
+6. **Every load-bearing number carries a provenance comment**: `% src: PAPER/<path>`.
+7. **Any single supply number states its accounting tier** — tier-1 (fractional
+   presence, optimizer convention) vs tier-2 (distinct-taxi recount from raw GPS).
+   See PAPER/supply-lift/LIFT_ALGORITHM_REFERENCE.md §10.
+8. **Three-ring metric firewall** (LIFT_ALGORITHM_REFERENCE.md §13):
+   (i) optimized: F_spatial/F_demo/F_fidelity; (ii) design-targeted, not optimized:
+   mean(Y|D)/SDR family; (iii) genuinely external: DP, DI, Theil, per-group levels,
+   tier-2 recount, channel decomposition. "Improves metrics we never optimized"
+   claims ride ring (iii) only.
+9. **No product/tool names** anywhere.
+10. **Mechanism names (renamed 2026-07-11):** trim's selector is **"demand deficit
+    attribution"** (formerly "deficit attribution"); lift's is "supply-gradient
+    attribution". Use the full name wherever the mechanism is meant; generic uses
+    of "deficit" (e.g. "fairness deficit", "highest-deficit units") stay as-is.
+11. **DSR expansion (renamed 2026-07-24, Robert):** paper expansion is
+    **"departure-service ratio"**, matching its source su2018taxigini ("departure
+    service rate" — the paper the ASR/DSR pair was drawn from during objective
+    design). Formula unchanged (D_i/S_i, pickups per unit of taxi presence).
+    Code + famail_temporal docs (RESEARCHER_HANDOFF.md §4, fairness/spatial.py)
+    keep the legacy expansion "demand-service ratio"; artifact keys unaffected.
+
+## Layout
+
+`main.tex` (acmart sigconf, anonymous+review) → `sections/01..05` → `refs.bib`
+(seeded from PAPER/objective-motivation/REFERENCES.md; T3 human pass pending).

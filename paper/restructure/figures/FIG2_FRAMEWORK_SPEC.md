@@ -23,12 +23,16 @@ adjudicated in `../MEETING_DIGEST.md` ADJ-2. Requirements source of record:
 - The methodology's leading paragraph will reference this figure; its stage order
   should match the methodology block order (Robert, [35:42], unopposed).
 
-**Accuracy constraints (binding; from ADJ-2):**
-- NEVER draw one shared selection feeding both editors: trim's selection (demand
-  deficit attribution) and lift's (supply-gradient attribution on the POST-TRIM state)
-  are separate. Two score-map glyphs, sequential order.
-- No z-score/normalization vocabulary on scores; labels say "share of the fairness
-  deficit" (trim side) and "value of added presence" (lift side).
+**Accuracy constraints (binding; ADJ-2 as amended by Robert's 07-25 ruling):**
+- Robert APPROVED the abstracted single-attribute-then-edit flow for the FIGURE
+  (C D9 permits visual merging): phase 1 selects k ≪ N, phase 2 edits them with
+  trim+lift. The caption/labels stay silent on mechanism count or defer to §3
+  ("attribution mechanisms detailed in §3.2") — PROSE never merges the phases and
+  never describes one ranked list feeding both editors.
+- Trajectory-group labels avoid per-trajectory-fairness verdicts (C D6): score by
+  "contribution to global fairness" / "fairness impact of an edit", not "this
+  trajectory is unfair". (Robert's group names are flexible by his own note.)
+- No z-score/normalization vocabulary on scores.
 - No "attack"/"perturbation" vocabulary anywhere.
 - Trim edits act in over-served areas; ONLY lift touches the under-served side (by
   adding presence). The output panel must not show demand moved INTO the
@@ -37,60 +41,54 @@ adjudicated in `../MEETING_DIGEST.md` ADJ-2. Requirements source of record:
 - Fidelity appears as a constraint annotation ("bounded ε; frozen identity
   discriminator in the objective"), never as an accept/reject gate glyph.
 
-## Recommended layout — Option A "hybrid two-stage" (matches her exemplar + email's
-two-stage FATE; adjudicated ADJ-2; ⚖ pending Robert)
+## ADOPTED LAYOUT — Robert's three-phase design (⚖ RULED 2026-07-25; supersedes the
+earlier Option A/B drafts, which are preserved in git history at bf64eee)
+
+Three logical phases, ST-iFGSM-style bands, colors consistent ACROSS all phases;
+simplicity mandate: "abstract the framework into logical steps… not perfectly
+represent the exact algorithm" (Robert). Stage order matches the methodology blocks.
 
 ```
-┌───────────────────────────────────────────────────────────────────────────┐
-│ [INPUT band — light blue]                                                 │
-│  ┌─────────────────────┐        Raw taxi trajectory corpus                │
-│  │ Raw HSTD corpus     │        τ₁ τ₂ … τ_N   (stylized polylines,        │
-│  │ τ₁ τ₂ … τ_N         │        N ≈ 95k; advantaged/disadvantaged         │
-│  └─────────┬───────────┘        context strip: two tinted blocks)         │
-├────────────┼──────────────────────────────────────────────────────────────┤
-│ [STAGE 1 band — peach]  Stage 1: Budgeted Fairness-Aware Editing          │
-│            │                                                              │
-│   ┌────────▼─────────┐   ┌──────────────────┐   ┌─────────────────────┐   │
-│   │ deficit map      │──▶│ trim: relocate   │──▶│ presence-value map  │─┐ │
-│   │ (share of the    │   │ pickups in over- │   │ on the EDITED corpus│ │ │
-│   │ fairness deficit │   │ served areas     │   │ (value of added     │ │ │
-│   │ per unit)        │   │ [k_trim selected]│   │ presence per unit)  │ │ │
-│   └──────────────────┘   └──────────────────┘   └─────────────────────┘ │ │
-│      arrow label:            arrow label:            arrow label:       │ │
-│      "attribute"             "bounded edits ≤ ε"     "re-score"         │ │
-│   ┌──────────────────────────────────────────────────────────────────┐  │ │
-│   │ lift: reroute final seeking states into under-served cells       │◀─┘ │
-│   │ [k_lift selected; budget k = k_trim + k_lift ≪ N]                │    │
-│   └────────────────────────────┬─────────────────────────────────────┘    │
-│   constraint strip (small): "every edit ≤ ε cells · continuity repaired · │
-│   frozen driver-identity discriminator in the objective"                  │
-├────────────────────────────────┼───────────────────────────────────────────┤
-│ [STAGE 2 band — green]  Stage 2: Edit-Aware Weighted Training              │
-│   ┌──────────────────┐         ▼                ┌───────────────────────┐  │
-│   │ Edited corpus    │──────▶ imitation ──────▶ │ trained policy        │  │
-│   │ τ'…(k edited,    │        training          └───────────┬───────────┘  │
-│   │ N−k untouched)   │        arrow label:                  │              │
-│   └──────────────────┘        "upweight the k edits"        │              │
-├───────────────────────────────────────────────────────────────────────────┤
-│ TERMINAL CONTRAST:  ┌─────────────────────────┐  ┌───────────────────────┐ │
-│  (uniform weights)  │ ✗ bias reproduced       │  │ ✓ fairer service      │ │
-│                     │ (edits averaged away)   │  │ allocation            │ │
-│                     └─────────────────────────┘  └───────────────────────┘ │
-└───────────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────┐
+│ [INPUT strip] Raw taxi trajectory corpus  τ₁ τ₂ … τ_N                   │
+│  (stylized gray polylines; optional advantaged/disadvantaged tint pair) │
+├─────────────────────────────────────────────────────────────────────────┤
+│ [PHASE 1 band] Attribute — select the trajectories that matter          │
+│   trajectories drawn in THREE GROUPS, colored by attribution outcome:   │
+│     ● selected, high fairness impact (k ≪ N)      [color A, e.g. orange]│
+│     ● scored, low impact — left unchanged          [color B, e.g. blue] │
+│     ● not selected — left unchanged                [gray]               │
+│   arrow label in: "score each trajectory's contribution to the          │
+│   corpus's collective fairness"; annotation: "edit budget k ≪ N"        │
+├─────────────────────────────────────────────────────────────────────────┤
+│ [PHASE 2 band] Trim + Lift — bounded gradient edits                     │
+│   selected (color-A) trajectories pass through "gradient ascent on the  │
+│   fairness objective L"; two labeled edit glyphs: trim (pickup          │
+│   relocated, ≤ ε) and lift (final seeking tail rerouted, ≤ ε);          │
+│   constraint strip: "every edit ≤ ε cells · continuity repaired ·       │
+│   frozen driver-identity discriminator in the objective"                │
+│   output: edited corpus (k edited in color A-dashed, N−k untouched)     │
+├─────────────────────────────────────────────────────────────────────────┤
+│ [PHASE 3 band] Upweight — edit-aware weighted training                  │
+│   edited corpus → imitation training, arrow label "upweight the k       │
+│   edited demonstrations" → trained policy                               │
+│   terminal contrast pair: ✗ uniform weights: bias reproduced            │
+│                           ✓ upweighted: fairer service allocation       │
+└─────────────────────────────────────────────────────────────────────────┘
 ```
 
-Reading: the k≪N budget beat lives in the bracketed counts + one bold annotation
-("budget k ≪ N: only the trajectories that matter change"). The two score-map glyphs
-make per-phase attribution visible without prose. The terminal contrast pair encodes
-the vanilla-null vs upweighted result (mirrors her exemplar's Wrong/Correct Label pair)
-— that is the honest version of "the payoff lands downstream."
-
-## Option B "three bands" (analysis_C C-7's shape; simpler, taller)
-
-Band 1: Attribute & Trim (deficit map → bounded pickup relocations).
-Band 2: Re-score & Lift (presence-value map on edited corpus → tail reroutes).
-Band 3: Weight (upweighted imitation → fairer policy) + terminal contrast.
-Same glyph and label rules. Choose if Option A renders too wide/busy at \columnwidth.
+Design notes:
+- The three trajectory groups are THE phase-1 content (Robert's explicit spec);
+  group names flexible but avoid per-trajectory-fairness verdicts (see accuracy
+  constraints above) — "high impact / low impact / not selected" reads well.
+- Color continuity: color A marks the selected-and-edited trajectories in ALL three
+  bands (solid when selected, dashed after editing — consistent with Fig-1's
+  dashed-orange edited-trajectory vocabulary). Gray = untouched everywhere.
+- Phase 2 shows trim and lift as two glyphs INSIDE one band (approved abstraction);
+  no separate selection arrows into each.
+- Terminal contrast pair mirrors the exemplar's Wrong/Correct Label boxes and encodes
+  the vanilla-null vs upweighted result honestly.
+- Grayscale-safe: dashing + shape + labels carry meaning, not color alone.
 
 ## Implementation plan
 
@@ -103,15 +101,18 @@ Same glyph and label rules. Choose if Option A renders too wide/busy at \columnw
    alone). Trajectories: dark-gray polylines; edited ones dashed orange (consistent
    with Fig-1's legend vocabulary).
 3. Column width, target height ≤ 0.5\textheight. \scriptsize minimum text.
-4. Caption (draft, adjust to final layout): "FATE framework. Stage 1 spends a fixed
-   edit budget k ≪ N: demand deficit attribution selects trajectories whose pickups
-   over-serve advantaged areas and trim relocates those pickups under a bounded offset;
-   supply-gradient attribution, computed on the edited corpus, then selects
-   trajectories whose final seeking states lift reroutes into under-served cells. All
-   edits satisfy spatial bounds, continuity repair, and a frozen driver-identity
-   guardrail. Stage 2 upweights the k edited demonstrations during imitation so the
-   corpus-level fairness gain survives training; at uniform weights it averages away."
-   (Numbers stay out of the caption; k and N appear symbolically.)
+4. Caption (draft matching the ADOPTED three-phase layout; adjust in review): "FATE
+   framework. (1) Attribution scores every trajectory's contribution to the corpus's
+   collective fairness and selects the k ≪ N whose bounded edits would improve it
+   most (the attribution mechanisms are detailed in \S\ref{sec:editor}). (2) The
+   selected trajectories receive bounded gradient edits under the fairness objective:
+   trim relocates recorded pickups within over-served areas, and lift reroutes final
+   seeking states into under-served cells; every edit stays within \(\varepsilon\)
+   cells, is repaired for continuity, and is scored by a frozen driver-identity
+   discriminator inside the objective. (3) The k edited demonstrations are upweighted
+   during imitation so the corpus-level fairness gain survives training; at uniform
+   weights it is averaged away." (Numbers stay out; k, N, ε appear symbolically. The
+   §-defer clause is what keeps the merged phase-2 band honest.)
 5. Gate: renders under latexmk + lint; then send the standalone PDF to Zhang EARLY
    (meeting A5: cheap veto while revert is possible).
 6. `\label{fig:overview}` is kept (current §3.4 opener and Fig-1 caption reference it).

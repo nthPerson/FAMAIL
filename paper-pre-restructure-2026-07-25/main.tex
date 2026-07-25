@@ -1,0 +1,125 @@
+% FATE (né FAMAIL) — KDD manuscript.
+% Source of truth for writing is THIS repo; Robert ports completed sections to the
+% shared Overleaf for Dr. Zhang's review. Build: latexmk -pdf main.tex
+% Conventions: see README.md in this directory (trim+lift canonical, F_demo label (renamed from F_causal, Zhang-approved 2026-07-20)
+% + associational caveat, provenance comments on every load-bearing number, etc.).
+% \documentclass[sigconf,review]{acmart}
+\documentclass[sigconf,review,anonymous]{acmart}
+% KDD is double-blind: `anonymous` hides the author block; `review` adds line numbers.
+% Remove `review` for the PI-facing PDF if line numbers distract.
+\settopmatter{printacmref=false}
+\setcopyright{none}
+% Local-build font shim: this machine lacks the Libertine/newtxmath Type-1 fonts
+% acmart prefers, and pdfTeX's microtype font expansion fails on the bitmap
+% fallbacks once math appears. Disabling expansion keeps the local compile gate
+% meaningful; Overleaf (full TeX Live) renders the proper ACM fonts regardless.
+% To restore the ACM look locally: sudo apt install texlive-fonts-extra, then
+% delete this line.
+\microtypesetup{expansion=false}
+% Diagrams are TikZ from here on (Figure 1 first; others to follow) so figure
+% typography matches the manuscript at camera-ready. Source: figures/figure-2/.
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta}
+% Bulleted lists sit nearly flush with the paragraph margin (Robert,
+% 2026-07-24 read-aloud note: less indent, applied to every itemize).
+% NOTE: a plain \setlength{\leftmargini}{...} is INERT under acmart — the
+% class's font-size macros re-run \@listi and reset it (verified: 5em test
+% moved nothing). enumitem takes over list geometry properly; leftmargin=*
+% puts the bullet at the paragraph margin with text indented one label-width.
+\usepackage{enumitem}
+\setlist[itemize]{leftmargin=*}
+
+\begin{document}
+
+\title{Mitigating Demonstration Bias via Fairness-Aware Trajectory Editing}
+% Title per Dr. Zhang, 2026-07-18 (paper/reviews/abstract-feedback-from-Dr-Zhang.md);
+% submission initiation approved with this title.
+
+% Author list/order provisional — PI decision; hidden by the `anonymous` option.
+\author{Robert Ashe}
+\affiliation{%
+  \institution{San Diego State University}
+  \city{San Diego}\state{CA}\country{USA}}
+\email{rashe7414@sdsu.edu} % placeholder address — confirm before de-anonymizing
+\author{Xin Zhang}
+\affiliation{%
+  \institution{San Diego State University}
+  \city{San Diego}\state{CA}\country{USA}}
+\email{xzhang@sdsu.edu} % placeholder address — confirm before de-anonymizing
+
+\begin{abstract}
+\input{sections/00_abstract}
+\end{abstract}
+
+% CCS CONCEPTS (Robert 2026-07-24, superseding the earlier keywords-vs-CCS
+% back-and-forth: the template requires a CCS CONCEPTS section where keywords
+% stood). Concepts chosen to cover the retired keyword list — fairness, bias
+% mitigation, imitation learning, behavior cloning, data augmentation,
+% trajectory editing, spatiotemporal data mining, urban mobility — for the
+% paper under its current title. The \ccsdesc lines below render the visible
+% "CCS CONCEPTS" section; the CCSXML concept_id numbers are metadata only
+% (not rendered, used by the ACM DL at camera-ready) and are BEST-EFFORT here:
+% TODO(Robert, pre-submission pass): regenerate this block from the official
+% picker at https://dl.acm.org/ccs (2 minutes) to certify the ids.
+\begin{CCSXML}
+<ccs2012>
+   <concept>
+       <concept_id>10010147.10010257</concept_id>
+       <concept_desc>Computing methodologies~Machine learning</concept_desc>
+       <concept_significance>500</concept_significance>
+   </concept>
+   <concept>
+       <concept_id>10002951.10003227.10003351</concept_id>
+       <concept_desc>Information systems~Data mining</concept_desc>
+       <concept_significance>300</concept_significance>
+   </concept>
+   <concept>
+       <concept_id>10002951.10003227.10003236</concept_id>
+       <concept_desc>Information systems~Spatial-temporal systems</concept_desc>
+       <concept_significance>300</concept_significance>
+   </concept>
+   <concept>
+       <concept_id>10010405.10010444.10010449</concept_id>
+       <concept_desc>Applied computing~Transportation</concept_desc>
+       <concept_significance>100</concept_significance>
+   </concept>
+</ccs2012>
+\end{CCSXML}
+\ccsdesc[500]{Computing methodologies~Machine learning}
+\ccsdesc[300]{Information systems~Data mining}
+\ccsdesc[300]{Information systems~Spatial-temporal systems}
+\ccsdesc[100]{Applied computing~Transportation}
+% Prior keywords (retired 2026-07-24; kept for reference — they informed the
+% concept selection above):
+% \keywords{fairness, bias mitigation, imitation learning, behavior cloning,
+% data augmentation, trajectory editing, spatiotemporal data mining,
+% urban mobility}
+
+% --- Venue metadata -------------------------------------------------------
+% Without these, acmart.cls silently falls back to its built-in placeholders
+% ("Conference'17, July 2017, Washington, DC, USA" + a fake ISBN/DOI) — see
+% acmart.cls line ~1491. Real venue: KDD 2027, San Jose McEnery Convention
+% Center, August 1--5, 2027 (https://kdd2027.kdd.org/).
+% ISBN/DOI are assigned at camera-ready; blank them rather than print fakes.
+\acmConference[KDD '27]{ACM SIGKDD Conference on Knowledge Discovery and Data
+  Mining}{August 1--5, 2027}{San Jose, CA, USA}
+\acmYear{2027}
+\copyrightyear{2027}
+\acmISBN{}
+\acmDOI{}
+
+\maketitle
+
+\input{sections/01_introduction}
+\input{sections/02_related_work}
+\input{sections/03_methodology}
+\input{sections/04_experiments}
+\input{sections/05_conclusion}
+
+\bibliographystyle{ACM-Reference-Format}
+\bibliography{refs}
+
+\appendix
+\input{sections/appendix}
+
+\end{document}
