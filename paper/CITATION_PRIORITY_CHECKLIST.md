@@ -449,3 +449,10 @@ Metadata upgrades for these are already in the 2026-07-16 report diff, ready if 
      strategy that helped ...", matching this file's own verified refs.bib note
      ("adaptive augmentation was the one strategy that helped the disadvantaged
      group", verified 2026-07-16). Verify the domain qualifier is how you want it. -->
+
+<!-- Coverage note (2026-07-25, findings round: #5/#8/#10/#11/#13/#15/#16/#17/#18/#19):
+     NO key-set change and no \cite added or removed. The only cite-adjacent edit was in
+     §3.4, where the recourse gloss was dropped for the page budget; the citation group
+     \cite{ustun2019recourse,wachter2018counterfactual} is unchanged and §5 still states
+     the same idea with the same five perturbation/recourse keys. Table 2 moved to
+     Appendix C and carries no citations. Lint coverage green. Nothing ticked. -->

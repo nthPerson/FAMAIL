@@ -53,6 +53,15 @@ Francisco. Results show that editing a
 small fraction of the corpus improves multiple established fairness measures
 the objective never optimizes, and increases
 distinct-taxi presence in under-served areas. Edit-aware weighting then
-carries these gains into learned policies: sparse, targeted trajectory
-intervention can improve collective service fairness with limited data
-modification.
+carries these gains into learned policies, on 12 of 12 paired seeds in both
+cities ($p = .00049$): sparse, targeted trajectory intervention can improve
+collective service fairness with limited data modification.
+% src: PAPER/supply-lift/data/a10/{shz,sf12}_a10_wbc_n12_pooled_stats.json
+% (WBC-N12 + SF-WBC-N12 2026-07-18: w30 flagship, 12/12 positive in each city,
+% exact Wilcoxon p = .00049 = 2/4096, the one comparison that survives
+% multiple-comparison correction — the same number \S4.3, \S4.6 and \S6 carry.)
+% 2026-07-25 (review finding #19, Robert approved): her abstract stated no
+% quantitative result. This is the two-city-safe anchor; the 3.0x disparity is
+% NOT (Shenzhen district extremes 3.01x, San Francisco 1.41x), and "about a
+% tenth of the corpus" is not either (SZ k=10,000/95,297 = 10.5%, SF
+% k=2,000/10,887 = 18.4%) — both would have been false as two-city claims.

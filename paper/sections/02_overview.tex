@@ -53,8 +53,14 @@ seeks and picks up moves demand and supply with it.
 
 Each cell additionally carries demographic covariates $x_i$ describing its
 neighborhood: housing price, per-capita compensation, and migrant population
-share. These covariates resolve at district granularity, which bounds the
+share. These covariates resolve at coarse administrative units (districts or
+census tracts), which bounds the
 resolution of any demographic analysis built on them (\S\ref{sec:objective}).
+% 2026-07-25 (review finding #15): "at district granularity" was Shenzhen's fact
+% stated globally — \S\ref{sec:exp-setup} fills San Francisco's features from ACS
+% TRACT values (PAPER/argument/02_datasets.md: SZ = 10 district profiles; SF = ACS
+% 2006-2010 tracts -> cells). The replacement is true of both cities and keeps the
+% resolution caveat; the per-city detail stays in \S\ref{sec:exp-setup}.
 Fairness throughout this paper is \textbf{collective}: a property of the
 service allocation the whole corpus induces over units and demographic
 groups, never a property of one trajectory.

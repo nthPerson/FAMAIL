@@ -130,21 +130,19 @@ it. This motivates a data-centric intervention: repair the individual
 demonstrations that generate the collective disparity, targeting them by their
 aggregate effect.
 
-Realizing such an intervention is challenging. First, collective fairness is
-global, but edits are local. An editor must therefore trace this global
-disparity to influential trajectories and identify the local edits with the
-largest corpus-level effect. Second, reducing disparity does not necessarily improve
-disadvantaged-group welfare. An intervention may narrow a group gap by
-decreasing the measured outcome of the advantaged group rather than increasing
-the resources received by the disadvantaged group. In taxi mobility, for
-example, reducing the contribution of trips from heavily served areas can
-narrow the measured service gap without directing additional taxi presence to
-under-served neighborhoods. Third, fairness intervention must be effective
-under a limited edit budget: modifying a large portion of HSTD is costly and
-may distort the human behaviors that make the data valuable. The editor
-must therefore achieve substantial collective fairness improvement by
-modifying only a small subset of trajectories, while preserving the validity
-and downstream influence of these sparse edits.
+Realizing such an intervention is challenging. First, collective fairness is a
+corpus-level property, but edits are local: an editor must trace the disparity
+to the trajectories that carry it and identify the local edits with the largest
+aggregate effect. Second, reducing disparity does not necessarily improve
+disadvantaged-group welfare: an intervention can narrow a group gap by lowering
+the advantaged group's measured outcome instead of raising the resources the
+disadvantaged group receives. In taxi mobility, reducing the contribution of
+trips from heavily served areas narrows the measured service gap without
+directing additional taxi presence to under-served neighborhoods. Third, the
+intervention must work under a limited edit budget, because modifying a large
+portion of HSTD is costly and may distort the human behaviors that make the
+data valuable. The few edits it does make must be physically valid, faithful to
+the recorded driver, and influential enough to survive downstream training.
 Section~\ref{sec:overview} makes these difficulties precise as five labeled
 challenges, each answered by one component of our method: the edit budget
 (C1), fidelity (C2), the wrong target (C3), leveling up rather than down
@@ -157,12 +155,10 @@ and applies bounded modifications to those with the greatest estimated
 aggregate fairness impact, as illustrated in Figure~\ref{fig:teaser}. FATE
 distinguishes outcome-side edits, which change the measured allocation
 statistic, from resource-aware edits, which alter the underlying
-resource-provision process. The former may reduce disparity without benefiting
-disadvantaged groups, whereas the latter directly changes where resources are
-supplied. Because the edited demonstrations constitute only a small fraction
-of the corpus, FATE further applies edit-aware weighting to preserve their
-influence during downstream training. In the taxi-mobility instantiation
-studied in this paper, outcome-side and resource-aware edits correspond to
+resource-provision process. Because the edited demonstrations are only a small
+fraction of the corpus, FATE applies edit-aware weighting to preserve their
+influence during downstream training. In our taxi-mobility instantiation,
+outcome-side and resource-aware edits correspond to
 modifying pickup endpoints and rerouting the final passenger-seeking segments,
 respectively. Experiments on real-world HSTD show that FATE consistently
 reduces demographic service disparity on measures the objective never
@@ -174,8 +170,8 @@ learned policies. Our contributions are summarized as follows:
 \item We formulate fairness mitigation in HSTD as a budgeted
 local-to-collective problem: disparity emerges from the aggregate effects of
 many sequential decisions, while only a small subset of individual
-trajectories can be modified. This formulation connects the edit budget on
-local demonstrations to its corpus-level fairness impact.
+trajectories can be modified. This formulation connects a bounded edit budget
+on local demonstrations to corpus-level fairness.
 \item We develop FATE, which attributes collective disparity to individual
 trajectories and distinguishes edits that change a measured allocation
 statistic from those that alter the underlying resource-provision process. We
@@ -186,7 +182,8 @@ differentiable resource-aware intervention to address this limitation.
 from Shenzhen and San Francisco. The results show consistent reductions in
 demographic service disparity, increased taxi presence in under-served areas,
 and transfer of metric-level fairness improvements to downstream
-imitation-learned policies under edit-aware weighting. We make our code and
+imitation-learned policies under edit-aware weighting, with random-subset and
+most-fair controls isolating the edit. We make our code and
 dataset available to the research community via an anonymous
 link.\footnote{\url{https://anonymous.4open.science/r/FATE-review}.
 % TODO(Robert, before submission): create the anonymous repository and

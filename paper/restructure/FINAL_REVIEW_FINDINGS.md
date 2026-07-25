@@ -1,5 +1,10 @@
 # FINAL WHOLE-BRANCH REVIEW — findings (2026-07-24 late, base 39dd01a → ea6dd25 + T10 in flight)
 
+> **→ PART 3 at the bottom of this file is the current state (2026-07-25).** Every
+> finding below is dispositioned there, the 8-page limit is now met, and Part 3 carries
+> the two claim defects that finding #5 turned up plus the one item still needing
+> Robert's ruling. The statuses in this header describe 07-24 and are superseded.
+
 Verdict: **FIX-FIRST** — blockers #1–#4, plus #5 (T10 diff needs its own claim-safety
 read after commit). #6–#14 are minors. Everything else verified clean: every numeral
 era-checked, all 17 E-items + 10 digest decisions implemented, D15/D16 fully
@@ -254,3 +259,113 @@ collective definition intact. "confirm the edit itself is what carries them" →
     content only, since the 8-page pressure and your close read are both there. I did
     read Appendix A's derivations (that is where the g_0 repair was verified) and the
     SF results block. Say the word and I will do A–E next.
+
+---
+
+# PART 3 — findings applied (2026-07-25, Robert approved all but #1; base 44763ea)
+
+**Headline: the paper now fits KDD's hard 8-page limit.** `pdftotext -f 9 -l 9`
+opens with REFERENCES; main content ends on page 8. Total 13pp. Gates green
+throughout: `latexmk` clean, `lint.sh` silent, 0 undefined refs, 0 `??` in the PDF,
+no Overfull > 5pt.
+
+Trajectory of the §6 spill onto p9: **29 lines (07-24) → 20 (Part 2) → 0 (now).**
+
+## ⚠ Zero margin — read this before the close read
+
+Page 8 holds **116 of 116 available lines in both columns**, the same count as every
+float-free page (verified against p5 and p7). There is no slack. Any net addition
+during the close read pushes content back onto p9, and the Overleaf port is a real
+risk here: a different TeX Live version can change hyphenation and reflow a line.
+
+Reserve levers, cheapest first, none of them yet used:
+- **Figure 2's height** (~290pt). I did NOT touch it — the limit was met without it,
+  and it is the other session's style reference. Realistic yield on inspection is
+  ~0.5 line, not the 3–4 I estimated in #16: the vertical rhythm is set by text
+  blocks and by the stage-3 title band, which the left op-box cannot pass. Lower
+  yield than it looks.
+- The abstract's second sentence and §1 ¶1–¶2 (PI prose, so far untouched): ~2 lines.
+- §4.6's San Francisco caveats: ~1 line of wordiness.
+- Table 1 → appendix (~7 lines). Last resort; it backs the headline RQ1 result.
+- If the other session's TikZ Figure 1 comes in under 135pt, that is free margin.
+
+## Disposition of every open finding
+
+| # | Status |
+|---|---|
+| 1 | Handed to the parallel Figure-1 TikZ session (not touched here) |
+| 5 | ✅ **discharged, and it found two real defects — see below** |
+| 8 | ✅ applied: "collective fairness is **global**" ×2 → corpus-level property / "the disparity" |
+| 10 | ✅ applied: contribution 1 → "connects **a bounded** edit budget on local demonstrations to corpus-level fairness" (drops the budget-curve priming, D16-adjacent) |
+| 11 | ✅ applied: contribution 3 gains "with random-subset and most-fair controls isolating the edit" |
+| 12 | No action (note for the PI; defensible under the meeting's lowered bar) |
+| 13 | ✅ applied: Fig-2 caption now pairs the vocabularies once — "trim (outcome-side) and lift (resource-aware)" |
+| 15 | ✅ applied in §2 + §3.1; **one residual needs your ruling** — see below |
+| 16 | ✅ all five cheap levers applied **plus** Table 2 → appendix; Figure 2 untouched |
+| 17 | ✅ applied: ¶3 restructured so difficulties 1 and 3 no longer both argue the budget |
+| 18 | ✅ applied: ¶4's restatement of the trim/lift distinction dropped; contribution 2 keeps the C4 insight |
+| 19 | ✅ applied — but **not** with the number I first proposed; see below |
+| 20 | Unchanged by design |
+| 21 | Still open (appendix not re-read line by line; #5 covered the T10-relocated blocks) |
+
+## #5 found two claim defects in T10's relocated appendix block
+
+Both in Appendix B, "Why demand-only editing has no lever in under-served units",
+the block T10 moved out of §3.3. Repaired, with the reasoning in a comment beside each:
+
+1. **"so under-served cells are never edit candidates" — dropped.** The claim asserts
+   a structural guarantee the selection rule does not provide. Trim ranks by *signed*
+   per-unit attribution (`attribution.py::rank_trajectories`: ascending, "most-negative
+   α_i first"), and that score is built from squared residual projections — so a
+   strongly *under*-served unit whose residual is demographically predictable can also
+   score negative and be nominated. Under-served cells going unselected is an
+   **empirical** fact about this corpus (the 2,455/2,455 finding, already in §3.3), not
+   a property of the rule. The surviving clause — candidates *concentrate* in
+   over-served, high-residual cells — is what the mechanism supports, and Leverage plus
+   Supply-side inequity carry the rest of the argument unchanged.
+2. **"an upper bound on any editor" → "on any demand-only editor".** Read literally,
+   the original said no editor can help the under-served — the exact opposite of the
+   paper's central result, since the lift channel does precisely that. Compression
+   dropped the scope; §3.3 frames the same bound correctly as "the constrained optimum
+   of the demand-only problem".
+
+Also verified for #5: every numeric token T10 removed from §2/§3/§4 still exists in the
+paper (21 tokens checked mechanically; the one apparent miss, 98.8%, was reworded, not
+lost, and survives in §4.4). #14's "for $Y$" is present at appendix.tex:147 — that fix
+did land, despite the T10 diff appearing to drop it.
+
+## #19: the number I planned would have been false
+
+I proposed the 3.0× disparity or "about a tenth of the corpus". **Both fail as two-city
+claims** and I checked before writing either: disparate impact before editing is 0.3325
+on Shenzhen (3.01×) but 0.7076 on San Francisco (1.41×), and the budget share is
+10.5% on Shenzhen (k=10,000/95,297) versus 18.4% on San Francisco (k=2,000/10,887).
+The abstract now carries the flagship instead, which *is* two-city-safe: **"on 12 of 12
+paired seeds in both cities ($p = .00049$)"**, with its `% src` pointer and a comment
+recording why the other two candidates were rejected.
+
+## ⚖ The one residual of #15 (protected register — your call)
+
+§2 now says the covariates "resolve at coarse administrative units (districts or census
+tracts)", true of both cities, and §3.1's ecological caveat is scoped ("about ten
+district profiles **on Shenzhen**"). The §6 bounds paragraph still states it globally:
+"a partial $R^2$ over roughly ten district-level demographic profiles". That sentence is
+**byte-identical protected register** from M44, so I did not touch it. Two words
+("on Shenzhen") would make it consistent with §3.1. For San Francisco the claim errs
+conservative — it asserts coarser resolution than the tract data has — so this is
+precision, not overclaim.
+
+## Also applied while working (each a genuine repair, none requested)
+
+- Two Overfull boxes my §1 rewrites created (5.01pt and 5.56pt) were closed by
+  tightening rather than by reverting: "is an *associational* quantity" → "is
+  *associational*"; "the same assumption turns out to bound" → "bounds"; "In the
+  taxi-mobility instantiation studied in this paper" → "In our taxi-mobility
+  instantiation"; "FATE further applies" → "FATE applies".
+- §4.2's ablation gloss ("trim only redistributes existing service; lift adds taxi
+  presence where it was missing") dropped as the **second** statement of it inside the
+  same subsection — the ablation's own opening sentence already says it.
+- §4.3's one-sentence "Model-level variance" paragraph folded into the end of the
+  upweighting paragraph: same claim, same appendix pointer, one fewer paragraph break.
+- §4.1's stuck-GPS cleanup sentence (106,677 pickups) moved to Appendix B's grid
+  block with its `% src`; §4.1 now points there.

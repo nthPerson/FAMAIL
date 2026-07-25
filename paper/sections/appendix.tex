@@ -92,8 +92,14 @@ F_{\mathrm{spatial}} &\;=\; 1 - \tfrac{1}{2}\bigl(\mathrm{Gini}(\mathrm{DSR})
 $0.01^{\circ}$ grid cells and hourly time blocks (\S\ref{sec:problem}):
 a $48{\times}90$ cell grid on Shenzhen and a $32{\times}30$ grid on San
 Francisco. The resolution is an implementation choice; the formulation
-requires only a discrete partition of space and time.
-% src: PAPER/argument/02_datasets.md (0.01° grid, hourly blocks, per-city dims)
+requires only a discrete partition of space and time. Preprocessing the
+Shenzhen source data also removed 106{,}677 pickups that had almost no
+matching drop-offs, which are stuck GPS records rather than real demand.
+% src: PAPER/argument/02_datasets.md (0.01° grid, hourly blocks, per-city dims;
+% cleanup counts)
+% (2026-07-25, review finding #16 page budget: the stuck-GPS cleanup sentence
+% MOVED here verbatim-in-substance from \S\ref{sec:exp-setup} with its src
+% pointer. The disclosure survives; only its location changed.)
 % (moved here from §3.1/§4.1 on 2026-07-24 — Meeting-44 [1:29:27]/[1:37:28]:
 % resolution to appendix, defined once)
 
@@ -135,16 +141,32 @@ trajectory's score is its best offset.
 \textbf{Why demand-only editing has no lever in under-served units.} The three
 structural facts behind \S\ref{sec:leveling}, in detail. \emph{Selection}: the
 demand deficit attribution that picks trim's edits (\S\ref{sec:attribution})
-concentrates in over-served, high-residual cells, so under-served cells are
-never edit candidates. \emph{Leverage}: with supply frozen,
+concentrates in over-served, high-residual cells. \emph{Leverage}: with supply frozen,
 $\partial Y_i / \partial D_i = -S_i / D_i^{2}$ makes padding demand into
 high-supply advantaged cells more consequential for $Y$ than removing it from starved
 ones, and 93\% of disadvantaged units sit at the demand floor $d_0$, where
 removing demand changes nothing. \emph{Supply-side inequity}: median taxi
 presence is 1.8 in disadvantaged cells versus 17.6 in advantaged cells, which
 no demand edit can touch, and a greedy unconstrained search, an upper bound on
-any editor, leaves only the perverse option of deleting the under-served
-group's recorded pickups.
+any demand-only editor, leaves only the perverse option of deleting the
+under-served group's recorded pickups.
+% 2026-07-25 (review finding #5, the focused claim read of T10's committed diff —
+% two claim repairs in this relocated block):
+% (1) "so under-served cells are never edit candidates" DROPPED. The ranking is by
+% SIGNED per-unit attribution (famail_temporal/algorithm/attribution.py
+% rank_trajectories: ascending, "most-negative alpha_i first"), and that score is
+% built from squared residual projections, so a strongly UNDER-served unit whose
+% residual is demographically predictable can also score negative. Under-served
+% cells being unselected is therefore an empirical fact about this corpus (the
+% 2,455/2,455 finding in \S\ref{sec:leveling}), not a structural guarantee of the
+% selection rule. The clause the sentence keeps -- that candidates CONCENTRATE in
+% over-served, high-residual cells -- is what the mechanism supports, and Leverage
+% plus Supply-side inequity carry the rest of the argument.
+% (2) "an upper bound on any editor" -> "on any demand-only editor". Read
+% literally, the original said no editor can help the under-served, which is the
+% opposite of the paper's central result: the LIFT channel does exactly that. The
+% bound is over the demand-only problem, which is also how \S\ref{sec:leveling}
+% frames it ("the constrained optimum of the demand-only problem").
 % (2026-07-24, T10 page-budget lever 4: moved here from \S\ref{sec:leveling},
 % which now names the three facts in one sentence and points at this block.)
 % src: PAPER/external-metrics/LEVELING_DOWN_MECHANISM.md; LIFT_ALGORITHM_REFERENCE.md §1 (32x; 93%; median presence 1.8 vs 17.6; oracle perversity)
@@ -413,6 +435,32 @@ violate king-move adjacency wholesale (72.0/87.0/97.5\%), and pay
 $2$--$4\times$ the edited corpus's distributional divergence there,
 0.198--0.418 against 0.098.
 % src: famail_temporal/results/2026-07-16T16-08-{05_baseline_ifgsm,16_baseline_fgsm,23_baseline_random}_sf12/metrics.json (B1 runs 2026-07-16; SF Fid-B from level1 sf12 edited row = 0.098)
+
+% (2026-07-25, review finding #16 page budget: this table MOVED VERBATIM here from
+% \S\ref{sec:exp-baselines}, whose prose still states every headline it carries.
+% Label unchanged so the incoming \ref resolves.)
+\begin{table}[t]
+\centering
+\caption{Cross-arm comparison at matched budgets (Shenzhen).}
+\label{tab:baselines}
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{lrrr}
+\toprule
+arm & $\Delta F_{\mathrm{demo}}$ & $\Delta F_{\mathrm{spatial}}$ & inflation \\
+\midrule
+raw (reference) & --- & --- & 0\% \\
+\textbf{FATE trim+lift} & $\mathbf{+0.0226}$ & $+0.0061$ & 0\% \\
+iFGSM (rand.\ restart) & $-0.0057$ & $+0.0126$ & 0\% \\
+FGSM (rand.\ restart) & $+0.0017$ & $+0.0137$ & 0\% \\
+random jitter & $+0.0135$ & $+0.0132$ & 0\% \\
+demog.\ oversampling (targeted) & $+0.0153$ & $+0.0052$ & 10.5\% \\
+\quad placebo (untargeted) & $-0.0172$ & $+0.0138$ & 10.5\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+% src: PAPER/supply-lift/FINDINGS.md §3 (FATE row); famail_temporal/baselines/baseline_table/baseline_table.json (perturbation rows);
+% src: oversampling cells = 3-seed means over *_d10000_s{0,1,2} metrics.json deltas (matches the committed FINDINGS aggregation; the assembler's seed-0-only d10000 row reads +0.0175)
 
 \textbf{San Francisco downstream detail.} Supporting \S\ref{sec:exp-sf}.
 At $n = 12$ the controls sharpen the contrast rather than soften it: the

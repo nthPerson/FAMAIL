@@ -47,8 +47,9 @@ challenge of \S\ref{sec:overview}, named in its opening sentence.
   bounded, admissible edit to each trajectory would improve the corpus's
   collective fairness, and selects the $k \ll |\mathcal{T}|$ best
   (\S\ref{sec:attribution}). (2) The selected trajectories receive bounded
-  gradient edits under the fairness objective through the two channels trim
-  and lift; every edit stays within $\varepsilon$ cells, is repaired for
+  gradient edits under the fairness objective through its two channels, trim
+  (outcome-side) and lift (resource-aware); every edit stays within
+  $\varepsilon$ cells, is repaired for
   continuity, and is scored by a frozen driver-identity discriminator inside
   the objective. (3) The $k$ edited demonstrations are upweighted during
   imitation so the corpus-level fairness gain survives training.}
@@ -124,14 +125,14 @@ in Appendix~\ref{app:derivations}.
 % Meeting-44 [1:23:32]-[1:24:14]: keep 1-r^2 + meaning + bare hat-matrix cite here)
 
 Two important caveats. First, $F_{\mathrm{demo}}$ (\emph{demo}
-for demographic dependence) is an \emph{associational} quantity: the
+for demographic dependence) is \emph{associational}: the
 partial $R^2$ of a cross-sectional regression on observational
 district-level demographics, with no identification and no counterfactual.
-With about ten district profiles the association is ecological,
+With about ten district profiles on Shenzhen the association is ecological,
 and we make no in\-di\-vid\-ual-level claims. Second, adjusting for demand treats
 recorded demand as exogenous; but demand recorded where service has
 historically been thin is itself suppressed by that under-service. We return
-to this in \S\ref{sec:leveling}, where the same assumption turns out to bound
+to this in \S\ref{sec:leveling}, where the same assumption bounds
 what a demand-only editor can achieve.
 % src: PAPER/objective-motivation/MOTIVATION.md (associational caveat; demand endogeneity)
 
@@ -358,9 +359,14 @@ Both phases repurpose bounded adversarial
 perturbation \cite{goodfellow2015fgsm,kurakin2017ifgsm}, in its
 spatio-temporal instantiation \cite{hu2023stifgsm}, \emph{constructively},
 in the spirit of algorithmic recourse
-\cite{ustun2019recourse,wachter2018counterfactual}: the same
-coun\-ter\-fac\-tual-perturbation tooling that finds a minimal input change to flip
-a decision instead prescribes a minimal, bounded, beneficial one. Per
+\cite{ustun2019recourse,wachter2018counterfactual}.
+% 2026-07-25 (review finding #16 page budget): the gloss ": the same
+% counterfactual-perturbation tooling that finds a minimal input change to flip a
+% decision instead prescribes a minimal, bounded, beneficial one" is dropped here
+% because \S\ref{sec:related} states the same idea in its own words ("a minimal
+% bounded change prescribed for benefit rather than attack") with the same five
+% citations. The constructive framing and every citation survive in both places.
+Per
 iteration, the edit offset takes a signed-gradient step under a cumulative
 $L_\infty$ clip,
 \begin{equation}\label{eq:step}

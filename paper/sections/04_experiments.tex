@@ -43,10 +43,11 @@ reported where each gain is claimed.
 \subsection{Experimental Setup}\label{sec:exp-setup}
 \textbf{Datasets.} The primary city is Shenzhen: a 50-driver sample of real
 taxi GPS trajectories on a $48{\times}90$ grid (cell resolution:
-Appendix~\ref{app:editor}), with district-level demographics. Raw data
-preprocessing included removing 106{,}677
-pickups with almost no matching drop-offs (stuck GPS, not real demand).
-% src: PAPER/argument/02_datasets.md (grid, cleanup counts)
+Appendix~\ref{app:editor}), with district-level demographics; the source-data
+cleanup is described there as well.
+% (2026-07-25, review finding #16 page budget: the 106,677-pickup stuck-GPS
+% cleanup sentence and its % src pointer MOVED to Appendix~\ref{app:editor},
+% Grid configuration. Nothing was deleted.)
 The second city is San Francisco (Cabspotting): a 12-driver
 subsample matched on fleet density (\texttt{sf12}, $32{\times}30$ grid), with
 the same demographic feature names filled from ACS tract values. Density matching is
@@ -210,9 +211,13 @@ $-0.611$, DI $+0.0098$, Theil $-0.0059$, all CIs excluding zero), but the
 disadvantaged group's service level is unchanged while the advantaged level
 falls, so the improvement is pure top-down redistribution. Under trim+lift
 the disadvantaged level rises with a bootstrap interval excluding zero, and
-$\Delta F_{\mathrm{spatial}}$ flips from negative to positive: trim only
-redistributes existing service; lift adds taxi presence where it was
-missing. On Shenzhen
+$\Delta F_{\mathrm{spatial}}$ flips from negative to positive.
+% 2026-07-25 (page budget): the gloss ": trim only redistributes existing
+% service; lift adds taxi presence where it was missing" is dropped as the SECOND
+% statement of it inside this same subsection — the ablation's opening sentence
+% already says "demand-only editing improves the metrics without raising
+% under-served service; the supply channel is what changes that".
+On Shenzhen
 the trim-only versus trim+lift contrast is
 $\Delta F_{\mathrm{demo}}$ $+0.0146$ versus $+0.0226$, % lint-allow: ablation
 $\Delta F_{\mathrm{spatial}}$ $-0.0011$ versus $+0.0061$, and % lint-allow: ablation
@@ -234,7 +239,7 @@ generators trained from scratch for this comparison and Fidelity-A gated using
 the fidelity guardrail of \S\ref{sec:objective}. The edited corpus is the
 fairest source that stays
 faithful to driver identity (Fidelity-A gate passed, matched 0.848 vs.\ mismatched
-0.193), with Fidelity-B 0.187 the disclosed divergence of the bounded edits
+0.193), at the Fidelity-B cost disclosed above
 (Table~\ref{tab:l1}, Appendix~\ref{app:results}). One instability we surface
 rather than smooth: the Shenzhen GAN's Fidelity-B is bimodal across seeds, 
 while the SF GAN stays uniformly healthy (\S\ref{sec:exp-sf}); the
@@ -265,11 +270,14 @@ gain), then fades to n.s.\ at every higher dose. $F_{\mathrm{spatial}}$ also pro
 on Shenzhen, though not on San Francisco (\S\ref{sec:exp-sf}); per-dose
 values and the control contrast are in Appendix~\ref{app:results}. Fidelity-A is unchanged at every weight;
 Fidelity-B rises dose-monotonically: the expected signature of deliberately
-shifting population statistics toward the edited slice (Appendix~\ref{app:results}).
+shifting population statistics toward the edited slice. Model-level variance
+across paired retrainings is real but an order of magnitude below the
+upweighting effect (Appendix~\ref{app:results}).
 % src: famail_temporal/results/weighted_bc_sweep/alpha_sweep_s10_c80_f10_filtered_6seed/paired_stats.json + dose_response.json
 
-\textbf{Model-level variance} across paired retrainings is real but an order
-of magnitude below the upweighting effect (Appendix~\ref{app:results}).
+% 2026-07-25 (page budget): the one-sentence "Model-level variance" paragraph was
+% FOLDED into the end of the upweighting paragraph above (same claim, same
+% appendix pointer, one fewer paragraph break). Nothing was deleted.
 
 % (2026-07-22 argument-triage, Robert's call: the allocation-boundary block moved to
 % Appendix C ('Rollout allocation shares, both cities') with the SF replication passage;
@@ -277,7 +285,8 @@ of magnitude below the upweighting effect (Appendix~\ref{app:results}).
 
 \subsection{Data-Augmentation Baselines}\label{sec:exp-baselines}
 % 2026-07-24 (T10, page-budget lever 1): this subsection is compressed to its
-% framing opener, Table~\ref{tab:baselines} (untouched), and a three-paragraph
+% framing opener, Table~\ref{tab:baselines} (moved to the appendix 2026-07-25,
+% finding #16), and a three-paragraph
 % RQ4 summary. RELOCATED to Appendix~\ref{app:results}, not deleted: the
 % perturbation-arm constructions (with their four cites), the per-arm
 % identity-fidelity reading (~0.846), the random-jitter diffusion mechanism, the
@@ -292,8 +301,8 @@ None of the baselines below optimizes a fairness objective; they are
 \emph{editing-quality} baselines that test whether FATE's gains come from
 its objective or merely from bounded perturbation (or corpus resampling)
 per se. Fairness is accordingly \emph{expected not to improve} under the
-perturbation arms. Table~\ref{tab:baselines} compares every arm at matched
-budgets; per-arm detail is in Appendix~\ref{app:results}.
+perturbation arms. Table~\ref{tab:baselines} in Appendix~\ref{app:results}
+compares every arm at matched budgets, alongside the per-arm detail.
 % src: PAPER/baselines/README.md (Meeting-41 framing)
 
 \textbf{Perturbation arms.} Three arms move the same trajectories the headline
@@ -330,28 +339,17 @@ of \cite{zheng2023} is inert at every trainable dose, destructive only where
 it dominates.
 % src: famail_temporal/results/weighted_bc_sweep/fairness_baseline_6seed/paired_stats.json (fair_reweigh; edited_w30 +0.0302 replicated internally)
 
-\begin{table}[t]
-\centering
-\caption{Cross-arm comparison at matched budgets (Shenzhen).}
-\label{tab:baselines}
-\footnotesize
-\setlength{\tabcolsep}{4pt}
-\begin{tabular}{lrrr}
-\toprule
-arm & $\Delta F_{\mathrm{demo}}$ & $\Delta F_{\mathrm{spatial}}$ & inflation \\
-\midrule
-raw (reference) & --- & --- & 0\% \\
-\textbf{FATE trim+lift} & $\mathbf{+0.0226}$ & $+0.0061$ & 0\% \\
-iFGSM (rand.\ restart) & $-0.0057$ & $+0.0126$ & 0\% \\
-FGSM (rand.\ restart) & $+0.0017$ & $+0.0137$ & 0\% \\
-random jitter & $+0.0135$ & $+0.0132$ & 0\% \\
-demog.\ oversampling (targeted) & $+0.0153$ & $+0.0052$ & 10.5\% \\
-\quad placebo (untargeted) & $-0.0172$ & $+0.0138$ & 10.5\% \\
-\bottomrule
-\end{tabular}
-\end{table}
-% src: PAPER/supply-lift/FINDINGS.md §3 (FATE row); famail_temporal/baselines/baseline_table/baseline_table.json (perturbation rows);
-% src: oversampling cells = 3-seed means over *_d10000_s{0,1,2} metrics.json deltas (matches the committed FINDINGS aggregation; the assembler's seed-0-only d10000 row reads +0.0175)
+% (2026-07-25, review finding #16 page budget, Robert-approved: Table
+% \ref{tab:baselines} MOVED VERBATIM to Appendix~\ref{app:results}, beside the
+% perturbation-arm constructions block that already supports this subsection.
+% Every cell, its caption and both % src: comments travelled unchanged; the
+% \label is unchanged so this subsection's reference still resolves. This was the
+% single largest page-budget lever left (~10 rendered lines) and it was taken last,
+% after the four cheaper ones. RQ4's answer stays in this subsection's prose: the
+% three perturbation arms all fall short of the editor's +0.0226 while breaking
+% adjacency, oversampling reaches +0.0153 only by fabricating 10.5% of the corpus,
+% its untargeted placebo degrades fairness, and both training-side fairness
+% methods fail to reproduce the recovery.)
 
 \subsection{Robustness and Sensitivity}\label{sec:exp-robustness}
 
