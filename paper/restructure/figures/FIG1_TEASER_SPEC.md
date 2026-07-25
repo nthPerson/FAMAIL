@@ -1,5 +1,12 @@
 # FIGURE 1 SPEC — teaser (Dr. Zhang's PNG; optional TikZ remake)
 
+> **v5 (Robert, 2026-07-25, legend + fonts):** legend groups now spaced by
+> compile-time measurement (`\settowidth` per label, leftover split into
+> 5 equal gaps — self-re-spacing on any wording/font/icon change; the
+> measuring block must stay OUTSIDE the tikzpicture, where it returns 0);
+> titles `\small` 9 pt, side names `\footnotesize` bold 8 pt; bands grown
+> (`\tzTitleH` 0.40, `\tzLabelH` 0.94). Measured 239.50 × 126.51 pt.
+>
 > **v4 (Robert, 2026-07-25, overlay legibility):** middle-right passenger
 > (0.920,0.409)→(0.870,0.455) both panels, clear of the arrow shaft;
 > semi-transparent white backing behind FATE (`\tzFateBgW/H/Dy/Opacity`,

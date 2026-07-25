@@ -136,8 +136,8 @@
 \pgfmathsetmacro\tzPW{(\tzW-\tzGap)/2}% panel width (= 4.08, grew from
 %                    3.60 when the center zone was surrendered)
 \def\tzPH{2.60}%     panel height
-\def\tzTitleH{0.36}% title band height (titles sit inside it)
-\def\tzLabelH{0.88}% label band height (side labels only -- keep clear)
+\def\tzTitleH{0.40}% title band height (titles sit inside it)
+\def\tzLabelH{0.94}% label band height (side labels only -- keep clear)
 \def\tzLegGap{0.06}% gap between label band and legend band
 \def\tzLegH{0.44}%   legend band height
 \def\tzInPad{0.10}%  inner panel margin the icons respect (documentation;
@@ -155,20 +155,20 @@
 \pgfmathsetmacro\tzRcx{\tzRPx+\tzPW/2}% right panel center
 \pgfmathsetmacro\tzArrY{\tzPanelTop-0.45*\tzPH}% block-arrow center y
 % ---- FATE overlay (label backing + block arrow; all tinker-friendly) --
-\def\tzFateBgW{0.94}%       backing rectangle width (cm)
-\def\tzFateBgH{0.40}%       backing rectangle height (cm)
+\def\tzFateBgW{0.78}%       backing rectangle width (cm)
+\def\tzFateBgH{0.33}%       backing rectangle height (cm)
 \def\tzFateBgOpacity{0.72}% backing opacity: 1 = solid white, 0 = invisible
 %                           (panel content underneath shows through washed)
 \def\tzFateBgDy{0.32}%      backing CENTER height above \tzArrY (cm)
-\def\tzArrLen{0.94}%        block-arrow total length; ~= \tzFateBgW per
+\def\tzArrLen{0.70}%        block-arrow total length; ~= \tzFateBgW per
 %                           Robert 2026-07-25 v4
-\def\tzArrShaftH{0.075}%    shaft half-height (cm)
+\def\tzArrShaftH{0.065}%    shaft half-height (cm)
 \def\tzArrHeadH{0.14}%      arrowhead half-height (cm)
 \def\tzArrHeadL{0.26}%      arrowhead length (cm)
-% ---- fonts (one level up per Robert 2026-07-25 v3; exact sizes and
-% ---- legibility in FIG1_TIKZ_REPORT.md) ------------------------------
-\def\tzTitleFont{\footnotesize}%                   panel titles (8 pt)
-\def\tzSideFont{\scriptsize\bfseries}%             Advantaged/Disadv. (7 pt)
+% ---- fonts (v5, Robert 2026-07-25: titles + side names one MORE level
+% ---- up; exact sizes and legibility in FIG1_TIKZ_REPORT.md) ----------
+\def\tzTitleFont{\small}%                          panel titles (9 pt)
+\def\tzSideFont{\footnotesize\bfseries}%           Advantaged/Disadv. (8 pt)
 \def\tzInfoFont{\scriptsize}%                      Service/Demand (7 pt)
 \def\tzLegendFont{\scriptsize}%                    legend entries (7 pt)
 \def\tzFateFont{\footnotesize\bfseries}%           center FATE label (8 pt)
@@ -237,6 +237,29 @@
 \def\tzTrimToX{0.245}\def\tzTrimToY{0.775}%
 \def\tzTrimArrX{0.222}\def\tzTrimArrY{0.750}% arrowhead stops here, just
 %                    short of the relocated passenger icon
+% ---- legend layout (v5): group widths measured at compile time, the
+% ---- leftover band width split into 5 EQUAL gaps (see legend section)
+\def\tzLegSample{0.32}% trajectory line-sample length (cm)
+\def\tzLegPad{0.10}%    icon-to-label pad (cm)
+\pgfmathsetmacro\tzPickW{\tzPickH*62/148}% passenger icon width (cm)
+\newdimen\tzlgdim
+\settowidth{\tzlgdim}{{\tzLegendFont \tzLegTaxi}}%
+\pgfmathsetmacro\tzlgTaxiW{\tzlgdim/28.452756}%   pt -> cm
+\settowidth{\tzlgdim}{{\tzLegendFont \tzLegPick}}%
+\pgfmathsetmacro\tzlgPickW{\tzlgdim/28.452756}%
+\settowidth{\tzlgdim}{{\tzLegendFont \tzLegExist}}%
+\pgfmathsetmacro\tzlgExistW{\tzlgdim/28.452756}%
+\settowidth{\tzlgdim}{{\tzLegendFont \tzLegEdit}}%
+\pgfmathsetmacro\tzlgEditW{\tzlgdim/28.452756}%
+\pgfmathsetmacro\tzlgGa{\tzTaxiW+\tzLegPad+\tzlgTaxiW}%     group widths
+\pgfmathsetmacro\tzlgGb{\tzPickW+\tzLegPad+\tzlgPickW}%
+\pgfmathsetmacro\tzlgGc{\tzLegSample+\tzLegPad+\tzlgExistW}%
+\pgfmathsetmacro\tzlgGd{\tzLegSample+\tzLegPad+\tzlgEditW}%
+\pgfmathsetmacro\tzlgGap{(\tzW-\tzlgGa-\tzlgGb-\tzlgGc-\tzlgGd)/5}%
+\pgfmathsetmacro\tzlgXa{\tzlgGap}%                          group starts
+\pgfmathsetmacro\tzlgXb{\tzlgXa+\tzlgGa+\tzlgGap}%
+\pgfmathsetmacro\tzlgXc{\tzlgXb+\tzlgGb+\tzlgGap}%
+\pgfmathsetmacro\tzlgXd{\tzlgXc+\tzlgGc+\tzlgGap}%
 % ---------------------------------------------------------------------
 % helper: panel-fraction pair -> local cm coordinate
 \providecommand{\pxy}[2]{({#1*\tzPW},{-#2*\tzPH})}%
@@ -490,7 +513,8 @@
     -- ({\tzCx+\tzArrLen/2-\tzArrHeadL},{\tzArrY-\tzArrShaftH})
     -- ({\tzCx-\tzArrLen/2},{\tzArrY-\tzArrShaftH}) -- cycle;
   \node[anchor=south, font=\tzFateFont, inner sep=1.5pt]
-    at (\tzCx,{\tzArrY+0.15}) {\tzFateLabel};
+    at (\tzCx,{\tzArrY+0.18}) {\tzFateLabel};
+    % at (\tzCx,{\tzArrY+0.15}) {\tzFateLabel};
 
   % ================= label band (side labels ONLY) =====================
   \pgfmathsetmacro\tzAdvLx{\tzBx*\tzPW/2}%          adv half center
@@ -502,24 +526,35 @@
       at ({\dx+\tzDisLx},{\tzPanelBot-0.04}) {\tzDisName};
   }
   \node[anchor=north, font=\tzInfoFont, align=center, inner sep=1pt]
-    at (\tzAdvLx,{\tzPanelBot-0.33}) {\tzAdvInfoL};
+    at (\tzAdvLx,{\tzPanelBot-0.37}) {\tzAdvInfoL};
   \node[anchor=north, font=\tzInfoFont, align=center, inner sep=1pt]
-    at (\tzDisLx,{\tzPanelBot-0.33}) {\tzDisInfoL};
+    at (\tzDisLx,{\tzPanelBot-0.37}) {\tzDisInfoL};
   \node[anchor=north, font=\tzInfoFont, align=center, inner sep=1pt]
-    at ({\tzRPx+\tzAdvLx},{\tzPanelBot-0.33}) {\tzAdvInfoR};
+    at ({\tzRPx+\tzAdvLx},{\tzPanelBot-0.37}) {\tzAdvInfoR};
   \node[anchor=north, font=\tzInfoFont, align=center, inner sep=1pt]
-    at ({\tzRPx+\tzDisLx},{\tzPanelBot-0.33}) {\tzDisInfoR};
+    at ({\tzRPx+\tzDisLx},{\tzPanelBot-0.37}) {\tzDisInfoR};
 
   % ================= legend band =======================================
+  % Even spacing (v5): the four icon+label groups are measured at compile
+  % time (\settowidth in the actual legend font) and the leftover band
+  % width is split into 5 EQUAL gaps (left margin, three between-group
+  % gaps, right margin). Editing a label string, the legend font, an icon
+  % size, \tzLegSample or \tzLegPad re-spaces the band automatically.
   \fill[tzband] (0,\tzLegTop) rectangle (\tzW,\tzLegBot);
   \draw[tzrule, line width=0.35pt] (0,\tzLegTop) rectangle (\tzW,\tzLegBot);
   \pgfmathsetmacro\tzLegY{(\tzLegTop+\tzLegBot)/2}%
-  \pic[tzTaxiInk] at (0.42,\tzLegY) [scale=\tzTaxiScale] {taxi};
-  \node[anchor=west, font=\tzLegendFont] at (0.70,\tzLegY) {\tzLegTaxi};
-  \pic[tzink] at (1.58,\tzLegY) [scale=\tzPickScale] {pick};
-  \node[anchor=west, font=\tzLegendFont] at (1.70,\tzLegY) {\tzLegPick};
-  \draw[tztraj] (2.98,\tzLegY) -- (3.30,\tzLegY);
-  \node[anchor=west, font=\tzLegendFont] at (3.38,\tzLegY) {\tzLegExist};
-  \draw[tzedit] (5.86,\tzLegY) -- (6.18,\tzLegY);
-  \node[anchor=west, font=\tzLegendFont] at (6.26,\tzLegY) {\tzLegEdit};
+  \pic[tzTaxiInk] at ({\tzlgXa+\tzTaxiW/2},\tzLegY)
+    [scale=\tzTaxiScale] {taxi};
+  \node[anchor=west, font=\tzLegendFont, inner sep=0pt]
+    at ({\tzlgXa+\tzTaxiW+\tzLegPad},\tzLegY) {\tzLegTaxi};
+  \pic[tzink] at ({\tzlgXb+\tzPickW/2},\tzLegY)
+    [scale=\tzPickScale] {pick};
+  \node[anchor=west, font=\tzLegendFont, inner sep=0pt]
+    at ({\tzlgXb+\tzPickW+\tzLegPad},\tzLegY) {\tzLegPick};
+  \draw[tztraj] (\tzlgXc,\tzLegY) -- ({\tzlgXc+\tzLegSample},\tzLegY);
+  \node[anchor=west, font=\tzLegendFont, inner sep=0pt]
+    at ({\tzlgXc+\tzLegSample+\tzLegPad},\tzLegY) {\tzLegExist};
+  \draw[tzedit] (\tzlgXd,\tzLegY) -- ({\tzlgXd+\tzLegSample},\tzLegY);
+  \node[anchor=west, font=\tzLegendFont, inner sep=0pt]
+    at ({\tzlgXd+\tzLegSample+\tzLegPad},\tzLegY) {\tzLegEdit};
 \end{tikzpicture}%

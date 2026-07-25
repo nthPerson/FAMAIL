@@ -1,4 +1,22 @@
-# FIG-1 TikZ RE-IMPLEMENTATION — report (2026-07-25, v4)
+# FIG-1 TikZ RE-IMPLEMENTATION — report (2026-07-25, v5)
+
+**v5 (Robert's legend + font pass, 2026-07-25):**
+1. **Legend evenly spaced, by computation.** The four icon+label group
+   widths are measured at compile time (`\settowidth` in the actual
+   legend font, in the config block — measuring inside the tikzpicture
+   silently returns 0) and the leftover band width is split into 5 EQUAL
+   gaps (both end margins + three between-group gaps, 0.486 cm each at
+   current settings). Editing a label string, the legend font, an icon
+   size, `\tzLegSample` or `\tzLegPad` re-spaces the band automatically.
+   Render-verified: inter-group ink gaps 59/56/55 px at 300 dpi (±2 px
+   is antialiasing + the icons' transparent padding).
+2. **Fonts up one more level**: panel titles `\small` (9 pt), side names
+   `\footnotesize` bold (8 pt). Bands grown to fit: `\tzTitleH` 0.40,
+   `\tzLabelH` 0.94, info-line offset −0.37. Info/legend stay 7 pt, FATE
+   8 pt bold (Robert's hand-tuned v4 overlay values preserved: backing
+   0.78 × 0.33, arrow 0.70).
+3. Measured box **239.50 × 126.51 pt** (width unchanged; height +2.8 pt,
+   still 8.5 pt under the 135 pt cap and ~0.7 line shorter than the PNG).
 
 **v4 (Robert's overlay-legibility pass, 2026-07-25):**
 1. **Icons cleared from the overlay zone.** The middle-right disadvantaged
@@ -86,9 +104,9 @@ From the harness (`\newsavebox` measurement, printed by the compiler):
 
 - **Width 239.50285 pt** vs `\columnwidth` = 241.14749 pt (1.64 pt to spare;
   Figure 2 is 239.80 pt, so the two figures are visually the same width).
-- **Height 123.66023 pt** (v3) vs the 135.0 pt hard cap → **11.34 pt of
-  headroom** (the PNG renders at 135.0 pt, so the TikZ version is still ~1
-  text line SHORTER than the PNG despite the one-level font bump).
+- **Height 126.50525 pt** (v5) vs the 135.0 pt hard cap → **8.49 pt of
+  headroom** (the PNG renders at 135.0 pt, so the TikZ version is still
+  ~0.7 text line SHORTER than the PNG despite two rounds of font bumps).
 - Harness log: 0 errors, 0 Overfull.
 
 Full manuscript gates (PNG still in place), all green:
@@ -102,12 +120,12 @@ fig1-on-p1: 1        (pdftotext p1 finds "Collective service disparity")
 
 ## 2. Font sizes and legibility call
 
-v3 sizes (one level up from v1/v2 per Robert):
+v5 sizes (titles + side names one further level up per Robert):
 
 | Element | Macro | Size |
 |---|---|---|
-| Panel titles | `\tzTitleFont` | `\footnotesize` (8 pt) |
-| Advantaged / Disadvantaged | `\tzSideFont` | `\scriptsize` bold (7 pt) |
+| Panel titles | `\tzTitleFont` | `\small` (9 pt) |
+| Advantaged / Disadvantaged | `\tzSideFont` | `\footnotesize` bold (8 pt) |
 | Service/Demand lines | `\tzInfoFont` | `\scriptsize` (7 pt) |
 | Legend entries | `\tzLegendFont` | `\scriptsize` (7 pt) |
 | FATE center label | `\tzFateFont` | `\footnotesize` bold (8 pt) |
