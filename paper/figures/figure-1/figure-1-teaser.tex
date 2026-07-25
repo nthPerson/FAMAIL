@@ -154,6 +154,17 @@
 \pgfmathsetmacro\tzLcx{\tzPW/2}%       left panel center
 \pgfmathsetmacro\tzRcx{\tzRPx+\tzPW/2}% right panel center
 \pgfmathsetmacro\tzArrY{\tzPanelTop-0.45*\tzPH}% block-arrow center y
+% ---- FATE overlay (label backing + block arrow; all tinker-friendly) --
+\def\tzFateBgW{0.94}%       backing rectangle width (cm)
+\def\tzFateBgH{0.40}%       backing rectangle height (cm)
+\def\tzFateBgOpacity{0.72}% backing opacity: 1 = solid white, 0 = invisible
+%                           (panel content underneath shows through washed)
+\def\tzFateBgDy{0.32}%      backing CENTER height above \tzArrY (cm)
+\def\tzArrLen{0.94}%        block-arrow total length; ~= \tzFateBgW per
+%                           Robert 2026-07-25 v4
+\def\tzArrShaftH{0.075}%    shaft half-height (cm)
+\def\tzArrHeadH{0.14}%      arrowhead half-height (cm)
+\def\tzArrHeadL{0.26}%      arrowhead length (cm)
 % ---- fonts (one level up per Robert 2026-07-25 v3; exact sizes and
 % ---- legibility in FIG1_TIKZ_REPORT.md) ------------------------------
 \def\tzTitleFont{\footnotesize}%                   panel titles (8 pt)
@@ -206,7 +217,9 @@
 % panel; in the right panel it is the trim edit's subject when
 % \showTrimEdit is on, else drawn dark unchanged there too).
 \def\tzAdvPicksKept{0.119/0.269, 0.047/0.615}%
-\def\tzDisPicks{0.655/0.266, 0.920/0.409, 0.861/0.860}% both panels: 3 dark
+% (the middle-right passenger sits at (0.870,0.455), not the PNG's
+% (0.920,0.409), so he stands clear of the overlaid FATE arrow shaft)
+\def\tzDisPicks{0.655/0.266, 0.870/0.455, 0.861/0.860}% both panels: 3 dark
 \def\tzServedX{0.740}\def\tzServedY{0.590}%  4th dis passenger: dark on the
 %            left, RECOLORED tzEdit on the right (served, not moved); PNG
 %            position (0.669,0.409) moved with the pair (same spot in BOTH
@@ -463,14 +476,21 @@
 
   % ================= center: FATE + block arrow (drawn AFTER the panels
   % ================= so it overlays their inner edges -- Zhang's
-  % ================= composition; the gap itself is only ~one grid cell)
+  % ================= composition; the gap itself is only ~one grid cell).
+  % Layers: semi-transparent backing rectangle -> arrow -> FATE label.
+  \fill[white, opacity=\tzFateBgOpacity, rounded corners=1pt]
+    ({\tzCx-\tzFateBgW/2},{\tzArrY+\tzFateBgDy-\tzFateBgH/2}) rectangle
+    ({\tzCx+\tzFateBgW/2},{\tzArrY+\tzFateBgDy+\tzFateBgH/2});
+  \shade[left color=tzrule!35, right color=tzrule]
+    ({\tzCx-\tzArrLen/2},{\tzArrY+\tzArrShaftH})
+    -- ({\tzCx+\tzArrLen/2-\tzArrHeadL},{\tzArrY+\tzArrShaftH})
+    -- ({\tzCx+\tzArrLen/2-\tzArrHeadL},{\tzArrY+\tzArrHeadH})
+    -- ({\tzCx+\tzArrLen/2},\tzArrY)
+    -- ({\tzCx+\tzArrLen/2-\tzArrHeadL},{\tzArrY-\tzArrHeadH})
+    -- ({\tzCx+\tzArrLen/2-\tzArrHeadL},{\tzArrY-\tzArrShaftH})
+    -- ({\tzCx-\tzArrLen/2},{\tzArrY-\tzArrShaftH}) -- cycle;
   \node[anchor=south, font=\tzFateFont, inner sep=1.5pt]
     at (\tzCx,{\tzArrY+0.15}) {\tzFateLabel};
-  \shade[left color=tzrule!35, right color=tzrule]
-    ({\tzCx-0.55},{\tzArrY+0.11}) -- ({\tzCx+0.26},{\tzArrY+0.11})
-    -- ({\tzCx+0.26},{\tzArrY+0.20}) -- ({\tzCx+0.55},\tzArrY)
-    -- ({\tzCx+0.26},{\tzArrY-0.20}) -- ({\tzCx+0.26},{\tzArrY-0.11})
-    -- ({\tzCx-0.55},{\tzArrY-0.11}) -- cycle;
 
   % ================= label band (side labels ONLY) =====================
   \pgfmathsetmacro\tzAdvLx{\tzBx*\tzPW/2}%          adv half center

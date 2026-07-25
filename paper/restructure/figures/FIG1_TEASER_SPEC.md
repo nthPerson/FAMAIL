@@ -1,5 +1,11 @@
 # FIGURE 1 SPEC — teaser (Dr. Zhang's PNG; optional TikZ remake)
 
+> **v4 (Robert, 2026-07-25, overlay legibility):** middle-right passenger
+> (0.920,0.409)→(0.870,0.455) both panels, clear of the arrow shaft;
+> semi-transparent white backing behind FATE (`\tzFateBgW/H/Dy/Opacity`,
+> 0.94×0.40 cm @ 0.72); arrow shrunk to the backing's length
+> (`\tzArrLen` 0.94, heights 0.075/0.14, all macros). Box unchanged.
+>
 > **v3 (Robert, 2026-07-25, post-integration):** trim channel ON (drawn as
 > a relocation of one existing advantaged passenger, counts conserved,
 > both endpoints inside the advantaged tint; `\showTrimEditfalse` = back

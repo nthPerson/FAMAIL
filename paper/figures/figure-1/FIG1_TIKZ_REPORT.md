@@ -1,4 +1,22 @@
-# FIG-1 TikZ RE-IMPLEMENTATION — report (2026-07-25, v3)
+# FIG-1 TikZ RE-IMPLEMENTATION — report (2026-07-25, v4)
+
+**v4 (Robert's overlay-legibility pass, 2026-07-25):**
+1. **Icons cleared from the overlay zone.** The middle-right disadvantaged
+   passenger moved from the PNG's (0.920,0.409) to (0.870,0.455) in BOTH
+   panels — he stood with his feet under the arrow shaft. (The v3 taxi
+   nudge to x=0.145 plus the smaller v4 arrow clears the right panel's
+   side; no other icon or trajectory touched the zone.)
+2. **Semi-transparent backing behind FATE**: a white rounded rectangle at
+   `\tzFateBgOpacity` (default 0.72) drawn under the label, so panel
+   content shows through washed out. Fully tinker-friendly:
+   `\tzFateBgW`/`\tzFateBgH` (0.94 × 0.40 cm) and `\tzFateBgDy` (center
+   height above the arrow axis). TikZ cannot blur, so semi-transparency
+   is the whole effect; opacity 1 gives a solid plate.
+3. **Arrow shrunk to the backing's length**: total length `\tzArrLen` =
+   0.94 cm = `\tzFateBgW` (was 1.10), shaft/head half-heights
+   `\tzArrShaftH` 0.075 / `\tzArrHeadH` 0.14 (was 0.11/0.20), head length
+   `\tzArrHeadL` 0.26 — every dimension a macro. Box unchanged:
+   239.50 × 123.66 pt.
 
 **v3 (Robert's three post-integration changes, 2026-07-25):**
 1. **Trim channel shown** (`\showTrimEdittrue`, now the default). Drawn so
