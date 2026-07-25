@@ -1,5 +1,15 @@
 # FIGURE 1 SPEC — teaser (Dr. Zhang's PNG; optional TikZ remake)
 
+> **v2 REFINEMENTS (Robert, 2026-07-25, same day):** Zhang's own taxi/
+> passenger icons adopted (extracted from teaser.png's legend + PIL
+> recolor variants, `icon-*.png`); grid ~2.4x finer (19x13); SZ street
+> map (`figures/figure-2/SZ_street_background_5x4_rotated.png`) under the
+> panels at 0.55 opacity with the existing-trajectory polylines re-traced
+> along its roads (mixed 3-10 segment lengths); panel cards ON by default
+> (cautionary pink left / calm green right, her in-panel hexes). Measured
+> box now 239.50 x 116.83 pt. Each refinement macro-reversible
+> (`\useZhangIcons`, `\useMapBackground`, `\showCardTints`, `\tzGridN*`).
+>
 > **PHASE 2 EXECUTED (2026-07-25).** The TikZ remake is BUILT at
 > `paper/figures/figure-1/figure-1-teaser.tex` (harness:
 > `figure-1-teaser-test.tex`; previews + email-ready `fig1-for-zhang.png`
