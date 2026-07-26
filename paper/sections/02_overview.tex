@@ -117,12 +117,18 @@ fairness of the whole corpus (\S\ref{sec:editor}).
 reads as its original driver. Each edit is therefore bounded to a small
 neighborhood of the recorded trajectory and scored by a frozen driver-identity
 discriminator inside the editing objective (\S\ref{sec:phys-validity}).
-\textbf{C3 (de\-mand-ad\-just\-ed fairness).}%
+\textbf{C3 (de\-mand-ad\-just\-ed fairness).}
 % 2026-07-25: discretionary hyphens added to the bold compound. Without them
 % "demand-adjusted" is unbreakable and the challenge block overran the column by
 % 6.57pt (lint gate is >5pt). Same house pattern as "demo\-graph\-ic-parity" and
-% "dis\-pa\-rate-impact" elsewhere; the rendered word is unchanged. Equal service is not the target: a 
-business district should receive more service than a quiet residential block. 
+% "dis\-pa\-rate-impact" elsewhere; the rendered word is unchanged.
+% 2026-07-25 (later, found during the fig-2 fork-removal pass): the comment above
+% had swallowed the sentence opening "Equal service is not the target: a" (same
+% defect class as commit 6d03679), so C3 rendered as "fairness).business district
+% should...". Restored below; the % after \textbf{} is dropped so the line break
+% supplies the space the swallowed text lost.
+Equal service is not the target: a
+business district should receive more service than a quiet residential block.
 The objective must score only the service variation demand leaves
 unexplained (\S\ref{sec:objective}).
 \textbf{C4 (level up, not down).} Measured fairness can improve while the

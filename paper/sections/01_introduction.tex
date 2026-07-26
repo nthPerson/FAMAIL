@@ -102,9 +102,15 @@ HSTD to downstream applications \cite{ensign2018,lumisaac2016}.
   % It is a SCHEMATIC: icons, street lattice and trajectories are stylized, no
   % real trajectory or measured value is plotted, and the prose therefore says
   % "sketched in" rather than "shows". Fig-1 and Fig-2 now share one palette and
-  % one edit vocabulary (amber = the edit, faint open circle = vacated original,
-  % dashed amber + arrowhead = the rerouted tail); the raster/TikZ style mismatch
-  % the meeting tolerated is gone. This figure is the WHY; fig:overview is the HOW.
+  % one edit vocabulary (amber = the edit; dashed amber + arrowhead = the
+  % rerouted tail); the raster/TikZ style mismatch the meeting tolerated is gone.
+  % This figure is the WHY; fig:overview is the HOW.
+  % 2026-07-25: the fig-1 session's v6.1 (5c49ecc) turned the vacated-taxi ghost
+  % circle and the "+" added-presence mark OFF by default, so the \Description
+  % below no longer claims a plus sign and this comment no longer lists the open
+  % circle in the shared vocabulary. Both survive behind \showVacatedGhost /
+  % \showAddedMark. The rerouted line still begins at the vacated position, so
+  % that clause of the \Description stands.
   \input{figures/figure-1/figure-1-teaser}
   \caption{Collective service disparity emerges from the aggregation of local
   trajectories (left). FATE edits a small set of influential trajectories to
@@ -119,10 +125,9 @@ HSTD to downstream applications \cite{ensign2018,lumisaac2016}.
   High. A thick arrow labeled FATE leads to the right map, titled FATE for
   Fairer Service. There the advantaged half holds four taxis and the same
   three passengers, and the disadvantaged half holds three taxis and the same
-  four passengers: a dashed amber line starts at the vacated position of the
-  taxi that left the advantaged half, crosses the district boundary, and ends
-  with an arrowhead at the arriving amber taxi, beside a small plus sign
-  marking added service presence. The passenger nearest that taxi is drawn in
+  four passengers: a dashed amber line starts where the taxi that left the
+  advantaged half had been, crosses the district boundary, and ends
+  with an arrowhead at the arriving amber taxi. The passenger nearest that taxi is drawn in
   amber to mark the passenger who now gets served, and passenger counts are
   unchanged on both sides. The two halves are labeled Service: Moderate,
   Demand: Similar and Service: Increased, Demand: Similar. A legend below

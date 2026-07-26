@@ -17,9 +17,12 @@
 % operation labels, terminal contrast boxes.
 %
 % GEOMETRY (all in cm; y grows DOWNWARD as negative):
-%   canvas 8.40 x 10.54 cm; MEASURED box (framework-test.tex prints it):
-%   239.80pt wide x 300.69pt tall. Gates: \columnwidth (acmart sigconf) =
-%   241.15pt -> 1.3pt to spare; 0.5\textheight = 313.0pt -> 12.3pt to spare.
+%   canvas 8.40 x 10.16 cm; MEASURED box (framework-test.tex prints it):
+%   239.80pt wide x 289.88pt tall (re-measured 2026-07-25 after the Stage-2
+%   fork removal; the "8.40 x 10.54 / 300.69pt" previously recorded here was
+%   stale from before an earlier canvas shrink). Gates: \columnwidth (acmart
+%   sigconf) = 241.15pt -> 1.3pt to spare; 0.5\textheight = 313.0pt ->
+%   23.1pt to spare.
 %   Keep any edit inside those two numbers, and keep the last line of this
 %   file ending in a comment character (a bare newline would leak an
 %   interword space when the file is \input mid-paragraph).
@@ -49,9 +52,10 @@
 %   over-served area, fwlow!12 = under-served area. Saturated strokes are
 %   objects; that is what keeps the pale under-served tint from being read
 %   as the cobalt "low impact" trajectories one band above.
-%   fwneg/fwpos are used ONLY in the two terminal verdict boxes (the
-%   exemplar's red "Wrong Label!" / green "Correct Label!" pair); the x/check
-%   marks and the border dashing carry the verdict without color.
+%   fwpos is used ONLY in the terminal outcome box (the exemplar's green
+%   "Correct Label!" analogue); the check mark carries the verdict without
+%   color. (fwneg + the xmark pic left with the uniform-weights fork,
+%   removed 2026-07-25 -- see the Stage-2 comment block.)
 %
 % VOCABULARY GUARDS (binding, per the spec's accuracy constraints):
 %   - no "attack" / "perturbation" / "z-score" anywhere;
@@ -72,7 +76,6 @@
 \definecolor{fwbandone}{HTML}{E3EDF9}% stage 1 band
 \definecolor{fwbandtwo}{HTML}{E7F1E4}% stage 2 band
 \definecolor{fwbandthree}{HTML}{EFEAF7}% stage 3 band
-\definecolor{fwneg}{HTML}{B3261E}%     terminal box: bias reproduced
 \definecolor{fwpos}{HTML}{15803D}%     terminal box: fairer allocation
 \begin{tikzpicture}[x=1cm, y=1cm, line cap=round, line join=round,
   font=\scriptsize, text=fwink, inner sep=1.2pt,
@@ -83,9 +86,7 @@
                     -- (0.60,0.03);},
   trajc/.pic={\draw (0,0.14) -- (0.14,0.03) -- (0.30,0.12) -- (0.44,0.04)
                     -- (0.60,0.15);},
-  % ---- terminal verdict marks (drawn, so no extra package is needed) ----
-  xmark/.pic={\draw[line width=0.85pt] (-0.075,-0.075) -- (0.075,0.075)
-                                       (-0.075,0.075) -- (0.075,-0.075);},
+  % ---- terminal verdict mark (drawn, so no extra package is needed) ----
   ckmark/.pic={\draw[line width=0.85pt] (-0.085,0.005) -- (-0.025,-0.070)
                                         -- (0.090,0.085);},
   % ---- trajectory styles (weight + dashing carry the groups) -----------
@@ -119,8 +120,8 @@
   \def\xL{0.45}          % inner left  margin for full-width boxes
   \def\xR{7.95}          % inner right margin for full-width boxes
   \def\spine{4.20}       % centre flow spine
-  \def\bL{2.20}          % left  branch axis (trim / uniform weights)
-  \def\bR{6.20}          % right branch axis (lift / upweighted)
+  \def\bL{2.20}          % left  branch axis (trim panel, Stage 1b)
+  \def\bR{6.20}          % right branch axis (lift panel, Stage 1b)
 
   % =====================================================================
   % Bands + outer canvas (flat fills, exemplar style)
@@ -144,7 +145,7 @@
   \pic[tnone] at (0.75,-1.02) {traja};
   \pic[tnone] at (2.39,-1.02) {trajb};
   \pic[tnone] at (4.03,-1.02) {trajc};
-  \node at (5.85,-0.93) {$\ldots$};
+  \node at (5.85,-1.10) {$\ldots$};
   \pic[tnone] at (7.06,-1.02) {traja};
   \node[anchor=north] at (1.05,-1.08) {$\tau_1$};
   \node[anchor=north] at (2.69,-1.08) {$\tau_2$};
@@ -257,36 +258,51 @@
   % =====================================================================
   % STAGE 2 -- Upweight: the sparse edits must survive training
   % =====================================================================
+  % 2026-07-25 (Robert): the uniform-weights fork (uniform weights ->
+  % trained policy -> bias reproduced) is REMOVED -- it was the experimental
+  % control, not part of the proposed method, so the band now shows only
+  % FATE's own path, centred on the spine. The averaged-away null the red
+  % terminal carried survives as the weight chip's second line, which keeps
+  % the 2026-07-24 caption decision (that clause was dropped from the caption
+  % BECAUSE the figure states it) sound. The freed width pays for the weight
+  % chip: a trim/lift-style visual in which each demonstration stands on a
+  % bar whose height is its loss weight -- edited (dashed amber) demos ride
+  % tall amber bars, unchanged (gray) demos sit on short gray ones. Bar
+  % HEIGHT carries the distinction, so the chip is grayscale-safe, and no
+  % weight symbol is introduced (\S3.4 names none; symbol guard holds).
   \node[ttl] at (0.20,-7.45)
     {\textbf{Stage 2: Upweight}\\
      \textcolor{fwgray}{edit-aware imitation training}};
-  \draw[flow] (\spine,-7.33) -- (\spine,-8.03);
-  \draw[flow] (\spine,-8.03) -- (\bL,-8.19);
-  \draw[flow] (\spine,-8.03) -- (\bR,-8.19);
-  % weighting regimes (the only difference between the two branches)
-  \draw[opbox] (1.35,-8.19) rectangle (3.05,-8.52);
-  \node at (\bL,-8.355) {uniform weights};
-  \draw[opbox, draw=fwsel, line width=0.7pt] (5.05,-8.19) rectangle (7.35,-8.76);
-  \node[align=center] at (\bR,-8.475)
-    {upweight the $k$\\edited demonstrations};
-  \draw[flow] (\bL,-8.52) -- (\bL,-8.89);
-  \draw[flow] (\bR,-8.76) -- (\bR,-8.89);
-  \draw[data] (0.55,-8.89) rectangle (3.85,-9.26);
-  \node at (\bL,-9.075) {\textbf{trained policy}};
-  \draw[data] (4.55,-8.89) rectangle (7.85,-9.26);
-  \node at (\bR,-9.075) {\textbf{trained policy}};
-  \draw[flow] (\bL,-9.26) -- (\bL,-9.46);
-  \draw[flow] (\bR,-9.26) -- (\bR,-9.46);
-  % terminal contrast pair (mirrors the exemplar's wrong/correct boxes;
-  % dashed vs solid border keeps the contrast in grayscale)
-  \draw[fill=white, draw=fwneg, line width=0.6pt,
-        dash pattern=on 1.8pt off 1.3pt] (0.55,-9.46) rectangle (3.85,-10.1);
-  \pic[fwneg] at (0.80,-9.78) {xmark};
-  \node[anchor=west, align=left, text=fwneg] at (0.98,-9.78)
-    {\textbf{bias reproduced}\\edits averaged away};
+  \draw[flow] (\spine,-7.33) -- (\spine,-7.51);
+  % op-box sits right of the title block (x > 2.9 rule), like Stage 1a's
+  \draw[opbox, draw=fwsel, line width=0.7pt] (2.95,-7.51) rectangle (6.85,-8.06);
+  \node[align=center] at (4.90,-7.785)
+    {imitation training with the $k$ edited\\demonstrations upweighted in the loss};
+  \draw[flow] (\spine,-8.06) -- (\spine,-8.20);
+  % --- weight chip: per-demonstration loss weight drawn as support bars ---
+  \draw[panel] (\xL,-8.20) rectangle (\xR,-8.82);
+  \draw[fwrule, line width=0.5pt] (0.62,-8.74) -- (4.06,-8.74);
+  \fill[fwsel] (0.74,-8.74) rectangle (1.30,-8.44);
+  \pic[tedit] at (0.72,-8.42) {traja};
+  \fill[fwsel] (1.40,-8.74) rectangle (1.96,-8.44);
+  \pic[tedit] at (1.38,-8.42) {trajc};
+  \fill[fwgray!55] (2.06,-8.74) rectangle (2.62,-8.62);
+  \pic[tnone] at (2.04,-8.60) {trajb};
+  \fill[fwgray!55] (2.72,-8.74) rectangle (3.28,-8.62);
+  \pic[tnone] at (2.70,-8.60) {trajc};
+  \fill[fwgray!55] (3.38,-8.74) rectangle (3.94,-8.62);
+  \pic[tnone] at (3.36,-8.60) {traja};
+  \node[anchor=west, align=left] at (4.22,-8.51)
+    {\textbf{loss weight:} the $k$ edited count more,\\
+     so the sparse edit is not averaged away};
+  \draw[flow] (\spine,-8.82) -- (\spine,-8.96);
+  \draw[data] (2.55,-8.96) rectangle (5.85,-9.32);
+  \node at (\spine,-9.14) {\textbf{imitation learning model}};
+  \draw[flow] (\spine,-9.32) -- (\spine,-9.46);
+  % terminal outcome box (the exemplar's green "Correct Label!" analogue)
   \draw[fill=white, draw=fwpos, line width=0.8pt]
-    (4.55,-9.46) rectangle (7.85,-10.1);
-  \pic[fwpos] at (4.80,-9.78) {ckmark};
-  \node[anchor=west, align=left, text=fwpos] at (4.98,-9.78)
+    (2.55,-9.46) rectangle (5.85,-10.08);
+  \pic[fwpos] at (2.80,-9.77) {ckmark};
+  \node[anchor=west, align=left, text=fwpos] at (2.98,-9.77)
     {\textbf{fairer service allocation}\\the fairness gain survives};
 \end{tikzpicture}%

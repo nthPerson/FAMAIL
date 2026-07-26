@@ -118,3 +118,27 @@ Design notes:
 6. `\label{fig:overview}` is kept (current §3.4 opener and Fig-1 caption reference it).
 7. The retired 3-panel figure's source stays in `figures/figure-2/` (git history +
    possible case-study salvage per ADJ-1) but leaves main.tex.
+
+---
+
+## AMENDMENT 2026-07-25 (Robert) — Stage-2 uniform-weights fork removed
+
+The Stage-2 fork drawn in the ADOPTED layout above (uniform weights → trained
+policy → bias reproduced, beside the upweighted branch) is REMOVED from the
+rendered figure: it depicted the experimental control (the vanilla null of
+§3.4), not the proposed method. Stage 2 now shows the single FATE path,
+centred on the spine:
+
+    imitation-training op-box (amber) → loss-weight chip → "imitation
+    learning model" box (renamed from "trained policy") → green terminal
+    outcome box ("fairer service allocation / the fairness gain survives")
+
+The loss-weight chip is new (trim/lift-style visual detail, filling the freed
+width): each demonstration stands on a bar whose height is its loss weight —
+edited dashed-amber demos on tall amber bars, unchanged gray demos on short
+gray ones. No weight symbol is introduced (§3.4 names none; symbol guard
+holds). The averaged-away null moved from the deleted red terminal into the
+chip's label ("so the sparse edit is not averaged away"), so the 2026-07-24
+caption-tightening rationale still holds. The ASCII sketch and caption draft
+above predate this amendment; `figures/figure-2/framework.tex` is the source
+of truth.
