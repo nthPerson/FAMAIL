@@ -137,6 +137,36 @@ ends: the advantaged group's over-service \emph{falls} while the disadvantaged
 group's service \emph{rises}.
 % src: famail_temporal/baselines/external_fairness/results/shenzhen-primary-supplylift-s10/external_fairness.json
 
+
+\textbf{The lift-up claim rests on the supply channel.} The
+$\mathrm{mean}(Y \mid \mathrm{disadv.})$ rise is a
+\emph{design-targeted} (class (ii)) quantity (the lift mechanism was aimed
+at it), so we decompose it rather than take it at face value. Evaluating $Y$ at
+$(S,D) \to (S,D') \to (S',D')$ splits the delta exactly into a demand move and
+a supply move ($B{=}2{,}000$). The demand channel (pickup relocation) carries
+large variance and is not significant, $+0.0352$ [$-0.0095$, $+0.0814$]. The
+supply channel (rerouted tails adding presence) is significant under
+\emph{both} accounting conventions. Under the optimizer's
+\emph{fractional-presence} convention it is $+0.0176$ [$+0.0128$, $+0.0225$]; % lint-allow: coincidental CI bound (s10 fractional-presence/tier-1 interval, not the trim-only headline delta)
+under the \emph{distinct-taxi} accounting (supply re-counted from raw GPS;
+it reproduces the production supply grid exactly) it is $+0.0411$
+[$+0.0346$, $+0.0479$].
+% recount mechanics trimmed 2026-07-23 (argument triage): per neighborhood-hour, edited tails
+% substituted, MAE 0.0, 100% history match — LIFT_ALGORITHM_REFERENCE.md §10 + REPRODUCIBILITY.md
+% src: famail_temporal/results/2026-07-10T02-06-37_alpha_sweep_s10_c80_f10_filtered/channel_decomposition.json (channel panel; Total = mean(Y|disadv.) +0.0529 row above)
+% src: <s10>/channel_decomposition.json + <s10>/supply_recount.json
+% src (recount validity properties): PAPER/supply-lift/FINDINGS.md §4 (G2, machinery unchanged)
+
+% 2026-07-25 (Robert, read-aloud): this table environment MOVED later in the
+% source, from immediately after the External-metrics paragraph to after the
+% lift-up paragraph. Nothing inside it changed. Reason: as a [t] float declared
+% while column 1 of its page was still open, it was landing at the TOP of that
+% column -- above \S\ref{sec:exp-data-level}'s own heading and ~46 lines above
+% its only reference, so a reader met Table 1 before any text mentioned it.
+% Declared later, it takes the top of the NEXT column, which puts it after the
+% reference in reading order while staying on the same page. If this subsection
+% is re-ordered again, re-check that "(Table~\ref{tab:external-sz})" still
+% precedes the float in the rendered PDF.
 \begin{table}[t]
 \centering
 \caption{Shenzhen external fairness (migrant axis, district extremes; paired
@@ -159,25 +189,6 @@ $\mathrm{mean}(Y \mid \mathrm{adv.})$ & 21.272 & 20.435 & $-0.837$ \\
 \end{table}
 % src: famail_temporal/baselines/external_fairness/results/shenzhen-primary-supplylift-s10/external_fairness.json
 % (before-edit values are alpha-independent; identical cleaned base data)
-
-\textbf{The lift-up claim rests on the supply channel.} The
-$\mathrm{mean}(Y \mid \mathrm{disadv.})$ rise is a
-\emph{design-targeted} (class (ii)) quantity (the lift mechanism was aimed
-at it), so we decompose it rather than take it at face value. Evaluating $Y$ at
-$(S,D) \to (S,D') \to (S',D')$ splits the delta exactly into a demand move and
-a supply move ($B{=}2{,}000$). The demand channel (pickup relocation) carries
-large variance and is not significant, $+0.0352$ [$-0.0095$, $+0.0814$]. The
-supply channel (rerouted tails adding presence) is significant under
-\emph{both} accounting conventions. Under the optimizer's
-\emph{fractional-presence} convention it is $+0.0176$ [$+0.0128$, $+0.0225$]; % lint-allow: coincidental CI bound (s10 fractional-presence/tier-1 interval, not the trim-only headline delta)
-under the \emph{distinct-taxi} accounting (supply re-counted from raw GPS;
-it reproduces the production supply grid exactly) it is $+0.0411$
-[$+0.0346$, $+0.0479$].
-% recount mechanics trimmed 2026-07-23 (argument triage): per neighborhood-hour, edited tails
-% substituted, MAE 0.0, 100% history match — LIFT_ALGORITHM_REFERENCE.md §10 + REPRODUCIBILITY.md
-% src: famail_temporal/results/2026-07-10T02-06-37_alpha_sweep_s10_c80_f10_filtered/channel_decomposition.json (channel panel; Total = mean(Y|disadv.) +0.0529 row above)
-% src: <s10>/channel_decomposition.json + <s10>/supply_recount.json
-% src (recount validity properties): PAPER/supply-lift/FINDINGS.md §4 (G2, machinery unchanged)
 
 \textbf{Fidelity.} Fidelity-A stability and lift's expected Fidelity-B
 distributional cost (whole-tail relocation shifts trajectory-shape statistics
