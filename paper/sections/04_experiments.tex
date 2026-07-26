@@ -132,29 +132,34 @@ instrument definitions are in Appendix~\ref{app:protocol}.
 % src: PAPER/external-metrics/FINDINGS.md §1, §4.3 (DP≡gap disclosure)
 
 \textbf{Baseline algorithms.} No existing method edits trajectories for
-fairness under a fidelity constraint, so we draw baselines from the two
-nearest families: bounded perturbation methods, which edit trajectories but not
-for fairness; data-level interventions that add rather than edit; and
-training-side fairness methods, which target fairness but leave the
-demonstrations unchanged. The perturbation and oversampling arms run at FATE's
-edit budget, the training-side methods act on the raw corpus, and the generated
-corpora replace it wholesale.
+fairness under a fidelity constraint, so no single system is a direct
+competitor. We instead draw baselines from the three nearest families and use
+each to isolate one design decision of FATE: whether the gain comes from the
+fairness objective or from bounded editing alone, from targeting or from sheer
+added volume, and whether the editing step is needed at all. Each arm below
+names the decision it tests. The perturbation and oversampling arms run at
+FATE's edit budget, the training-side methods act on the raw corpus, and the
+generated corpora replace it wholesale.
 \begin{enumerate}[topsep=2pt,itemsep=0pt,parsep=0pt,leftmargin=1.4em]
 \item \textbf{ST-iFGSM} \cite{hu2023stifgsm}: iterative signed-gradient attack
-on the frozen identity discriminator, with PGD-style random restart.
-\item \textbf{FGSM} \cite{goodfellow2015fgsm}: the single full-budget step.
-\item \textbf{Random jitter}: seeded $\varepsilon$-jitter, the direction
-placebo for the two gradient arms.
-\item \textbf{Demographic oversampling}: duplicates real trajectories
-originating in disadvantaged regions, with an untargeted placebo that
-fabricates the same volume without targeting.
+on the frozen identity discriminator --- \emph{isolates the objective: FATE's
+editing machinery without its fairness term}.
+\item \textbf{FGSM} \cite{goodfellow2015fgsm}: the single full-budget step ---
+\emph{isolates iteration, the same step taken once}.
+\item \textbf{Random jitter}: seeded $\varepsilon$-jitter ---
+\emph{isolates direction, the same budget spent at random}.
+\item \textbf{Demographic oversampling}: duplicates real trajectories from
+disadvantaged regions, with an untargeted placebo --- \emph{isolates
+redistribution, adding volume instead of moving it; the placebo isolates
+targeting}.
 \item \textbf{Instance reweighing} \cite{kamirancalders2012}: inverse
-group-service weights on the raw corpus, weighting by demographic group rather
-than by edit.
+group-service weights on the raw corpus, by demographic group rather than by
+edit --- \emph{isolates the editing step, fairness weighting with no edit}.
 \item \textbf{Demographic-parity penalty} in the spirit of \cite{zheng2023}:
-the parity gap added to the imitation loss at training time.
+the parity gap added to the imitation loss --- \emph{isolates the stage,
+fairness imposed in training rather than in the data}.
 \item \textbf{BC- and GAN-generated corpora}: alternative sources of training
-data, standing in for generate-instead-of-edit.
+data --- \emph{isolates the choice to edit rather than to generate}.
 \end{enumerate}
 % 2026-07-26 (Zhang R2, D6 + Robert's R1): baselines are now named, cited and
 % explained in the SETTING, matching ST-SiameseNet §4.2 and cGAIL §6.3. The
@@ -220,13 +225,9 @@ it reproduces the production supply grid exactly) it is $+0.0411$
 % precedes the float in the rendered PDF.
 \begin{table}[t]
 \centering
-\caption{Shenzhen external fairness (migrant axis, district extremes; paired
-bootstrap): established instruments and group service levels, before $\to$
-after editing. $B = 1{,}000$ over active grid units, except the
-$\mathrm{mean}(Y \mid \mathrm{disadv.})$ interval, which is the channel
-decomposition's $B = 2{,}000$ over the disadvantaged units
-(\S\ref{sec:exp-data-level}). No interval was computed for the advantaged
-level.}
+\caption{Shenzhen external fairness (migrant axis, district extremes): every
+instrument and both group service levels, before $\to$ after editing, with
+paired-bootstrap intervals over the active grid units ($B = 1{,}000$).}
 \label{tab:external-sz}
 \footnotesize
 \setlength{\tabcolsep}{4pt}
@@ -237,13 +238,27 @@ metric & before & after & $\Delta$ [95\% CI] \\
 Disparate impact ($\uparrow$) & 0.3325 & 0.3487 & $+0.0162$ [$+0.0136, +0.0189$] \\
 DP gap ($\downarrow$) & 14.199 & 13.309 & $-0.890$ [$-0.992, -0.785$] \\
 Theil ($\downarrow$) & 0.1550 & 0.1463 & $-0.0087$ [$-0.0097, -0.0076$] \\
-$\mathrm{mean}(Y \mid \mathrm{disadv.})$ ($\uparrow$) & 7.0734 & 7.1263 & $+0.0529$ [$+0.0086, +0.0989$] \\
-$\mathrm{mean}(Y \mid \mathrm{adv.})$ & 21.272 & 20.435 & $-0.837$ \\
+$\mathrm{mean}(Y \mid \mathrm{disadv.})$ ($\uparrow$) & 7.0734 & 7.1263 & $+0.0529$ [$+0.0074, +0.0991$] \\
+$\mathrm{mean}(Y \mid \mathrm{adv.})$ & 21.272 & 20.435 & $-0.837$ [$-0.9285, -0.7429$] \\
 \bottomrule
 \end{tabular}
 \end{table}
 % src: famail_temporal/baselines/external_fairness/results/shenzhen-primary-supplylift-s10/external_fairness.json
 % (before-edit values are alpha-independent; identical cleaned base data)
+% 2026-07-26 (Robert's ask): BOTH group levels now carry a paired-bootstrap
+% interval from the SAME B=1,000 bootstrap over active units as DI/DP/Theil.
+% Previously the advantaged level had no interval at all and the disadvantaged
+% level borrowed the channel decomposition's B=2,000 bootstrap over a different
+% unit set, so one column mixed two estimators — the caption had to disclose it.
+% run_external_fairness.py now registers ef.sdr_mean_{dis,}advantaged as bootstrap
+% specs (the helpers already existed, they were just never wired up) and emits
+% their CIs. VERIFIED NON-PERTURBING: paired_bootstrap draws its index vector once
+% per replicate BEFORE the spec loop, so adding specs consumes no extra RNG; a
+% field-by-field diff of the regenerated artifact against the committed one showed
+% 0 of 141 pre-existing numeric fields changed. The disadvantaged Delta is
+% unchanged at +0.0529; only its interval now comes from the matched estimator
+% ([+0.0074,+0.0991] here vs the channel decomposition's [+0.0086,+0.0989], which
+% \S\ref{sec:exp-data-level} still uses for the CHANNEL total).
 
 \textbf{Fidelity.} Editing costs little identity fidelity (Fidelity-A 0.844
 vs.\ raw 0.848) and pays a distributional cost concentrated in the components

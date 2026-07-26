@@ -231,6 +231,21 @@ inside the weighted-BC sweep (+0.0022, n.s.), not by a separate L2 suite. Do not
 | `shenzhen-{primary,gdp-comp,logpop}`, `sf12` | the 3 cleaned + sf12-fair-ce | pre-lift |
 | 5 × `baseline-2026-07-13T*` | the perturbation arms | **α\*-selected** ⭐ |
 
+> 🔄 REGENERATED 2026-07-26 (`shenzhen-primary-supplylift-s10` only): the harness now
+> registers `ef.sdr_mean_disadvantaged` / `ef.sdr_mean_advantaged` as paired-bootstrap
+> specs, so **both group service levels carry a Δ 95% CI** from the same B=1,000 bootstrap
+> over active units as DI/DP/Theil. Previously the advantaged level had no interval and
+> Table 1's disadvantaged interval was borrowed from `channel_decomposition.json`
+> (B=2,000, disadvantaged units only) — one column, two estimators.
+> **Provably non-perturbing:** `paired_bootstrap` draws its index vector once per replicate
+> *before* the spec loop, so extra specs consume no RNG; a field-by-field diff of the
+> regenerated artifact against the committed one showed **0 of 141 pre-existing numeric
+> fields changed**. New fields only: `supply_demand_ratio.mean_{dis,}advantaged_delta_ci`.
+> Era unchanged (**α\***). The other dirs in this table still lack the two new fields;
+> re-run them the same way if a later table needs group-level CIs from them.
+> Invocation (the `--delta-supply` flag is REQUIRED or every after-side value differs):
+> `python3 -m famail_temporal.baselines.run_external_fairness --edit-dir <edit> --delta-supply <edit>/delta_supply_3d.npz --out-dir <out> --dataset shenzhen-primary-supplylift-s10 --seed 0 --bootstrap 1000`
+
 **Rollouts** (policy-level allocation) — identify by `run.log: edited=`:
 
 | dir | `edited=` | corpus | era |

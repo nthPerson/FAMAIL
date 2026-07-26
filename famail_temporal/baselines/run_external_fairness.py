@@ -61,6 +61,16 @@ def assemble_results(
             specs.append((f"dp::{axis}::{g}", ef.demographic_parity, groups))
             specs.append((f"di::{axis}::{g}", ef.disparate_impact, groups))
             specs.append((f"sdrgap::{axis}::{g}", ef.sdr_gap, groups))
+            # 2026-07-26: the two GROUP LEVELS gain paired-bootstrap CIs. The
+            # helpers already existed (external_fairness.sdr_mean_{dis,}advantaged)
+            # but were never registered, so Table 1's advantaged row had no
+            # interval and its disadvantaged row had to borrow one from the
+            # channel decomposition's B=2,000 bootstrap over a different unit set.
+            # Purely additive: paired_bootstrap draws its index vector ONCE per
+            # replicate, before the spec loop, so adding specs consumes no extra
+            # RNG and every pre-existing CI reproduces bit-for-bit.
+            specs.append((f"meandis::{axis}::{g}", ef.sdr_mean_disadvantaged, groups))
+            specs.append((f"meanadv::{axis}::{g}", ef.sdr_mean_advantaged, groups))
 
     boot = ef.paired_bootstrap(Y_before, Y_after, specs, B=B, seed=seed)
 
@@ -82,6 +92,8 @@ def assemble_results(
             e["demographic_parity"]["delta_ci"] = boot[f"dp::{axis}::{g}"]["delta"]
             e["disparate_impact"]["delta_ci"] = boot[f"di::{axis}::{g}"]["delta"]
             e["supply_demand_ratio"]["gap_ci"] = boot[f"sdrgap::{axis}::{g}"]["delta"]
+            e["supply_demand_ratio"]["mean_disadvantaged_delta_ci"] = boot[f"meandis::{axis}::{g}"]["delta"]
+            e["supply_demand_ratio"]["mean_advantaged_delta_ci"] = boot[f"meanadv::{axis}::{g}"]["delta"]
     return result
 
 
