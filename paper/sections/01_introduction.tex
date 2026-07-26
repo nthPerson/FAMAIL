@@ -136,21 +136,21 @@ HSTD to downstream applications \cite{ensign2018,lumisaac2016}.
   \label{fig:teaser}
 \end{figure}
 
-Existing methods address bias either by modifying data or by constraining a
-model, but they do not explicitly bridge the local-to-collective gap in HSTD:
-how individual trajectories jointly produce corpus-level service disparity.
-Data-level trajectory perturbation and fairness-aware generation alter
-individual samples or the overall distribution
-\cite{hu2023stifgsm,vanbreugel2021decaf,xu2018fairgan,hastingsblow2025diffaug},
-but are not designed to attribute collective service disparity back to
-specific trajectories and their local decisions. Algorithm-level methods,
-including training-time reweighting and fairness-aware objectives
-\cite{kamirancalders2012,zheng2023,lamalfa2026fairppo,zhao2025fairdrlst},
-mitigate bias for a particular model without identifying which demonstrations
-generate the observed collective disparity or repairing their contribution to
-it. This motivates a data-centric intervention: repair the individual
-demonstrations that generate the collective disparity, targeting them by their
-aggregate effect.
+Fairness interventions are conventionally grouped by where they act.
+\emph{In-processing} methods constrain the training objective
+\cite{zheng2023,lamalfa2026fairppo,zhao2025fairdrlst}. They fix one model. The
+demonstrations are left untouched, so the next model trained on the same corpus
+inherits the same bias. \emph{Pre-processing} acts on the data itself
+and so survives retraining, but the available pre-processing tools were built
+for other settings or other targets. Reweighing and related repairs assume
+tabular records with labels \cite{kamirancalders2012}, not sequential
+demonstrations. Fairness-aware generation synthesizes new data instead of
+repairing real records
+\cite{xu2018fairgan,vanbreugel2021decaf,hastingsblow2025diffaug}. The one
+pre-processing method built for trajectories perturbs them to harden identity
+models, not to improve fairness \cite{hu2023stifgsm}. What is missing is a
+pre-processing method that edits real trajectories so the corpus is fairer,
+while keeping each trajectory faithful to the driver who produced it.
 
 Realizing such an intervention is challenging. First, collective fairness is a
 corpus-level property, but edits are local: an editor must trace the disparity

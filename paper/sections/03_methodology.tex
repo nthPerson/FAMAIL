@@ -318,7 +318,7 @@ the disadvantaged group rather than pulling others down \cite{zietlow2022}.
 % above. The sentence is restored verbatim; it is protected register.)
 The analogy is inexact in one
 instructive way: trim \emph{relocates} pickups under conservation rather than
-removing service, so nothing is destroyed; yet the under-served group is
+removing service, so nothing is destroyed; yet the under-served group is still
 not helped at all.
 
 Three structural facts make this the constrained optimum of the demand-only
@@ -346,11 +346,12 @@ behavior into under-served cells.
 % src: LIFT_ALGORITHM_REFERENCE.md §1-2 (dY/dS; oracle gate G0 covered in §4.4 + App. C)
 
 \textbf{Resource-aware editing (the \emph{lift} operation).} Lift changes the
-provision process itself. It translates a nominated tail: the pickup moves by
-the full offset $\delta$, earlier tail states by linearly tapered fractions of
-it, and the anchor state before the tail never moves, so the edit physically
-routes the trajectory through the under-served area before the pickup without
-teleporting. The moved states carry supply with them, differentiably,
+provision process itself. It moves a nominated tail toward an under-served
+area. The pickup moves by the full offset $\delta$. States earlier in the tail
+move by linearly tapered fractions of $\delta$. The state immediately before
+the tail, its \emph{anchor}, does not move at all. Holding the anchor fixed
+keeps the path continuous, so the trajectory is rerouted \emph{through} the
+under-served area on its way to the pickup rather than teleported into it. The moved states carry supply with them, differentiably,
 contributing presence to $\Delta S$ over the same $5{\times}5$ neighborhood.
 Supply is thus \emph{endogenous}: the optimizer sees the supply consequences
 of its own moves and is rewarded for providing service where it improves

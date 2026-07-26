@@ -182,31 +182,29 @@ data --- \emph{isolates the choice to edit rather than to generate}.
 % renders "(\S\ref{sec:exp-ablation}) is caused by lift alone", so the link went
 % to the wrong object. Anchored to the subsection it now points where it reads.
 
-\textbf{Optimized metrics.} Editing raises $F_{\mathrm{demo}}$ from 0.7988
-to 0.8214 ($+0.0226$) and $F_{\mathrm{spatial}}$ from 0.1034 to 0.1095
-($+0.0061$), the quantities the editor optimizes directly.
+\textbf{Fairness improves on every measure.}
+Table~\ref{tab:external-sz} reports all of them together. The two quantities
+the editor optimizes both rise. So does every established instrument the
+objective never sees, each with a 95\% interval excluding zero. The gap closes
+from both ends. The advantaged group's over-service \emph{falls}, and the
+disadvantaged group's service \emph{rises}.
 % src: famail_temporal/results/2026-07-10T02-06-37_alpha_sweep_s10_c80_f10_filtered/metrics.json
-
-\textbf{External metrics.} Every established instrument moves
-toward fairness with 95\% intervals excluding zero
-(Table~\ref{tab:external-sz}). The gap closes from both
-ends: the advantaged group's over-service \emph{falls} while the disadvantaged
-group's service \emph{rises}.
+% 2026-07-26 (Kash #3): the F_demo/F_spatial values moved OUT of prose and INTO
+% Table 1 as their own panel — he asked to see all the metrics in one table
+% rather than some in a table and some in the text. Same numbers, same source.
 % src: famail_temporal/baselines/external_fairness/results/shenzhen-primary-supplylift-s10/external_fairness.json
 
 
-\textbf{The supply channel.} The
-$\mathrm{mean}(Y \mid \mathrm{disadv.})$ rise is a
-quantity the lift mechanism targets directly, so we decompose it. Evaluating $Y$ at
-$(S,D) \to (S,D') \to (S',D')$ splits the delta exactly into a demand move and
-a supply move ($B{=}2{,}000$). The demand channel (pickup relocation) carries
-large variance and is not significant, $+0.0352$ [$-0.0095$, $+0.0814$]. The
-supply channel (rerouted tails adding presence) is significant under
-\emph{both} accounting conventions. Under the optimizer's
-\emph{fractional-presence} convention it is $+0.0176$ [$+0.0128$, $+0.0225$]; % lint-allow: coincidental CI bound (s10 fractional-presence/tier-1 interval, not the trim-only headline delta)
-under the \emph{distinct-taxi} accounting (supply re-counted from raw GPS;
-it reproduces the production supply grid exactly) it is $+0.0411$
-[$+0.0346$, $+0.0479$].
+\textbf{The supply channel.} Lift targets the disadvantaged group's service
+level directly, so we decompose its rise rather than take it at face value.
+Evaluating $Y$ at $(S,D) \to (S,D') \to (S',D')$ splits the change exactly into
+a demand move and a supply move ($B{=}2{,}000$). The demand channel is pickup
+relocation. It carries large variance and is not significant, $+0.0352$
+[$-0.0095$, $+0.0814$]. The supply channel is rerouted tails adding presence.
+It is significant under \emph{both} accounting conventions. Under the
+optimizer's \emph{fractional-presence} convention it is $+0.0176$ [$+0.0128$, $+0.0225$]; % lint-allow: coincidental CI bound (s10 fractional-presence/tier-1 interval, not the trim-only headline delta)
+The \emph{distinct-taxi} convention re-counts supply from raw GPS. Under it
+the channel is $+0.0411$ [$+0.0346$, $+0.0479$].
 % recount mechanics trimmed 2026-07-23 (argument triage): per neighborhood-hour, edited tails
 % substituted, MAE 0.0, 100% history match — LIFT_ALGORITHM_REFERENCE.md §10 + REPRODUCIBILITY.md
 % src: famail_temporal/results/2026-07-10T02-06-37_alpha_sweep_s10_c80_f10_filtered/channel_decomposition.json (channel panel; Total = mean(Y|disadv.) +0.0529 row above)
@@ -225,7 +223,7 @@ it reproduces the production supply grid exactly) it is $+0.0411$
 % precedes the float in the rendered PDF.
 \begin{table}[t]
 \centering
-\caption{Shenzhen external fairness (migrant axis, district extremes), before
+\caption{Shenzhen data-level fairness (migrant axis, district extremes), before
 $\to$ after editing. Brackets are 95\% intervals over the active grid units
 ($B = 1{,}000$; \S\ref{sec:exp-setup}), the convention used in every table below.}
 \label{tab:external-sz}
@@ -235,9 +233,16 @@ $\to$ after editing. Brackets are 95\% intervals over the active grid units
 \toprule
 metric & before & after & $\Delta$ [95\% CI] \\
 \midrule
+\multicolumn{4}{l}{\emph{Optimized by the editor}}\\
+$F_{\mathrm{demo}}$ ($\uparrow$) & 0.7988 & 0.8214 & $+0.0226$ \\
+$F_{\mathrm{spatial}}$ ($\uparrow$) & 0.1034 & 0.1095 & $+0.0061$ \\
+\midrule
+\multicolumn{4}{l}{\emph{External to the objective}}\\
 Disparate impact ($\uparrow$) & 0.3325 & 0.3487 & $+0.0162$ [$+0.0136, +0.0189$] \\
 DP gap ($\downarrow$) & 14.199 & 13.309 & $-0.890$ [$-0.992, -0.785$] \\
 Theil ($\downarrow$) & 0.1550 & 0.1463 & $-0.0087$ [$-0.0097, -0.0076$] \\
+\midrule
+\multicolumn{4}{l}{\emph{Group service levels}}\\
 $\mathrm{mean}(Y \mid \mathrm{disadv.})$ ($\uparrow$) & 7.0734 & 7.1263 & $+0.0529$ [$+0.0074, +0.0991$] \\
 $\mathrm{mean}(Y \mid \mathrm{adv.})$ & 21.272 & 20.435 & $-0.837$ [$-0.9285, -0.7429$] \\
 \bottomrule
