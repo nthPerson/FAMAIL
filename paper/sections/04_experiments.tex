@@ -86,11 +86,21 @@ its $t$-interval and dose-response monotonicity, and treat $p = 0.031$ only as
 a sign-unanimity certificate; the flagship comparison (the edited
 demonstrations upweighted $30\times$, written w30; \S\ref{sec:exp-downstream})
 is additionally run at $n = 12$ paired seeds in both cities. External metrics
-are compared before versus after editing with no model in the loop, one
-bootstrap resample of the active grid units applied to both sides
-($B = 1{,}000$, percentile); units are spatially correlated and demographics
-district-constant, so these intervals understate true uncertainty
-(Appendix~\ref{app:protocol}).
+are compared before versus after editing with no model in the loop, by a
+paired bootstrap over the active grid units: each of $B = 1{,}000$ replicates
+scores both corpora on the same resample. The resulting percentile intervals
+understate true uncertainty: units are spatially correlated and demographics
+district-constant (Appendix~\ref{app:protocol}).
+% 2026-07-25 (Robert, read-aloud): "one bootstrap resample of the active grid
+% units applied to both sides ($B = 1,000$, percentile)" read as though a single
+% resample were drawn, which contradicts $B = 1,000$ in the same parenthesis. What
+% the phrase was compressing is the PAIRING. Ground truth,
+% famail_temporal/baselines/external_fairness.py::paired_bootstrap: each of the B
+% replicates draws one index vector (rng.integers(0, N, size=N)) and applies it to
+% BOTH Y_before and Y_after, then records a - b; percentile CIs are taken over the
+% replicates. The rewrite names the design ("paired bootstrap", the term Table
+% \ref{tab:external-sz}'s caption already uses), says what is resampled, and states
+% the pairing as the mechanism it is. +5 words.
 % 2026-07-24 (T10, page-budget lever 2): each surviving clause above is the
 % one-clause form of a fuller explanation that Appendix~\ref{app:protocol}
 % already carries verbatim — the exact-Wilcoxon floor arithmetic (why n=6 reads
