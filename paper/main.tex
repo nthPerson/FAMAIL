@@ -127,19 +127,26 @@
 
 % Section order per the 2026-07-24 restructure (MEETING_DIGEST decision #4, 2026-07-24 restructure meeting):
 % 1 Intro · 2 Overview · 3 Methodology · 4 Experiments · 5 Related Work ·
-% 6 Conclusion. 02_related_work.tex KEEPS ITS FILENAME while rendering as §5 —
-% file renames are deliberately out of scope for the restructure.
+% 6 Conclusion.
+% 2026-07-25 (Robert, ahead of the Overleaf transfer): the section files are now
+% named in RENDER order, so the file tree reads like the paper. Renames applied:
+% 02_related_work.tex -> 05_related_work.tex (it renders as §5 since the
+% restructure moved related work after the experiments), 05_conclusion.tex ->
+% 06_conclusion.tex, and appendix.tex -> 07_appendix.tex. The two unnumbered
+% parts keep the existing device: 00_ for front matter (the abstract), 07_ for
+% back matter (the appendices, which still render as Appendix A-E, not §7).
+% The earlier "file renames are out of scope" note is superseded.
 \input{sections/01_introduction}
 \input{sections/02_overview}
 \input{sections/03_methodology}
 \input{sections/04_experiments}
-\input{sections/02_related_work}
-\input{sections/05_conclusion}
+\input{sections/05_related_work}
+\input{sections/06_conclusion}
 
 \bibliographystyle{ACM-Reference-Format}
 \bibliography{refs}
 
 \appendix
-\input{sections/appendix}
+\input{sections/07_appendix}
 
 \end{document}
