@@ -265,6 +265,22 @@ Crossref/DOI metadata matched (front-end bot-blocked) · **NONE** = no publisher
 
 ## P1 — Load-bearing attributions verified only via publisher DEPOSIT (spot-check the rendered page)
 
+- [ ] **pastaltzidis2022dataaug** — Pastaltzidis, Dimitriou, Quezada-Tavárez, Aidinlis,
+  Marquenie, Gurzawska & Tzovaras, *Data Augmentation for Fairness-Aware Machine Learning:
+  Preventing Algorithmic Bias in Law Enforcement Systems*, FAccT '22 —
+  used once, on the Demographic-oversampling item of §4.1's Baseline algorithms list.
+  NEW 2026-07-26: the arm was selected from this paper during the Mission-3 candidate
+  scan but the key was never added to refs.bib, so the arm ran uncredited.
+  Machine status: DEPOSIT — Semantic Scholar Graph API on DOI 10.1145/3531146.3534644
+  confirmed title, all 7 authors, venue, year (ACM DL 403s on direct fetch); DBLP
+  `conf/fat/PastaltzidisDQA22` cross-confirms indexing.
+  **Check (two items, deliberately not guessed):** (1) four given names are recorded only
+  as initials — expand N. Dimitriou, K. Quezada-Tavárez, S. Aidinlis, D. Tzovaras against
+  the ACM DL author list; (2) no page range was ever captured, so the entry has none.
+  **Claim-check:** the source works on video (RWF-2000), not trajectories — it is cited as
+  the lineage of demographic-targeted oversampling, NOT as a trajectory-domain result.
+  Link: https://dl.acm.org/doi/10.1145/3531146.3534644
+
 All fields matched ACM/IEEE-deposited metadata; the residual risk is page-level rendering only.
 Open each DL/Xplore page in a browser (they block our fetchers, not humans) and eyeball
 authors/title/pages.
@@ -485,3 +501,27 @@ Metadata upgrades for these are already in the 2026-07-16 report diff, ready if 
        fidelity axes" block, which carries the Jensen--Shannon definition the §4.2
        sentence used to gloss.
      Lint's cited-key coverage guard is green. -->
+
+<!-- Applied-changes entry (2026-07-26, Robert's ask): ONE NEW refs.bib entry,
+     `pastaltzidis2022dataaug` — Pastaltzidis, Dimitriou, Quezada-Tavárez, Aidinlis,
+     Marquenie, Gurzawska & Tzovaras, "Data Augmentation for Fairness-Aware Machine
+     Learning: Preventing Algorithmic Bias in Law Enforcement Systems", FAccT '22,
+     DOI 10.1145/3531146.3534644. Cited once, on the Demographic-oversampling item of
+     §4.1's Baseline algorithms list — this arm's lineage (rebalance by demographic
+     oversampling rather than by perturbation). The arm was selected FROM this paper
+     during the Mission-3 candidate scan, but the key had never been added to
+     refs.bib, so the arm ran uncredited in the manuscript.
+     Machine status: **DEPOSIT** — Semantic Scholar Graph API keyed on the DOI
+     (ACM DL 403s on direct fetch) confirmed title, all 7 authors, venue and year;
+     DBLP conf/fat/PastaltzidisDQA22 cross-confirms indexing. Evidence trail:
+     famail_temporal/baselines/DATA_AUG_BASELINE_CANDIDATES.md.
+     ⚠️ TWO ITEMS FOR ROBERT'S MANUAL PASS, both deliberately left rather than guessed:
+       1. Four given names exist only as initials in the verification trail
+          (N. Dimitriou, K. Quezada-Tavárez, S. Aidinlis, D. Tzovaras) — expand
+          against the ACM DL author list.
+       2. No page range was ever captured; the entry has none. Add from ACM DL.
+     Claim-check for the manual pass: the citation supports "duplicates real
+     trajectories from disadvantaged regions" as a known fairness-augmentation
+     paradigm. The source works on video data (RWF-2000), not trajectories, so it is
+     cited as the paradigm's lineage and NOT as a trajectory-domain result.
+     Nothing ticked. -->

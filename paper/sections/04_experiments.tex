@@ -102,7 +102,7 @@ district-constant (Appendix~\ref{app:protocol}).
 % src: PAPER/argument/04_evaluation.md §3; PAPER/external-metrics/FINDINGS.md §1, §5
 
 \textbf{Metrics.} Fairness is measured on the service ratio $Y$ over active
-grid units. Three instruments are external to the objective: \emph{disparate
+grid units, plus three instruments external to the objective: \emph{disparate
 impact} (DI, $\uparrow$), the \emph{demographic-parity gap} (DP, $\downarrow$;
 on a continuous outcome DP is the supply/demand-ratio gap), and the
 between-region \emph{Theil} index ($\downarrow$). We also report the two group
@@ -148,10 +148,10 @@ editing machinery without its fairness term}.
 \emph{isolates iteration, the same step taken once}.
 \item \textbf{Random jitter}: seeded $\varepsilon$-jitter ---
 \emph{isolates direction, the same budget spent at random}.
-\item \textbf{Demographic oversampling}: duplicates real trajectories from
-disadvantaged regions, with an untargeted placebo --- \emph{isolates
-redistribution, adding volume instead of moving it; the placebo isolates
-targeting}.
+\item \textbf{Demographic oversampling} \cite{pastaltzidis2022dataaug}:
+duplicates real trajectories from disadvantaged regions, with an untargeted
+placebo --- \emph{isolates redistribution: it adds volume rather than moving
+it, and the placebo isolates targeting}.
 \item \textbf{Instance reweighing} \cite{kamirancalders2012}: inverse
 group-service weights on the raw corpus, by demographic group rather than by
 edit --- \emph{isolates the editing step, fairness weighting with no edit}.
@@ -292,7 +292,7 @@ $\Delta F_{\mathrm{spatial}}$ positive. San Francisco shows the same contrast,
 $\Delta F_{\mathrm{demo}}$ $+0.0144$ versus $+0.0316$ and migrant DP gap % lint-allow: ablation
 $-0.052$ versus $-0.073$, both CIs excluding zero. % lint-allow: ablation — both sig at alpha*; contrast is magnitude + the supply channel
 
-\begin{table}[tb]
+\begin{table}[b]
 \centering
 \caption{Demand-only editing versus trim+lift (Shenzhen; migrant axis,
 district extremes, as in Table~\ref{tab:external-sz}). Every \emph{external}
@@ -640,7 +640,7 @@ the edited arm's w30 gain and at least $3\times$ smaller at every dose.
 % src: PAPER/supply-lift/data/a10/shz_hgc_a10_weighted_bc_paired_stats.json (most_fair w30 +0.0054; vanilla +0.0022)
 % src: PAPER/supply-lift/data/a10/shz_4feat_a10_weighted_bc_paired_stats.json (4feat most_fair doses +0.0059/+0.0059/+0.0072, all p=.031; edited/most_fair min ratio 3.05 at w10)
 
-\begin{table}[t]
+\begin{table}[b]
 \caption{Feature-set robustness under trim+lift (Shenzhen; $\Delta$ rows are
 after $-$ before edit). $^{*}$-marked rows: every cell's paired-bootstrap
 95\% interval excludes zero ($B = 2{,}000$ for
