@@ -1,4 +1,46 @@
-# FIG-1 TikZ RE-IMPLEMENTATION — report (2026-07-25, v5)
+# FIG-1 TikZ RE-IMPLEMENTATION — report (2026-07-25, v6)
+
+**v6 (Robert's trajectory-correlation pass, 2026-07-25):**
+1. **Road-true trajectories.** All 13 trajectories re-traced so every
+   waypoint sits on a road of the underlying SZ map (left horizontal road,
+   top-left/mid-left blocks, SW diagonal, S-curve artery, right vertical
+   artery, NE diagonal, bottom-right blocks, center artery + 4 background
+   lines).
+2. **Icons anchored to trajectories.** Taxis sit ON intermediate waypoints
+   (horizontal segments preferred, so cars read as driving the road);
+   passengers stand at trajectory ENDS (every trajectory ends in a
+   pickup). The icon lists in the config block literally repeat waypoints
+   from the trajectory paths, with comments naming each host (A1, A2, A4,
+   A5 = advantaged; D1, D2, D3 = disadvantaged; B* = iconless texture).
+3. **Trim redrawn**: the pickup at trajectory A1's end — dark in the left
+   panel — is vacated (FAINT passenger, `icon-passenger-faint.png`) in the
+   right panel, with the amber dashed arrow from that position to the
+   amber passenger at the new location. Both endpoints inside the
+   advantaged tint.
+4. **Lift redrawn as the fig-2-detail composition** ("more realistic
+   trajectory edit"): host trajectory T_L runs down the S-curve artery
+   with its taxi ON the route and its recorded pickup at the end, just
+   inside the under-served side. In the right panel the tail branches at
+   the ANCHOR (dark node dot — the state that never moves): the original
+   tail grays out (faint line + faint state dots + faint pickup), and the
+   amber dashed reroute (with amber state dots) carries the pickup AND
+   the taxi deeper into the under-served side — amber taxi ON the dashed
+   line past the boundary, "+" mark, arrowhead into the amber passenger.
+   "The real Lift edit moves the pickup, too" (Robert; ALGORITHM_FACTS:
+   pickup moves by the full offset δ).
+   **Design decision flagged:** the recorded pickup was placed just
+   INSIDE the disadvantaged half so the moved pickup travels WITHIN the
+   under-served district (deeper, toward the high-value interior). This
+   keeps the per-panel demand counts identical (4/4) and keeps any
+   demand-out-of-district reading impossible; presence still visibly
+   flows advantaged→disadvantaged via the vacated-taxi ghost and the
+   amber taxi. Placing the recorded pickup on the ADVANTAGED side
+   instead would show demand crossing into the district (also a true
+   lift outcome) at the cost of the count invariant — two-macro change
+   (`\tzLiftPickOrig*`) if preferred.
+5. New knobs: `\showTailNodes` (state dots), `\tzTailDotR`, the lift
+   path/anchor/taxi/pickup macros (`\tzLift*`), `icon-passenger-faint.png`
+   (PIL alpha ×0.32). Box unchanged: 239.50 × 126.51 pt.
 
 **v5 (Robert's legend + font pass, 2026-07-25):**
 1. **Legend evenly spaced, by computation.** The four icon+label group
@@ -140,32 +182,39 @@ line, still sits fully inside its half-panel column at 7 pt.
 Verified two ways: by construction (the coordinate lists in the config block
 drive every icon) and by count on the 300 dpi render.
 
-1. ✅ Disadvantaged passengers identical in both panels: `\tzDisPicks` (3) +
-   the served passenger (1) are drawn in BOTH panels → 4/4. (The PNG had
-   4→3; this is the semantic fix.)
-2. ✅ Advantaged passengers identical (v3, trim shown): left panel =
-   `\tzAdvPicksKept` (2) + the trim subject dark at `\tzTrimFrom` = 3;
-   right panel = 2 kept dark + the SAME passenger relocated in amber = 3.
-   Moved, not added.
+(v6 wording — the lift now shows the moved pickup, per Robert)
+
+1. ✅ Disadvantaged passengers identical in both panels: left = D1/D2/D3
+   ends (3 dark) + the lift's recorded pickup (dark, just inside the
+   district) = 4; right = the same 3 dark + the moved pickup in amber
+   (the faint vacated marker does not count) = 4. Demand never leaves the
+   district — the lift pickup moves DEEPER into it.
+2. ✅ Advantaged passengers identical: left = A4/A5 ends (2) + the trim
+   subject dark at A1's end = 3; right = 2 kept + the SAME passenger
+   relocated in amber = 3. Moved, not added.
 3. ✅ Conservation: advantaged taxis 5→4 (`\tzAdvTaxisR` = `\tzAdvTaxis`
-   minus the vacated entry), disadvantaged 2→3 (+1 amber taxi). One leaves,
-   one arrives; corpus total 7 in both panels.
-4. ✅ Every amber element on the disadvantaged side is added presence: the
-   amber taxi (with a small "+" mark, Figure-2's added-presence glyph), the
-   dashed rerouted trajectory, and the amber passenger — which is one of the
-   four disadvantaged passengers RECOLORED in place (same coordinates in
-   both panels), i.e. "the passenger who now gets served", not moved demand.
-   (The trim channel's amber passenger sits on the ADVANTAGED side.)
-5. ✅ Trim edit (v3: ON by default): recorded position x=0.098, relocated
-   position x=0.245, arrowhead x=0.222 — all left of the 0.517 boundary,
-   inside the advantaged tint. Verified in source and render.
+   minus the lift driver), disadvantaged 2→3 (+1 amber taxi ON the
+   reroute). One leaves, one arrives; corpus total 7 in both panels.
+4. ✅ Amber on the disadvantaged side = the lift edit only: added presence
+   (amber taxi + "+" mark) and the lift-moved pickup, which RELOCATES
+   WITHIN the under-served district (v6 revision of the old "never
+   relocated demand" wording — the real lift moves the pickup by the full
+   offset δ; the forbidden direction, demand moved OUT of the district,
+   remains impossible to read because the vacated marker sits inside the
+   district too). The trim channel's amber passenger sits on the
+   ADVANTAGED side.
+5. ✅ Trim edit: recorded position x=0.270 (A1's end), relocated position
+   x=0.135, arrowhead x=0.158 — all left of the 0.517 boundary, inside
+   the advantaged tint. Verified in source and render.
 6. ✅ Grayscale: `figure-1-teaser-preview-gray.png`. The 5-vs-2 / 4-vs-3
    taxi asymmetry, bold side labels, boundary dash, both edit dashes +
-   arrowheads, ghosts and the "+" mark all survive with the tints gone.
+   arrowheads, the faint-vs-dark vacated marks and the "+" all survive
+   with the tints gone.
 7. ✅ The edit vocabulary is the right panel's most salient element class;
-   within it the lift path dominates (longest dashed stroke, crosses the
-   boundary, ends at the amber taxi + "+"). The trim arrow is a shorter
-   parallel statement fully inside the advantaged half.
+   within it the lift dominates (branch node, grayed tail, longest dashed
+   stroke crossing the boundary, amber taxi + "+", arrowhead into the
+   amber passenger). The trim arrow is a shorter parallel statement fully
+   inside the advantaged half.
 
 ## 4. The semantic fix (FINAL_REVIEW_FINDINGS #1)
 
@@ -229,24 +278,33 @@ time (the current one is wrong for the PNG and wrong for this figure):
 
 ```latex
   \Description{Two stylized city maps side by side, each split by a vertical
-  dashed district boundary into an advantaged half and a disadvantaged half,
-  drawn over a faint street grid with dark gray polylines standing in for
-  existing trajectories. In the left map, titled Biased Service in HSTD, the
-  advantaged half holds five taxis and three passengers and is labeled
-  Service: High, Demand: Low, while the disadvantaged half holds two taxis
-  and four passengers and is labeled Service: Low, Demand: High. A thick
-  arrow labeled FATE leads to the right map, titled FATE for Fairer Service.
-  There the advantaged half holds four taxis, and a dashed orange line
-  starts at the vacated position of the missing taxi, crosses the district
-  boundary, and ends with an arrowhead at an orange taxi on the
-  disadvantaged side, beside a small plus sign marking added service
-  presence. The passenger nearest the arriving taxi is drawn in orange to
-  mark the passenger who now gets served; passenger counts are unchanged on
-  both sides. The halves are labeled Service: Moderate, Demand: Similar and
+  dashed district boundary into an advantaged half and a disadvantaged
+  half, drawn over a faint street map. Solid gray polylines trace existing
+  taxi trajectories along the streets; taxi icons sit on the routes and a
+  passenger icon stands at the end of each route, marking its pickup. In
+  the left map, titled Biased Service in HSTD, the advantaged half holds
+  five taxis and three passengers and is labeled Service: High, Demand:
+  Low, while the disadvantaged half holds two taxis and four passengers
+  and is labeled Service: Low, Demand: High. A thick arrow labeled FATE
+  leads to the right map, titled FATE for Fairer Service, where two edits
+  are drawn in orange. In the advantaged half, a dashed orange arrow leads
+  from a faded passenger at the end of one route to an orange passenger at
+  a new location, showing a recorded pickup relocated within the
+  advantaged district. On a long route that ends just inside the
+  disadvantaged district, the final segments fade out and a dashed orange
+  line branches from a marked point on the route, crosses the boundary
+  carrying an orange taxi and a small plus sign, and ends with an
+  arrowhead at an orange passenger deeper in the district, showing the
+  rerouted trajectory that moves taxi presence and its pickup further into
+  the under-served district. Passenger counts are unchanged in both
+  halves, which are labeled Service: Moderate, Demand: Similar and
   Service: Increased, Demand: Similar. A legend identifies the taxi and
   passenger icons, the solid gray existing trajectories, and the dashed
   orange edited trajectory.}
 ```
+
+(v6: the manuscript currently carries the v1-era `\Description`; it no
+longer matches the figure and NEEDS this replacement.)
 
 (If Robert instead ships the PNG, the `\Description` repair decided under
 finding #1 still applies and this draft does NOT fit the PNG — the PNG shows

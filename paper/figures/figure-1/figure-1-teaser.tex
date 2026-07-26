@@ -95,6 +95,8 @@
 %                          (ON, Robert 2026-07-25 v3: both edit channels
 %                          shown; false = lift-only teaser)
 \newif\ifshowVacatedGhost\showVacatedGhosttrue% open circle at vacated taxi
+\newif\ifshowTailNodes\showTailNodestrue%    state dots on the lift tail +
+%                          reroute (the fig-2-detail "states" reading)
 \newif\ifshowAddedMark\showAddedMarktrue%    small + beside the orange taxi
 \newif\ifshowCardTints\showCardTintstrue%    Zhang's pink/green outer cards
 %                                            (cautionary left / calm right)
@@ -198,44 +200,58 @@
 \def\tzDisInfoR{Service: Increased\\Demand: Similar}%
 \def\tzLegTaxi{Taxi}\def\tzLegPick{Passenger}%
 \def\tzLegExist{Existing trajectory}\def\tzLegEdit{Edited trajectory}%
-% ---- icon positions: panel-fraction pairs x/y, measured from the PNG --
-% Conservation is visible here: right adv taxis = left adv taxis MINUS
-% the vacated one (\tzVacated); right dis gains exactly the orange taxi.
-% (the mid-left taxi sits at x=0.145, not the PNG's 0.086, so the FATE
-% arrowhead overlaying the right panel's left edge lands clear of it)
-\def\tzAdvTaxis{0.086/0.150, 0.228/0.203, 0.442/0.287, 0.145/0.470,
-                0.360/0.729}%                       left panel: 5
-\def\tzAdvTaxisR{0.086/0.150, 0.228/0.203, 0.145/0.470,
-                 0.360/0.729}%                      right panel: 4
-\def\tzVacatedX{0.442}\def\tzVacatedY{0.287}%       the taxi that left
-\def\tzDisTaxis{0.886/0.182, 0.934/0.639}%          both panels: 2
-\def\tzOrangeTaxiX{0.630}\def\tzOrangeTaxiY{0.550}% right panel: +1 (PNG
-%            had the pair at ~(0.61,0.39); moved to the open lower-middle
-%            so the rerouted path and the pair sit clear of other icons)
-% advantaged passengers: 3 in BOTH panels. The list holds the two that
-% trim never touches; the third is \tzTrimFrom* (drawn dark in the left
-% panel; in the right panel it is the trim edit's subject when
-% \showTrimEdit is on, else drawn dark unchanged there too).
-\def\tzAdvPicksKept{0.119/0.269, 0.047/0.615}%
-% (the middle-right passenger sits at (0.870,0.455), not the PNG's
-% (0.920,0.409), so he stands clear of the overlaid FATE arrow shaft)
-\def\tzDisPicks{0.655/0.266, 0.870/0.455, 0.861/0.860}% both panels: 3 dark
-\def\tzServedX{0.740}\def\tzServedY{0.590}%  4th dis passenger: dark on the
-%            left, RECOLORED tzEdit on the right (served, not moved); PNG
-%            position (0.669,0.409) moved with the pair (same spot in BOTH
-%            panels, so demand visibly does not move)
-% edited trajectory (fraction waypoints THROUGH \pxy; vacated position ->
-% down -> east across the boundary -> arrowhead at the taxi's west edge
-% (0.562 = \tzOrangeTaxiX - half of \tzTaxiW/\tzPW, minus a small gap)):
-\def\tzEditPath{\pxy{\tzVacatedX}{\tzOrangeTaxiY}
-                -- \pxy{0.562}{\tzOrangeTaxiY}}%
-% trim overlay (the second edit channel; ON per Robert 2026-07-25 v3):
-% relocates the recorded pickup \tzTrimFrom* (the right member of the
-% passenger pair) to \tzTrimTo* -- BOTH endpoints inside the advantaged
-% tint (boundary fraction \tzBx), which is the ALGORITHM_FACTS guard.
-\def\tzTrimFromX{0.098}\def\tzTrimFromY{0.615}%
-\def\tzTrimToX{0.245}\def\tzTrimToY{0.775}%
-\def\tzTrimArrX{0.222}\def\tzTrimArrY{0.750}% arrowhead stops here, just
+% ---- icon positions (v6, Robert 2026-07-25): every icon is ANCHORED to
+% ---- a trajectory -- taxis sit ON intermediate waypoints, passengers at
+% ---- trajectory ENDS (each trajectory ends in a pickup). The x/y pairs
+% ---- below therefore repeat waypoints from the trajectory paths in
+% ---- \tzBaseMap (comments name the host trajectory). Conservation is
+% ---- visible here: right adv taxis = left adv taxis MINUS the lift
+% ---- taxi; the dis side gains exactly the amber taxi on the reroute.
+\def\tzAdvTaxis{0.140/0.313, 0.095/0.140, 0.215/0.465, 0.190/0.685,
+                \tzLiftTaxiX/\tzLiftTaxiY}% left: 5 (A1,A2,B4,A4 + lift)
+\def\tzAdvTaxisR{0.140/0.313, 0.095/0.140, 0.215/0.465,
+                 0.190/0.685}%              right: 4 (the lift taxi left)
+\def\tzDisTaxis{0.690/0.130, 0.790/0.290}%  both panels: 2 (on D1, D2)
+% advantaged passengers: 3 in BOTH panels -- A4 end, A5 end, and the trim
+% subject at A1's end (\tzTrimFrom*: dark left; relocated amber right).
+\def\tzAdvPicksKept{0.345/0.600, 0.060/0.645}%       A4 end, A5 end
+% disadvantaged passengers: 4 in BOTH panels -- D1/D2/D3 ends stay dark;
+% the 4th is the LIFT pickup (\tzLiftPickOrig* near the boundary on the
+% left; moved DEEPER into the under-served side, \tzLiftPickNew*, on the
+% right). Demand never leaves the district.
+\def\tzDisPicks{0.705/0.430, 0.920/0.400, 0.885/0.885}% D1, D2, D3 ends
+% ---- LIFT (resource-aware edit; the fig-2-detail composition) --------
+% Host trajectory T_L runs down the S-curve artery; the tail branches at
+% the ANCHOR (which never moves), the original tail + pickup gray out,
+% and the amber dashed reroute carries pickup AND taxi presence deeper
+% into the under-served side ("the real Lift edit moves the pickup, too"
+% -- Robert 2026-07-25; pickup moves by the full offset, ALGORITHM_FACTS).
+\def\tzLiftPre{\pxy{0.380}{0.100} -- \pxy{0.400}{0.200}
+  -- \pxy{0.410}{0.300} -- \pxy{0.420}{0.400} -- \pxy{0.440}{0.500}}%
+\def\tzLiftTail{\pxy{0.440}{0.500} -- \pxy{0.460}{0.580}
+  -- \pxy{0.490}{0.660} -- \pxy{0.530}{0.720} -- \pxy{0.565}{0.765}}%
+\def\tzLiftReroute{\pxy{0.440}{0.500} -- \pxy{0.530}{0.520}
+  -- \pxy{0.620}{0.530} -- \pxy{0.700}{0.530} -- \pxy{0.752}{0.530}}%
+\def\tzLiftAnchorX{0.440}\def\tzLiftAnchorY{0.500}% branch point (fixed)
+\def\tzLiftTaxiX{0.410}\def\tzLiftTaxiY{0.300}%  the driver, ON T_L (left
+%                    panel; vacated ghost circle there on the right)
+\def\tzLiftTaxiNewX{0.620}\def\tzLiftTaxiNewY{0.530}% amber taxi ON the
+%                    reroute, past the boundary (presence arrived)
+\def\tzLiftPickOrigX{0.565}\def\tzLiftPickOrigY{0.780}% recorded pickup,
+%                    just inside the under-served side (dark left; FAINT
+%                    vacated marker right)
+\def\tzLiftPickNewX{0.780}\def\tzLiftPickNewY{0.530}% moved pickup (amber,
+%                    right panel only), deeper under-served
+% node dots on the tail + reroute (the fig-2-detail "states" reading):
+\def\tzTailDotR{0.032}% dot radius (cm)
+% ---- TRIM (outcome-side edit) ----------------------------------------
+% The pickup at the END of trajectory A1 (dark left panel) relocates to
+% \tzTrimTo* -- amber dashed arrow from the vacated (faint) passenger to
+% the amber passenger; BOTH endpoints inside the advantaged tint
+% (boundary fraction \tzBx), the ALGORITHM_FACTS guard.
+\def\tzTrimFromX{0.270}\def\tzTrimFromY{0.332}%  = A1's end
+\def\tzTrimToX{0.135}\def\tzTrimToY{0.455}%
+\def\tzTrimArrX{0.158}\def\tzTrimArrY{0.437}% arrowhead stops here, just
 %                    short of the relocated passenger icon
 % ---- legend layout (v5): group widths measured at compile time, the
 % ---- leftover band width split into 5 EQUAL gaps (see legend section)
@@ -289,51 +305,46 @@
       \draw \pxy{0}{\j/(\tzGridNy+1)} -- \pxy{1}{\j/(\tzGridNy+1)};
   \end{scope}
   % existing trajectories (the legend's "Existing trajectory" refers to
-  % these). Waypoints traced along the street map's visible roads (panel
-  % fractions; map crop accounted for): mixed lengths -- short (3-4
-  % segments), medium (5-6), long (8-10) -- segment length ~ grid cell.
+  % these), v6: every waypoint sits ON a road of the underlying map, and
+  % the icon-hosting trajectories (A*/D*, named in the icon lists above)
+  % carry a taxi at an intermediate waypoint and end at a passenger.
+  % T_L, the lift host, is NOT here -- it renders per panel. Mixed
+  % lengths: short 3-4 segments, medium 5-6, long 8-10.
   \begin{scope}[tztraj]
     % -- advantaged side -------------------------------------------------
-    \draw \pxy{0.15}{0.315} -- \pxy{0.21}{0.32} -- \pxy{0.27}{0.325}
-          -- \pxy{0.33}{0.33};       % short (east of the passenger)
-    \draw \pxy{0.06}{0.10} -- \pxy{0.06}{0.17} -- \pxy{0.12}{0.17}
-          -- \pxy{0.12}{0.24};                              % short
-    \draw \pxy{0.19}{0.395} -- \pxy{0.19}{0.465} -- \pxy{0.245}{0.465}
-          -- \pxy{0.245}{0.535};     % short (clear of the mid-left taxi)
-    \draw \pxy{0.03}{0.77} -- \pxy{0.09}{0.73} -- \pxy{0.15}{0.69}
-          -- \pxy{0.21}{0.66} -- \pxy{0.27}{0.63} -- \pxy{0.32}{0.60}
-          -- \pxy{0.37}{0.58} -- \pxy{0.40}{0.545} -- \pxy{0.43}{0.50}
-          -- \pxy{0.44}{0.44};             % long: bottom-left diagonal
-    \draw \pxy{0.28}{0.08} -- \pxy{0.33}{0.10} -- \pxy{0.36}{0.15}
-          -- \pxy{0.36}{0.21};                              % short
-    \draw \pxy{0.36}{0.02} -- \pxy{0.38}{0.09} -- \pxy{0.395}{0.16}
-          -- \pxy{0.405}{0.24} -- \pxy{0.41}{0.32}
-          -- \pxy{0.42}{0.40};             % medium: S-curve artery upper
-    \draw \pxy{0.36}{0.86} -- \pxy{0.33}{0.92} -- \pxy{0.28}{0.955}
-          -- \pxy{0.22}{0.97};                              % short
-    \draw \pxy{0.28}{0.44} -- \pxy{0.28}{0.50} -- \pxy{0.33}{0.50}
-          -- \pxy{0.33}{0.56} -- \pxy{0.38}{0.58};          % medium
-    % -- crossing the boundary (S-curve bend toward the SE road) ---------
-    \draw \pxy{0.46}{0.70} -- \pxy{0.51}{0.74} -- \pxy{0.56}{0.78}
-          -- \pxy{0.61}{0.82} -- \pxy{0.66}{0.86};          % medium
+    \draw \pxy{0.02}{0.31} -- \pxy{0.10}{0.31} -- \pxy{0.18}{0.317}
+          -- \pxy{0.25}{0.325};% A1 (trim host): left horizontal road;
+          % taxi @ (0.14,0.313), pickup at the end (0.27,0.332)
+    \draw \pxy{0.06}{0.06} -- \pxy{0.06}{0.14} -- \pxy{0.13}{0.14}
+          -- \pxy{0.13}{0.22};% A2: top-left blocks; taxi @ (0.095,0.14)
+    \draw \pxy{0.05}{0.77} -- \pxy{0.12}{0.725} -- \pxy{0.19}{0.685}
+          -- \pxy{0.26}{0.645} -- \pxy{0.33}{0.605};% A4: SW diagonal
+          % road; taxi @ (0.19,0.685), pickup at the end (0.345,0.60)
+    \draw \pxy{0.06}{0.44} -- \pxy{0.06}{0.53}
+          -- \pxy{0.06}{0.62};% A5: left block street; pickup at the
+          % end (0.06,0.645)
+    \draw \pxy{0.22}{0.05} -- \pxy{0.22}{0.13} -- \pxy{0.29}{0.13}
+          -- \pxy{0.29}{0.21};% A6: upper blocks; taxi @ (0.29,0.175)
     % -- disadvantaged side ----------------------------------------------
-    \draw \pxy{0.68}{0.03} -- \pxy{0.69}{0.10} -- \pxy{0.695}{0.17}
-          -- \pxy{0.70}{0.24} -- \pxy{0.70}{0.31} -- \pxy{0.705}{0.38}
-          -- \pxy{0.71}{0.45};             % medium: right vertical artery
-    \draw \pxy{0.56}{0.435} -- \pxy{0.63}{0.425} -- \pxy{0.70}{0.42}
-          -- \pxy{0.77}{0.415} -- \pxy{0.84}{0.41};% medium: y~0.42 road
-          % (stops west of the right-edge passenger)
+    \draw \pxy{0.68}{0.03} -- \pxy{0.69}{0.13} -- \pxy{0.70}{0.23}
+          -- \pxy{0.70}{0.33} -- \pxy{0.705}{0.42};% D1: right vertical
+          % artery; taxi @ (0.69,0.13), pickup at the end (0.705,0.43)
+    \draw \pxy{0.72}{0.25} -- \pxy{0.79}{0.29} -- \pxy{0.86}{0.335}
+          -- \pxy{0.905}{0.385};% D2: NE diagonal road; taxi @
+          % (0.79,0.29), pickup at the end (0.92,0.40)
+    \draw \pxy{0.76}{0.66} -- \pxy{0.81}{0.71} -- \pxy{0.81}{0.79}
+          -- \pxy{0.87}{0.79} -- \pxy{0.87}{0.87};% D3: bottom-right
+          % blocks; pickup at the end (0.885,0.885)
+    % -- background texture (no icons) -----------------------------------
     \draw \pxy{0.78}{0.06} -- \pxy{0.84}{0.06} -- \pxy{0.84}{0.13}
-          -- \pxy{0.90}{0.13};                              % short
-    \draw \pxy{0.72}{0.24} -- \pxy{0.78}{0.28} -- \pxy{0.83}{0.31}
-          -- \pxy{0.88}{0.345};            % short: NE diagonal (stops
-          % west of the right-edge passenger)
+          -- \pxy{0.90}{0.13};% B2: top-right blocks
+    \draw \pxy{0.36}{0.86} -- \pxy{0.33}{0.92} -- \pxy{0.28}{0.955}
+          -- \pxy{0.22}{0.97};% B3: S-curve bottom bend
+    \draw \pxy{0.19}{0.395} -- \pxy{0.19}{0.465} -- \pxy{0.245}{0.465}
+          -- \pxy{0.245}{0.535};% B4: mid-left blocks
     \draw \pxy{0.52}{0.06} -- \pxy{0.545}{0.13} -- \pxy{0.555}{0.21}
           -- \pxy{0.56}{0.29} -- \pxy{0.555}{0.36}
-          -- \pxy{0.545}{0.43};            % medium: center artery
-    \draw \pxy{0.75}{0.68} -- \pxy{0.79}{0.715} -- \pxy{0.83}{0.75}
-          -- \pxy{0.87}{0.77} -- \pxy{0.91}{0.77};% medium (passes above
-          % the bottom-right passenger, below the right-edge taxi)
+          -- \pxy{0.545}{0.43};% B5: center artery
   \end{scope}
   \draw[tzboundary] ({\tzBx*\tzPW},0) -- ({\tzBx*\tzPW},-\tzPH);
   \draw[tzframe] (0,0) rectangle (\tzPW,-\tzPH);
@@ -394,10 +405,22 @@
              \draw[fill=white, line width=0.45pt]
              (-0.068,-0.046) circle[radius=0.027]
              (0.068,-0.046) circle[radius=0.027];\fi},
+  pickghost/.pic={\ifuseZhangIcons
+             \node[inner sep=0pt] at (0,0)
+               {\includegraphics[height=\tzPickH cm]{\figonedir icon-passenger-faint.png}};
+             \else
+             \begin{scope}[tzgray!40]
+             \draw[line width=0.6pt] (0,0.075) circle[radius=0.042];
+             \draw[line width=0.6pt] (0,0.033) -- (0,-0.046);
+             \draw[line width=0.6pt] (-0.065,0.0) -- (0.065,0.0);
+             \draw[line width=0.6pt] (0,-0.046) -- (-0.055,-0.117)
+                                     (0,-0.046) -- (0.055,-0.117);
+             \end{scope}\fi},
   % ---- styles ---------------------------------------------------------
   tzframe/.style={tzgray, line width=0.5pt},
   tzstreet/.style={tzfaint, line width=\tzGridW, opacity=0.45},
   tztraj/.style={tzgray, line width=\tzTrajW, rounded corners=1.2pt},
+  tzvacated/.style={tzgray!38, line width=\tzTrajW, rounded corners=1.2pt},
   tzghost/.style={tzEdit!45, line width=0.6pt},
   tzarrhead/.style={-{Stealth[length=3.2pt, width=2.8pt]}}]
 
@@ -421,6 +444,14 @@
   % ================= LEFT panel: Biased Service in HSTD ================
   \begin{scope}[shift={(0,\tzPanelTop)}]
     \tzBaseMap
+    % T_L, the trajectory lift will edit: fully recorded here (solid);
+    % its taxi rides an intermediate waypoint (in \tzAdvTaxis) and its
+    % pickup sits at the end, just inside the under-served side
+    \draw[tztraj] \tzLiftPre;
+    \draw[tztraj] \tzLiftTail;
+    \pic[tzink] at
+      ({\tzLiftPickOrigX*\tzPW},{-\tzLiftPickOrigY*\tzPH+\tzPickDy})
+      [scale=\tzPickScale] {pick};
     \foreach \fx/\fy in \tzAdvTaxis
       \pic[tzTaxiInk] at ({\fx*\tzPW},{-\fy*\tzPH+\tzTaxiDy})
         [scale=\tzTaxiScale] {taxi};
@@ -430,20 +461,56 @@
     \foreach \fx/\fy in \tzAdvPicksKept
       \pic[tzink] at ({\fx*\tzPW},{-\fy*\tzPH+\tzPickDy})
         [scale=\tzPickScale] {pick};
-    % the pickup trim will relocate: recorded (dark, unmoved) here
+    % the pickup trim will relocate: recorded (dark) at A1's end
     \pic[tzink] at ({\tzTrimFromX*\tzPW},{-\tzTrimFromY*\tzPH+\tzPickDy})
       [scale=\tzPickScale] {pick};
     \foreach \fx/\fy in \tzDisPicks
       \pic[tzink] at ({\fx*\tzPW},{-\fy*\tzPH+\tzPickDy})
         [scale=\tzPickScale] {pick};
-    % the passenger who will be served after the edit: still dark here
-    \pic[tzink] at ({\tzServedX*\tzPW},{-\tzServedY*\tzPH+\tzPickDy})
-      [scale=\tzPickScale] {pick};
   \end{scope}
 
   % ================= RIGHT panel: FATE for Fairer Service ==============
   \begin{scope}[shift={(\tzRPx,\tzPanelTop)}]
     \tzBaseMap
+    % ---- lift (resource-aware edit), fig-2-detail composition: T_L's
+    % ---- pre-branch part is unchanged (solid); from the ANCHOR (which
+    % ---- never moves) the ORIGINAL tail + recorded pickup gray out,
+    % ---- and the amber dashed reroute carries the pickup AND the taxi
+    % ---- deeper into the under-served side.
+    \draw[tztraj] \tzLiftPre;
+    \draw[tzvacated] \tzLiftTail;
+    \pic at ({\tzLiftPickOrigX*\tzPW},{-\tzLiftPickOrigY*\tzPH+\tzPickDy})
+      [scale=\tzPickScale] {pickghost};
+    \draw[tzedit, tzarrhead] \tzLiftReroute;
+    \ifshowTailNodes % state dots: anchor (dark, fixed), original tail
+      % (faint), reroute (amber; the waypoint under the taxi is skipped)
+      \fill[tzink] \pxy{\tzLiftAnchorX}{\tzLiftAnchorY}
+        circle[radius=\tzTailDotR];
+      \foreach \fx/\fy in {0.460/0.580, 0.490/0.660, 0.530/0.720}
+        \fill[tzgray!45] ({\fx*\tzPW},{-\fy*\tzPH})
+          circle[radius=\tzTailDotR];
+      \foreach \fx/\fy in {0.530/0.520, 0.700/0.530}
+        \fill[tzEdit] ({\fx*\tzPW},{-\fy*\tzPH})
+          circle[radius=\tzTailDotR];
+    \fi
+    \ifshowVacatedGhost % open circle where the driver was on T_L
+      \draw[tzghost] ({\tzLiftTaxiX*\tzPW},{-\tzLiftTaxiY*\tzPH})
+        circle[radius=0.08];
+    \fi
+    \pic[tzEdit] at
+      ({\tzLiftTaxiNewX*\tzPW},{-\tzLiftTaxiNewY*\tzPH+\tzTaxiDy})
+      [scale=\tzTaxiScale] {taxiedit};
+    \ifshowAddedMark % small + = added presence (grayscale carrier)
+      \draw[tzEdit, line width=0.8pt]
+        ({\tzLiftTaxiNewX*\tzPW-0.18},{-\tzLiftTaxiNewY*\tzPH+0.26})
+        -- ++(0.16,0)
+        ({\tzLiftTaxiNewX*\tzPW-0.10},{-\tzLiftTaxiNewY*\tzPH+0.18})
+        -- ++(0,0.16);
+    \fi
+    \pic[tzEdit] at
+      ({\tzLiftPickNewX*\tzPW},{-\tzLiftPickNewY*\tzPH+\tzPickDy})
+      [scale=\tzPickScale] {pickedit};
+    % ---- the untouched icons -------------------------------------------
     \foreach \fx/\fy in \tzAdvTaxisR
       \pic[tzTaxiInk] at ({\fx*\tzPW},{-\fy*\tzPH+\tzTaxiDy})
         [scale=\tzTaxiScale] {taxi};
@@ -453,48 +520,26 @@
     \foreach \fx/\fy in \tzAdvPicksKept
       \pic[tzink] at ({\fx*\tzPW},{-\fy*\tzPH+\tzPickDy})
         [scale=\tzPickScale] {pick};
-    % ---- trim (outcome-side edit): the recorded pickup relocated
-    % ---- WITHIN the advantaged area -- ghost at the recorded position,
-    % ---- dashed edit arrow, amber passenger at the new position. Count
-    % ---- unchanged: this is the SAME third passenger the left panel
+    \foreach \fx/\fy in \tzDisPicks
+      \pic[tzink] at ({\fx*\tzPW},{-\fy*\tzPH+\tzPickDy})
+        [scale=\tzPickScale] {pick};
+    % ---- trim (outcome-side edit): the pickup at A1's end relocates
+    % ---- WITHIN the advantaged area -- faint vacated passenger at the
+    % ---- recorded position, amber dashed arrow, amber passenger at the
+    % ---- new position. Count unchanged: same passenger the left panel
     % ---- draws dark at \tzTrimFrom*.
     \ifshowTrimEdit
-      \draw[tzghost] ({\tzTrimFromX*\tzPW},{-\tzTrimFromY*\tzPH})
-        circle[radius=0.055];
+      \pic at ({\tzTrimFromX*\tzPW},{-\tzTrimFromY*\tzPH+\tzPickDy})
+        [scale=\tzPickScale] {pickghost};
       \draw[tzedit, tzarrhead]
         ({\tzTrimFromX*\tzPW},{-\tzTrimFromY*\tzPH})
         -- ({\tzTrimArrX*\tzPW},{-\tzTrimArrY*\tzPH});
       \pic[tzEdit] at ({\tzTrimToX*\tzPW},{-\tzTrimToY*\tzPH+\tzPickDy})
         [scale=\tzPickScale] {pickedit};
-    \else % trim hidden: the third passenger sits unmoved, dark
+    \else % trim hidden: the pickup sits unmoved, dark
       \pic[tzink] at ({\tzTrimFromX*\tzPW},{-\tzTrimFromY*\tzPH+\tzPickDy})
         [scale=\tzPickScale] {pick};
     \fi
-    \foreach \fx/\fy in \tzDisPicks
-      \pic[tzink] at ({\fx*\tzPW},{-\fy*\tzPH+\tzPickDy})
-        [scale=\tzPickScale] {pick};
-    % ---- lift (resource-aware edit): presence moved under conservation
-    \ifshowVacatedGhost % open circle where the departing taxi was
-      \draw[tzghost] ({\tzVacatedX*\tzPW},{-\tzVacatedY*\tzPH})
-        circle[radius=0.08];
-    \fi
-    % rerouted trajectory: vacated position -> across the boundary ->
-    % arrowhead into the orange taxi (THE focal element)
-    \draw[tzedit, tzarrhead]
-      ({\tzVacatedX*\tzPW},{-\tzVacatedY*\tzPH}) -- \tzEditPath;
-    \pic[tzEdit] at ({\tzOrangeTaxiX*\tzPW},{-\tzOrangeTaxiY*\tzPH+\tzTaxiDy})
-      [scale=\tzTaxiScale] {taxiedit};
-    \ifshowAddedMark % small + = added presence (grayscale carrier),
-      % placed above-left of the taxi cabin, clear of the passenger
-      \draw[tzEdit, line width=0.8pt]
-        ({\tzOrangeTaxiX*\tzPW-0.18},{-\tzOrangeTaxiY*\tzPH+0.26})
-        -- ++(0.16,0)
-        ({\tzOrangeTaxiX*\tzPW-0.10},{-\tzOrangeTaxiY*\tzPH+0.18})
-        -- ++(0,0.16);
-    \fi
-    % the served passenger: same position as the left panel, recolored
-    \pic[tzEdit] at ({\tzServedX*\tzPW},{-\tzServedY*\tzPH+\tzPickDy})
-      [scale=\tzPickScale] {pickedit};
   \end{scope}
 
   % ================= center: FATE + block arrow (drawn AFTER the panels

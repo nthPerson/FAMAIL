@@ -1,5 +1,19 @@
 # FIGURE 1 SPEC — teaser (Dr. Zhang's PNG; optional TikZ remake)
 
+> **v6 (Robert, 2026-07-25, trajectory correlation):** all trajectories
+> re-traced onto the map's roads; taxis ON routes, passengers at route
+> ENDS; trim = amber arrow from the faded vacated pickup at trajectory
+> A1's end to the relocated amber passenger (both advantaged); lift =
+> the fig-2-detail composition (anchor node, grayed original tail +
+> faded recorded pickup just inside the under-served side, amber dashed
+> reroute w/ state dots carrying the pickup AND an amber taxi deeper
+> into the district, "+" mark, arrowhead into the amber passenger).
+> Demand counts stay 4/4 and 3/3 per panel (the moved lift pickup stays
+> WITHIN the under-served district; the adv-side origin alternative is a
+> two-macro change, see report v6 note 4). New: \showTailNodes,
+> \tzLift* macros, icon-passenger-faint.png. ⚠ the manuscript's
+> \Description is now stale — replacement drafted in report §6.
+>
 > **v5 (Robert, 2026-07-25, legend + fonts):** legend groups now spaced by
 > compile-time measurement (`\settowidth` per label, leftover split into
 > 5 equal gaps — self-re-spacing on any wording/font/icon change; the
