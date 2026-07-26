@@ -69,6 +69,30 @@ if [ -f main.pdf ] && command -v pdftotext >/dev/null 2>&1; then
   elif [ "$refpage" -gt 9 ]; then
     echo "LINT FAIL — body spilled past 8 pages: REFERENCES starts on page $refpage, expected 9."
     fail=1
+  else
+    # 2026-07-26: "REFERENCES is on page 9" is NOT sufficient. The heading can sit
+    # partway DOWN page 9 with body text above it, which is still a body overrun and
+    # passed the earlier version of this gate silently. Count the rendered lines that
+    # precede the heading in its own column.
+    spill=$(python3 - <<'PYEOF'
+import re, subprocess
+out = subprocess.run(['pdftotext','-f','9','-l','9','-bbox','main.pdf','-'],
+                     capture_output=True, text=True).stdout
+ws = [(float(m.group(1)), float(m.group(2)), m.group(3))
+      for m in re.finditer(r'<word xMin="([\d.]+)" yMin="([\d.]+)"[^>]*>([^<]*)</word>', out)]
+h = [(x, y) for x, y, w in ws if w.upper().startswith('REFERENCE')]
+if not h:
+    print(0)
+else:
+    hx, hy = h[0]
+    col = 0 if hx < 300 else 1
+    ys = {round(y) for x, y, w in ws if (0 if x < 300 else 1) == col and 90 < y < hy}
+    print(len(ys))
+PYEOF
+)
+    if [ "${spill:-0}" -gt 0 ]; then
+      echo "LINT WARN — body overruns 8 pages: $spill rendered line(s) of body text sit above the REFERENCES heading on page 9."
+    fi
   fi
 else
   echo "LINT WARN — main.pdf or pdftotext unavailable; body-spill gate did not run."
