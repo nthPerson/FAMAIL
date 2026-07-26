@@ -94,10 +94,14 @@
 \newif\ifshowTrimEdit\showTrimEdittrue%      advantaged-side trim overlay
 %                          (ON, Robert 2026-07-25 v3: both edit channels
 %                          shown; false = lift-only teaser)
-\newif\ifshowVacatedGhost\showVacatedGhosttrue% open circle at vacated taxi
+\newif\ifshowVacatedGhost\showVacatedGhostfalse% open circle at the
+%                          vacated lift-taxi position (OFF, Robert
+%                          2026-07-25 v6.1: the amber icons carry the
+%                          edits; true restores the marker)
 \newif\ifshowTailNodes\showTailNodestrue%    state dots on the lift tail +
 %                          reroute (the fig-2-detail "states" reading)
-\newif\ifshowAddedMark\showAddedMarktrue%    small + beside the orange taxi
+\newif\ifshowAddedMark\showAddedMarkfalse%   small + beside the amber taxi
+%                          (OFF, Robert 2026-07-25 v6.1, same reason)
 \newif\ifshowCardTints\showCardTintstrue%    Zhang's pink/green outer cards
 %                                            (cautionary left / calm right)
 \newif\ifuseMapBackground\useMapBackgroundtrue% SZ street map render under

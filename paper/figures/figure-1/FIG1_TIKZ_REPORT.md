@@ -41,6 +41,12 @@
 5. New knobs: `\showTailNodes` (state dots), `\tzTailDotR`, the lift
    path/anchor/taxi/pickup macros (`\tzLift*`), `icon-passenger-faint.png`
    (PIL alpha ×0.32). Box unchanged: 239.50 × 126.51 pt.
+6. **v6.1**: the vacated-taxi ghost circle and the "+" added-presence
+   mark are OFF (`\showVacatedGhostfalse`, `\showAddedMarkfalse`) — the
+   amber taxi/passenger icons carry the edits on their own (Robert
+   2026-07-25); the toggles restore either marker. Invariant 6's
+   grayscale carriers are now the dash patterns, arrowheads and
+   faint-vs-dark contrast (re-verified without ghost/"+").
 
 **v5 (Robert's legend + font pass, 2026-07-25):**
 1. **Legend evenly spaced, by computation.** The four icon+label group

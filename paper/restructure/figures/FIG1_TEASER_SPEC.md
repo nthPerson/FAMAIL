@@ -1,5 +1,9 @@
 # FIGURE 1 SPEC — teaser (Dr. Zhang's PNG; optional TikZ remake)
 
+> **v6.1 (Robert, 2026-07-25):** vacated-taxi ghost circle + "+" mark
+> removed (redundant beside the amber icons); toggles
+> \showVacatedGhost/\showAddedMark restore them.
+>
 > **v6 (Robert, 2026-07-25, trajectory correlation):** all trajectories
 > re-traced onto the map's roads; taxis ON routes, passengers at route
 > ENDS; trim = amber arrow from the faded vacated pickup at trajectory
