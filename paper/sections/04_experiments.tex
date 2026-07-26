@@ -20,8 +20,8 @@ San Francisco, by answering five questions.
 (\S\ref{sec:exp-data-level})?
 \textbf{Q2}: does it raise service in under-served regions, not just lower it
 elsewhere (\S\ref{sec:exp-data-level})?
-\textbf{Q3}: do the edited demonstrations improve downstream policies
-(\S\ref{sec:exp-downstream})?
+\textbf{Q3}: do the edited demonstrations improve downstream policies, and is
+the gain specific to the edit (\S\ref{sec:exp-downstream})?
 \textbf{Q4}: does FATE outperform existing and simpler baselines
 (\S\ref{sec:exp-baselines})?
 \textbf{Q5}: do the results hold across cities and demographic definitions
@@ -55,7 +55,7 @@ no editable fairness gradient.
 
 \textbf{Editor configuration.} All edits are made using the trim+lift editor of
 \S\ref{sec:method}, with $\alpha = (0.1, 0.8, 0.1)$ weights selected using the 
-three-class criterion of \S\ref{sec:exp-robustness}, $\varepsilon = 2$, and the 
+three-class criterion of Appendix~\ref{app:results}, $\varepsilon = 2$, and the 
 skip-on-infeasible rule of \S\ref{sec:phys-validity}. The edit budget is fixed
 per city: Shenzhen $k = 10{,}000$, about a tenth
 of the corpus (2{,}337 trim + 7{,}545 lift after filtering); San Francisco
@@ -133,11 +133,12 @@ instrument definitions are in Appendix~\ref{app:protocol}.
 
 \textbf{Baseline algorithms.} No existing method edits trajectories for
 fairness under a fidelity constraint, so we draw baselines from the two
-nearest families: bounded perturbation methods, which edit trajectories but
-not for fairness, and fairness interventions, which target fairness but act on
-the model rather than on the demonstrations. The perturbation and oversampling arms
-run at FATE's edit budget; the fairness interventions act on the raw corpus at
-training time.
+nearest families: bounded perturbation methods, which edit trajectories but not
+for fairness; data-level interventions that add rather than edit; and
+training-side fairness methods, which target fairness but leave the
+demonstrations unchanged. The perturbation and oversampling arms run at FATE's
+edit budget, the training-side methods act on the raw corpus, and the generated
+corpora replace it wholesale.
 \begin{enumerate}[topsep=2pt,itemsep=0pt,parsep=0pt,leftmargin=1.4em]
 \item \textbf{ST-iFGSM} \cite{hu2023stifgsm}: iterative signed-gradient attack
 on the frozen identity discriminator, with PGD-style random restart.
@@ -160,8 +161,10 @@ data, standing in for generate-instead-of-edit.
 % opening two sentences are R1: they say WHY these families were chosen, once,
 % declaratively, without apologising. The former §4.4 opener that carried these
 % four cites is deleted (it duplicated this list); its pre-registered "expected
-% not to improve" disclosure travels to §4.4's prose, where the comparison is
-% actually made. Item 5 keeps the "by group rather than by edit" distinction
+% not to improve" disclosure was CUT from the body in the style pass and is
+% restored in Appendix C's perturbation-arm block instead — the body version had
+% become a pre-emption of an objection rather than a report of a result, which is
+% what D2 targets, but deleting a pre-registration outright is what R2 forbids. Item 5 keeps the "by group rather than by edit" distinction
 % added in fbe876f — §3.5 calls FATE's own upweighting "instance reweighing
 % transplanted to imitation learning", so without it the same citation reads as
 % both our lineage and a baseline we beat.
@@ -219,7 +222,11 @@ it reproduces the production supply grid exactly) it is $+0.0411$
 \centering
 \caption{Shenzhen external fairness (migrant axis, district extremes; paired
 bootstrap): established instruments and group service levels, before $\to$
-after editing ($B{=}1{,}000$).}
+after editing. $B = 1{,}000$ over active grid units, except the
+$\mathrm{mean}(Y \mid \mathrm{disadv.})$ interval, which is the channel
+decomposition's $B = 2{,}000$ over the disadvantaged units
+(\S\ref{sec:exp-data-level}). No interval was computed for the advantaged
+level.}
 \label{tab:external-sz}
 \footnotesize
 \setlength{\tabcolsep}{4pt}
@@ -253,9 +260,9 @@ a rerouted tail must move (Fidelity-B 0.187; Appendix~\ref{app:results}).
 % reports on is defined. 03_methodology.tex's pointer is repaired to name it.
 
 \textbf{Ablation: trim-only versus trim+lift.}
-Because trim is frozen inside the combined editor, the lift-disabled run
-reproduces the demand-only editor exactly, so every difference between the
-trim-only and trim+lift results below isolates lift: demand-only editing improves the metrics without raising
+Because trim is frozen inside the combined editor, the lift-disabled run is
+the same demand-only editor, so the difference between the trim-only and
+trim+lift results below is the supply channel: demand-only editing improves the metrics without raising
 under-served service; the supply channel is what changes that.
 % (2026-07-24, T5: the opening "(\S\ref{sec:editor})" pointer dropped — after T4
 % that label reads "Attribution under an Edit Budget", while both the freezing of
@@ -272,9 +279,13 @@ $-0.052$ versus $-0.073$, both CIs excluding zero. % lint-allow: ablation — bo
 
 \begin{table}[tb]
 \centering
-\caption{Demand-only editing versus trim+lift (Shenzhen). Every instrument
-improves under trim-only, but the under-served service level does not move;
-only the supply channel raises it.}
+\caption{Demand-only editing versus trim+lift (Shenzhen; migrant axis,
+district extremes, as in Table~\ref{tab:external-sz}). Every \emph{external}
+instrument improves under trim-only, yet the under-served service level does
+not move and $F_{\mathrm{spatial}}$ slips. Only the supply channel raises the
+level and turns $\Delta F_{\mathrm{spatial}}$ positive. The trim+lift column
+applies 118 fewer trim edits, which the king-move filter reverts
+(Appendix~\ref{app:editor}).}
 \label{tab:ablation}
 \footnotesize
 \setlength{\tabcolsep}{4pt}
@@ -311,9 +322,11 @@ $\Delta F_{\mathrm{spatial}}$ & $-0.0011$ & $+0.0061$ \\ % lint-allow: ablation
 BC-generated, and GAN-generated) on fairness and both fidelity axes, with
 generators trained from scratch for this comparison and Fidelity-A gated using
 the fidelity guardrail of \S\ref{sec:objective}. The edited corpus is the
-fairest source that stays faithful to driver identity (Fidelity-A gate passed,
-matched 0.848 vs.\ mismatched 0.193), at the Fidelity-B cost reported above
-(Table~\ref{tab:l1}). The Shenzhen GAN's Fidelity-B is bimodal across seeds
+fairest source that stays faithful to driver identity, at the Fidelity-B cost
+reported above (Table~\ref{tab:l1}): its Fidelity-A is 0.844 against raw's
+0.848, and the discriminator's own real-anchored gate passes, matched 0.848
+against mismatched 0.193. The Shenzhen GAN's Fidelity-B is bimodal across
+seeds
 while the SF GAN stays uniformly healthy (\S\ref{sec:exp-sf}); the per-seed
 spread is in Appendix~\ref{app:results}.
 
@@ -374,7 +387,8 @@ Appendix~\ref{app:results}.
 \includegraphics[width=\linewidth]{figures/dose_response.pdf}
 \caption{Downstream transfer against the upweighting factor (Shenzhen,
 $n = 6$ paired seeds). The edited arm climbs from the uniform-weight null
-(open marker, n.s.) and saturates. The most-fair control is significantly
+(open marker, $+0.0022$ at $n = 6$; the $n = 12$ pooled estimate in the text is
+$+0.0016$, likewise n.s.) and saturates. The most-fair control is significantly
 positive only at $w = 10$ and fades; the random control is null-to-negative
 throughout, and was not run at $w = 20$.}
 \label{fig:dose}
@@ -393,21 +407,20 @@ throughout, and was not run at $w = 20$.}
 % panel names its own measurement level and carries its own FATE reference row
 % (+0.0226 data level, +0.0302 training side at n=6, w30).
 The arms of \S\ref{sec:exp-setup} are compared in Table~\ref{tab:baselines};
-the generated-corpus arms are scored as data sources in Table~\ref{tab:l1}. FATE gives the largest fairness gain of any
+the generated-corpus arms are scored as data sources in Table~\ref{tab:l1}. FATE gives the largest $\Delta F_{\mathrm{demo}}$ of any
 data-level arm and is the only one that inflates nothing and breaks no
 trajectories.
 
 \begin{table}[t]
 \centering
-\caption{Comparison with baselines (Shenzhen). Upper panel: data-level arms,
-each editing the corpus at FATE's budget; inflation is the fabricated share of
-the corpus. Lower panel: training-side fairness methods on the raw corpus,
-scored as paired downstream deltas over $n = 6$ seeds; only FATE's row is
-dose-parameterized, and adjacency does not apply because these methods edit
-nothing. Adjacency violation is the share of touched trajectories left
-violating the king-move rule (Shenzhen). The parity penalty has no single value: it moves
-$F_{\mathrm{demo}}$ by at most $0.0009$ (n.s.) at every stably trainable
-$\lambda$, and collapses it only at $\lambda = 1000$.}
+\caption{Comparison with baselines (Shenzhen). Upper panel: data-level arms at
+FATE's edit budget; inflation is the fabricated share of the corpus, adjacency
+violation the share of touched trajectories left violating the king-move rule.
+Lower panel: downstream deltas over $n = 6$ paired seeds, with FATE's w30 arm
+as the like-for-like reference; the two fairness methods act on the raw corpus
+at training time, so adjacency does not apply to them. The parity penalty is
+inert across the six-seed grid and collapses $F_{\mathrm{demo}}$ only at
+$\lambda = 1000$ (Appendix~\ref{app:results}).}
 \label{tab:baselines}
 \footnotesize
 \setlength{\tabcolsep}{4pt}
@@ -431,7 +444,8 @@ demographic-parity penalty & inert & --- & --- & 0\% \\
 \bottomrule
 \end{tabular}
 \end{table}
-% src: PAPER/supply-lift/FINDINGS.md §3 (FATE data-level row); famail_temporal/baselines/baseline_table/baseline_table.json (perturbation rows);
+% src (FATE data-level row): famail_temporal/results/2026-07-10T02-06-37_alpha_sweep_s10_c80_f10_filtered/metrics.json deltas.f_causal +0.022561, deltas.f_spatial +0.006112; adjacency 0% from that run's provenance.compliance.filtered (n_edits_introducing_violations 0 of 9,882). NOT FINDINGS.md §3 — a pre-alpha* era artifact reading +0.02222. % lint-allow: names the old-alpha value precisely so this row is never re-sourced from it
+% src: famail_temporal/baselines/baseline_table/baseline_table.json (perturbation rows);
 % src: oversampling cells = 3-seed means over *_d10000_s{0,1,2} metrics.json deltas (matches the committed FINDINGS aggregation; the assembler's seed-0-only d10000 row reads +0.0175)
 % src (Panel B): famail_temporal/results/weighted_bc_sweep/fairness_baseline_6seed/paired_stats.json (fair_reweigh -0.0227, all six seeds negative, p=.031); .../alpha_sweep_s10_c80_f10_filtered_6seed/dose_response.json (FATE w30 n=6 +0.0302 — the like-for-like reference for this panel); .../fairness_penalty_6seed/ + fairness_penalty_abs_{pilot,6seed}/ (lambda grid)
 
@@ -530,7 +544,7 @@ every trainable dose.
 under different geography, sampling, and fleet size. Because
 $F_{\mathrm{demo}}$ is city-specific, what reproduces is each conclusion's
 direction and significance, not its magnitude. At the data level
-$F_{\mathrm{demo}}$ rises from 0.8752 to 0.9067 ($+0.0316$), and every external
+$F_{\mathrm{demo}}$ rises by $+0.0316$, and every external
 instrument improves (Theil $-0.0079$, CI $[-0.0094, -0.0065]$). The supply
 channel replicates under both accounting conventions: distinct-taxi $+0.1027$
 (CI $[+0.0872,$ $+0.1203]$), the largest such effect in this study. Downstream,
@@ -544,10 +558,11 @@ counterpart.
 
 \begin{table}[tb]
 \centering
-\caption{Two-city reproduction. $^{*}$-marked rows: the paired-bootstrap
-95\% interval excludes zero in both cities. The cities differ in grid, fleet
-size and demographic basis, so magnitudes are not comparable; direction and
-significance are.}
+\caption{Two-city reproduction. $^{*}$: interval excludes zero in both cities
+--- paired bootstrap for Theil and the supply channel, paired $t$-interval over
+$n = 12$ seeds for the w30 row (exact Wilcoxon $p = .00049$). The cities differ
+in grid, fleet size and demographic basis, so magnitudes are not comparable;
+direction and significance are.}
 \label{tab:twocity}
 \footnotesize
 \setlength{\tabcolsep}{4pt}
@@ -555,7 +570,7 @@ significance are.}
 \toprule
  & Shenzhen & San Francisco \\
 \midrule
-$\Delta F_{\mathrm{demo}}$ (data level)$^{*}$ & $+0.0226$ & $+0.0316$ \\
+$\Delta F_{\mathrm{demo}}$ (data level) & $+0.0226$ & $+0.0316$ \\
 Theil ($\downarrow$)$^{*}$ & $-0.0087$ & $-0.0079$ \\
 supply channel, distinct-taxi$^{*}$ & $+0.0411$ & $+0.1027$ \\
 downstream $\Delta F_{\mathrm{demo}}$ (w30, $n{=}12$)$^{*}$ & $+0.0297$ & $+0.0333$ \\
@@ -604,24 +619,65 @@ Appendix~\ref{app:results}).
 % pass; the primary-set +0.0411 is also a cell of Table~\ref{tab:twocity}.
 The transfer controls hold under all three: the random placebo stays
 null-to-negative, and the most-fair selection control, null on the primary set,
-turns significantly positive under both alternate sets at a fifth to a quarter
-of the edited arm's gain, which is still at least $3\times$ smaller at every
-dose.
+turns significantly positive under both alternate sets, at roughly a quarter of
+the edited arm's w30 gain and at least $3\times$ smaller at every dose.
 % src: {2026-07-13T04-41-12_..._hgc, 2026-07-13T17-04-22_..._4feat}_filtered/channel_decomposition.json (A1 2026-07-16 + A1' tier-2 rerun 2026-07-17, B=2000): totals +0.0594 [+0.0181,+0.1013] / +0.1461 [+0.0900,+0.2039]; supply t1 +0.0054 / +0.0608; supply TIER-2 +0.0211 [+0.0181,+0.0247] / +0.0771 [+0.0706,+0.0836]; demand +0.0539* / +0.0853* (PRIMARY: t1 +0.0176, t2 +0.0411, demand n.s.)
 % src: PAPER/supply-lift/data/a10/shz_hgc_a10_weighted_bc_paired_stats.json (most_fair w30 +0.0054; vanilla +0.0022)
 % src: PAPER/supply-lift/data/a10/shz_4feat_a10_weighted_bc_paired_stats.json (4feat most_fair doses +0.0059/+0.0059/+0.0072, all p=.031; edited/most_fair min ratio 3.05 at w10)
 
-\textbf{Objective weights.} A sweep of six full editing runs, each scored on
-all three metric classes, leaves the optimized $\Delta F_{\mathrm{demo}}$ flat
-within $0.001$ for $\alpha_{\mathrm{sp}} \in [0, 0.55]$, while the
-supply-channel lift-up declines monotonically with $\alpha_{\mathrm{sp}}$ and
-stays significant only for $\alpha_{\mathrm{sp}} \le 0.2$. The adopted
-$(0.1, 0.8, 0.1)$ is the three-class criterion's selection: inside the flat
-range, the low $\alpha_{\mathrm{sp}}$ is what keeps the lift-up significant
-(Fig.~\ref{fig:alpha-pareto}, Appendix~\ref{app:results}).
-% src: PAPER/objective-motivation/weight-sensitivity/EXTENDED_FRONTIER.md (full table + criterion)
+\begin{table}[t]
+\caption{Feature-set robustness under trim+lift (Shenzhen; $\Delta$ rows are
+after $-$ before edit). $^{*}$-marked rows: every cell's paired-bootstrap
+95\% interval excludes zero ($B = 2{,}000$ for
+$\Delta\,\mathrm{mean}(Y \mid \mathrm{disadv.})$; $B = 1{,}000$ for
+DI/DP/Theil).}
+\label{tab:featsets}
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{lrrr}
+\toprule
+ & \{hous,comp,migr\} & \{hous,gdp,comp\} & +logpopdens \\
+\midrule
+before-edit $F_{\mathrm{demo}}$ & 0.7988 & 0.8069 & 0.7253 \\
+editor $\Delta F_{\mathrm{demo}}$ & $+0.0226$ & $+0.0206$ & $+0.0220$ \\
+$\Delta\,\mathrm{mean}(Y \mid \mathrm{disadv.})^{*}$ & $+0.0529$ & $+0.0594$ & $+0.1461$ \\ % src: {shenzhen-primary-supplylift-s10,shenzhen-hgc-supplylift,shenzhen-4feat-supplylift}/external_fairness.json: metrics.MigrantRatio.district_extremes.supply_demand_ratio.{after,before}.mean_disadvantaged, delta at full precision (4FEAT 7.219558-7.073448=+0.1461). TOTAL quantity (both channels), decomposed in tab:channels — label deliberately NOT "lift-up": per §4.2 the lift-up CLAIM rides the supply channel; delta-only per DI/Theil convention. all three totals CI-sig (PRIMARY [+0.0086,+0.0989]; HGC [+0.0181,+0.1013]; 4FEAT [+0.0900,+0.2039]; B=2000, A1 runs 2026-07-16).
+supply channel, distinct-taxi$^{*}$ & $+0.0411$ & $+0.0211$ & $+0.0771$ \\ % src: {2026-07-13T04-41-12_..._hgc, 2026-07-13T17-04-22_..._4feat}_filtered/channel_decomposition.json (A1' tier-2 rerun 2026-07-17, B=2000): tier-2 supply HGC +0.0211 [+0.0181,+0.0247], 4FEAT +0.0771 [+0.0706,+0.0836]; PRIMARY +0.0411 [+0.0346,+0.0479]
+% 2026-07-26 (Zhang R2 review): row ADDED. §4.5 asserts the supply channel is
+% individually significant on all three sets, and a §4 comment claimed the three
+% distinct-taxi values were "cells of Table~\ref{tab:featsets}". They were not:
+% dropping them from the body left +0.0211 and +0.0771 in % comments only, i.e.
+% absent from the rendered paper. Now they are cells, and the claim is true.
+DI $\Delta$ (migrant/extremes)$^{*}$ & $+0.0162$ & $+0.0147$ & $+0.0191$ \\ % src: same external_fairness.json: disparate_impact.delta_ci — HGC [+0.0120,+0.0171], 4FEAT [+0.0158,+0.0223], B=1000 (PRIMARY CI in tab:external-sz)
+DP gap $\Delta^{*}$ & $-0.890$ & $-0.787$ & $-0.886$ \\ % src: same external_fairness.json: metrics.MigrantRatio.district_extremes.demographic_parity.delta (identical to supply_demand_ratio.delta_gap -- DP IS the gap, do not also add a gap row; delta_ci — HGC [-0.8839,-0.6827], 4FEAT [-0.9924,-0.7712])
+Theil $\Delta^{*}$ & $-0.0087$ & $-0.0080$ & $-0.0085$ \\ % src: same files, top-level theil.delta_ci — HGC [-0.0090,-0.0070], 4FEAT [-0.0096,-0.0074]
+L1: edited fairest faithful? & see Tab.~\ref{tab:l1} & yes & yes \\ % src: per-set level1_v2_multiseed.json (HGC 0.8275 / 4FEAT 0.7473 fairest, both Fid-A ~0.845; GAN Fid-B bimodality reproduces seed-for-seed in all three sets)
+vanilla-BC transfer (w1) & see~\S\ref{sec:exp-downstream} & $+0.0022$ & $+0.0011$ (n.s.) \\ % src: hgc w1 is sign-unanimous (6/6, p=.031) though a tenth of its w30 gain — row renamed from 'null' for honesty
+weighted-BC w30 & see~\S\ref{sec:exp-downstream} & $+0.0248$ & $+0.0256$ \\
+\quad random placebo (w30) & $-0.0023$ (n.s.) & $-0.0019$ (n.s.) & $-0.0044$ (n.s.) \\
+\quad most-fair select (w30) & $+0.0009$ (n.s.) & $+0.0054$ & $+0.0072$ \\
+variance (b0 vs FATE) & see~\S\ref{sec:exp-downstream} & null & null \\ % src: hgc +0.0029±0.0038 / 4feat +0.0003±0.0028, both mixed-sign at n=5 — null under the pre-registered sign-consistency reading (PRIMARY was all-positive)
+\bottomrule
+\end{tabular}
+\end{table}
+% src (PRIMARY column): s10 corpus metrics.json + shenzhen-primary-supplylift-s10 external_fairness.json
+% 2026-07-26 (final review, D3 BLOCKER): tab:featsets MOVED from Appendix C into
+% the main text. §4.5 is titled "Robustness Across Cities and Demographic
+% Features" and Q5 asks about demographic definitions, but the feature-set half
+% of that claim had no main-text float at all — every per-set number lived in the
+% appendix. Declared after its first \ref in the feature-set paragraph above.
 
-\textbf{Filtering versus editing.} Deleting the most-biased trajectories
-instead of editing them underperforms editing (0.7935 vs.\ 0.8214, at matched
-count; Appendix~\ref{app:results}).
+\textbf{Secondary robustness.} Two further checks are reported in
+Appendix~\ref{app:results}: a six-run objective-weight sweep, whose flat range
+is what selects the adopted $\alpha = (0.1, 0.8, 0.1)$
+(Fig.~\ref{fig:alpha-pareto}), and a filtering rebuttal, where deleting the
+most-biased trajectories underperforms editing them, 0.7935 against 0.8214.
+% src: PAPER/objective-motivation/weight-sensitivity/EXTENDED_FRONTIER.md (full table + criterion)
 % src: famail_temporal/results/analysis/pareto_supplylift/pareto_points.csv (Q7-pareto ledger row: 0.7935 at K=2,455)
+% 2026-07-26 (final review, D1/D7): the "Objective weights" and "Filtering versus
+% editing" paragraphs answered none of Q1-Q5 and were supported only by appendix
+% floats, so they sat outside both the question map and §4.5's own title. Both
+% are ALREADY carried in full by Appendix C ("Weight sensitivity", "Filtering
+% versus editing"); the body keeps a one-sentence statement of each claim so
+% nothing becomes invisible. Frees the space that pays for Table~\ref{tab:featsets}
+% moving into the main text, which is what D3 needs for the feature-set half of Q5.
+

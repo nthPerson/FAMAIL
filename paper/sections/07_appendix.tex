@@ -251,41 +251,6 @@ alternate sets.
 % \S\ref{sec:exp-robustness}, whose paragraph now states their size in words and
 % points at Table~\ref{tab:featsets} for the per-set values.)
 
-\begin{table}[t]
-\caption{Feature-set robustness under trim+lift (Shenzhen; $\Delta$ rows are
-after $-$ before edit). $^{*}$-marked rows: every cell's paired-bootstrap
-95\% interval excludes zero ($B = 2{,}000$ for
-$\Delta\,\mathrm{mean}(Y \mid \mathrm{disadv.})$; $B = 1{,}000$ for
-DI/DP/Theil).}
-\label{tab:featsets}
-\footnotesize
-\setlength{\tabcolsep}{3pt}
-\begin{tabular}{lrrr}
-\toprule
- & \{hous,comp,migr\} & \{hous,gdp,comp\} & +logpopdens \\
-\midrule
-before-edit $F_{\mathrm{demo}}$ & 0.7988 & 0.8069 & 0.7253 \\
-editor $\Delta F_{\mathrm{demo}}$ & $+0.0226$ & $+0.0206$ & $+0.0220$ \\
-$\Delta\,\mathrm{mean}(Y \mid \mathrm{disadv.})^{*}$ & $+0.0529$ & $+0.0594$ & $+0.1461$ \\ % src: {shenzhen-primary-supplylift-s10,shenzhen-hgc-supplylift,shenzhen-4feat-supplylift}/external_fairness.json: metrics.MigrantRatio.district_extremes.supply_demand_ratio.{after,before}.mean_disadvantaged, delta at full precision (4FEAT 7.219558-7.073448=+0.1461). TOTAL quantity (both channels), decomposed in tab:channels — label deliberately NOT "lift-up": per §4.2 the lift-up CLAIM rides the supply channel; delta-only per DI/Theil convention. all three totals CI-sig (PRIMARY [+0.0086,+0.0989]; HGC [+0.0181,+0.1013]; 4FEAT [+0.0900,+0.2039]; B=2000, A1 runs 2026-07-16).
-supply channel, distinct-taxi$^{*}$ & $+0.0411$ & $+0.0211$ & $+0.0771$ \\ % src: {2026-07-13T04-41-12_..._hgc, 2026-07-13T17-04-22_..._4feat}_filtered/channel_decomposition.json (A1' tier-2 rerun 2026-07-17, B=2000): tier-2 supply HGC +0.0211 [+0.0181,+0.0247], 4FEAT +0.0771 [+0.0706,+0.0836]; PRIMARY +0.0411 [+0.0346,+0.0479]
-% 2026-07-26 (Zhang R2 review): row ADDED. §4.5 asserts the supply channel is
-% individually significant on all three sets, and a §4 comment claimed the three
-% distinct-taxi values were "cells of Table~\ref{tab:featsets}". They were not:
-% dropping them from the body left +0.0211 and +0.0771 in % comments only, i.e.
-% absent from the rendered paper. Now they are cells, and the claim is true.
-DI $\Delta$ (migrant/extremes)$^{*}$ & $+0.0162$ & $+0.0147$ & $+0.0191$ \\ % src: same external_fairness.json: disparate_impact.delta_ci — HGC [+0.0120,+0.0171], 4FEAT [+0.0158,+0.0223], B=1000 (PRIMARY CI in tab:external-sz)
-DP gap $\Delta^{*}$ & $-0.890$ & $-0.787$ & $-0.886$ \\ % src: same external_fairness.json: metrics.MigrantRatio.district_extremes.demographic_parity.delta (identical to supply_demand_ratio.delta_gap -- DP IS the gap, do not also add a gap row; delta_ci — HGC [-0.8839,-0.6827], 4FEAT [-0.9924,-0.7712])
-Theil $\Delta^{*}$ & $-0.0087$ & $-0.0080$ & $-0.0085$ \\ % src: same files, top-level theil.delta_ci — HGC [-0.0090,-0.0070], 4FEAT [-0.0096,-0.0074]
-L1: edited fairest faithful? & see Tab.~\ref{tab:l1} & yes & yes \\ % src: per-set level1_v2_multiseed.json (HGC 0.8275 / 4FEAT 0.7473 fairest, both Fid-A ~0.845; GAN Fid-B bimodality reproduces seed-for-seed in all three sets)
-vanilla-BC transfer (w1) & see~\S\ref{sec:exp-downstream} & $+0.0022$ & $+0.0011$ (n.s.) \\ % src: hgc w1 is sign-unanimous (6/6, p=.031) though a tenth of its w30 gain — row renamed from 'null' for honesty
-weighted-BC w30 & see~\S\ref{sec:exp-downstream} & $+0.0248$ & $+0.0256$ \\
-\quad random placebo (w30) & $-0.0023$ (n.s.) & $-0.0019$ (n.s.) & $-0.0044$ (n.s.) \\
-\quad most-fair select (w30) & $+0.0009$ (n.s.) & $+0.0054$ & $+0.0072$ \\
-variance (b0 vs FATE) & see~\S\ref{sec:exp-downstream} & null & null \\ % src: hgc +0.0029±0.0038 / 4feat +0.0003±0.0028, both mixed-sign at n=5 — null under the pre-registered sign-consistency reading (PRIMARY was all-positive)
-\bottomrule
-\end{tabular}
-\end{table}
-% src (PRIMARY column): s10 corpus metrics.json + shenzhen-primary-supplylift-s10 external_fairness.json
 
 \textbf{Filtering versus editing.} Detail for the filtering rebuttal of
 \S\ref{sec:exp-robustness}. Deleting the $K$ most-biased trajectories rather
@@ -310,8 +275,8 @@ edited trajectory against a trace of its original driver; higher is
 better), the evaluation-time reading of the \S\ref{sec:objective}
 guardrail, and validated by its separation from mismatched-driver pairs.
 \emph{Fidelity-B} is the distributional axis: a Jensen--Shannon divergence
-over aggregate mobility statistics, computed against the raw corpus (raw
-scores 0); lower is better.
+over aggregate mobility statistics \cite{feng2020simulate}, computed against
+the raw corpus (raw scores 0); lower is better.
 % src: famail_temporal/baselines/run_level1_table_v2.py (fidelity_a = gate high_matched; fidelity_a_separation); PAPER/supply-lift/FINDINGS.md §6 (HuMID identity axis, higher better); tab:l1 raw row Fid-B 0.000 (raw-referenced)
 
 \textbf{Edited-corpus Fidelity-B components.} Supporting the fidelity
@@ -336,8 +301,15 @@ at 0.060.
 \S\ref{sec:exp-downstream}. Beyond the adopted w30, the edited arm's gain
 extends to $+0.0323$ (w40) and $+0.0339$ (w50), each 6/6, with the per-step
 increment shrinking monotonically ($+0.0050$, $+0.0035$, $+0.0021$,
-$+0.0016$) --- w30 sits at the knee.
+$+0.0016$) --- w30 sits at the knee. At the adopted dose the $n = 12$ flagship
+carries a paired $t$-interval of $[+0.0278,$ $+0.0315]$. % lint-allow: n=12 pooled CI bounds (computed 2026-07-18), not the old-alpha supply-lift number
 % src: famail_temporal/results/weighted_bc_sweep/alpha_sweep_s10_c80_f10_filtered_6seed/dose_response.json
+% src: PAPER/supply-lift/data/a10/shz_a10_wbc_n12_pooled_stats.json (t-interval)
+% 2026-07-26 (final review): the flagship's 95% t-interval was dropped from the
+% body when the dose paragraph became Fig.~\ref{fig:dose}. A numeric-token diff
+% against fbe876f showed those bounds had left the rendered paper entirely;
+% the body still reports +0.0297 +/- 0.0029, which is NOT the same statistic.
+% Restored here rather than lost, per R2.
 
 \textbf{Downstream $F_{\mathrm{spatial}}$ and fidelity dose detail (Shenzhen).}
 Supporting \S\ref{sec:exp-downstream}. $F_{\mathrm{spatial}}$ propagates from
@@ -416,7 +388,14 @@ every $\lambda$.
 discriminator with ST-iFGSM \cite{hu2023stifgsm}, the spatio-temporal
 iterative FGSM \cite{kurakin2017ifgsm}, and with single-step FGSM
 \cite{goodfellow2015fgsm}, both under PGD-style random initialization inside
-the $\varepsilon$ ball \cite{madry2018pgd}; the random-start arms are the reported
+the $\varepsilon$ ball \cite{madry2018pgd}; We pre-registered these arms as expected
+not to improve fairness; random jitter is the one arm that did.
+% 2026-07-26 (final review, R2): restored. The style pass cut the body's
+% "expected not to improve" clause as a pre-emption, which D2 wants gone from the
+% main text, but a pre-registration is a disclosure and R2 says MOVE not DELETE.
+% Without it random jitter's +0.0135 reads as an unexplained anomaly rather than
+% a logged prediction failure.
+The random-start arms are the reported
 ones (the pre-registered $\delta = 0$ ablation:
 Appendix~\ref{app:editor}). Identity fidelity survives every arm
 ($\approx 0.846$): the perturbation is too small to break driver identity, so
