@@ -203,12 +203,13 @@ must). The stationarity assumption held only for the head we did not deploy.
 sweep summarized in \S\ref{sec:exp-robustness}: six full editing runs across the
 simplex (fidelity fixed at $0.1$), each scored on all three metric classes. The
 optimized $\Delta F_{\mathrm{demo}}$ is flat --- within $0.001$ --- for
-$\alpha_{\mathrm{sp}} \in [0, 0.55]$; the class (ii) supply-channel lift-up
+$\alpha_{\mathrm{sp}} \in [0, 0.55]$; the supply-channel lift-up
 declines monotonically with $\alpha_{\mathrm{sp}}$ and is significant under
 both accounting conventions only for $\alpha_{\mathrm{sp}} \le 0.2$; and
-class (iii) instruments
-improve significantly at every point. The adopted $(0.1, 0.8, 0.1)$ is the
-three-class criterion's selection: any weighting in the flat range delivers
+the external
+instruments improve significantly at every point. The adopted
+$(0.1, 0.8, 0.1)$ is the criterion's selection: any weighting in the flat
+range delivers
 the same $\Delta F_{\mathrm{demo}}$, and the low $\alpha_{\mathrm{sp}}$ is
 what keeps the supply-channel lift-up significant.
 
@@ -266,6 +267,12 @@ DI/DP/Theil).}
 before-edit $F_{\mathrm{demo}}$ & 0.7988 & 0.8069 & 0.7253 \\
 editor $\Delta F_{\mathrm{demo}}$ & $+0.0226$ & $+0.0206$ & $+0.0220$ \\
 $\Delta\,\mathrm{mean}(Y \mid \mathrm{disadv.})^{*}$ & $+0.0529$ & $+0.0594$ & $+0.1461$ \\ % src: {shenzhen-primary-supplylift-s10,shenzhen-hgc-supplylift,shenzhen-4feat-supplylift}/external_fairness.json: metrics.MigrantRatio.district_extremes.supply_demand_ratio.{after,before}.mean_disadvantaged, delta at full precision (4FEAT 7.219558-7.073448=+0.1461). TOTAL quantity (both channels), decomposed in tab:channels — label deliberately NOT "lift-up": per §4.2 the lift-up CLAIM rides the supply channel; delta-only per DI/Theil convention. all three totals CI-sig (PRIMARY [+0.0086,+0.0989]; HGC [+0.0181,+0.1013]; 4FEAT [+0.0900,+0.2039]; B=2000, A1 runs 2026-07-16).
+supply channel, distinct-taxi$^{*}$ & $+0.0411$ & $+0.0211$ & $+0.0771$ \\ % src: {2026-07-13T04-41-12_..._hgc, 2026-07-13T17-04-22_..._4feat}_filtered/channel_decomposition.json (A1' tier-2 rerun 2026-07-17, B=2000): tier-2 supply HGC +0.0211 [+0.0181,+0.0247], 4FEAT +0.0771 [+0.0706,+0.0836]; PRIMARY +0.0411 [+0.0346,+0.0479]
+% 2026-07-26 (Zhang R2 review): row ADDED. §4.5 asserts the supply channel is
+% individually significant on all three sets, and a §4 comment claimed the three
+% distinct-taxi values were "cells of Table~\ref{tab:featsets}". They were not:
+% dropping them from the body left +0.0211 and +0.0771 in % comments only, i.e.
+% absent from the rendered paper. Now they are cells, and the claim is true.
 DI $\Delta$ (migrant/extremes)$^{*}$ & $+0.0162$ & $+0.0147$ & $+0.0191$ \\ % src: same external_fairness.json: disparate_impact.delta_ci — HGC [+0.0120,+0.0171], 4FEAT [+0.0158,+0.0223], B=1000 (PRIMARY CI in tab:external-sz)
 DP gap $\Delta^{*}$ & $-0.890$ & $-0.787$ & $-0.886$ \\ % src: same external_fairness.json: metrics.MigrantRatio.district_extremes.demographic_parity.delta (identical to supply_demand_ratio.delta_gap -- DP IS the gap, do not also add a gap row; delta_ci — HGC [-0.8839,-0.6827], 4FEAT [-0.9924,-0.7712])
 Theil $\Delta^{*}$ & $-0.0087$ & $-0.0080$ & $-0.0085$ \\ % src: same files, top-level theil.delta_ci — HGC [-0.0090,-0.0070], 4FEAT [-0.0096,-0.0074]
@@ -433,6 +440,46 @@ $2$--$4\times$ the edited corpus's distributional divergence there,
 
 % src: PAPER/supply-lift/FINDINGS.md §3 (FATE row); famail_temporal/baselines/baseline_table/baseline_table.json (perturbation rows);
 % src: oversampling cells = 3-seed means over *_d10000_s{0,1,2} metrics.json deltas (matches the committed FINDINGS aggregation; the assembler's seed-0-only d10000 row reads +0.0175)
+
+\textbf{San Francisco channels and caveats.} Supporting \S\ref{sec:exp-sf}.
+At the data level $F_{\mathrm{spatial}}$ rises by $+0.0139$ alongside the % lint-allow: coincidental value (SF a10 F_spatial delta, not the trim-only F_demo headline)
+$F_{\mathrm{demo}}$ gain, and the DP gap on the migrant axis is significant
+under \emph{both} grouping conventions while DI is significant under one and
+n.s.\ under the other, a grouping dependence the 12-driver sample makes
+unsurprising. The total decomposes as follows. The supply channel is
+$+0.0209$ under fractional-presence accounting
+(CI $[+0.0122,$ $+0.0300]$) and $+0.1027$ under the distinct-taxi
+recount (CI $[+0.0872,$ $+0.1203]$). The demand channel is
+significantly negative, $-0.0533$
+(CI $[-0.0798,$ $-0.0298]$). That is large enough to make the
+fractional-presence total net-negative, $-0.0324$ with a CI
+excluding zero, before the recount turns it positive. Downstream,
+the dose ladder is $+0.0242$ (w10) and $+0.0309$ (w20), each 6/6, before the
+$n = 12$ w30 flagship reported in \S\ref{sec:exp-sf}.
+% src: PAPER/supply-lift/data/a10/sf12_a10_metrics.json + sf12_a10_external_fairness.json
+% src: PAPER/supply-lift/data/a10/sf12_a10_channel_decomposition.json (D1-CHAN 2026-07-18, B=2000 seed 0)
+% src: PAPER/supply-lift/data/a10/sf12_a10_wbc_n12_pooled_stats.json (prior n=6: vanilla +0.0026 5/6 p=.0625; w30 +0.0332 6/6)
+
+\emph{Caveats.} ACS foreign-born share proxies the migrant axis of Shenzhen;
+the 12-driver density-matched subsample is small; and 14.9\% of raw
+Cabspotting trajectories violate king-move adjacency at source (GPS gaps), so
+no corpus built from this data can be fully compliant. The standard we hold the
+editor to is therefore that its own edits introduce no violations (all of them
+comply), and the edited corpus ends \emph{more} compliant than raw (87.6\%
+vs.\ 85.2\%). The Shenzhen GAN's distributional collapse does not recur here
+(Fidelity-B 0.039, cf.\ \S\ref{sec:exp-downstream}); that cautionary note is
+city-specific.
+% src: famail_temporal/results/level1_table_v2/supply_lift_sf12_5seed/level1_v2_multiseed.json (gan row)
+% src: PAPER/supply-lift/data/a10/sf12_a10_metrics.json (provenance.compliance.filtered: 0.87647/0.85197); PAPER/argument/07_limitations.md §5-7 (era-neutral caveats; FINDINGS.md §10 is the old-alpha doc — do not copy numbers from it)
+% 2026-07-26 (Zhang R2 review, BLOCKER): the §4.5 compression DELETED this
+% material instead of moving it, while §4.5's own comment claimed "Nothing
+% deleted; numbers moved" and its prose promised the reader these caveats were
+% here. Restored verbatim from fbe876f. Values that had left the paper entirely:
+% +0.0139, the fractional-presence supply +0.0209 and its CI, the demand channel % lint-allow: provenance comment listing restored SF values, not a claim
+% -0.0533 and its CI, the net-negative total -0.0324, the w10/w20 SF ladder,
+% 14.9%, 87.6/85.2, and the SF GAN Fidelity-B 0.039. The appendix is outside the
+% 8pp body limit, so restoring costs nothing. R2's guard rail is MOVE over
+% DELETE for any disclosure, limitation or negative result; this is all three.
 
 \textbf{San Francisco downstream detail.} Supporting \S\ref{sec:exp-sf}.
 At $n = 12$ the controls sharpen the contrast rather than soften it: the
