@@ -242,7 +242,7 @@ evaluate the objective at hypothetically augmented supply $S + \Delta S$ and
 read $\partial \mathcal{L} / \partial S_i$ by automatic differentiation at
 $\Delta S = 0$: the marginal fairness effect of added presence at each of the
 $N \approx 34{,}500$ active units, in one backward pass. The result is a
-\emph{value-of-presence} map over the city: large where added presence would
+\emph{value-of-presence} map over cells and hours: large where added presence would
 most repair the fairness terms, and small or negative where presence is
 already abundant. Its $F_{\mathrm{demo}}$ component has a closed form, given
 with its autograd verification in Appendix~\ref{app:derivations}.
@@ -265,7 +265,7 @@ nominees
 edits), and the supply gradient is computed on the post-trim state.
 % src: LIFT_ALGORITHM_REFERENCE.md §4.3, §5 (budget split, phase order)
 Attribution is therefore not a post-hoc explanation of an edited corpus: it is
-the mechanism that decides which trajectories receive the budget.
+the mechanism that decides which trajectories are modified by the editor.
 
 \subsection{Outcome-Side and Resource-Aware Editing}
 

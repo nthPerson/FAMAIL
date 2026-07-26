@@ -42,12 +42,17 @@ reported where each gain is claimed.
 
 \subsection{Experimental Setup}\label{sec:exp-setup}
 \textbf{Datasets.} The primary city is Shenzhen: a 50-driver sample of real
-taxi GPS trajectories on a $48{\times}90$ grid (cell resolution:
-Appendix~\ref{app:editor}), with district-level demographics; the source-data
-cleanup is described there as well.
+taxi GPS trajectories on a $48{\times}90$ grid (cell resolution and
+source-data cleanup: Appendix~\ref{app:editor}), with district-level
+demographics.
 % (2026-07-25, review finding #16 page budget: the 106,677-pickup stuck-GPS
 % cleanup sentence and its % src pointer MOVED to Appendix~\ref{app:editor},
 % Grid configuration. Nothing was deleted.)
+% 2026-07-25 (Robert, read-aloud): the relocation had left a trailing "; the
+% source-data cleanup is described there as well", whose "there" the reader had
+% to resolve back to the parenthetical. Both pointers now name the same appendix
+% once, in the parenthetical, which is also where its Grid configuration block
+% actually carries both facts. Six words shorter.
 The second city is San Francisco (Cabspotting): a 12-driver
 subsample matched on fleet density (\texttt{sf12}, $32{\times}30$ grid), with
 the same demographic feature names filled from ACS tract values. Density matching is
