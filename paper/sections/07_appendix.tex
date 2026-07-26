@@ -410,11 +410,11 @@ every $\lambda$.
 % src: famail_temporal/results/weighted_bc_sweep/fairness_penalty_abs_{pilot,6seed}/ (FB-PENALTY-ABS 2026-07-18: l10 +0.0008 n.s.; l1000 -0.1293 6/6, Fid-B 0.363)
 
 \textbf{Perturbation-arm constructions and per-arm figures.} Supporting
-\S\ref{sec:exp-baselines}. The two gradient arms are \emph{iFGSM\slash FGSM
-with random restart} \cite{kurakin2017ifgsm,goodfellow2015fgsm} against the
-frozen identity discriminator in its spatio-temporal instantiation
-\cite{hu2023stifgsm}, with PGD-style random initialization inside the
-$\varepsilon$ ball \cite{madry2018pgd}; the random-start arms are the reported
+\S\ref{sec:exp-baselines}. The two gradient arms attack the frozen identity
+discriminator with ST-iFGSM \cite{hu2023stifgsm}, the spatio-temporal
+iterative FGSM \cite{kurakin2017ifgsm}, and with single-step FGSM
+\cite{goodfellow2015fgsm}, both under PGD-style random initialization inside
+the $\varepsilon$ ball \cite{madry2018pgd}; the random-start arms are the reported
 ones (the pre-registered $\delta = 0$ ablation:
 Appendix~\ref{app:editor}). Identity fidelity survives every arm
 ($\approx 0.846$): the perturbation is too small to break driver identity, so
@@ -426,7 +426,7 @@ on San Francisco, where random is the weakest mover.
 % reading, the diffusion mechanism and the San Francisco replication moved here
 % from \S\ref{sec:exp-baselines}; all four perturbation cites travelled with them.)
 % src: famail_temporal/baselines/baseline_table/baseline_table.json (Fid-A ~0.846 across arms)
-On Shenzhen the gradient arms violate king-move adjacency (54.4\% iFGSM,
+On Shenzhen the gradient arms violate king-move adjacency (54.4\% ST-iFGSM,
 91.4\% FGSM) with distributional divergence 0.143 and 0.339 respectively,
 against the edited corpus's 0.187.
 % src: famail_temporal/baselines/baseline_table/baseline_table.json (Shenzhen Fid-B(JS)/adjacency-violation columns)
@@ -451,7 +451,7 @@ arm & $\Delta F_{\mathrm{demo}}$ & $\Delta F_{\mathrm{spatial}}$ & inflation \\
 \midrule
 raw (reference) & --- & --- & 0\% \\
 \textbf{FATE trim+lift} & $\mathbf{+0.0226}$ & $+0.0061$ & 0\% \\
-iFGSM (rand.\ restart) & $-0.0057$ & $+0.0126$ & 0\% \\
+ST-iFGSM (rand.\ restart) & $-0.0057$ & $+0.0126$ & 0\% \\
 FGSM (rand.\ restart) & $+0.0017$ & $+0.0137$ & 0\% \\
 random jitter & $+0.0135$ & $+0.0132$ & 0\% \\
 demog.\ oversampling (targeted) & $+0.0153$ & $+0.0052$ & 10.5\% \\

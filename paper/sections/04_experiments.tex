@@ -330,17 +330,29 @@ upweighting effect (Appendix~\ref{app:results}).
 % task brief: the pre-registered-expectation disclosure, the placebo's DP-gap
 % explosion as the \S\ref{sec:leveling} endogeneity concern made concrete, and
 % both training-side directions with their headline numbers.
-None of the baselines below optimizes a fairness objective; they are
-\emph{editing-quality} baselines that test whether FATE's gains come from
-its objective or merely from bounded perturbation (or corpus resampling)
-per se. Fairness is accordingly \emph{expected not to improve} under the
-perturbation arms. Table~\ref{tab:baselines} in Appendix~\ref{app:results}
+We compare against four methods from the literature, each adapted to our
+setting: ST-iFGSM \cite{hu2023stifgsm} and FGSM \cite{goodfellow2015fgsm}
+as trajectory perturbation, Kamiran--Calders reweighing
+\cite{kamirancalders2012} and a demographic-parity penalty in the spirit
+of \cite{zheng2023} at training time. None edits trajectories for fairness
+under a fidelity bound (\S\ref{sec:related}), so the perturbation arms
+measure bounded editing alone and are \emph{expected not to improve}
+fairness. Table~\ref{tab:baselines} in Appendix~\ref{app:results}
 compares every arm at matched budgets, alongside the per-arm detail.
 % src: PAPER/baselines/README.md (Meeting-41 framing)
+% 2026-07-26 (external-baseline legibility): the opener previously led with
+% "None of the baselines below optimizes a fairness objective; they are
+% editing-quality baselines...", named no method, and carried no cite — so a
+% reader meeting §4.5 could not tell these were published external methods
+% rather than our own ablations. That is exactly how the arms were read on
+% review. The four method names + cites are pulled UP from
+% Appendix~\ref{app:results} and from the fairness-baselines paragraph below;
+% no number changed and no arm changed. The pre-registered
+% "expected not to improve" disclosure is preserved verbatim as a clause.
 
 \textbf{Perturbation arms.} Three arms move the same trajectories the headline
-edit selected, at the same $\varepsilon = 2$: iterative and single-step
-signed-gradient attacks on the frozen identity discriminator, and a seeded
+edit selected, at the same $\varepsilon = 2$: ST-iFGSM and FGSM against the
+frozen identity discriminator, and a seeded
 random-jitter placebo. None of the three reaches the editor's $+0.0226$, and
 all three break king-move adjacency on a large share of the trajectories they
 touch, in both cities. One result lands against the
@@ -372,14 +384,22 @@ metrics can be gamed by fabrication, the demand-endo\-ge\-ne\-ity concern of
 \S\ref{sec:leveling} made concrete.
 % src: PAPER/baselines/demographic-oversampling/FINDINGS.md §2-5
 
-\textbf{Fairness-method baselines (training-side).} Two established fairness
-methods, applied at training time on the raw corpus where they usually live,
-reproduce no part of the recovery that editing provides: instance reweighing in the
-Kamiran--Calders style \cite{kamirancalders2012} moves demand-adjusted
+\textbf{Fairness-method baselines (training-side).} Applied on the raw corpus
+where they usually live, neither reproduces any part of the recovery that
+editing provides: reweighing \cite{kamirancalders2012} moves demand-adjusted
 fairness the \emph{wrong} way ($-0.0227$, all six seeds negative,
-$p = .031$), and an in-processing demo\-graph\-ic-parity penalty in the spirit
-of \cite{zheng2023} is inert at every trainable dose, destructive only where
-it dominates.
+$p = .031$), and the in-processing penalty \cite{zheng2023} is inert at
+every trainable dose, destructive only where it dominates.
+% 2026-07-26: the paragraph no longer re-introduces the two methods ("Two
+% established fairness methods, applied at training time...", "instance
+% reweighing in the Kamiran--Calders style", "an in-processing
+% demographic-parity penalty in the spirit of") because the subsection opener
+% now names and cites both. Both cites are retained at point-of-claim; the
+% "in the spirit of" hedge on the penalty moved UP to the opener, so it is
+% still stated exactly once and the penalty is not misattributed to
+% \cite{zheng2023} as a verbatim reimplementation. Numbers unchanged. This
+% recovers the ~2 rendered lines the opener's method names cost, which
+% matters because the body must end on p8.
 % src: famail_temporal/results/weighted_bc_sweep/fairness_baseline_6seed/paired_stats.json (fair_reweigh; edited_w30 +0.0302 replicated internally)
 
 % (2026-07-25, review finding #16 page budget, Robert-approved: Table

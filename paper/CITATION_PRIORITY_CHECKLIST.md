@@ -456,3 +456,18 @@ Metadata upgrades for these are already in the 2026-07-16 report diff, ready if 
      \cite{ustun2019recourse,wachter2018counterfactual} is unchanged and §5 still states
      the same idea with the same five perturbation/recourse keys. Table 2 moved to
      Appendix C and carries no citations. Lint coverage green. Nothing ticked. -->
+
+<!-- Coverage note (2026-07-26, external-baseline legibility pass): NO key-set change,
+     NO new refs.bib entry, nothing ticked. Four EXISTING keys gained a §4.5 body usage
+     so the baseline arms read as external published methods rather than internal
+     ablations: hu2023stifgsm and goodfellow2015fgsm (previously cited on these arms only
+     in Appendix C, per the 2026-07-24 T10 page-budget move recorded above), plus
+     kamirancalders2012 and zheng2023 (already cited later in the same subsection; the
+     opener now names them too). Appendix C keeps all four plus kurakin2017ifgsm and
+     madry2018pgd; its gradient-arm sentence was reworded to name ST-iFGSM explicitly
+     rather than describe it as "the spatio-temporal instantiation" of the discriminator.
+     The cross-arm table's two gradient rows were relabeled iFGSM -> ST-iFGSM (tab:baselines,
+     renders as Table 4 in Appendix C). No number, no arm and
+     no result changed; this is a naming and attribution fix only. Rationale: the
+     experiments section named no method and carried no cite, so the arms were read as
+     internal ablations on review. -->
