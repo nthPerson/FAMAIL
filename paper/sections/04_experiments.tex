@@ -211,9 +211,9 @@ net out.
 % src: famail_temporal/results/level1_table_v2/supply_lift_shz_5seed/level1_v2_multiseed.json (edited row: Fid-A, Fid-B 0.187)
 
 \textbf{Provenance disclosures.} About 5\% of trim edits (118/2{,}455) had no
-king-compliant repair and were reverted post hoc, before fairness metrics were 
-computed. Before building lift we bounded the largest under-served service
-gain the supply channel could possibly deliver; that bound, and the far
+king-move-com\-pli\-ant repair and were reverted post hoc, before any fairness
+metric was computed. Ahead of building lift we bounded the largest under-served service
+gain the supply channel could deliver; that bound, and the far
 smaller realized gain, are in Appendix~\ref{app:results}.
 % src: PAPER/supply-lift/FINDINGS.md §8 (skip-on-infeasible)
 % (2026-07-22: Robert cut the 'moved every metric favorably' clause and compressed rule-first
@@ -266,8 +266,8 @@ the fidelity guardrail of \S\ref{sec:objective}. The edited corpus is the
 fairest source that stays
 faithful to driver identity (Fidelity-A gate passed, matched 0.848 vs.\ mismatched
 0.193), at the Fidelity-B cost disclosed above
-(Table~\ref{tab:l1}, Appendix~\ref{app:results}). One instability we surface
-rather than smooth: the Shenzhen GAN's Fidelity-B is bimodal across seeds, 
+(Table~\ref{tab:l1}, Appendix~\ref{app:results}). One instability that 
+surfaced during experimentation: the Shenzhen GAN's Fidelity-B is bimodal across seeds, 
 while the SF GAN stays uniformly healthy (\S\ref{sec:exp-sf}); the
 per-seed spread is in Appendix~\ref{app:results}.
 
@@ -344,8 +344,17 @@ against the edited corpus's disclosed 0.187, where FATE edits are
 king-compliant by construction.
 % src: famail_temporal/baselines/baseline_table/baseline_table.json (random Fid-B(JS)/adjacency)
 
-\textbf{Demographic oversampling.} The naive lift-up baseline captures part of
-the gain, $+0.0153$ at the duplication dose matched to FATE's budget, but
+\textbf{Demographic oversampling (duplicating trajectories from disadvantaged
+areas).} The naive lift-up baseline captures part of
+the gain,
+% 2026-07-25 (Robert, read-aloud): the head is glossed because nothing in this
+% paragraph said WHAT the arm duplicates or what its "targeting" targets — the
+% construction lives in Appendix~\ref{app:results} ("duplicates real trajectories
+% originating in demographically disadvantaged regions ... phantom driver IDs,
+% rigid +/-1-cell jitter, additively rebuilding demand and supply"). The head is
+% where a reader looks for what an arm is, and it matches the next head's shape
+% ("Fairness-method baselines (training-side)"). "disadvantaged-origin" is
+% already house vocabulary (App C's reweighing block). +3 words. $+0.0153$ at the duplication dose matched to FATE's budget, but
 fabricates 10.5\% of the corpus to get there, where FATE redistributes
 observed behavior at zero inflation and reaches $+0.0226$. Its untargeted
 placebo (the same fabrication without targeting) \emph{degrades} fairness,
@@ -381,10 +390,10 @@ it dominates.
 
 Under the two alternate demographic feature sets defined below, we re-measure
 the transfer controls of \S\ref{sec:exp-downstream} and report the strongest
-controls we found rather than averaging them away:
+controls we found:
 the random placebo stays null-to-negative under every set, while the most-fair
 selection control, null on the primary set, turns significantly \emph{positive}
-under both alternate sets, a fifth to a quarter of the edited arm's gain. Even
+under both alternate sets at a fifth to a quarter of the edited arm's gain. Even
 under that hardest test of edit specificity the edited arm's gain is at least
 $3\times$ larger at every dose, and vanilla transfer stays an order of
 magnitude below it under every set (per-set values:
