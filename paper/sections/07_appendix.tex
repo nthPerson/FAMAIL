@@ -128,6 +128,21 @@ backward-reachability repair that returns the king-compliant assignment
 nearest the tapered targets, or reports that none exists.
 % src: LIFT_ALGORITHM_REFERENCE.md §3 (king-move rule), §6 (repair; lift skips in-loop)
 
+\textbf{Repair provenance.} About 5\% of trim edits (118/2{,}455) had no
+king-move-com\-pli\-ant repair and were reverted post hoc, before any fairness
+metric was computed. Ahead of building lift we also bounded the largest
+under-served service gain the supply channel could deliver; that bound, and the
+far smaller realized gain, are in Appendix~\ref{app:results}.
+% src: PAPER/supply-lift/FINDINGS.md §8 (skip-on-infeasible)
+% (2026-07-22: Robert cut the 'moved every metric favorably' clause and compressed rule-first
+% to 'before fairness metrics were computed' (matches §3.4); gate detail = appendix Headroom-ceiling block)
+% 2026-07-26 (Zhang R2, D7): MOVED verbatim from §4.2's "Provenance disclosures"
+% paragraph. It lands beside King-move repair because that is where the rule it
+% reports on is defined. \S3.4 promises "\S... reports the fraction and when it
+% was applied", so 03_methodology.tex's pointer is repaired to name this block —
+% a \ref repair alone would have pointed at a subsection that no longer carries
+% the fraction. The 118/2,455 disclosure appears nowhere else in the paper.
+
 \textbf{Linearized-offset screen.} The candidate screen of
 \S\ref{sec:attribution}, in detail. Each trajectory's tail --- its last
 $\ell$ seeking states and pickup --- is rigidly translated by every nonzero
@@ -300,26 +315,6 @@ trajectory length, which neither editing phase alters, barely registers
 (0.060).
 % src: famail_temporal/results/level1_table_v2/supply_lift_shz_5seed/level1_v2_multiseed.json (edited row fidelity_b_per_component)
 
-\textbf{Four-source data-quality comparison (Shenzhen).} The full table behind
-the four-source claim of \S\ref{sec:exp-downstream}: raw, edited, BC-gen\-er\-ated,
-and GAN-generated corpora scored on fairness and both fidelity axes (means over
-five seeds; the GAN row's Fidelity-B is seed-bimodal, detailed next).
-\begin{table}[t]
-\caption{Data-quality comparison, four sources (Shenzhen; means over five
-seeds; the GAN row's Fidelity-B is seed-bimodal --- see text).}
-\label{tab:l1}
-\small
-\begin{tabular}{lrrr}
-\toprule
-source & $F_{\mathrm{demo}}$ & Fid.-A ($\uparrow$) & Fid.-B ($\downarrow$) \\
-\midrule
-raw & 0.7988 & 0.848 & 0.000 \\
-\textbf{edited (trim+lift)} & \textbf{0.8214} & 0.844 & 0.187 \\
-bc-generated & 0.7980 & 0.848 & 0.011 \\
-gan-generated & 0.8089 & 0.848 & 0.171 \\
-\bottomrule
-\end{tabular}
-\end{table}
 % src: famail_temporal/results/level1_table_v2/supply_lift_shz_5seed/level1_v2_multiseed.json
 
 \textbf{Shenzhen GAN per-seed spread.} Supporting the four-source
@@ -436,29 +431,6 @@ $2$--$4\times$ the edited corpus's distributional divergence there,
 0.198--0.418 against 0.098.
 % src: famail_temporal/results/2026-07-16T16-08-{05_baseline_ifgsm,16_baseline_fgsm,23_baseline_random}_sf12/metrics.json (B1 runs 2026-07-16; SF Fid-B from level1 sf12 edited row = 0.098)
 
-% (2026-07-25, review finding #16 page budget: this table MOVED VERBATIM here from
-% \S\ref{sec:exp-baselines}, whose prose still states every headline it carries.
-% Label unchanged so the incoming \ref resolves.)
-\begin{table}[t]
-\centering
-\caption{Cross-arm comparison at matched budgets (Shenzhen).}
-\label{tab:baselines}
-\footnotesize
-\setlength{\tabcolsep}{4pt}
-\begin{tabular}{lrrr}
-\toprule
-arm & $\Delta F_{\mathrm{demo}}$ & $\Delta F_{\mathrm{spatial}}$ & inflation \\
-\midrule
-raw (reference) & --- & --- & 0\% \\
-\textbf{FATE trim+lift} & $\mathbf{+0.0226}$ & $+0.0061$ & 0\% \\
-ST-iFGSM (rand.\ restart) & $-0.0057$ & $+0.0126$ & 0\% \\
-FGSM (rand.\ restart) & $+0.0017$ & $+0.0137$ & 0\% \\
-random jitter & $+0.0135$ & $+0.0132$ & 0\% \\
-demog.\ oversampling (targeted) & $+0.0153$ & $+0.0052$ & 10.5\% \\
-\quad placebo (untargeted) & $-0.0172$ & $+0.0138$ & 10.5\% \\
-\bottomrule
-\end{tabular}
-\end{table}
 % src: PAPER/supply-lift/FINDINGS.md §3 (FATE row); famail_temporal/baselines/baseline_table/baseline_table.json (perturbation rows);
 % src: oversampling cells = 3-seed means over *_d10000_s{0,1,2} metrics.json deltas (matches the committed FINDINGS aggregation; the assembler's seed-0-only d10000 row reads +0.0175)
 
@@ -479,7 +451,7 @@ External-instrument grouping detail: the DP gap is $-0.0729$
 [$-0.1132$, $-0.0259$] under district extremes and $-0.0370$ [$-0.0733$,
 $-0.0002$] under median split; DI is $+0.0058$ [$+0.0004$, $+0.0103$]
 under district extremes and n.s.\ under median split.
-% src: PAPER/supply-lift/data/a10/sf12_a10_external_fairness.json (MigrantRatio, both conventions; moved from §4.6 main text, argument-triage 2026-07-23) Model-level variance: the SF suite stays null
+% src: PAPER/supply-lift/data/a10/sf12_a10_external_fairness.json (MigrantRatio, both conventions; moved from the San Francisco block, now §4.5, argument-triage 2026-07-23) Model-level variance: the SF suite stays null
 at $n = 10$ seeds ($\Delta F_{\mathrm{demo}} = -0.0009 \pm 0.0035$, mixed
 signs, closer to zero than at $n = 5$), unlike the primary city's small
 significant positive effect. Four sources (generators retrained from
@@ -508,7 +480,7 @@ as future work.
 % src: famail_temporal/baselines/external_fairness/results/option_a_rollout_a10/summary.json + option_a_rollout_trimonly_a10/summary.json (edited_w30.MigrantRatio.pickups.share_D_delta; SZ)
 % src: famail_temporal/baselines/external_fairness/results/option_a_rollout_sf12_tl/summary.json + option_a_rollout_sf12_trimonly/summary.json (C3-SF-ROLLOUT 2026-07-17; attenuation 1-0.0335/0.0432=22.5%)
 % src: PAPER/supply-lift/data/rollout_supplylift_summary.json + rollout_trimonly_prior_summary.json; FINDINGS.md §9
-% (moved from §4.3 'The allocation boundary' + the §4.6 SF passage, argument-triage 2026-07-22; restore at camera-ready if space allows)
+% (moved from 'The allocation boundary' + the SF passage, argument-triage 2026-07-22; restore at camera-ready if space allows. §4.6 no longer exists: the SF block merged into §4.5 in the 2026-07-26 Zhang R2 restructure.)
 
 \section{Statistical Protocol Details}\label{app:protocol}
 

@@ -233,7 +233,100 @@ def overview_figure() -> None:
     plt.close(fig)
 
 
+def dose_response_figure() -> None:
+    """dose_response.pdf — downstream transfer vs upweighting dose (fig:dose).
+
+    Replaces the dense per-dose paragraph in the Downstream Transfer subsection
+    (Dr. Zhang, 2026-07-26: "A dose-response figure for downstream transfer
+    would be much clearer than presenting all the values in a long paragraph").
+
+    Everything is read from the committed sweep outputs; nothing is hard-coded.
+    Two source directories are needed and BOTH are required: the primary sweep
+    stops at w30, and the w40/w50 saturation points that make the knee visible
+    live in the dose-extension suite.
+
+    Honest-gap note: the random-subset control was never run at w20, so its line
+    carries a real gap there. It is drawn as a break rather than interpolated,
+    and the caption states the omission.
+
+    All arms are n=6 paired seeds. The w30 flagship is additionally run at n=12
+    (+0.0297) and the uniform-weight null at n=12 is +0.0016; both are different
+    quantities from the n=6 points plotted here and are reported in the text.
+    """
+    base = ROOT / "famail_temporal/results/weighted_bc_sweep"
+    srcs = ["alpha_sweep_s10_c80_f10_filtered_6seed", "alpha_sweep_s10_dose_ext_6seed"]
+
+    arms: dict[str, dict[int, float]] = {"edited": {}, "most_fair": {}, "random": {}}
+    vanilla = None
+    for s in srcs:
+        stats = json.loads((base / s / "paired_stats.json").read_text())
+        block = stats.get("f_causal", stats)
+        for key, val in block.items():
+            if not isinstance(val, dict):
+                continue
+            mean = val.get("mean_delta", val.get("mean"))
+            if mean is None:
+                continue
+            if key == "edited":                      # uniform weight == the null
+                vanilla = mean
+                continue
+            arm, _, w = key.rpartition("_w")
+            if arm in arms and w.isdigit():
+                arms[arm][int(w)] = mean
+
+    # w=1 anchors the edited curve at the uniform-weight null: the whole claim is
+    # that this point is flat and the curve climbs away from it.
+    if vanilla is not None:
+        arms["edited"][1] = vanilla
+
+    fig, ax = plt.subplots(figsize=(3.35, 2.0))
+    ax.axhline(0.0, color=FAINT, linewidth=0.6, zorder=1)
+
+    style = {
+        "edited":    dict(label="edited (FATE)", marker="o", ls="-",
+                          color=ACCENT, lw=1.2, ms=3.4, zorder=4),
+        "most_fair": dict(label="most-fair control", marker="s", ls="--",
+                          color=INK, lw=0.9, ms=3.0, zorder=3),
+        "random":    dict(label="random control", marker="^", ls=":",
+                          color=GRAY, lw=0.9, ms=3.0, zorder=2),
+    }
+    for arm, st in style.items():
+        got = arms[arm]
+        # Plot over the union grid with NaN at un-run doses, so a dose that was
+        # never run reads as a BREAK in the line instead of a straight segment
+        # implying an interpolated value (the random arm has no w20).
+        grid = sorted(set(got) | ({10, 20, 30, 40, 50} if arm != "edited" else set()))
+        ax.plot(grid, [got.get(w, float("nan")) for w in grid], **st)
+        missing = [w for w in grid if w not in got]
+        if missing:
+            print(f"  note: {arm} has no data at w={missing} — drawn as a gap")
+
+    # The uniform-weight null is the point the argument turns on. It is marked
+    # with an OPEN marker (redundant with position, so it survives grayscale) and
+    # named in the caption rather than in-axes: at 3.35in the only free space
+    # around w=1 is against the y-axis, where the label clipped.
+    if vanilla is not None:
+        ax.scatter([1], [vanilla], s=30, marker="o", facecolor="white",
+                   edgecolor=ACCENT, linewidth=0.9, zorder=5)
+
+    ax.set_xlabel(r"upweighting factor $w$ on the edited demonstrations")
+    ax.set_ylabel(r"paired $\Delta F_{\mathrm{demo}}$")
+    ax.set_xticks([1, 10, 20, 30, 40, 50])
+    ax.legend(frameon=False, loc="upper left", handlelength=2.4, borderaxespad=0.2)
+    for side in ("top", "right"):
+        ax.spines[side].set_visible(False)
+
+    fig.tight_layout(pad=0.3)
+    fig.savefig(OUT / "dose_response.pdf")
+    plt.close(fig)
+
+    flat = {a: {w: round(v, 4) for w, v in sorted(d.items())} for a, d in arms.items()}
+    print(f"dose_response.pdf plotted values: {flat}")
+
+
 if __name__ == "__main__":
     frontier_figure()
     overview_figure()
-    print(f"wrote {OUT / 'extended_frontier.pdf'} and {OUT / 'method_overview.pdf'}")
+    dose_response_figure()
+    print(f"wrote {OUT / 'extended_frontier.pdf'}, {OUT / 'method_overview.pdf'} "
+          f"and {OUT / 'dose_response.pdf'}")

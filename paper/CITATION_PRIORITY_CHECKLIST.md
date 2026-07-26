@@ -471,3 +471,17 @@ Metadata upgrades for these are already in the 2026-07-16 report diff, ready if 
      no result changed; this is a naming and attribution fix only. Rationale: the
      experiments section named no method and carried no cite, so the arms were read as
      internal ablations on review. -->
+
+<!-- Coverage note (2026-07-26, Zhang R2 §4 restructure): NO key-set change, NO new
+     refs.bib entry, nothing ticked. Citation USAGE moved within §4 only:
+     - hu2023stifgsm, goodfellow2015fgsm, kamirancalders2012, zheng2023 moved UP from
+       the §4.4 opener (added that morning in daaeb88) into the new "Baseline
+       algorithms" list in §4.1 Experimental Setup, per Dr. Zhang's D6 ("baselines
+       should be cited and explained as part of the experiment setting section") and
+       the ST-SiameseNet §4.2 / cGAIL §6.3 pattern. The §4.4 opener was deleted as a
+       duplicate; all four keys remain cited in the body, plus Appendix C and E.
+     - feng2020simulate was dropped from §4.2's compressed Fidelity sentence. NOT
+       orphaned: still cited at 01_introduction.tex and in Appendix C's "The two
+       fidelity axes" block, which carries the Jensen--Shannon definition the §4.2
+       sentence used to gloss.
+     Lint's cited-key coverage guard is green. -->

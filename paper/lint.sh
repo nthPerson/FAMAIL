@@ -49,4 +49,28 @@ if [ -f CITATION_PRIORITY_CHECKLIST.md ]; then
     fail=1
   fi
 fi
+
+# Body-spill gate (2026-07-26, added for the Zhang R2 restructure). KDD's 8pp body
+# limit is HARD and page 8 currently has exactly ONE spare line-slot, so any prose or
+# float added to §4 can silently push §6's tail onto page 9. Before this gate the only
+# check was reading the PDF by eye. The bibliography heading is the marker: it must
+# begin on page 9, i.e. the body must fit in 8 pages. Requires a fresh main.pdf.
+if [ -f main.pdf ] && command -v pdftotext >/dev/null 2>&1; then
+  refpage=""
+  for p in $(seq 1 12); do
+    if pdftotext -f "$p" -l "$p" main.pdf - 2>/dev/null | grep -qE '^REFERENCES$'; then
+      refpage=$p; break
+    fi
+  done
+  if [ -z "$refpage" ]; then
+    echo "LINT WARN — could not locate the REFERENCES heading; body-spill gate did not run."
+  elif [ "$refpage" -lt 9 ]; then
+    echo "LINT WARN — REFERENCES starts on page $refpage (expected 9); body is shorter than budgeted."
+  elif [ "$refpage" -gt 9 ]; then
+    echo "LINT FAIL — body spilled past 8 pages: REFERENCES starts on page $refpage, expected 9."
+    fail=1
+  fi
+else
+  echo "LINT WARN — main.pdf or pdftotext unavailable; body-spill gate did not run."
+fi
 exit $fail

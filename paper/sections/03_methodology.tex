@@ -426,7 +426,11 @@ cell per axis), enforced by an exact backward-reachability repair
 (Appendix~\ref{app:editor}). Infeasible edits are not applied: lift skips
 them in-loop, and the trim edits with no compliant repair are reverted to the
 originals post hoc under the same rule
-(\S\ref{sec:exp-data-level} reports the fraction and when it was applied).
+(Appendix~\ref{app:editor} reports the fraction and when it was applied).
+% 2026-07-26 (Zhang R2): repointed from \S\ref{sec:exp-data-level}. The
+% 118/2,455 fraction moved to Appendix B's "Repair provenance" block in the
+% same pass; this sentence promises a fraction, so a \ref that still resolved
+% would have pointed at a subsection that no longer carries one.
 % src: PAPER/supply-lift/data/a10/shz_a10_metrics.json (n_reverted_infeasible_trim 118/2,455 ≈ 4.8%);
 % PAPER/supply-lift/FINDINGS.md §8 (rule-first disclosure)
 
