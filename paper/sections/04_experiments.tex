@@ -386,7 +386,8 @@ metrics can be gamed by fabrication, the demand-endo\-ge\-ne\-ity concern of
 
 \textbf{Fairness-method baselines (training-side).} Applied on the raw corpus
 where they usually live, neither reproduces any part of the recovery that
-editing provides: reweighing \cite{kamirancalders2012} moves demand-adjusted
+editing provides: reweighing \cite{kamirancalders2012} by demographic group
+rather than by edit moves demand-adjusted
 fairness the \emph{wrong} way ($-0.0227$, all six seeds negative,
 $p = .031$), and the in-processing penalty \cite{zheng2023} is inert at
 every trainable dose, destructive only where it dominates.
@@ -400,6 +401,18 @@ every trainable dose, destructive only where it dominates.
 % \cite{zheng2023} as a verbatim reimplementation. Numbers unchanged. This
 % recovers the ~2 rendered lines the opener's method names cost, which
 % matters because the body must end on p8.
+% 2026-07-26 (Robert, cold read): "by demographic group rather than by edit"
+% added because \S\ref{sec:downstream} calls FATE's upweighting "instance
+% reweighing \cite{kamirancalders2012}, transplanted to imitation learning"
+% and \S\ref{sec:related} says FATE "takes from" it — so listing the same key
+% as a baseline in this subsection's opener reads as a contradiction ("you
+% took their method and you also beat it"). The two differ in what the weight
+% is INDEXED on: the baseline weights by group (inverse group-service
+% 1/SDR_g on the RAW corpus, famail_temporal/baselines/fairness_baseline.py
+% weights_from_groups), FATE weights by edit membership on the EDITED corpus
+% and uses no demographics at training time. Appendix C already disclosed the
+% "inverse group-service weights" construction; the collision is created in
+% the body, so the reconciling clause belongs in the body. +6 words.
 % src: famail_temporal/results/weighted_bc_sweep/fairness_baseline_6seed/paired_stats.json (fair_reweigh; edited_w30 +0.0302 replicated internally)
 
 % (2026-07-25, review finding #16 page budget, Robert-approved: Table
