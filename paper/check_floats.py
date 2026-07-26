@@ -1,6 +1,14 @@
 """Report every float's rendered position and verify it appears AFTER its first
 in-text reference, in true two-column reading order (page, then column, then y).
 
+KNOWN LIMITATION (measured 2026-07-26): `pdftotext -bbox` does not always emit
+every word that plain `pdftotext` does — on page 8 it reports 2 "Table" tokens
+where the text extraction finds 3, silently dropping one in-text reference. So a
+"FLOAT BEFORE REF" verdict is a PROMPT TO GO LOOK, not proof: confirm against
+`pdftotext -f N -l N main.pdf -` before acting on it. Under-detection can only
+make this tool too pessimistic, never too permissive, which is the safe
+direction — but do not treat a clean run as proof that every reference exists.
+
 Captions render as "Table 3:" / "Figure 3:"; in-text references render as
 "Table 3" / "Fig. 3" with no colon. We locate both from pdftotext -bbox.
 """

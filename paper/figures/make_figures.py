@@ -279,7 +279,12 @@ def dose_response_figure() -> None:
     if vanilla is not None:
         arms["edited"][1] = vanilla
 
-    fig, ax = plt.subplots(figsize=(3.35, 2.0))
+    # 2026-07-26: aspect ratio cut from 2.00/3.35 = 0.60 to 1.45/3.35 = 0.43.
+    # The graphic is drawn at \linewidth, so RENDERED HEIGHT is set by the aspect
+    # ratio, not by figsize in inches — shrinking both axes equally would have
+    # changed nothing on the page. Tight y-limits below recover the vertical
+    # resolution the shorter box would otherwise cost.
+    fig, ax = plt.subplots(figsize=(3.35, 1.45))
     ax.axhline(0.0, color=FAINT, linewidth=0.6, zorder=1)
 
     style = {
@@ -312,7 +317,16 @@ def dose_response_figure() -> None:
     ax.set_xlabel(r"upweighting factor $w$ on the edited demonstrations")
     ax.set_ylabel(r"paired $\Delta F_{\mathrm{demo}}$")
     ax.set_xticks([1, 10, 20, 30, 40, 50])
-    ax.legend(frameon=False, loc="upper left", handlelength=2.4, borderaxespad=0.2)
+    ax.tick_params(labelsize=7)
+    ax.xaxis.label.set_size(7.5)
+    ax.yaxis.label.set_size(7.5)
+    # Pad the data range by 8% rather than matplotlib's default 5% + legend
+    # collision: the legend is what forced extra headroom before.
+    vals = [v for d in arms.values() for v in d.values()]
+    lo, hi = min(vals + [0.0]), max(vals)
+    ax.set_ylim(lo - 0.08 * (hi - lo), hi + 0.30 * (hi - lo))
+    ax.legend(frameon=False, loc="upper left", handlelength=1.8,
+              borderaxespad=0.1, fontsize=6.5, labelspacing=0.25)
     for side in ("top", "right"):
         ax.spines[side].set_visible(False)
 

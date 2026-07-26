@@ -188,7 +188,7 @@ to 0.8214 ($+0.0226$) and $F_{\mathrm{spatial}}$ from 0.1034 to 0.1095
 % src: famail_temporal/results/2026-07-10T02-06-37_alpha_sweep_s10_c80_f10_filtered/metrics.json
 
 \textbf{External metrics.} Every established instrument moves
-toward fairness with bootstrap intervals excluding zero
+toward fairness with 95\% intervals excluding zero
 (Table~\ref{tab:external-sz}). The gap closes from both
 ends: the advantaged group's over-service \emph{falls} while the disadvantaged
 group's service \emph{rises}.
@@ -225,9 +225,9 @@ it reproduces the production supply grid exactly) it is $+0.0411$
 % precedes the float in the rendered PDF.
 \begin{table}[t]
 \centering
-\caption{Shenzhen external fairness (migrant axis, district extremes): every
-instrument and both group service levels, before $\to$ after editing, with
-paired-bootstrap intervals over the active grid units ($B = 1{,}000$).}
+\caption{Shenzhen external fairness (migrant axis, district extremes), before
+$\to$ after editing. Brackets are 95\% intervals over the active grid units
+($B = 1{,}000$; \S\ref{sec:exp-setup}), the convention used in every table below.}
 \label{tab:external-sz}
 \footnotesize
 \setlength{\tabcolsep}{4pt}
@@ -287,20 +287,15 @@ under-served service; the supply channel is what changes that.
 Under trim-only every external instrument still improves significantly, yet
 the disadvantaged group's service level does not move at all: the improvement
 is pure top-down redistribution (Table~\ref{tab:ablation}). Adding lift raises
-that level with a bootstrap interval excluding zero and flips
+that level with a 95\% interval excluding zero and turns
 $\Delta F_{\mathrm{spatial}}$ positive. San Francisco shows the same contrast,
 $\Delta F_{\mathrm{demo}}$ $+0.0144$ versus $+0.0316$ and migrant DP gap % lint-allow: ablation
 $-0.052$ versus $-0.073$, both CIs excluding zero. % lint-allow: ablation — both sig at alpha*; contrast is magnitude + the supply channel
 
-\begin{table}[b]
+\begin{table}[!ht]
 \centering
-\caption{Demand-only editing versus trim+lift (Shenzhen; migrant axis,
-district extremes, as in Table~\ref{tab:external-sz}). Every \emph{external}
-instrument improves under trim-only, yet the under-served service level does
-not move and $F_{\mathrm{spatial}}$ slips. Only the supply channel raises the
-level and turns $\Delta F_{\mathrm{spatial}}$ positive. The trim+lift column
-applies 118 fewer trim edits, which the king-move filter reverts
-(Appendix~\ref{app:editor}).}
+\caption{Demand-only editing versus trim+lift (Shenzhen; axis and grouping as in
+Table~\ref{tab:external-sz}).}
 \label{tab:ablation}
 \footnotesize
 \setlength{\tabcolsep}{4pt}
@@ -377,8 +372,8 @@ trained on raw: paired $\Delta F_{\mathrm{demo}} = +0.0016$ ($n = 12$,
 \textbf{Edit-specific recovery under upweighting.} Upweighting the edited
 demonstrations recovers the gain. It grows with the weight, and neither
 control follows it (Fig.~\ref{fig:dose}). The most-fair control reaches
-$+0.0033$ at w10, under a sixth of the edited arm's gain, then fades to n.s. At the adopted dose the flagship
-comparison runs at $n = 12$ paired seeds: $+0.0297 \pm 0.0029$ (w30), 12/12
+$+0.0033$ at w10, under a sixth of the edited arm's gain, then fades to n.s.
+At the adopted dose the flagship comparison runs at $n = 12$ paired seeds: $+0.0297 \pm 0.0029$ (w30), 12/12
 positive, exact Wilcoxon $p = .00049$, with both controls null at the same
 $n = 12$ (random $-0.0017$, most-fair $+0.0012$, n.s.). The gain saturates,
 placing w30 at the knee rather than at a tuned endpoint. Fidelity-A is
@@ -397,15 +392,12 @@ Appendix~\ref{app:results}.
 % different n from every plotted point. The w30 t-interval [+0.0278,+0.0315] left % lint-allow: n=12 pooled CI bounds recorded in a provenance comment, not a claim
 % the body (its % lint-allow travelled with it); Appendix C keeps the dose detail.
 
-\begin{figure}[b]
+\begin{figure}[!ht]
 \centering
 \includegraphics[width=\linewidth]{figures/dose_response.pdf}
-\caption{Downstream transfer against the upweighting factor (Shenzhen,
-$n = 6$ paired seeds). The edited arm climbs from the uniform-weight null
-(open marker, $+0.0022$ at $n = 6$; the $n = 12$ pooled estimate in the text is
-$+0.0016$, likewise n.s.) and saturates. The most-fair control is significantly
-positive only at $w = 10$ and fades; the random control is null-to-negative
-throughout, and was not run at $w = 20$.}
+\caption{Downstream transfer against the upweighting factor (Shenzhen, $n = 6$
+paired seeds). The open marker is the uniform-weight null; the random control
+was not run at $w = 20$.}
 \label{fig:dose}
 \end{figure}
 
@@ -426,16 +418,13 @@ the generated-corpus arms are scored as data sources in Table~\ref{tab:l1}. FATE
 data-level arm and is the only one that inflates nothing and breaks no
 trajectories.
 
-\begin{table}[b]
+\begin{table}[!ht]
 \centering
 \caption{Comparison with baselines (Shenzhen). Upper panel: data-level arms at
-FATE's edit budget; inflation is the fabricated share of the corpus, adjacency
-violation the share of touched trajectories left violating the king-move rule.
-Lower panel: downstream deltas over $n = 6$ paired seeds, with FATE's w30 arm
-as the like-for-like reference; the two fairness methods act on the raw corpus
-at training time, so adjacency does not apply to them. The parity penalty is
-inert across the six-seed grid and collapses $F_{\mathrm{demo}}$ only at
-$\lambda = 1000$ (Appendix~\ref{app:results}).}
+FATE's edit budget, where \emph{inflation} is the fabricated share of the corpus
+and \emph{adj.\ viol.} the share of touched trajectories left breaking the
+king-move rule. Lower panel: downstream deltas over $n = 6$ paired seeds,
+against FATE's w30 arm.}
 \label{tab:baselines}
 \footnotesize
 \setlength{\tabcolsep}{4pt}
@@ -571,13 +560,9 @@ counterpart.
 % src: PAPER/supply-lift/data/a10/sf12_a10_channel_decomposition.json (D1-CHAN 2026-07-18, B=2000 seed 0; tier-2 grid = D1-RECOUNT S_tier2_after.npz; gates G-repro MAE 0.0 + replay 1959/1959)
 % src: PAPER/supply-lift/data/a10/sf12_a10_wbc_n12_pooled_stats.json (pooled seeds 0-5 + 6-11; SF-WBC-N12 2026-07-18)
 
-\begin{table}[b]
+\begin{table}[!ht]
 \centering
-\caption{Two-city reproduction. $^{*}$: interval excludes zero in both cities
---- paired bootstrap for Theil and the supply channel, paired $t$-interval over
-$n = 12$ seeds for the w30 row (exact Wilcoxon $p = .00049$). The cities differ
-in grid, fleet size and demographic basis, so magnitudes are not comparable;
-direction and significance are.}
+\caption{Two-city reproduction. $^{*}$: interval excludes zero in both cities.}
 \label{tab:twocity}
 \footnotesize
 \setlength{\tabcolsep}{4pt}
@@ -620,11 +605,11 @@ Appendix~\ref{app:results}.
 demographic feature set, so every layer of the argument is re-measured under
 two alternate sets. The
 lift-up reproduces on all three: the total
-$\Delta\,\mathrm{mean}(Y \mid \mathrm{disadv.})$ carries a bootstrap interval
+$\Delta\,\mathrm{mean}(Y \mid \mathrm{disadv.})$ carries an interval
 excluding zero on every set, and the supply channel is individually significant
 on every set under both accounting conventions
-(\S\ref{sec:exp-data-level}; per-set values in Table~\ref{tab:featsets},
-Appendix~\ref{app:results}).
+(\S\ref{sec:exp-data-level}; per-set values in Table~\ref{tab:featsets}, with
+the per-control detail in Appendix~\ref{app:results}).
 % 2026-07-26: the inline distinct-taxi run "+0.0411, +0.0211, +0.0771" is dropped
 % from the body (it overflowed the column by 6.8pt as an unbreakable math run).
 % CORRECTED after review: this comment previously claimed all three were already
@@ -640,12 +625,11 @@ the edited arm's w30 gain and at least $3\times$ smaller at every dose.
 % src: PAPER/supply-lift/data/a10/shz_hgc_a10_weighted_bc_paired_stats.json (most_fair w30 +0.0054; vanilla +0.0022)
 % src: PAPER/supply-lift/data/a10/shz_4feat_a10_weighted_bc_paired_stats.json (4feat most_fair doses +0.0059/+0.0059/+0.0072, all p=.031; edited/most_fair min ratio 3.05 at w10)
 
-\begin{table}[b]
-\caption{Feature-set robustness under trim+lift (Shenzhen; $\Delta$ rows are
-after $-$ before edit). $^{*}$-marked rows: every cell's paired-bootstrap
-95\% interval excludes zero ($B = 2{,}000$ for
-$\Delta\,\mathrm{mean}(Y \mid \mathrm{disadv.})$; $B = 1{,}000$ for
-DI/DP/Theil).}
+\begin{table}[!ht]
+\caption{Feature-set robustness under trim+lift (Shenzhen; $\Delta$ rows are after
+$-$ before edit). $^{*}$-marked rows: every cell's 95\% interval excludes zero
+($B = 2{,}000$ for $\Delta\,\mathrm{mean}(Y \mid \mathrm{disadv.})$;
+$B = 1{,}000$ for DI/DP/Theil).}
 \label{tab:featsets}
 \footnotesize
 \setlength{\tabcolsep}{3pt}
